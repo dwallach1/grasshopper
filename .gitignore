@@ -4,11 +4,6 @@
 .venv/
 !.env.example
 
-# Runtime state
-*.sqlite
-*.sqlite3
-*.db
-
 # Node/build artifacts
 node_modules/
 dist/
@@ -18,7 +13,5 @@ __pycache__/
 *.pyc
 
 data/
-!web/data/
-!web/data/ontology-snapshot.json
 
 # The nested Sites checkout is also tracked by the managing repository.

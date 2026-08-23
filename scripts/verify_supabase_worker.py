@@ -9,7 +9,7 @@ from database import connect
 
 
 def main() -> None:
-    conn = connect(require_remote=True)
+    conn = connect()
     write_ok = False
     delete_denied = False
     try:

@@ -5,17 +5,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import re
-import sqlite3
-from pathlib import Path
 
 try:
     from scripts import database
 except ModuleNotFoundError:
     import database
-
-ROOT = Path(__file__).resolve().parents[1]
-DB = ROOT / "data" / "thesisforge.sqlite"
-
 
 def now_iso() -> str:
     return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -27,7 +21,6 @@ def slugify(value: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, default=DB)
     commands = parser.add_subparsers(dest="command", required=True)
 
     view = commands.add_parser("thesis-view", help="Set stance, variant perception, and falsifier")
@@ -83,8 +76,7 @@ def main() -> None:
 
     args = parser.parse_args()
     ts = now_iso()
-    conn = database.connect(args.db)
-    conn.execute("PRAGMA foreign_keys=ON")
+    conn = database.connect()
 
     if args.command == "thesis-view":
         result = conn.execute(
@@ -119,7 +111,9 @@ def main() -> None:
         insight_id = conn.execute("SELECT id FROM insights WHERE slug=?", (slug,)).fetchone()[0]
         for node_id in args.node:
             conn.execute(
-                "INSERT OR REPLACE INTO insight_links(insight_id, node_id, relationship) VALUES (?, ?, 'connects')",
+                """INSERT INTO insight_links(insight_id, node_id, relationship)
+                   VALUES (?, ?, 'connects')
+                   ON CONFLICT(insight_id, node_id, relationship) DO NOTHING""",
                 (insight_id, node_id),
             )
     elif args.command == "relation":

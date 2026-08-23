@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cache-first Financial Datasets ingestion for the ThesisForge local vault.
+"""Cache-first Financial Datasets ingestion for the ThesisForge Supabase vault.
 
 Every network response is retained as compressed JSON before it is normalized.
 The API key is read from the environment and is never written to the database.
@@ -12,7 +12,6 @@ import gzip
 import hashlib
 import json
 import os
-import sqlite3
 import sys
 import urllib.error
 import urllib.parse
@@ -26,75 +25,9 @@ try:
 except ModuleNotFoundError:
     import database
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DB = ROOT / "data" / "thesisforge.sqlite"
 BASE_URL = "https://api.financialdatasets.ai"
 PROVIDER = "financialdatasets.ai"
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS financial_api_requests (
-  id INTEGER PRIMARY KEY,
-  provider TEXT NOT NULL,
-  request_fingerprint TEXT NOT NULL,
-  method TEXT NOT NULL,
-  endpoint TEXT NOT NULL,
-  params_json TEXT NOT NULL DEFAULT '{}',
-  body_json TEXT,
-  requested_at TEXT NOT NULL,
-  completed_at TEXT NOT NULL,
-  status_code INTEGER NOT NULL,
-  response_headers_json TEXT NOT NULL DEFAULT '{}',
-  response_sha256 TEXT NOT NULL,
-  response_encoding TEXT NOT NULL DEFAULT 'gzip',
-  response_body BLOB NOT NULL,
-  error_text TEXT
-);
-
-CREATE TABLE IF NOT EXISTS financial_request_cache (
-  request_fingerprint TEXT PRIMARY KEY,
-  request_id INTEGER NOT NULL,
-  cached_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  freshness_policy TEXT NOT NULL,
-  FOREIGN KEY (request_id) REFERENCES financial_api_requests(id)
-);
-
-CREATE TABLE IF NOT EXISTS financial_access_log (
-  id INTEGER PRIMARY KEY,
-  request_fingerprint TEXT NOT NULL,
-  request_id INTEGER,
-  access_type TEXT NOT NULL CHECK(access_type IN ('network', 'cache', 'dry_run', 'blocked')),
-  accessed_at TEXT NOT NULL,
-  detail TEXT,
-  FOREIGN KEY (request_id) REFERENCES financial_api_requests(id)
-);
-
-CREATE TABLE IF NOT EXISTS financial_records (
-  id INTEGER PRIMARY KEY,
-  provider TEXT NOT NULL,
-  dataset TEXT NOT NULL,
-  ticker TEXT,
-  record_key TEXT NOT NULL,
-  period TEXT,
-  report_period TEXT,
-  filing_date TEXT,
-  fetched_at TEXT NOT NULL,
-  record_sha256 TEXT NOT NULL,
-  payload_json TEXT NOT NULL,
-  source_request_id INTEGER NOT NULL,
-  UNIQUE(provider, dataset, record_key, record_sha256),
-  FOREIGN KEY (source_request_id) REFERENCES financial_api_requests(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_financial_requests_fingerprint
-  ON financial_api_requests(request_fingerprint, completed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_financial_access_type_date
-  ON financial_access_log(access_type, accessed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_financial_records_ticker_dataset
-  ON financial_records(ticker, dataset, report_period DESC);
-CREATE INDEX IF NOT EXISTS idx_financial_records_source_request
-  ON financial_records(source_request_id);
-"""
 
 
 @dataclass(frozen=True)
@@ -126,12 +59,6 @@ def request_fingerprint(spec: RequestSpec) -> str:
         "body": spec.body,
     })
     return hashlib.sha256(material.encode()).hexdigest()
-
-
-def initialize(conn) -> None:
-    conn.executescript(SCHEMA)
-    conn.execute("PRAGMA optimize")
-    conn.commit()
 
 
 def ttl_for(spec: RequestSpec) -> tuple[dt.timedelta, str]:
@@ -215,10 +142,11 @@ def normalize_records(conn, spec: RequestSpec, payload: Any, request_id: int, fe
         payload_json = canonical_json(record)
         record_sha = hashlib.sha256(payload_json.encode()).hexdigest()
         result = conn.execute(
-            """INSERT OR IGNORE INTO financial_records(
+            """INSERT INTO financial_records(
                  provider, dataset, ticker, record_key, period, report_period, filing_date,
                  fetched_at, record_sha256, payload_json, source_request_id
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(provider, dataset, record_key, record_sha256) DO NOTHING""",
             (PROVIDER, dataset, ticker, record_key, str(period) if period else None,
              str(report_period) if report_period else None, str(filing_date) if filing_date else None,
              fetched_at, record_sha, payload_json, request_id),
@@ -233,7 +161,7 @@ def fetch(conn, spec: RequestSpec, *, force: bool = False) -> tuple[Any, str, in
         cached = cached_request(conn, fingerprint)
         if cached:
             conn.execute(
-                "INSERT INTO financial_access_log(request_fingerprint, request_id, access_type, accessed_at, detail) VALUES (?, ?, 'cache', ?, 'fresh local response')",
+                "INSERT INTO financial_access_log(request_fingerprint, request_id, access_type, accessed_at, detail) VALUES (?, ?, 'cache', ?, 'fresh Supabase response')",
                 (fingerprint, cached["id"], iso(now())),
             )
             conn.commit()
@@ -391,10 +319,9 @@ def database_stats(conn) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    fetch_parser = sub.add_parser("fetch", help="Fetch one endpoint through the local cache")
+    fetch_parser = sub.add_parser("fetch", help="Fetch one endpoint through the Supabase cache")
     fetch_parser.add_argument("endpoint")
     fetch_parser.add_argument("--param", action="append", default=[], type=parse_value)
     fetch_parser.add_argument("--force", action="store_true", help="Refresh even when the local copy is fresh")
@@ -411,11 +338,9 @@ def main() -> None:
     pilot.add_argument("--max-paid-requests", type=int, default=100, help="Hard cap for this invocation")
     pilot.add_argument("--force", action="store_true", help="Refresh fresh requests; normally leave this off")
 
-    sub.add_parser("stats", help="Show the local vault and cache statistics")
+    sub.add_parser("stats", help="Show the Supabase vault and cache statistics")
     args = parser.parse_args()
-    args.db.parent.mkdir(parents=True, exist_ok=True)
-    conn = database.connect(args.db)
-    initialize(conn)
+    conn = database.connect()
 
     if args.command == "stats":
         print(json.dumps(database_stats(conn), indent=2))

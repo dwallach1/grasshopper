@@ -25,13 +25,13 @@ Load it into the shell, then inspect a three-ticker pilot without spending credi
 set -a
 source .env.local
 set +a
-python3 scripts/financial_data.py pilot GEV VST CEG
+bun run financial:plan
 ```
 
 After reviewing the request count, execute it:
 
 ```sh
-python3 scripts/financial_data.py pilot GEV VST CEG --execute --max-paid-requests 40
+bun run financial:plan -- --execute --max-paid-requests 40
 ```
 
 The pilot requests 11 core datasets per ticker: company facts, quarterly metrics, three standardized statements, earnings, filings, insider trades, institutional holdings, news, and one year of daily prices. A repeated identical run uses the vault where the response remains fresh.
@@ -39,13 +39,13 @@ The pilot requests 11 core datasets per ticker: company facts, quarterly metrics
 Inspect usage and storage:
 
 ```sh
-python3 scripts/financial_data.py stats
+bun run financial:stats
 ```
 
 Fetch an individual endpoint through the same cache:
 
 ```sh
-python3 scripts/financial_data.py fetch /financial-metrics --param ticker=GEV --param period=quarterly --param limit=4
+bun run financial:fetch -- /financial-metrics --param ticker=GEV --param period=quarterly --param limit=4
 ```
 
 Use `--force` only when a fresh upstream snapshot is intentionally worth another request. Historical price queries whose end date is already in the past are cached for ten years.

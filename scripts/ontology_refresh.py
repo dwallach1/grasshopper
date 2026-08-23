@@ -5,217 +5,11 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
-import sqlite3
-from pathlib import Path
 
 try:
     from scripts import database
 except ModuleNotFoundError:
     import database
-
-ROOT = Path(__file__).resolve().parents[1]
-DB = ROOT / "data" / "thesisforge.sqlite"
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS graph_nodes (
-  id TEXT PRIMARY KEY,
-  node_type TEXT NOT NULL,
-  label TEXT NOT NULL,
-  properties_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS graph_edges (
-  id INTEGER PRIMARY KEY,
-  src_id TEXT NOT NULL,
-  dst_id TEXT NOT NULL,
-  edge_type TEXT NOT NULL,
-  weight REAL NOT NULL DEFAULT 1.0,
-  evidence_count INTEGER NOT NULL DEFAULT 1,
-  properties_json TEXT NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(src_id, dst_id, edge_type),
-  FOREIGN KEY (src_id) REFERENCES graph_nodes(id),
-  FOREIGN KEY (dst_id) REFERENCES graph_nodes(id)
-);
-
-CREATE TABLE IF NOT EXISTS research_events (
-  id INTEGER PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  label TEXT NOT NULL,
-  event_date TEXT,
-  status TEXT NOT NULL DEFAULT 'watching',
-  source_url TEXT,
-  summary TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS research_queue (
-  id INTEGER PRIMARY KEY,
-  priority INTEGER NOT NULL DEFAULT 50,
-  status TEXT NOT NULL DEFAULT 'open',
-  topic TEXT NOT NULL,
-  reason TEXT NOT NULL,
-  source TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS predictions (
-  id INTEGER PRIMARY KEY,
-  external_key TEXT NOT NULL UNIQUE,
-  thesis_id TEXT NOT NULL,
-  statement TEXT NOT NULL,
-  target_date TEXT,
-  probability INTEGER NOT NULL DEFAULT 50 CHECK(probability BETWEEN 0 AND 100),
-  status TEXT NOT NULL DEFAULT 'open',
-  resolution_notes TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id)
-);
-
-CREATE TABLE IF NOT EXISTS insights (
-  id INTEGER PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,
-  title TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  insight_type TEXT NOT NULL DEFAULT 'derived',
-  novelty INTEGER NOT NULL DEFAULT 50 CHECK(novelty BETWEEN 0 AND 100),
-  confidence INTEGER NOT NULL DEFAULT 50 CHECK(confidence BETWEEN 0 AND 100),
-  status TEXT NOT NULL DEFAULT 'active',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS insight_links (
-  insight_id INTEGER NOT NULL,
-  node_id TEXT NOT NULL,
-  relationship TEXT NOT NULL DEFAULT 'connects',
-  PRIMARY KEY (insight_id, node_id, relationship),
-  FOREIGN KEY (insight_id) REFERENCES insights(id),
-  FOREIGN KEY (node_id) REFERENCES graph_nodes(id)
-);
-
-CREATE TABLE IF NOT EXISTS thesis_relations (
-  src_thesis_id TEXT NOT NULL,
-  dst_thesis_id TEXT NOT NULL,
-  relation_type TEXT NOT NULL,
-  strength REAL NOT NULL DEFAULT 1.0,
-  rationale TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (src_thesis_id, dst_thesis_id, relation_type),
-  FOREIGN KEY (src_thesis_id) REFERENCES theses(id),
-  FOREIGN KEY (dst_thesis_id) REFERENCES theses(id)
-);
-
-CREATE TABLE IF NOT EXISTS event_decisions (
-  event_id INTEGER PRIMARY KEY,
-  decision TEXT NOT NULL DEFAULT 'watch',
-  rationale TEXT NOT NULL,
-  participation_trigger TEXT,
-  decided_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (event_id) REFERENCES research_events(id)
-);
-
-CREATE TABLE IF NOT EXISTS research_cycles (
-  id INTEGER PRIMARY KEY,
-  external_key TEXT NOT NULL UNIQUE,
-  thesis_id TEXT NOT NULL,
-  hypothesis TEXT NOT NULL,
-  preregistered_outcome TEXT NOT NULL,
-  preregistered_at TEXT NOT NULL,
-  stage TEXT NOT NULL DEFAULT 'research',
-  status TEXT NOT NULL DEFAULT 'open',
-  iteration INTEGER NOT NULL DEFAULT 1,
-  market_regime TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id)
-);
-
-CREATE TABLE IF NOT EXISTS strategy_tests (
-  id INTEGER PRIMARY KEY,
-  external_key TEXT NOT NULL UNIQUE,
-  cycle_id INTEGER NOT NULL,
-  variant_label TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'queued',
-  total_return REAL,
-  max_drawdown REAL,
-  deflated_sharpe REAL,
-  cost_multiplier REAL NOT NULL DEFAULT 1.0,
-  stress_regime TEXT,
-  failure_reason TEXT,
-  autopsy TEXT,
-  tested_at TEXT NOT NULL,
-  FOREIGN KEY (cycle_id) REFERENCES research_cycles(id)
-);
-
-CREATE TABLE IF NOT EXISTS test_scenarios (
-  id INTEGER PRIMARY KEY,
-  test_id INTEGER NOT NULL,
-  scenario_key TEXT NOT NULL,
-  market_regime TEXT NOT NULL,
-  cost_multiplier REAL NOT NULL,
-  outcome TEXT NOT NULL,
-  metric_value REAL,
-  breach_type TEXT,
-  tested_at TEXT NOT NULL,
-  UNIQUE(test_id, scenario_key),
-  FOREIGN KEY (test_id) REFERENCES strategy_tests(id)
-);
-
-CREATE TABLE IF NOT EXISTS agent_runs (
-  id INTEGER PRIMARY KEY,
-  cycle_id INTEGER NOT NULL,
-  agent_role TEXT NOT NULL,
-  independence_group TEXT,
-  price_blinded INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'complete',
-  summary TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (cycle_id) REFERENCES research_cycles(id)
-);
-
-CREATE TABLE IF NOT EXISTS research_lessons (
-  id INTEGER PRIMARY KEY,
-  cycle_id INTEGER NOT NULL,
-  test_id INTEGER,
-  thesis_id TEXT NOT NULL,
-  lesson_type TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  market_regime TEXT,
-  incorporated INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (cycle_id) REFERENCES research_cycles(id),
-  FOREIGN KEY (test_id) REFERENCES strategy_tests(id),
-  FOREIGN KEY (thesis_id) REFERENCES theses(id)
-);
-
-CREATE TABLE IF NOT EXISTS risk_controls (
-  id INTEGER PRIMARY KEY,
-  control_key TEXT NOT NULL UNIQUE,
-  scope TEXT NOT NULL,
-  control_type TEXT NOT NULL,
-  threshold_json TEXT NOT NULL,
-  enforcement_level TEXT NOT NULL DEFAULT 'code',
-  status TEXT NOT NULL DEFAULT 'active',
-  updated_at TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_predictions_thesis_status ON predictions(thesis_id, status);
-CREATE INDEX IF NOT EXISTS idx_insights_status ON insights(status);
-CREATE INDEX IF NOT EXISTS idx_event_decisions_decision ON event_decisions(decision);
-CREATE INDEX IF NOT EXISTS idx_research_cycles_stage ON research_cycles(stage, status);
-CREATE INDEX IF NOT EXISTS idx_strategy_tests_cycle_status ON strategy_tests(cycle_id, status);
-CREATE INDEX IF NOT EXISTS idx_test_scenarios_test_outcome ON test_scenarios(test_id, outcome);
-CREATE INDEX IF NOT EXISTS idx_research_lessons_thesis ON research_lessons(thesis_id, incorporated);
-"""
 
 CONCEPTS = {
     "concept:ai_power": ["power", "electric", "grid", "energy", "data center", "datacenter", "10 gw", "831 mw"],
@@ -269,12 +63,6 @@ def upsert_edge(conn, src, dst, edge_type, weight=1.0, props=None):
         """,
         (src, dst, edge_type, weight, json.dumps(props or {}, sort_keys=True), ts, ts),
     )
-
-
-def ensure_column(conn, table: str, column: str, definition: str) -> None:
-    columns = database.table_columns(conn, table)
-    if column not in columns:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def seed_research_views(conn, ts: str) -> None:
@@ -347,7 +135,9 @@ def seed_research_views(conn, ts: str) -> None:
         for node_id in links:
             if conn.execute("SELECT 1 FROM graph_nodes WHERE id=?", (node_id,)).fetchone():
                 conn.execute(
-                    "INSERT OR IGNORE INTO insight_links(insight_id, node_id, relationship) VALUES (?, ?, 'connects')",
+                    """INSERT INTO insight_links(insight_id, node_id, relationship)
+                       VALUES (?, ?, 'connects')
+                       ON CONFLICT(insight_id, node_id, relationship) DO NOTHING""",
                     (insight_id, node_id),
                 )
 
@@ -460,12 +250,7 @@ def seed_closed_loop(conn, ts: str) -> None:
 
 
 def main():
-    conn = database.connect(DB)
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
-    ensure_column(conn, "theses", "stance", "TEXT NOT NULL DEFAULT 'neutral'")
-    ensure_column(conn, "theses", "variant_perception", "TEXT")
-    ensure_column(conn, "theses", "falsifier", "TEXT")
+    conn = database.connect()
 
     for cid in CONCEPTS:
         upsert_node(conn, cid, "concept", cid.split(":", 1)[1].replace("_", " "))
@@ -478,7 +263,7 @@ def main():
         tid, name, status, confidence, summary = row
         upsert_node(conn, f"thesis:{tid}", "thesis", name, {"status": status, "confidence": confidence, "summary": summary})
 
-    for row in conn.execute("SELECT id, text, created_at, market_score FROM bookmarks WHERE is_market_related = 1"):
+    for row in conn.execute("SELECT id, text, created_at, market_score FROM bookmarks WHERE is_market_related = TRUE"):
         bid, text, created_at, score = row
         src_id = f"source:x_bookmark:{bid}"
         upsert_node(conn, src_id, "source", f"X bookmark {bid}", {"created_at": created_at, "market_score": score})
@@ -567,8 +352,6 @@ def main():
 
     seed_research_views(conn, ts)
     seed_closed_loop(conn, ts)
-    conn.execute("PRAGMA optimize")
-
     conn.commit()
     nodes = conn.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()[0]
     edges = conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]

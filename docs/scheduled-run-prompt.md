@@ -6,10 +6,10 @@ Use only X bookmark data, linked article text when fetchable, and the Robinhood 
 
 Steps:
 0. Read `config/trade_policy.json` and obey its sizing, asset-class, and approval rules.
-1. Refresh X bookmarks with `npm run x:bookmarks`.
-2. Confirm `THESISFORGE_DATABASE_URL` is configured, then update persistent Supabase thesis memory with `npm run thesis:ingest`.
-3. Fetch readable linked articles with `npm run articles:fetch`. If network/article fetch fails, continue with available bookmark text.
-4. Read `npm run thesis:report` and query the canonical Supabase database as needed.
+1. Refresh X bookmarks with `bun run x:bookmarks`.
+2. Confirm `THESISFORGE_DATABASE_URL` is configured, then update persistent Supabase thesis memory with `bun run thesis:ingest`.
+3. Fetch readable linked articles with `bun run articles:fetch`. If network/article fetch fails, continue with available bookmark text.
+4. Read `bun run thesis:report` and query the canonical Supabase database as needed.
 5. Use Robinhood MCP to refresh the Agentic account, cross-account exposure, quotes, fundamentals, earnings, financials, and options data where useful.
 6. Validate every candidate symbol through Robinhood search/quotes before treating it as a ticker. Reject uppercase words that do not resolve.
 7. Run bull-case, bear-case, and portfolio-risk reviews for candidate trades when practical.

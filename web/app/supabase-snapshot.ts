@@ -4,23 +4,20 @@ import type { Snapshot } from './ontology-dashboard';
 
 type SnapshotRow = { payload?: Snapshot };
 
-export async function loadSnapshot(fallback: Snapshot): Promise<Snapshot> {
+export async function loadSnapshot(): Promise<Snapshot> {
   const url = env.SUPABASE_URL;
   const secretKey = env.SUPABASE_SECRET_KEY;
-  if (!url || !secretKey) return fallback;
+  if (!url || !secretKey) throw new Error('Supabase environment is not configured');
 
-  try {
-    const response = await fetch(
-      `${url.replace(/\/$/, '')}/rest/v1/dashboard_snapshots?id=eq.current&select=payload`,
-      {
-        headers: { apikey: secretKey },
-        cache: 'no-store',
-      },
-    );
-    if (!response.ok) return fallback;
-    const rows = (await response.json()) as SnapshotRow[];
-    return rows[0]?.payload ?? fallback;
-  } catch {
-    return fallback;
-  }
+  const response = await fetch(
+    `${url.replace(/\/$/, '')}/rest/v1/dashboard_snapshots?id=eq.current&select=payload`,
+    {
+      headers: { apikey: secretKey },
+      cache: 'no-store',
+    },
+  );
+  if (!response.ok) throw new Error(`Supabase snapshot request failed: ${response.status}`);
+  const rows = (await response.json()) as SnapshotRow[];
+  if (!rows[0]?.payload) throw new Error('Supabase has no current dashboard snapshot');
+  return rows[0].payload;
 }

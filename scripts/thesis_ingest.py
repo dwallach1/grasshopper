@@ -10,7 +10,6 @@ import argparse
 import datetime as dt
 import json
 import re
-import sqlite3
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -21,7 +20,6 @@ except ModuleNotFoundError:
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BOOKMARKS = ROOT / "data" / "x-bookmarks.json"
-DEFAULT_DB = ROOT / "data" / "thesisforge.sqlite"
 
 STOP_TICKERS = {
     "A", "AI", "AM", "AN", "AND", "API", "ARE", "ATH", "BE", "BEST", "BUT", "CAD", "CEO", "CLI",
@@ -85,176 +83,6 @@ THESIS_TEMPLATES = {
     },
 }
 
-SCHEMA = """
-PRAGMA journal_mode=WAL;
-
-CREATE TABLE IF NOT EXISTS runs (
-  id INTEGER PRIMARY KEY,
-  run_type TEXT NOT NULL,
-  started_at TEXT NOT NULL,
-  completed_at TEXT,
-  notes TEXT
-);
-
-CREATE TABLE IF NOT EXISTS bookmarks (
-  id TEXT PRIMARY KEY,
-  author_id TEXT,
-  created_at TEXT,
-  fetched_at TEXT NOT NULL,
-  text TEXT NOT NULL,
-  raw_json TEXT NOT NULL,
-  market_score INTEGER NOT NULL DEFAULT 0,
-  is_market_related INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS bookmark_urls (
-  bookmark_id TEXT NOT NULL,
-  url TEXT NOT NULL,
-  expanded_url TEXT,
-  display_url TEXT,
-  PRIMARY KEY (bookmark_id, url),
-  FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id)
-);
-
-CREATE TABLE IF NOT EXISTS symbols (
-  symbol TEXT PRIMARY KEY,
-  first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  mention_count INTEGER NOT NULL DEFAULT 0,
-  source_count INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'candidate'
-);
-
-CREATE TABLE IF NOT EXISTS bookmark_symbols (
-  bookmark_id TEXT NOT NULL,
-  symbol TEXT NOT NULL,
-  source TEXT NOT NULL,
-  PRIMARY KEY (bookmark_id, symbol),
-  FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id),
-  FOREIGN KEY (symbol) REFERENCES symbols(symbol)
-);
-
-CREATE TABLE IF NOT EXISTS claims (
-  id INTEGER PRIMARY KEY,
-  bookmark_id TEXT NOT NULL,
-  claim_text TEXT NOT NULL,
-  claim_type TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  confidence INTEGER NOT NULL DEFAULT 40,
-  FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id)
-);
-
-CREATE TABLE IF NOT EXISTS theses (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'forming',
-  confidence INTEGER NOT NULL DEFAULT 40,
-  time_horizon TEXT NOT NULL DEFAULT 'days_to_weeks',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS thesis_symbols (
-  thesis_id TEXT NOT NULL,
-  symbol TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'candidate',
-  weight_hint REAL NOT NULL DEFAULT 0,
-  PRIMARY KEY (thesis_id, symbol),
-  FOREIGN KEY (thesis_id) REFERENCES theses(id),
-  FOREIGN KEY (symbol) REFERENCES symbols(symbol)
-);
-
-CREATE TABLE IF NOT EXISTS thesis_evidence (
-  id INTEGER PRIMARY KEY,
-  thesis_id TEXT NOT NULL,
-  bookmark_id TEXT,
-  evidence_type TEXT NOT NULL,
-  direction TEXT NOT NULL,
-  summary TEXT NOT NULL,
-  source_url TEXT,
-  confidence INTEGER NOT NULL DEFAULT 40,
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id),
-  FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id)
-);
-
-CREATE TABLE IF NOT EXISTS thesis_scores (
-  id INTEGER PRIMARY KEY,
-  thesis_id TEXT NOT NULL,
-  scored_at TEXT NOT NULL,
-  confidence INTEGER NOT NULL,
-  momentum INTEGER NOT NULL,
-  evidence_quality INTEGER NOT NULL,
-  catalyst_strength INTEGER NOT NULL,
-  portfolio_fit INTEGER NOT NULL,
-  risk INTEGER NOT NULL,
-  notes TEXT,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id)
-);
-
-CREATE TABLE IF NOT EXISTS catalysts (
-  id INTEGER PRIMARY KEY,
-  thesis_id TEXT,
-  symbol TEXT,
-  catalyst_type TEXT NOT NULL,
-  event_date TEXT,
-  summary TEXT NOT NULL,
-  source TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'watching',
-  created_at TEXT NOT NULL,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id),
-  FOREIGN KEY (symbol) REFERENCES symbols(symbol)
-);
-
-CREATE TABLE IF NOT EXISTS portfolio_exposure (
-  id INTEGER PRIMARY KEY,
-  observed_at TEXT NOT NULL,
-  account_last4 TEXT NOT NULL,
-  symbol TEXT NOT NULL,
-  quantity REAL NOT NULL,
-  average_buy_price REAL,
-  source TEXT NOT NULL DEFAULT 'robinhood_mcp'
-);
-
-CREATE TABLE IF NOT EXISTS account_snapshots (
-  id INTEGER PRIMARY KEY,
-  observed_at TEXT NOT NULL,
-  account_label TEXT NOT NULL,
-  total_value REAL NOT NULL,
-  equity_value REAL NOT NULL,
-  cash REAL NOT NULL,
-  buying_power REAL NOT NULL,
-  source TEXT NOT NULL DEFAULT 'robinhood_mcp'
-);
-
-CREATE TABLE IF NOT EXISTS trade_proposals (
-  id INTEGER PRIMARY KEY,
-  thesis_id TEXT,
-  symbol TEXT NOT NULL,
-  side TEXT NOT NULL,
-  notional REAL NOT NULL,
-  order_type TEXT NOT NULL DEFAULT 'market_review_only',
-  status TEXT NOT NULL DEFAULT 'proposed',
-  rationale TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  reviewed_at TEXT,
-  broker_alerts TEXT,
-  FOREIGN KEY (thesis_id) REFERENCES theses(id),
-  FOREIGN KEY (symbol) REFERENCES symbols(symbol)
-);
-
-CREATE TABLE IF NOT EXISTS postmortems (
-  id INTEGER PRIMARY KEY,
-  trade_proposal_id INTEGER,
-  thesis_id TEXT,
-  created_at TEXT NOT NULL,
-  outcome TEXT NOT NULL,
-  lesson TEXT NOT NULL,
-  FOREIGN KEY (trade_proposal_id) REFERENCES trade_proposals(id),
-  FOREIGN KEY (thesis_id) REFERENCES theses(id)
-);
-"""
 
 
 def now_iso() -> str:
@@ -347,15 +175,13 @@ def upsert_symbol(conn, symbol: str, seen_at: str, bookmark_id: str) -> None:
         )
 
 
-def ingest(bookmarks_path: Path, db_path: Path) -> dict:
+def ingest(bookmarks_path: Path) -> dict:
     payload = json.loads(bookmarks_path.read_text())
     fetched_at = payload.get("fetched_at") or now_iso()
     bookmarks = payload.get("bookmarks", [])
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = database.connect(db_path)
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(SCHEMA)
+    conn = database.connect()
 
     started_at = now_iso()
     cur = conn.execute("INSERT INTO runs(run_type, started_at, notes) VALUES (?, ?, ?)", ("bookmark_ingest", started_at, None))
@@ -399,7 +225,10 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
 
         for url, expanded, display in extract_urls(bookmark):
             conn.execute(
-                "INSERT OR REPLACE INTO bookmark_urls(bookmark_id, url, expanded_url, display_url) VALUES (?, ?, ?, ?)",
+                """INSERT INTO bookmark_urls(bookmark_id, url, expanded_url, display_url)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(bookmark_id, url) DO UPDATE SET
+                     expanded_url=excluded.expanded_url, display_url=excluded.display_url""",
                 (bookmark_id, url, expanded, display),
             )
 
@@ -407,7 +236,8 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
             upsert_symbol(conn, symbol, created_at, bookmark_id)
             source = "cashtag_or_uppercase"
             conn.execute(
-                "INSERT OR IGNORE INTO bookmark_symbols(bookmark_id, symbol, source) VALUES (?, ?, ?)",
+                """INSERT INTO bookmark_symbols(bookmark_id, symbol, source) VALUES (?, ?, ?)
+                   ON CONFLICT(bookmark_id, symbol) DO NOTHING""",
                 (bookmark_id, symbol, source),
             )
 
@@ -447,7 +277,9 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
         total = sum(count for _, count in thesis_symbols) or 1
         for symbol, count in sorted(thesis_symbols, key=lambda item: (-item[1], item[0])):
             conn.execute(
-                "INSERT OR REPLACE INTO thesis_symbols(thesis_id, symbol, role, weight_hint) VALUES (?, ?, ?, ?)",
+                """INSERT INTO thesis_symbols(thesis_id, symbol, role, weight_hint) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(thesis_id, symbol) DO UPDATE SET
+                     role=excluded.role, weight_hint=excluded.weight_hint""",
                 (thesis_id, symbol, "candidate", round(count / total, 4)),
             )
 
@@ -493,7 +325,7 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
     return {
         "bookmarks": len(bookmarks),
         "market_related": market_count,
-        "db": str(db_path),
+        "database": "supabase",
         "top_symbols": top_symbols,
         "theses": theses,
     }
@@ -502,10 +334,9 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bookmarks", type=Path, default=DEFAULT_BOOKMARKS)
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     args = parser.parse_args()
 
-    result = ingest(args.bookmarks, args.db)
+    result = ingest(args.bookmarks)
     print(json.dumps(result, indent=2))
 
 

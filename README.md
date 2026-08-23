@@ -1,40 +1,37 @@
 # ThesisForge
 
-ThesisForge is a persistent investment-research system that turns bookmarks,
-articles, financial data, portfolio state, and research judgments into a living
-ontology and decision ledger.
+ThesisForge turns bookmarks, articles, financial data, portfolio state, and
+research judgments into a living investment ontology and decision ledger.
 
-JavaScript tooling uses Bun 1.4. Install dependencies in the dashboard with
-`cd web && bun install`; use `bun run dev`, `bun run build`, and `bun run lint`
-there for the normal web workflow. Python remains the runtime for research and
-database jobs, invoked through the root Bun scripts below.
+## Runtime
+
+Bun 1.4 is the only JavaScript package manager and script orchestrator. Python
+remains the runtime for research workers, isolated in `.venv` and invoked
+through Bun.
+
+```sh
+bun run setup:python
+cd web && bun install
+```
 
 ## Database
 
-Supabase Postgres is the canonical database. The schema is declared in
-`supabase/schemas/01_thesisforge.sql`; browser roles are denied by default and
-all tables have Row Level Security enabled. Trusted local jobs connect through
-`THESISFORGE_DATABASE_URL`. The hosted dashboard reads a precomputed snapshot
-through a server-only `SUPABASE_SECRET_KEY` and falls back to its bundled
-snapshot if Supabase is temporarily unavailable.
+Supabase Postgres is the only database and source of truth. Its declarative
+schema lives in `supabase/schemas/`; migrations live in `supabase/migrations/`.
+All tables use Row Level Security, and trusted jobs connect through the
+least-privilege worker URL in `THESISFORGE_DATABASE_URL`.
 
-Install the pinned Python dependency:
+The hosted dashboard reads `dashboard_snapshots` through its server-only
+`SUPABASE_SECRET_KEY`. It deliberately shows an unavailable state when
+Supabase cannot be reached—there is no bundled or local database fallback.
 
-```sh
-python3 -m pip install -r requirements.txt
-```
-
-Configure `.env.local` from `.env.example`, apply the Supabase schema, then
-perform the one-time import:
+After configuring `.env.local` from `.env.example` and applying the Supabase
+schema:
 
 ```sh
-bun run db:migrate
-bun run ontology:export
+bun run supabase:verify
+bun run dashboard:publish
 ```
-
-The importer verifies every table's row count before committing. Keep the
-ignored `data/thesisforge.sqlite` file as a rollback copy until the cutover has
-been observed through at least one complete scheduled run.
 
 ## Common workflows
 

@@ -1,34 +1,22 @@
 #!/usr/bin/env python3
-"""Export the local ThesisForge database into the webapp's portable snapshot."""
+"""Publish the current ThesisForge dashboard snapshot to Supabase."""
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import json
-import sqlite3
 from decimal import Decimal
-from pathlib import Path
 
 try:
     from scripts import database
 except ModuleNotFoundError:
     import database
 
-ROOT = Path(__file__).resolve().parents[1]
-DB = ROOT / "data" / "thesisforge.sqlite"
-OUTPUT = ROOT / "web" / "data" / "ontology-snapshot.json"
-
-
 def rows(conn, query: str, params=()) -> list[dict]:
     return [dict(row) for row in conn.execute(query, params)]
 
 
-def table_exists(conn, name: str) -> bool:
-    return database.table_exists(conn, name)
-
-
 def json_default(value):
-    """Match SQLite's JSON-friendly scalar behavior for Postgres values."""
+    """Normalize native Postgres values for the dashboard JSON payload."""
     if isinstance(value, (dt.date, dt.datetime)):
         return value.isoformat().replace("+00:00", "Z")
     if isinstance(value, Decimal):
@@ -37,16 +25,11 @@ def json_default(value):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--db", type=Path, default=DB)
-    parser.add_argument("--output", type=Path, default=OUTPUT)
-    args = parser.parse_args()
-
-    conn = database.connect(args.db)
+    conn = database.connect()
     theses = rows(conn, """
         SELECT t.id, t.name, t.summary, t.status, t.confidence, t.time_horizon, t.stance,
                t.variant_perception, t.falsifier,
-               COALESCE((SELECT json_group_array(symbol) FROM
+               COALESCE((SELECT json_agg(symbol) FROM
                  (SELECT symbol FROM thesis_symbols ts WHERE ts.thesis_id=t.id ORDER BY weight_hint DESC, symbol LIMIT 8)), '[]') AS symbols_json
         FROM theses t ORDER BY t.confidence DESC, t.name
     """)
@@ -60,7 +43,7 @@ def main() -> None:
         "predictions": rows(conn, "SELECT id, external_key, thesis_id, statement, target_date, probability, status, resolution_notes FROM predictions ORDER BY target_date, probability DESC"),
         "insights": rows(conn, """
             SELECT i.id, i.slug, i.title, i.summary, i.insight_type, i.novelty, i.confidence,
-              COALESCE((SELECT json_group_array(node_id) FROM
+              COALESCE((SELECT json_agg(node_id) FROM
                 (SELECT node_id FROM insight_links il WHERE il.insight_id=i.id ORDER BY node_id)), '[]') AS links_json
             FROM insights i WHERE i.status='active' ORDER BY i.novelty DESC, i.confidence DESC
         """),
@@ -104,18 +87,18 @@ def main() -> None:
             FROM research_lessons l ORDER BY l.incorporated ASC, l.id DESC
         """),
         "risk_controls": rows(conn, "SELECT id, control_key, scope, control_type, threshold_json, enforcement_level, status, updated_at FROM risk_controls ORDER BY scope, control_key"),
-        "account_state": rows(conn, "SELECT observed_at, account_label, total_value, equity_value, cash, buying_power, source FROM account_snapshots ORDER BY observed_at DESC, id DESC LIMIT 1")[0] if table_exists(conn, "account_snapshots") and conn.execute("SELECT COUNT(*) FROM account_snapshots").fetchone()[0] else None,
+        "account_state": (rows(conn, "SELECT observed_at, account_label, total_value, equity_value, cash, buying_power, source FROM account_snapshots ORDER BY observed_at DESC, id DESC LIMIT 1") or [None])[0],
         "trade_proposals": rows(conn, "SELECT id, thesis_id, symbol, side, notional, order_type, status, rationale, created_at, reviewed_at, broker_alerts FROM trade_proposals ORDER BY created_at DESC, id DESC"),
         "graph": {
             "nodes": rows(conn, "SELECT id, node_type, label, properties_json FROM graph_nodes WHERE node_type IN ('thesis','concept','symbol','event') ORDER BY node_type, label"),
             "edges": rows(conn, "SELECT src_id, dst_id, edge_type, weight, evidence_count FROM graph_edges WHERE weight >= 1.5 ORDER BY weight DESC LIMIT 120"),
         },
         "financial_data": {
-            "network_requests": conn.execute("SELECT COUNT(*) FROM financial_api_requests").fetchone()[0] if table_exists(conn, "financial_api_requests") else 0,
-            "cache_hits": conn.execute("SELECT COUNT(*) FROM financial_access_log WHERE access_type='cache'").fetchone()[0] if table_exists(conn, "financial_access_log") else 0,
-            "records": conn.execute("SELECT COUNT(*) FROM financial_records").fetchone()[0] if table_exists(conn, "financial_records") else 0,
-            "tickers": conn.execute("SELECT COUNT(DISTINCT ticker) FROM financial_records WHERE ticker IS NOT NULL").fetchone()[0] if table_exists(conn, "financial_records") else 0,
-            "datasets": conn.execute("SELECT COUNT(DISTINCT dataset) FROM financial_records").fetchone()[0] if table_exists(conn, "financial_records") else 0,
+            "network_requests": conn.execute("SELECT COUNT(*) FROM financial_api_requests").fetchone()[0],
+            "cache_hits": conn.execute("SELECT COUNT(*) FROM financial_access_log WHERE access_type='cache'").fetchone()[0],
+            "records": conn.execute("SELECT COUNT(*) FROM financial_records").fetchone()[0],
+            "tickers": conn.execute("SELECT COUNT(DISTINCT ticker) FROM financial_records WHERE ticker IS NOT NULL").fetchone()[0],
+            "datasets": conn.execute("SELECT COUNT(DISTINCT dataset) FROM financial_records").fetchone()[0],
         },
         "counts": {
             "sources": conn.execute("SELECT COUNT(*) FROM graph_nodes WHERE node_type='source'").fetchone()[0],
@@ -130,8 +113,7 @@ def main() -> None:
         links = insight.pop("links_json")
         insight["links"] = json.loads(links) if isinstance(links, str) else links
 
-    # The dashboard's portable snapshot predates Postgres and intentionally
-    # represents JSON columns as strings and booleans as SQLite-style integers.
+    # Keep the dashboard wire format stable across Python and TypeScript.
     for run in payload["agent_runs"]:
         run["price_blinded"] = int(run["price_blinded"])
     for lesson in payload["lessons"]:
@@ -146,23 +128,19 @@ def main() -> None:
         if not isinstance(node["properties_json"], str):
             node["properties_json"] = json.dumps(node["properties_json"], separators=(",", ":"))
 
-    # Postgres returns native dates and exact numerics; normalize the complete
-    # snapshot once so the file and JSONB record stay byte-for-byte compatible.
+    # Normalize native dates and exact numerics before storing the JSONB record.
     payload = json.loads(json.dumps(payload, default=json_default))
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, indent=2) + "\n")
-    if database.is_postgres(conn):
-        from psycopg.types.json import Jsonb
-        conn.execute(
-            """INSERT INTO dashboard_snapshots(id, generated_at, payload)
-               VALUES ('current', ?, ?)
-               ON CONFLICT(id) DO UPDATE SET generated_at=excluded.generated_at, payload=excluded.payload""",
-            (payload["generated_at"], Jsonb(payload)),
-        )
-        conn.commit()
+    from psycopg.types.json import Jsonb
+    conn.execute(
+        """INSERT INTO dashboard_snapshots(id, generated_at, payload)
+           VALUES ('current', ?, ?)
+           ON CONFLICT(id) DO UPDATE SET generated_at=excluded.generated_at, payload=excluded.payload""",
+        (payload["generated_at"], Jsonb(payload)),
+    )
+    conn.commit()
     conn.close()
-    print(f"Exported {len(theses)} theses to {args.output}")
+    print(f"Published {len(theses)} theses to Supabase dashboard_snapshots")
 
 
 if __name__ == "__main__":

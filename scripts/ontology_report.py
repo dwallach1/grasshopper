@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from pathlib import Path
-
 try:
     from scripts import database
 except ModuleNotFoundError:
     import database
 
-DB = Path(__file__).resolve().parents[1] / "data" / "thesisforge.sqlite"
-conn = database.connect(DB)
+conn = database.connect()
 print("# ThesisForge Ontology\n")
 print("## Conviction Map")
 for row in conn.execute("SELECT name, stance, status, confidence, variant_perception FROM theses ORDER BY confidence DESC, name"):

@@ -6,35 +6,15 @@ import argparse
 import datetime as dt
 import html
 import re
-import sqlite3
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 from urllib.parse import urlparse
 
 try:
     from scripts import database
 except ModuleNotFoundError:
     import database
-
-ROOT = Path(__file__).resolve().parents[1]
-DB = ROOT / "data" / "thesisforge.sqlite"
-
-ARTICLE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS articles (
-  id INTEGER PRIMARY KEY,
-  bookmark_id TEXT NOT NULL,
-  url TEXT NOT NULL UNIQUE,
-  title TEXT,
-  fetched_at TEXT NOT NULL,
-  status_code INTEGER,
-  content_type TEXT,
-  text TEXT,
-  error TEXT,
-  FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id)
-);
-"""
 
 SKIP_HOSTS = {"x.com", "twitter.com", "pic.x.com", "youtube.com", "www.youtube.com", "youtu.be"}
 
@@ -84,14 +64,11 @@ def fetch(url: str, timeout: int) -> tuple[int | None, str | None, str | None, s
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", type=Path, default=DB)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--timeout", type=int, default=12)
     args = parser.parse_args()
 
-    conn = database.connect(args.db)
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(ARTICLE_SCHEMA)
+    conn = database.connect()
 
     rows = conn.execute(
         """
@@ -121,8 +98,12 @@ def main() -> None:
         text = None if error else text_or_error
         conn.execute(
             """
-            INSERT OR REPLACE INTO articles(bookmark_id, url, title, fetched_at, status_code, content_type, text, error)
+            INSERT INTO articles(bookmark_id, url, title, fetched_at, status_code, content_type, text, error)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+              bookmark_id=excluded.bookmark_id, title=excluded.title,
+              fetched_at=excluded.fetched_at, status_code=excluded.status_code,
+              content_type=excluded.content_type, text=excluded.text, error=excluded.error
             """,
             (bookmark_id, url, title, now_iso(), status, content_type, text, error),
         )
