@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
 
 
 def now() -> str:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat()
+    return utc_now_iso(zulu=False)
 
 
 def parser() -> argparse.ArgumentParser:

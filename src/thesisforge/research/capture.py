@@ -3,17 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import re
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
-
-def now_iso() -> str:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
 
 def slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
@@ -75,7 +68,7 @@ def main() -> None:
     lesson.add_argument("--incorporated", action="store_true")
 
     args = parser.parse_args()
-    ts = now_iso()
+    ts = utc_now_iso()
     conn = database.connect()
 
     if args.command == "thesis-view":

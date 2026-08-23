@@ -1,0 +1,1 @@
+"""Supabase operational verification commands."""

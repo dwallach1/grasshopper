@@ -7,17 +7,14 @@ leaves Robinhood enrichment to Codex scheduled runs.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
 
 STOP_TICKERS = {
     "A", "AI", "AM", "AN", "AND", "API", "ARE", "ATH", "BE", "BEST", "BUT", "CAD", "CEO", "CLI",
@@ -81,10 +78,6 @@ THESIS_TEMPLATES = {
     },
 }
 
-
-
-def now_iso() -> str:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def extract_symbols(text: str) -> set[str]:
@@ -174,12 +167,12 @@ def upsert_symbol(conn, symbol: str, seen_at: str, bookmark_id: str) -> None:
 
 
 def ingest(payload: dict) -> dict:
-    fetched_at = payload.get("fetched_at") or now_iso()
+    fetched_at = payload.get("fetched_at") or utc_now_iso()
     bookmarks = payload.get("bookmarks", [])
 
     conn = database.connect()
 
-    started_at = now_iso()
+    started_at = utc_now_iso()
     cur = conn.execute("INSERT INTO runs(run_type, started_at, notes) VALUES (?, ?, ?)", ("bookmark_ingest", started_at, None))
     run_id = cur.lastrowid
 
@@ -307,7 +300,7 @@ def ingest(payload: dict) -> dict:
             ),
         )
 
-    conn.execute("UPDATE runs SET completed_at = ?, notes = ? WHERE id = ?", (now_iso(), f"Ingested {len(bookmarks)} bookmarks", run_id))
+    conn.execute("UPDATE runs SET completed_at = ?, notes = ? WHERE id = ?", (utc_now_iso(), f"Ingested {len(bookmarks)} bookmarks", run_id))
     conn.commit()
 
     top_symbols = conn.execute(

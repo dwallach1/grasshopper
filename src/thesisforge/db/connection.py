@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 AUTO_RETURNING_TABLES = {"financial_api_requests", "research_events", "runs", "trade_proposals"}
 
 
@@ -60,8 +60,8 @@ def connect():
         import psycopg
     except ImportError as exc:
         raise RuntimeError(
-            "Install pinned database dependencies in .venv with: "
-            ".venv/bin/python -m pip install -r requirements.txt"
+            "Install the ThesisForge package and pinned dependencies with: "
+            "bun run setup:python"
         ) from exc
     return Connection(psycopg.connect(database_url(), row_factory=_row_factory))
 

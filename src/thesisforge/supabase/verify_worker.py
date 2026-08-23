@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from psycopg.errors import InsufficientPrivilege
 
-from database import connect
+from thesisforge.db import connect
 
 
 def main() -> None:

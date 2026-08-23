@@ -11,5 +11,6 @@ dist/
 .agents/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # The nested Sites checkout is also tracked by the managing repository.

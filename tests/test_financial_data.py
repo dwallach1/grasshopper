@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import unittest
 
-from scripts import financial_data
+from thesisforge.financial import service as financial_data
 
 
 class FinancialDataTests(unittest.TestCase):

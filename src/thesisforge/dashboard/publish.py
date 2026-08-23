@@ -6,10 +6,8 @@ import datetime as dt
 import json
 from decimal import Decimal
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
 
 def rows(conn, query: str, params=()) -> list[dict]:
     return [dict(row) for row in conn.execute(query, params)]
@@ -58,7 +56,7 @@ def main() -> None:
         thesis["symbols"] = json.loads(symbols) if isinstance(symbols, str) else symbols
 
     payload = {
-        "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "generated_at": utc_now_iso(),
         "run_reports": run_reports(conn),
         "theses": theses,
         "predictions": rows(conn, "SELECT id, external_key, thesis_id, statement, target_date, probability, status, resolution_notes FROM predictions ORDER BY target_date, probability DESC"),

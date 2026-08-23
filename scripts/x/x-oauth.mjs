@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomBytes, createHash } from 'node:crypto';
-import { Buffer } from 'node:buffer';
+import { exchangeAuthorizationCode } from './client.mjs';
 import { loadEnv, requireEnv, updateEnv } from './env.mjs';
 
 const env = loadEnv();
@@ -46,7 +46,7 @@ const server = createServer(async (req, res) => {
     if (returnedState !== state) throw new Error('OAuth state did not match. Please retry.');
     if (!code) throw new Error('Missing OAuth code in callback.');
 
-    const token = await exchangeCode({ code, verifier, env });
+    const token = await exchangeAuthorizationCode({ code, verifier, env });
     updateEnv({
       X_ACCESS_TOKEN: token.access_token,
       X_REFRESH_TOKEN: token.refresh_token || env.X_REFRESH_TOKEN || '',
@@ -72,32 +72,4 @@ server.listen(port, redirect.hostname, () => {
 
 function base64Url(buffer) {
   return buffer.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-}
-
-async function exchangeCode({ code, verifier, env }) {
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: env.X_REDIRECT_URI,
-    code_verifier: verifier,
-    client_id: env.X_CLIENT_ID,
-  });
-
-  const headers = { 'content-type': 'application/x-www-form-urlencoded' };
-  if (env.X_CLIENT_SECRET) {
-    headers.authorization = `Basic ${Buffer.from(`${env.X_CLIENT_ID}:${env.X_CLIENT_SECRET}`).toString('base64')}`;
-  }
-
-  const response = await fetch('https://api.x.com/2/oauth2/token', {
-    method: 'POST',
-    headers,
-    body,
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(`Token exchange failed (${response.status}): ${JSON.stringify(payload)}`);
-  }
-
-  return payload;
 }

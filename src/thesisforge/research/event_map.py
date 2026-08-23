@@ -7,47 +7,19 @@ price, liquidity, and portfolio overlap before a human review.
 """
 from __future__ import annotations
 
-import datetime as dt
 import json
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
+from thesisforge.ontology.graph import upsert_edge as edge
+from thesisforge.ontology.graph import upsert_node as node
 
 RUN_DATE = "2026-08-23"
 WEEK = "2026-08-24_to_2026-08-30"
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def node(conn: database.Connection, node_id: str, node_type: str, label: str, props: dict) -> None:
-    ts = now()
-    conn.execute(
-        """
-        INSERT INTO graph_nodes(id, node_type, label, properties_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET label=excluded.label, properties_json=excluded.properties_json,
-          updated_at=excluded.updated_at
-        """,
-        (node_id, node_type, label, json.dumps(props, sort_keys=True), ts, ts),
-    )
-
-
-def edge(conn: database.Connection, src: str, dst: str, edge_type: str, weight: float, props: dict | None = None) -> None:
-    ts = now()
-    conn.execute(
-        """
-        INSERT INTO graph_edges(src_id, dst_id, edge_type, weight, evidence_count, properties_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-        ON CONFLICT(src_id, dst_id, edge_type) DO UPDATE SET weight=excluded.weight,
-          evidence_count=excluded.evidence_count, properties_json=excluded.properties_json,
-          updated_at=excluded.updated_at
-        """,
-        (src, dst, edge_type, weight, json.dumps(props or {}, sort_keys=True), ts, ts),
-    )
+    return utc_now_iso()
 
 
 def ensure_symbol(conn: database.Connection, symbol: str) -> None:

@@ -20,10 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now
 
 BASE_URL = "https://api.financialdatasets.ai"
 PROVIDER = "financialdatasets.ai"
@@ -39,7 +37,7 @@ class RequestSpec:
 
 
 def now() -> dt.datetime:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0)
+    return utc_now()
 
 
 def iso(value: dt.datetime) -> str:

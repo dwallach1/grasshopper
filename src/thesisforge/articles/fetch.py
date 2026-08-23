@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import html
 import re
 import sys
@@ -11,16 +10,10 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-try:
-    from scripts import database
-except ModuleNotFoundError:
-    import database
+from thesisforge import db as database
+from thesisforge.clock import utc_now_iso
 
 SKIP_HOSTS = {"x.com", "twitter.com", "pic.x.com", "youtube.com", "www.youtube.com", "youtu.be"}
-
-
-def now_iso() -> str:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def clean_html(raw: str) -> tuple[str | None, str]:
@@ -105,7 +98,7 @@ def main() -> None:
               fetched_at=excluded.fetched_at, status_code=excluded.status_code,
               content_type=excluded.content_type, text=excluded.text, error=excluded.error
             """,
-            (bookmark_id, url, title, now_iso(), status, content_type, text, error),
+            (bookmark_id, url, title, utc_now_iso(), status, content_type, text, error),
         )
         fetched += 1
         print(f"fetched {url} -> {status or 'error'}", file=sys.stderr)

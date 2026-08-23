@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-export const envPath = new URL('../.env.local', import.meta.url);
+export const envPath = new URL('../../.env.local', import.meta.url);
 
 export function loadEnv() {
   if (!existsSync(envPath)) {
