@@ -8,17 +8,22 @@ import json
 import sqlite3
 from pathlib import Path
 
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
+
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "thesisforge.sqlite"
 OUTPUT = ROOT / "web" / "data" / "ontology-snapshot.json"
 
 
-def rows(conn: sqlite3.Connection, query: str, params=()) -> list[dict]:
+def rows(conn, query: str, params=()) -> list[dict]:
     return [dict(row) for row in conn.execute(query, params)]
 
 
-def table_exists(conn: sqlite3.Connection, name: str) -> bool:
-    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+def table_exists(conn, name: str) -> bool:
+    return database.table_exists(conn, name)
 
 
 def main() -> None:
@@ -27,8 +32,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=OUTPUT)
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db)
-    conn.row_factory = sqlite3.Row
+    conn = database.connect(args.db)
     theses = rows(conn, """
         SELECT t.id, t.name, t.summary, t.status, t.confidence, t.time_horizon, t.stance,
                t.variant_perception, t.falsifier,
@@ -37,7 +41,8 @@ def main() -> None:
         FROM theses t ORDER BY t.confidence DESC, t.name
     """)
     for thesis in theses:
-        thesis["symbols"] = json.loads(thesis.pop("symbols_json"))
+        symbols = thesis.pop("symbols_json")
+        thesis["symbols"] = json.loads(symbols) if isinstance(symbols, str) else symbols
 
     payload = {
         "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -111,10 +116,20 @@ def main() -> None:
         },
     }
     for insight in payload["insights"]:
-        insight["links"] = json.loads(insight.pop("links_json"))
+        links = insight.pop("links_json")
+        insight["links"] = json.loads(links) if isinstance(links, str) else links
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n")
+    if database.is_postgres(conn):
+        from psycopg.types.json import Jsonb
+        conn.execute(
+            """INSERT INTO dashboard_snapshots(id, generated_at, payload)
+               VALUES ('current', ?, ?)
+               ON CONFLICT(id) DO UPDATE SET generated_at=excluded.generated_at, payload=excluded.payload""",
+            (payload["generated_at"], Jsonb(payload)),
+        )
+        conn.commit()
     conn.close()
     print(f"Exported {len(theses)} theses to {args.output}")
 

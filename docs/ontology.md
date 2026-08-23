@@ -4,7 +4,7 @@ ThesisForge should build a living graph, not a flat watchlist.
 
 ## Core Idea
 
-Every bookmark, article, filing, earnings event, IPO report, Robinhood quote, trade proposal, critic note, and postmortem becomes a node or edge in a local knowledge graph.
+Every bookmark, article, filing, earnings event, IPO report, Robinhood quote, trade proposal, critic note, and postmortem becomes a node or edge in the persistent Supabase knowledge graph.
 
 The graph is paired with a judgment ledger. Evidence records what a source says; the ledger records what ThesisForge currently believes, what would falsify it, what it predicts, and why it will participate in or abstain from an event.
 

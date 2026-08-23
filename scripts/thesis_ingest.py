@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build and update the ThesisForge SQLite memory from fetched X bookmarks.
+"""Build and update persistent ThesisForge memory from fetched X bookmarks.
 
-This script is intentionally dependency-free. It creates durable local state from
-private bookmark data, then leaves Robinhood enrichment to Codex scheduled runs.
+It writes private bookmark data to the configured canonical database, then
+leaves Robinhood enrichment to Codex scheduled runs.
 """
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ import re
 import sqlite3
 from collections import Counter, defaultdict
 from pathlib import Path
+
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BOOKMARKS = ROOT / "data" / "x-bookmarks.json"
@@ -325,7 +330,7 @@ def claim_type(text: str) -> str:
     return "opinion_or_theme"
 
 
-def upsert_symbol(conn: sqlite3.Connection, symbol: str, seen_at: str, bookmark_id: str) -> None:
+def upsert_symbol(conn, symbol: str, seen_at: str, bookmark_id: str) -> None:
     row = conn.execute("SELECT mention_count, source_count FROM symbols WHERE symbol = ?", (symbol,)).fetchone()
     if row:
         existing_source = conn.execute(
@@ -348,7 +353,7 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
     bookmarks = payload.get("bookmarks", [])
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = database.connect(db_path)
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
 
@@ -364,7 +369,7 @@ def ingest(bookmarks_path: Path, db_path: Path) -> dict:
         text = bookmark.get("text") or ""
         symbols = extract_symbols(text)
         score = market_score(text, symbols, bookmark.get("context_annotations") or [])
-        is_market = 1 if score >= 35 else 0
+        is_market = score >= 35
         market_count += is_market
         created_at = bookmark.get("created_at") or fetched_at
         bookmark_id = bookmark["id"]

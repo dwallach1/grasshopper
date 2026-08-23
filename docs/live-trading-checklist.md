@@ -11,7 +11,7 @@ Before any real trade, ThesisForge should:
 7. Run bull-case, bear-case, and portfolio-risk reviews when practical.
 8. Use web research when the thesis depends on current events, 13F filings, articles, SEC filings, or fresh market context.
 9. Call Robinhood `review_equity_order` before any equity placement.
-10. Persist every proposal, placement, outcome, and lesson into `data/thesisforge.sqlite`.
+10. Persist every proposal, placement, outcome, and lesson into the canonical Supabase Postgres database.
 11. If a Robinhood MCP write tool requires explicit confirmation after review, obey that tool requirement.
 
 The user wants autonomous execution after validation where tooling and safety requirements allow it.

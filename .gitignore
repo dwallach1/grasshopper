@@ -12,10 +12,10 @@
 node_modules/
 dist/
 .cache/
+.agents/
 __pycache__/
 *.pyc
 
 data/
 
-# The deployed Sites app is versioned and published from its own repository.
-/web/
+# The nested Sites checkout is also tracked by the managing repository.

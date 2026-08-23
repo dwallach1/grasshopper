@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch readable text for bookmarked article URLs and store it in SQLite."""
+"""Fetch readable text for bookmarked article URLs and persist it."""
 from __future__ import annotations
 
 import argparse
@@ -12,6 +12,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "thesisforge.sqlite"
@@ -84,7 +89,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=12)
     args = parser.parse_args()
 
-    conn = sqlite3.connect(args.db)
+    conn = database.connect(args.db)
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(ARTICLE_SCHEMA)
 

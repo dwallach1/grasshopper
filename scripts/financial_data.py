@@ -21,6 +21,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / "data" / "thesisforge.sqlite"
 BASE_URL = "https://api.financialdatasets.ai"
@@ -123,7 +128,7 @@ def request_fingerprint(spec: RequestSpec) -> str:
     return hashlib.sha256(material.encode()).hexdigest()
 
 
-def initialize(conn: sqlite3.Connection) -> None:
+def initialize(conn) -> None:
     conn.executescript(SCHEMA)
     conn.execute("PRAGMA optimize")
     conn.commit()
@@ -157,7 +162,7 @@ def ttl_for(spec: RequestSpec) -> tuple[dt.timedelta, str]:
     return dt.timedelta(days=1), "default_1d"
 
 
-def cached_request(conn: sqlite3.Connection, fingerprint: str) -> sqlite3.Row | None:
+def cached_request(conn, fingerprint: str):
     return conn.execute(
         """SELECT r.* FROM financial_request_cache c
            JOIN financial_api_requests r ON r.id=c.request_id
@@ -166,7 +171,7 @@ def cached_request(conn: sqlite3.Connection, fingerprint: str) -> sqlite3.Row | 
     ).fetchone()
 
 
-def decode_response(row: sqlite3.Row) -> Any:
+def decode_response(row) -> Any:
     raw = bytes(row["response_body"])
     if row["response_encoding"] == "gzip":
         raw = gzip.decompress(raw)
@@ -187,9 +192,7 @@ def records_from_payload(payload: Any) -> list[dict[str, Any]]:
     return [payload]
 
 
-def normalize_records(
-    conn: sqlite3.Connection, spec: RequestSpec, payload: Any, request_id: int, fetched_at: str
-) -> int:
+def normalize_records(conn, spec: RequestSpec, payload: Any, request_id: int, fetched_at: str) -> int:
     dataset = spec.endpoint.strip("/").replace("/", ".")
     fallback_ticker = str(spec.params.get("ticker", "")).upper() or None
     inserted = 0
@@ -224,7 +227,7 @@ def normalize_records(
     return inserted
 
 
-def fetch(conn: sqlite3.Connection, spec: RequestSpec, *, force: bool = False) -> tuple[Any, str, int]:
+def fetch(conn, spec: RequestSpec, *, force: bool = False) -> tuple[Any, str, int]:
     fingerprint = request_fingerprint(spec)
     if not force:
         cached = cached_request(conn, fingerprint)
@@ -314,9 +317,7 @@ def fetch(conn: sqlite3.Connection, spec: RequestSpec, *, force: bool = False) -
     return payload, "network", request_id
 
 
-def import_mcp_response(
-    conn: sqlite3.Connection, spec: RequestSpec, payload: Any, *, tool_name: str
-) -> tuple[int, int]:
+def import_mcp_response(conn, spec: RequestSpec, payload: Any, *, tool_name: str) -> tuple[int, int]:
     """Persist a paid MCP result using the same cache identity as the HTTP API."""
     fingerprint = request_fingerprint(spec)
     completed = now()
@@ -376,7 +377,7 @@ def pilot_specs(ticker: str, start_date: str, end_date: str) -> list[RequestSpec
     ]
 
 
-def database_stats(conn: sqlite3.Connection) -> dict[str, Any]:
+def database_stats(conn) -> dict[str, Any]:
     row = conn.execute(
         """SELECT
           (SELECT COUNT(*) FROM financial_api_requests) AS network_requests,
@@ -413,8 +414,7 @@ def main() -> None:
     sub.add_parser("stats", help="Show the local vault and cache statistics")
     args = parser.parse_args()
     args.db.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(args.db)
-    conn.row_factory = sqlite3.Row
+    conn = database.connect(args.db)
     initialize(conn)
 
     if args.command == "stats":

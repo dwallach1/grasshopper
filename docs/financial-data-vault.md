@@ -1,12 +1,12 @@
 # Financial data vault
 
-ThesisForge treats Financial Datasets as a paid upstream source, not as its database. Every network response is written to `data/thesisforge.sqlite` before normalization. Repeat reads use the local cache until the dataset-specific freshness window expires.
+ThesisForge treats Financial Datasets as a paid upstream source, not as its database. Every network response is written to the canonical Supabase Postgres database before normalization. Repeat reads use the persistent cache until the dataset-specific freshness window expires.
 
 ## Safety properties
 
 - The API key is read only from `FINANCIAL_DATASETS_API_KEY` and is never included in fingerprints, logs, or stored request headers.
 - Raw response bytes, response headers, request parameters, status, timestamp, and SHA-256 are retained for every upstream call, including API errors.
-- Raw JSON is gzip-compressed in SQLite. Normalized records keep their source request ID, so every fact is traceable to the exact purchased payload.
+- Raw JSON is gzip-compressed in Postgres. Normalized records keep their source request ID, so every fact is traceable to the exact purchased payload.
 - Identical normalized records are deduplicated. Changed records are appended rather than overwritten.
 - Pilot runs are dry by default and have a hard paid-request cap.
 - Financial Datasets MCP results are imported under the same request fingerprint as direct HTTP results, preventing transport-specific duplicate purchases.

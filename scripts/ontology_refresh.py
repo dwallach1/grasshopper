@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and refresh a lightweight ThesisForge ontology graph in SQLite."""
+"""Create and refresh the persistent ThesisForge ontology graph."""
 from __future__ import annotations
 
 import datetime as dt
@@ -7,6 +7,11 @@ import json
 import re
 import sqlite3
 from pathlib import Path
+
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "thesisforge.sqlite"
@@ -267,12 +272,12 @@ def upsert_edge(conn, src, dst, edge_type, weight=1.0, props=None):
 
 
 def ensure_column(conn, table: str, column: str, definition: str) -> None:
-    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    columns = database.table_columns(conn, table)
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
-def seed_research_views(conn: sqlite3.Connection, ts: str) -> None:
+def seed_research_views(conn, ts: str) -> None:
     thesis_views = {
         "ai_power_nuclear": ("bullish", "The market still underestimates how long grid, generation, and fuel constraints can persist.", "Utility capex or power prices fail to accelerate despite sustained compute demand."),
         "neocloud_compute": ("bullish", "Capacity scarcity can outweigh financing anxiety during confirmed demand bursts.", "Utilization, contracted backlog, or financing access deteriorates materially."),
@@ -347,7 +352,7 @@ def seed_research_views(conn: sqlite3.Connection, ts: str) -> None:
                 )
 
 
-def seed_closed_loop(conn: sqlite3.Connection, ts: str) -> None:
+def seed_closed_loop(conn, ts: str) -> None:
     cycles = [
         ("cycle-ai-power-01", "ai_power_nuclear", "AI power beneficiaries sustain relative strength through the next capex-guidance cycle.", "Basket outperforms software AI proxies with improving breadth and no drawdown beyond the hard risk limit.", "live", "active", 4, "AI capex expansion"),
         ("cycle-neocloud-01", "neocloud_compute", "A confirmed Nscale filing expands volatility and attention across listed neocloud comps.", "At least two public comps show volume expansion around the filing window without a financing-quality break.", "backtest", "open", 3, "event volatility"),
@@ -422,7 +427,7 @@ def seed_closed_loop(conn: sqlite3.Connection, ts: str) -> None:
         ]
         for cycle_key, role, group, blinded, summary in roles:
             cycle_id = conn.execute("SELECT id FROM research_cycles WHERE external_key=?", (cycle_key,)).fetchone()[0]
-            conn.execute("INSERT INTO agent_runs(cycle_id, agent_role, independence_group, price_blinded, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)", (cycle_id, role, group, blinded, summary, ts))
+            conn.execute("INSERT INTO agent_runs(cycle_id, agent_role, independence_group, price_blinded, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)", (cycle_id, role, group, bool(blinded), summary, ts))
 
     lessons = [
         ("cycle-ai-power-01", "ai-power-fast", "ai_power_nuclear", "negative_result", "Fast-entry variants overfit recent power momentum and breach drawdown limits during rate shocks.", "2022 rates shock", 1),
@@ -434,7 +439,7 @@ def seed_closed_loop(conn: sqlite3.Connection, ts: str) -> None:
         test_id = conn.execute("SELECT id FROM strategy_tests WHERE external_key=?", (test_key,)).fetchone()[0]
         if conn.execute("SELECT 1 FROM research_lessons WHERE test_id=? AND lesson_type=?", (test_id, lesson_type)).fetchone():
             continue
-        conn.execute("INSERT INTO research_lessons(cycle_id, test_id, thesis_id, lesson_type, summary, market_regime, incorporated, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (cycle_id, test_id, thesis_id, lesson_type, summary, regime, incorporated, ts))
+        conn.execute("INSERT INTO research_lessons(cycle_id, test_id, thesis_id, lesson_type, summary, market_regime, incorporated, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (cycle_id, test_id, thesis_id, lesson_type, summary, regime, bool(incorporated), ts))
 
     controls = [
         ("portfolio-drawdown", "portfolio", "max_drawdown", {"percent": 8}, "code"),
@@ -455,7 +460,7 @@ def seed_closed_loop(conn: sqlite3.Connection, ts: str) -> None:
 
 
 def main():
-    conn = sqlite3.connect(DB)
+    conn = database.connect(DB)
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA)
     ensure_column(conn, "theses", "stance", "TEXT NOT NULL DEFAULT 'neutral'")
@@ -527,7 +532,10 @@ def main():
         """,
         ("ipo_watch", "Nscale possible U.S. IPO", "2026-09", "watching", "https://www.nscale.com/press-releases/nscale-acquires-anyscale", nscale_summary, ts, ts),
         )
-        event_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        event_id = conn.execute(
+            "SELECT id FROM research_events WHERE label=? AND event_date=? ORDER BY id LIMIT 1",
+            ("Nscale possible U.S. IPO", "2026-09"),
+        ).fetchone()[0]
     upsert_node(conn, f"event:{event_id}", "event", "Nscale possible U.S. IPO", {"event_date": "2026-09", "status": "watching"})
     for cid in ["concept:neocloud", "concept:ai_power", "concept:ipo_events"]:
         upsert_edge(conn, f"event:{event_id}", cid, "catalyzes", weight=4.0)

@@ -8,6 +8,11 @@ import re
 import sqlite3
 from pathlib import Path
 
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
+
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "thesisforge.sqlite"
 
@@ -78,7 +83,7 @@ def main() -> None:
 
     args = parser.parse_args()
     ts = now_iso()
-    conn = sqlite3.connect(args.db)
+    conn = database.connect(args.db)
     conn.execute("PRAGMA foreign_keys=ON")
 
     if args.command == "thesis-view":
@@ -163,7 +168,7 @@ def main() -> None:
             test_id = test_row[0]
         conn.execute(
             "INSERT INTO research_lessons(cycle_id, test_id, thesis_id, lesson_type, summary, market_regime, incorporated, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (cycle_row[0], test_id, args.thesis_id, args.type, args.summary, args.regime, 1 if args.incorporated else 0, ts),
+            (cycle_row[0], test_id, args.thesis_id, args.type, args.summary, args.regime, args.incorporated, ts),
         )
 
     conn.commit()

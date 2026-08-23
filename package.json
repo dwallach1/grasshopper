@@ -16,6 +16,7 @@
     "financial:plan": "python3 scripts/financial_data.py pilot GEV VST CEG",
     "financial:stats": "python3 scripts/financial_data.py stats",
     "financial:test": "python3 -m unittest scripts/test_financial_data.py",
+    "db:migrate": "python3 scripts/migrate_sqlite_to_supabase.py",
     "research:capture": "python3 scripts/research_capture.py",
     "research:refresh": "npm run thesis:refresh && npm run ontology:refresh && npm run ontology:export && npm run ontology:report"
   }

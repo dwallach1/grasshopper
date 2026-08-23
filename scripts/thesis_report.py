@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""Print a compact ThesisForge state report from SQLite."""
+"""Print a compact ThesisForge state report from the canonical database."""
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
+
+try:
+    from scripts import database
+except ModuleNotFoundError:
+    import database
 
 ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "data" / "thesisforge.sqlite"
 
-conn = sqlite3.connect(DB)
-conn.row_factory = sqlite3.Row
+conn = database.connect(DB)
 
 print("# ThesisForge State\n")
 run = conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone()
