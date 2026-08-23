@@ -212,6 +212,17 @@ CREATE TABLE IF NOT EXISTS portfolio_exposure (
   source TEXT NOT NULL DEFAULT 'robinhood_mcp'
 );
 
+CREATE TABLE IF NOT EXISTS account_snapshots (
+  id INTEGER PRIMARY KEY,
+  observed_at TEXT NOT NULL,
+  account_label TEXT NOT NULL,
+  total_value REAL NOT NULL,
+  equity_value REAL NOT NULL,
+  cash REAL NOT NULL,
+  buying_power REAL NOT NULL,
+  source TEXT NOT NULL DEFAULT 'robinhood_mcp'
+);
+
 CREATE TABLE IF NOT EXISTS trade_proposals (
   id INTEGER PRIMARY KEY,
   thesis_id TEXT,

@@ -88,6 +88,7 @@ def main() -> None:
             FROM research_lessons l ORDER BY l.incorporated ASC, l.id DESC
         """),
         "risk_controls": rows(conn, "SELECT id, control_key, scope, control_type, threshold_json, enforcement_level, status, updated_at FROM risk_controls ORDER BY scope, control_key"),
+        "account_state": rows(conn, "SELECT observed_at, account_label, total_value, equity_value, cash, buying_power, source FROM account_snapshots ORDER BY observed_at DESC, id DESC LIMIT 1")[0] if table_exists(conn, "account_snapshots") and conn.execute("SELECT COUNT(*) FROM account_snapshots").fetchone()[0] else None,
         "trade_proposals": rows(conn, "SELECT id, thesis_id, symbol, side, notional, order_type, status, rationale, created_at, reviewed_at, broker_alerts FROM trade_proposals ORDER BY created_at DESC, id DESC"),
         "graph": {
             "nodes": rows(conn, "SELECT id, node_type, label, properties_json FROM graph_nodes WHERE node_type IN ('thesis','concept','symbol','event') ORDER BY node_type, label"),
