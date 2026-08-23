@@ -4,6 +4,11 @@ ThesisForge is a persistent investment-research system that turns bookmarks,
 articles, financial data, portfolio state, and research judgments into a living
 ontology and decision ledger.
 
+JavaScript tooling uses Bun 1.4. Install dependencies in the dashboard with
+`cd web && bun install`; use `bun run dev`, `bun run build`, and `bun run lint`
+there for the normal web workflow. Python remains the runtime for research and
+database jobs, invoked through the root Bun scripts below.
+
 ## Database
 
 Supabase Postgres is the canonical database. The schema is declared in
@@ -23,8 +28,8 @@ Configure `.env.local` from `.env.example`, apply the Supabase schema, then
 perform the one-time import:
 
 ```sh
-npm run db:migrate
-npm run ontology:export
+bun run db:migrate
+bun run ontology:export
 ```
 
 The importer verifies every table's row count before committing. Keep the
@@ -34,11 +39,11 @@ been observed through at least one complete scheduled run.
 ## Common workflows
 
 ```sh
-npm run research:refresh
-npm run thesis:report
-npm run ontology:report
-npm run financial:stats
-npm run financial:test
+bun run research:refresh
+bun run thesis:report
+bun run ontology:report
+bun run financial:stats
+bun run financial:test
 ```
 
 The `web/` directory contains the private OpenAI Sites dashboard. Its source is

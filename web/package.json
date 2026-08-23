@@ -2,14 +2,15 @@
   "name": "sites-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "dev": "bun --bun vinext dev",
+    "build": "bun --bun vinext build",
+    "start": "bun --bun vinext start",
+    "lint": "bun --bun eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
     "next": "16.2.6",

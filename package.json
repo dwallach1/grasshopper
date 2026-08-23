@@ -2,14 +2,15 @@
   "name": "thesisforge",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "type": "module",
   "scripts": {
-    "x:auth": "node scripts/x-oauth.mjs",
-    "x:bookmarks": "node scripts/x-bookmarks.mjs",
+    "x:auth": "bun scripts/x-oauth.mjs",
+    "x:bookmarks": "bun scripts/x-bookmarks.mjs",
     "thesis:ingest": "python3 scripts/thesis_ingest.py",
     "thesis:report": "python3 scripts/thesis_report.py",
     "articles:fetch": "python3 scripts/article_fetch.py",
-    "thesis:refresh": "npm run x:bookmarks && npm run thesis:ingest && npm run articles:fetch && npm run thesis:report",
+    "thesis:refresh": "bun run x:bookmarks && bun run thesis:ingest && bun run articles:fetch && bun run thesis:report",
     "ontology:refresh": "python3 scripts/ontology_refresh.py",
     "ontology:report": "python3 scripts/ontology_report.py",
     "ontology:export": "python3 scripts/ontology_export.py",
@@ -18,6 +19,6 @@
     "financial:test": "python3 -m unittest scripts/test_financial_data.py",
     "db:migrate": "python3 scripts/migrate_sqlite_to_supabase.py",
     "research:capture": "python3 scripts/research_capture.py",
-    "research:refresh": "npm run thesis:refresh && npm run ontology:refresh && npm run ontology:export && npm run ontology:report"
+    "research:refresh": "bun run thesis:refresh && bun run ontology:refresh && bun run ontology:export && bun run ontology:report"
   }
 }
