@@ -6,6 +6,7 @@ import argparse
 import datetime as dt
 import json
 import sqlite3
+from decimal import Decimal
 from pathlib import Path
 
 try:
@@ -26,6 +27,15 @@ def table_exists(conn, name: str) -> bool:
     return database.table_exists(conn, name)
 
 
+def json_default(value):
+    """Match SQLite's JSON-friendly scalar behavior for Postgres values."""
+    if isinstance(value, (dt.date, dt.datetime)):
+        return value.isoformat().replace("+00:00", "Z")
+    if isinstance(value, Decimal):
+        return float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=DB)
@@ -37,7 +47,7 @@ def main() -> None:
         SELECT t.id, t.name, t.summary, t.status, t.confidence, t.time_horizon, t.stance,
                t.variant_perception, t.falsifier,
                COALESCE((SELECT json_group_array(symbol) FROM
-                 (SELECT symbol FROM thesis_symbols ts WHERE ts.thesis_id=t.id ORDER BY weight_hint DESC LIMIT 8)), '[]') AS symbols_json
+                 (SELECT symbol FROM thesis_symbols ts WHERE ts.thesis_id=t.id ORDER BY weight_hint DESC, symbol LIMIT 8)), '[]') AS symbols_json
         FROM theses t ORDER BY t.confidence DESC, t.name
     """)
     for thesis in theses:
@@ -50,7 +60,8 @@ def main() -> None:
         "predictions": rows(conn, "SELECT id, external_key, thesis_id, statement, target_date, probability, status, resolution_notes FROM predictions ORDER BY target_date, probability DESC"),
         "insights": rows(conn, """
             SELECT i.id, i.slug, i.title, i.summary, i.insight_type, i.novelty, i.confidence,
-              COALESCE((SELECT json_group_array(node_id) FROM insight_links il WHERE il.insight_id=i.id), '[]') AS links_json
+              COALESCE((SELECT json_group_array(node_id) FROM
+                (SELECT node_id FROM insight_links il WHERE il.insight_id=i.id ORDER BY node_id)), '[]') AS links_json
             FROM insights i WHERE i.status='active' ORDER BY i.novelty DESC, i.confidence DESC
         """),
         "relations": rows(conn, "SELECT src_thesis_id, dst_thesis_id, relation_type, strength, rationale FROM thesis_relations ORDER BY strength DESC"),
@@ -118,6 +129,26 @@ def main() -> None:
     for insight in payload["insights"]:
         links = insight.pop("links_json")
         insight["links"] = json.loads(links) if isinstance(links, str) else links
+
+    # The dashboard's portable snapshot predates Postgres and intentionally
+    # represents JSON columns as strings and booleans as SQLite-style integers.
+    for run in payload["agent_runs"]:
+        run["price_blinded"] = int(run["price_blinded"])
+    for lesson in payload["lessons"]:
+        lesson["incorporated"] = int(lesson["incorporated"])
+    for control in payload["risk_controls"]:
+        if not isinstance(control["threshold_json"], str):
+            control["threshold_json"] = json.dumps(control["threshold_json"], separators=(",", ":"))
+    for proposal in payload["trade_proposals"]:
+        if proposal["broker_alerts"] is not None and not isinstance(proposal["broker_alerts"], str):
+            proposal["broker_alerts"] = json.dumps(proposal["broker_alerts"], separators=(",", ":"))
+    for node in payload["graph"]["nodes"]:
+        if not isinstance(node["properties_json"], str):
+            node["properties_json"] = json.dumps(node["properties_json"], separators=(",", ":"))
+
+    # Postgres returns native dates and exact numerics; normalize the complete
+    # snapshot once so the file and JSONB record stay byte-for-byte compatible.
+    payload = json.loads(json.dumps(payload, default=json_default))
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2) + "\n")

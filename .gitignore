@@ -1,6 +1,7 @@
 # Local secrets and OAuth tokens
 .env
 .env.*
+.venv/
 !.env.example
 
 # Runtime state
@@ -17,5 +18,7 @@ __pycache__/
 *.pyc
 
 data/
+!web/data/
+!web/data/ontology-snapshot.json
 
 # The nested Sites checkout is also tracked by the managing repository.

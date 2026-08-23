@@ -36,7 +36,9 @@ class CompatRow(dict):
 
 
 def _compat_row_factory(cursor: Any):
-    columns = [column.name for column in cursor.description]
+    # INSERT/UPDATE statements have no result columns. Psycopg still invokes
+    # the configured row factory, so treat that description as an empty row.
+    columns = [] if cursor.description is None else [column.name for column in cursor.description]
 
     def make_row(values: Iterable[Any]) -> CompatRow:
         return CompatRow(zip(columns, values))
