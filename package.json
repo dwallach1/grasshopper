@@ -8,10 +8,9 @@
     "setup:python": "python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
     "x:auth": "bun scripts/x-oauth.mjs",
     "x:bookmarks": "bun scripts/x-bookmarks.mjs",
-    "thesis:ingest": ".venv/bin/python scripts/thesis_ingest.py",
     "thesis:report": ".venv/bin/python scripts/thesis_report.py",
     "articles:fetch": ".venv/bin/python scripts/article_fetch.py",
-    "thesis:refresh": "bun run x:bookmarks && bun run thesis:ingest && bun run articles:fetch && bun run thesis:report",
+    "thesis:refresh": "bun run x:bookmarks && bun run articles:fetch && bun run thesis:report",
     "ontology:refresh": ".venv/bin/python scripts/ontology_refresh.py",
     "ontology:report": ".venv/bin/python scripts/ontology_report.py",
     "dashboard:publish": ".venv/bin/python scripts/publish_dashboard.py",
@@ -19,8 +18,11 @@
     "financial:fetch": ".venv/bin/python scripts/financial_data.py fetch",
     "financial:stats": ".venv/bin/python scripts/financial_data.py stats",
     "financial:test": ".venv/bin/python -m unittest scripts/test_financial_data.py",
+    "policy:test": ".venv/bin/python -m unittest scripts/test_trade_policy.py",
     "supabase:verify": ".venv/bin/python scripts/verify_supabase_worker.py",
     "research:capture": ".venv/bin/python scripts/research_capture.py",
+    "event-map:sunday": ".venv/bin/python scripts/sunday_event_map.py",
+    "run:report": ".venv/bin/python scripts/run_report.py",
     "research:refresh": "bun run thesis:refresh && bun run ontology:refresh && bun run dashboard:publish && bun run ontology:report"
   }
 }

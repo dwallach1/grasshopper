@@ -7,7 +7,11 @@ export default async function Home() {
   let current;
   try {
     current = await loadSnapshot();
-  } catch {
+  } catch (error) {
+    console.error(
+      'Canonical dashboard snapshot unavailable:',
+      error instanceof Error ? error.message : 'unknown error',
+    );
     return <main className="data-unavailable"><section><b>TF://SUPABASE</b><h1>Canonical data unavailable</h1><p>ThesisForge will not substitute a stale local copy. Restore the Supabase connection or publish a fresh dashboard snapshot.</p></section></main>;
   }
   return <OntologyDashboard initialData={current} />;

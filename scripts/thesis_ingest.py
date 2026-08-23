@@ -10,6 +10,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -17,9 +18,6 @@ try:
     from scripts import database
 except ModuleNotFoundError:
     import database
-
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BOOKMARKS = ROOT / "data" / "x-bookmarks.json"
 
 STOP_TICKERS = {
     "A", "AI", "AM", "AN", "AND", "API", "ARE", "ATH", "BE", "BEST", "BUT", "CAD", "CEO", "CLI",
@@ -175,12 +173,10 @@ def upsert_symbol(conn, symbol: str, seen_at: str, bookmark_id: str) -> None:
         )
 
 
-def ingest(bookmarks_path: Path) -> dict:
-    payload = json.loads(bookmarks_path.read_text())
+def ingest(payload: dict) -> dict:
     fetched_at = payload.get("fetched_at") or now_iso()
     bookmarks = payload.get("bookmarks", [])
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = database.connect()
 
     started_at = now_iso()
@@ -333,10 +329,19 @@ def ingest(bookmarks_path: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bookmarks", type=Path, default=DEFAULT_BOOKMARKS)
+    parser.add_argument(
+        "--bookmarks",
+        required=True,
+        help="Bookmark JSON input path, or '-' to read the X response from stdin without a local file.",
+    )
     args = parser.parse_args()
 
-    result = ingest(args.bookmarks)
+    if args.bookmarks == "-":
+        payload = json.load(sys.stdin)
+    else:
+        payload = json.loads(Path(args.bookmarks).read_text())
+
+    result = ingest(payload)
     print(json.dumps(result, indent=2))
 
 

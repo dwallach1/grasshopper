@@ -12,6 +12,4 @@ dist/
 __pycache__/
 *.pyc
 
-data/
-
 # The nested Sites checkout is also tracked by the managing repository.

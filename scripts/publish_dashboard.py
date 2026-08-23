@@ -24,6 +24,26 @@ def json_default(value):
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
+def run_reports(conn) -> list[dict]:
+    reports = rows(conn, "SELECT id, run_type, started_at, completed_at, notes FROM runs ORDER BY started_at DESC, id DESC LIMIT 24")
+    for report in reports:
+        notes = report.pop("notes") or ""
+        try:
+            detail = json.loads(notes)
+        except (TypeError, json.JSONDecodeError):
+            detail = {"headline": report["run_type"].replace("_", " ").title(), "summary": notes}
+        report.update({
+            "status": detail.get("status", "complete" if report["completed_at"] else "running"),
+            "headline": detail.get("headline", report["run_type"].replace("_", " ").title()),
+            "summary": detail.get("summary", notes),
+            "insights": detail.get("insights", []),
+            "learnings": detail.get("learnings", []),
+            "actions": detail.get("actions", []),
+            "metrics": detail.get("metrics", {}),
+        })
+    return reports
+
+
 def main() -> None:
     conn = database.connect()
     theses = rows(conn, """
@@ -39,6 +59,7 @@ def main() -> None:
 
     payload = {
         "generated_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "run_reports": run_reports(conn),
         "theses": theses,
         "predictions": rows(conn, "SELECT id, external_key, thesis_id, statement, target_date, probability, status, resolution_notes FROM predictions ORDER BY target_date, probability DESC"),
         "insights": rows(conn, """
@@ -86,7 +107,7 @@ def main() -> None:
                    l.market_regime, l.incorporated, l.created_at
             FROM research_lessons l ORDER BY l.incorporated ASC, l.id DESC
         """),
-        "risk_controls": rows(conn, "SELECT id, control_key, scope, control_type, threshold_json, enforcement_level, status, updated_at FROM risk_controls ORDER BY scope, control_key"),
+        "risk_controls": rows(conn, "SELECT id, control_key, scope, control_type, threshold_json, enforcement_level, status, updated_at FROM risk_controls WHERE status='active' ORDER BY scope, control_key"),
         "account_state": (rows(conn, "SELECT observed_at, account_label, total_value, equity_value, cash, buying_power, source FROM account_snapshots ORDER BY observed_at DESC, id DESC LIMIT 1") or [None])[0],
         "trade_proposals": rows(conn, "SELECT id, thesis_id, symbol, side, notional, order_type, status, rationale, created_at, reviewed_at, broker_alerts FROM trade_proposals ORDER BY created_at DESC, id DESC"),
         "graph": {

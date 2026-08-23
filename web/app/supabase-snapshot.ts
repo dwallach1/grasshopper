@@ -6,13 +6,19 @@ type SnapshotRow = { payload?: Snapshot };
 
 export async function loadSnapshot(): Promise<Snapshot> {
   const url = env.SUPABASE_URL;
-  const secretKey = env.SUPABASE_SECRET_KEY;
-  if (!url || !secretKey) throw new Error('Supabase environment is not configured');
+  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY;
+  const dashboardToken = env.THESISFORGE_DASHBOARD_TOKEN;
+  if (!url || !publishableKey || !dashboardToken) {
+    throw new Error('Supabase environment is not configured');
+  }
 
   const response = await fetch(
     `${url.replace(/\/$/, '')}/rest/v1/dashboard_snapshots?id=eq.current&select=payload`,
     {
-      headers: { apikey: secretKey },
+      headers: {
+        apikey: publishableKey,
+        'x-thesisforge-dashboard-token': dashboardToken,
+      },
       cache: 'no-store',
     },
   );

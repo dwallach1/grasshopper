@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { loadEnv, requireEnv, updateEnv } from './env.mjs';
 import { Buffer } from 'node:buffer';
 
@@ -28,11 +28,21 @@ for (;;) {
   if (!paginationToken) break;
 }
 
-mkdirSync('data', { recursive: true });
-writeFileSync('data/x-bookmarks.json', JSON.stringify({ fetched_at: new Date().toISOString(), user: user.data, bookmarks }, null, 2));
+const payload = JSON.stringify({ fetched_at: new Date().toISOString(), user: user.data, bookmarks });
+const ingest = spawnSync('.venv/bin/python', ['scripts/thesis_ingest.py', '--bookmarks', '-'], {
+  cwd: process.cwd(),
+  input: payload,
+  encoding: 'utf8',
+  maxBuffer: 10 * 1024 * 1024,
+});
+
+if (ingest.error) throw ingest.error;
+if (ingest.status !== 0) {
+  throw new Error(`Supabase bookmark ingestion failed (${ingest.status}): ${ingest.stderr.trim()}`);
+}
 
 console.log(`Fetched ${bookmarks.length} bookmarks for @${user.data.username}.`);
-console.log('Saved private bookmark data to data/x-bookmarks.json.');
+console.log(ingest.stdout.trim());
 
 async function xFetch(path, env, retried = false) {
   const response = await fetch(`https://api.x.com${path}`, {

@@ -233,10 +233,15 @@ def seed_closed_loop(conn, ts: str) -> None:
 
     controls = [
         ("portfolio-drawdown", "portfolio", "max_drawdown", {"percent": 8}, "code"),
-        ("thesis-notional", "thesis", "max_notional", {"percent_of_equity": 5}, "code"),
+        ("thesis-notional", "thesis", "max_notional", {"percent_of_portfolio_value": 5}, "code"),
         ("event-liquidity", "trade", "minimum_liquidity", {"max_spread_bps": 80}, "code"),
         ("breaker-costs", "backtest", "transaction_cost_stress", {"multiplier": 2}, "code"),
     ]
+    conn.execute(
+        "UPDATE risk_controls SET status='retired', updated_at=? "
+        "WHERE scope LIKE 'symbol:%%' AND control_type='max_notional' AND status='active'",
+        (ts,),
+    )
     for key, scope, control_type, threshold, enforcement in controls:
         conn.execute(
             """

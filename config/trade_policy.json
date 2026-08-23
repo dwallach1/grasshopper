@@ -1,21 +1,38 @@
 {
-  "account_number": "964587638",
-  "account_label": "Agentic ending 7638",
-  "mode": "autonomous_after_validation_where_tooling_allows",
-  "live_order_policy": "User authorizes autonomous execution after thesis validation. Equities may be prepared for execution through Robinhood MCP after required review. If a Robinhood write tool requires explicit confirmation after review, obey the tool requirement. Persist every decision and learn from outcomes.",
+  "mode": "autonomous_during_regular_market_hours_after_validation",
+  "live_order_policy": "User authorizes autonomous execution after thesis validation without per-trade user approval. Place trades only while the US regular market session is open. Complete the broker review immediately before placement, obey any broker-enforced confirmation requirement that cannot be bypassed, persist every decision, and learn from outcomes.",
   "asset_classes": {
     "equities": true,
     "options": false,
     "crypto": true,
     "margin_or_shorting": false
   },
+  "account_state": {
+    "source": "robinhood",
+    "refresh_before_sizing": true,
+    "persist_account_snapshots_to": "supabase.account_snapshots",
+    "persist_positions_to": "supabase.portfolio_exposure",
+    "max_snapshot_age_seconds": 300,
+    "sizing_portfolio_value_field": "total_value",
+    "buying_power_field": "buying_power",
+    "reject_if_unavailable_or_stale": true
+  },
   "sizing": {
-    "starting_cash": 5000,
-    "cash_reserve_usd": null,
-    "max_total_deployed_usd": null,
-    "max_single_trade_usd": null,
-    "max_new_positions_per_run": null,
-    "sizing_method": "conviction_and_risk_weighted"
+    "cash_reserve_percent_of_portfolio_value": 0,
+    "max_total_deployed_percent_of_portfolio_value": 100,
+    "max_single_trade_percent_of_portfolio_value": 10,
+    "max_new_positions_per_run": 5,
+    "sizing_method": "percent_of_fresh_broker_equity_with_execution_gates",
+    "standing_cash_target_percent": 0,
+    "tactical_swing_sleeve": {
+      "target_percent_of_portfolio_value": 20,
+      "purpose": "Short-horizon, catalyst-driven swing trades that pass every validation and execution gate.",
+      "target_positions": 2,
+      "max_percent_per_position": 10,
+      "allow_transient_cash_only_when_market_closed_or_no_candidate_passes_gates": true,
+      "re_screen_transient_cash_at_next_regular_session": true
+    },
+    "default_max_thesis_percent_of_portfolio_value": 5
   },
   "swing_filters": {
     "time_horizon": "days_to_weeks",
@@ -39,5 +56,13 @@
     "market_hours": "regular_hours",
     "time_in_force": "gfd",
     "use_fractional_dollar_orders": true
+  },
+  "execution_gates": {
+    "require_user_approval_per_trade": false,
+    "require_us_regular_market_open": true,
+    "regular_session_timezone": "America/New_York",
+    "regular_session_start": "09:30",
+    "regular_session_end": "16:00",
+    "review_fresh_quote_immediately_before_placement": true
   }
 }
