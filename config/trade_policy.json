@@ -1,0 +1,43 @@
+{
+  "account_number": "964587638",
+  "account_label": "Agentic ending 7638",
+  "mode": "autonomous_after_validation_where_tooling_allows",
+  "live_order_policy": "User authorizes autonomous execution after thesis validation. Equities may be prepared for execution through Robinhood MCP after required review. If a Robinhood write tool requires explicit confirmation after review, obey the tool requirement. Persist every decision and learn from outcomes.",
+  "asset_classes": {
+    "equities": true,
+    "options": false,
+    "crypto": true,
+    "margin_or_shorting": false
+  },
+  "sizing": {
+    "starting_cash": 5000,
+    "cash_reserve_usd": null,
+    "max_total_deployed_usd": null,
+    "max_single_trade_usd": null,
+    "max_new_positions_per_run": null,
+    "sizing_method": "conviction_and_risk_weighted"
+  },
+  "swing_filters": {
+    "time_horizon": "days_to_weeks",
+    "require_robinhood_symbol_validation": true,
+    "require_clear_catalyst_or_dislocation": true,
+    "require_invalidation_note": true,
+    "penalize_existing_cross_account_exposure": true,
+    "allow_event_trades": true,
+    "avoid_buying_within_days_before_earnings_without_explicit_event_trade_thesis": 0
+  },
+  "review_process": {
+    "use_subagents": true,
+    "required_reviews": ["bull_case", "bear_case", "portfolio_risk"],
+    "persist_postmortems": true,
+    "harden_or_soften_theses_after_outcomes": true,
+    "allow_web_research": true
+  },
+  "order_defaults": {
+    "side": "buy",
+    "type": "market",
+    "market_hours": "regular_hours",
+    "time_in_force": "gfd",
+    "use_fractional_dollar_orders": true
+  }
+}

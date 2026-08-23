@@ -1,0 +1,21 @@
+# Local secrets and OAuth tokens
+.env
+.env.*
+!.env.example
+
+# Runtime state
+*.sqlite
+*.sqlite3
+*.db
+
+# Node/build artifacts
+node_modules/
+dist/
+.cache/
+__pycache__/
+*.pyc
+
+data/
+
+# The deployed Sites app is versioned and published from its own repository.
+/web/
