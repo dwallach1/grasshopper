@@ -39,7 +39,9 @@ declare
   sequence_name text;
 begin
   foreach target_table in array array[
-    'runs','bookmarks','bookmark_urls','symbols','bookmark_symbols','claims','theses',
+    'runs','codex_automations','codex_automation_runs','bookmarks','bookmark_urls','symbols','bookmark_symbols','claims','theses',
+    'ontology_themes','ontology_terms','ontology_lexicon','symbol_theme_memberships',
+    'ontology_observations','ontology_evidence','ontology_candidates','ontology_candidate_evidence',
     'thesis_symbols','thesis_evidence','thesis_scores','catalysts','portfolio_exposure',
     'account_snapshots','trade_proposals','postmortems','articles','graph_nodes','graph_edges',
     'research_events','research_queue','predictions','insights','insight_links','thesis_relations',

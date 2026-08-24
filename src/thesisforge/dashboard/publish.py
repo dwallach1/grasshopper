@@ -58,6 +58,27 @@ def main() -> None:
     payload = {
         "generated_at": utc_now_iso(),
         "run_reports": run_reports(conn),
+        "automations": rows(conn, """
+            SELECT a.id, a.name, a.prompt, a.kind, a.status, a.rrule, a.model,
+                   a.reasoning_effort, a.next_run_at, a.last_run_at, a.indexed_at,
+                   COUNT(r.thread_id) AS run_count,
+                   COUNT(r.thread_id) FILTER (WHERE r.outcome='passed') AS passed_count,
+                   COUNT(r.thread_id) FILTER (WHERE r.outcome='failed') AS failed_count
+            FROM codex_automations a
+            LEFT JOIN codex_automation_runs r ON r.automation_id=a.id
+            GROUP BY a.id
+            ORDER BY CASE a.status WHEN 'ACTIVE' THEN 0 ELSE 1 END, a.next_run_at, a.name
+        """),
+        "automation_runs": rows(conn, """
+            SELECT r.thread_id, r.automation_id, a.name AS automation_name,
+                   r.status, r.outcome, r.started_at, r.completed_at, r.duration_ms,
+                   r.title, r.summary, r.final_output, r.findings, r.learnings,
+                   r.explored, r.actions, r.timeline, r.error_text, r.tokens_used
+            FROM codex_automation_runs r
+            JOIN codex_automations a ON a.id=r.automation_id
+            ORDER BY r.started_at DESC
+            LIMIT 200
+        """),
         "theses": theses,
         "predictions": rows(conn, "SELECT id, external_key, thesis_id, statement, target_date, probability, status, resolution_notes FROM predictions ORDER BY target_date, probability DESC"),
         "insights": rows(conn, """
@@ -67,6 +88,33 @@ def main() -> None:
             FROM insights i WHERE i.status='active' ORDER BY i.novelty DESC, i.confidence DESC
         """),
         "relations": rows(conn, "SELECT src_thesis_id, dst_thesis_id, relation_type, strength, rationale FROM thesis_relations ORDER BY strength DESC"),
+        "ontology_themes": rows(conn, """
+            SELECT t.id, t.thesis_id, t.kind, t.name, t.description, t.status,
+                   t.match_threshold, t.auto_promote_sources,
+                   (SELECT COUNT(*) FROM ontology_terms x WHERE x.theme_id=t.id AND x.status='active') AS term_count,
+                   (SELECT COUNT(*) FROM symbol_theme_memberships m WHERE m.theme_id=t.id AND m.status='active') AS symbol_count
+            FROM ontology_themes t ORDER BY t.status, t.kind, t.name
+        """),
+        "ontology_candidates": rows(conn, """
+            SELECT id, candidate_type, candidate_key, proposed_theme_id, proposed_label,
+                   proposed_description, score, evidence_count, source_count, status,
+                   first_seen_at, last_seen_at, review_note
+            FROM ontology_candidates c
+            WHERE source_count >= 2
+              AND (
+                (candidate_type='membership' AND EXISTS (
+                  SELECT 1 FROM symbols s WHERE s.symbol=c.proposed_label
+                    AND s.status IN ('known', 'verified', 'active', 'public_comp')
+                ))
+                OR (candidate_type='term' AND lower(proposed_label)
+                    !~ '(^| )(http|https|www|t[.]co)( |$)')
+                OR (candidate_type='theme' AND (
+                  position(' ' in proposed_label) > 0
+                  OR sample_context->>'feature_type'='hashtag'
+                ))
+              )
+            ORDER BY status, source_count DESC, score DESC LIMIT 100
+        """),
         "events": rows(conn, """
             SELECT e.id, e.event_type, e.label, e.event_date, e.status, e.source_url, e.summary,
                    COALESCE(d.decision, 'watch') AS decision, d.rationale, d.participation_trigger

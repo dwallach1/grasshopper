@@ -10,6 +10,58 @@ create table public.runs (
   notes text
 );
 
+-- Mirror of Codex's local automation registry. The automation id is stable
+-- across schedule edits and is the natural key used by Codex run records.
+create table public.codex_automations (
+  id text primary key,
+  name text not null,
+  prompt text not null,
+  kind text not null default 'cron',
+  status text not null check (status in ('ACTIVE', 'PAUSED')),
+  rrule text not null,
+  model text,
+  reasoning_effort text,
+  execution_environment text,
+  project_id text,
+  working_directories jsonb not null default '[]'::jsonb,
+  next_run_at timestamptz,
+  last_run_at timestamptz,
+  source_created_at timestamptz not null,
+  source_updated_at timestamptz not null,
+  indexed_at timestamptz not null default now()
+);
+create index idx_codex_automations_status_next_run
+  on public.codex_automations(status, next_run_at);
+
+-- One immutable row per Codex automation thread/run. Rich JSON columns retain
+-- variable investigation output while the high-value operational fields stay
+-- typed and indexed for dashboard filters.
+create table public.codex_automation_runs (
+  thread_id text primary key,
+  automation_id text not null references public.codex_automations(id) on delete cascade,
+  status text not null,
+  outcome text not null check (outcome in ('running', 'passed', 'failed', 'cancelled', 'unknown')),
+  started_at timestamptz not null,
+  completed_at timestamptz,
+  duration_ms bigint check (duration_ms is null or duration_ms >= 0),
+  title text,
+  summary text,
+  final_output text,
+  findings jsonb not null default '[]'::jsonb,
+  learnings jsonb not null default '[]'::jsonb,
+  explored jsonb not null default '[]'::jsonb,
+  actions jsonb not null default '[]'::jsonb,
+  timeline jsonb not null default '[]'::jsonb,
+  error_text text,
+  tokens_used bigint check (tokens_used is null or tokens_used >= 0),
+  source_metadata jsonb not null default '{}'::jsonb,
+  indexed_at timestamptz not null default now()
+);
+create index idx_codex_automation_runs_automation_started
+  on public.codex_automation_runs(automation_id, started_at desc);
+create index idx_codex_automation_runs_outcome_started
+  on public.codex_automation_runs(outcome, started_at desc);
+
 create table public.bookmarks (
   id text primary key,
   author_id text,
@@ -69,6 +121,132 @@ create table public.theses (
   variant_perception text,
   falsifier text
 );
+
+-- Database-backed ontology catalog. Code supplies scoring and promotion
+-- mechanics; the evolving taxonomy and its evidence live in Supabase.
+create table public.ontology_themes (
+  id text primary key,
+  thesis_id text unique references public.theses(id) on delete set null,
+  kind text not null default 'theme' check (kind in ('theme', 'concept')),
+  name text not null,
+  description text not null default '',
+  status text not null default 'candidate' check (status in ('candidate', 'active', 'merged', 'retired')),
+  parent_theme_id text references public.ontology_themes(id) on delete set null,
+  merged_into_theme_id text references public.ontology_themes(id) on delete set null,
+  match_threshold smallint not null default 35 check (match_threshold between 0 and 100),
+  auto_promote_sources smallint not null default 3 check (auto_promote_sources >= 2),
+  created_by text not null default 'learning',
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  check (id <> parent_theme_id),
+  check (id <> merged_into_theme_id)
+);
+create index idx_ontology_themes_status_kind on public.ontology_themes(status, kind);
+create index idx_ontology_themes_parent on public.ontology_themes(parent_theme_id) where parent_theme_id is not null;
+create index idx_ontology_themes_merged_into on public.ontology_themes(merged_into_theme_id) where merged_into_theme_id is not null;
+
+create table public.ontology_terms (
+  id bigint generated always as identity primary key,
+  theme_id text not null references public.ontology_themes(id) on delete cascade,
+  term text not null,
+  normalized_term text not null,
+  term_type text not null default 'keyword' check (term_type in ('keyword', 'alias', 'phrase', 'entity', 'negative')),
+  weight smallint not null default 50 check (weight between 1 and 100),
+  status text not null default 'candidate' check (status in ('candidate', 'active', 'rejected')),
+  evidence_count bigint not null default 0 check (evidence_count >= 0),
+  source_count bigint not null default 0 check (source_count >= 0),
+  created_by text not null default 'learning',
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  unique (theme_id, normalized_term)
+);
+create index idx_ontology_terms_normalized_active on public.ontology_terms(normalized_term) where status = 'active';
+create index idx_ontology_terms_theme_status on public.ontology_terms(theme_id, status);
+
+create table public.ontology_lexicon (
+  token text not null,
+  token_type text not null check (token_type in ('ignored_symbol', 'market_keyword', 'market_context', 'candidate_stopword')),
+  weight smallint not null default 0 check (weight between 0 and 100),
+  status text not null default 'active' check (status in ('active', 'retired')),
+  reason text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (token, token_type)
+);
+create index idx_ontology_lexicon_type_status on public.ontology_lexicon(token_type, status);
+
+create table public.symbol_theme_memberships (
+  symbol text not null references public.symbols(symbol) on delete cascade,
+  theme_id text not null references public.ontology_themes(id) on delete cascade,
+  relationship text not null default 'member' check (relationship in ('member', 'beneficiary', 'supplier', 'customer', 'competitor', 'proxy')),
+  confidence smallint not null default 40 check (confidence between 0 and 100),
+  evidence_count bigint not null default 0 check (evidence_count >= 0),
+  source_count bigint not null default 0 check (source_count >= 0),
+  status text not null default 'candidate' check (status in ('candidate', 'active', 'rejected')),
+  learned_by text not null default 'cooccurrence',
+  first_seen_at timestamptz not null,
+  last_seen_at timestamptz not null,
+  primary key (symbol, theme_id)
+);
+create index idx_symbol_theme_memberships_theme_status on public.symbol_theme_memberships(theme_id, status, confidence desc);
+
+create table public.ontology_observations (
+  source_type text not null,
+  source_key text not null,
+  feature_type text not null check (feature_type in ('term', 'symbol', 'hashtag')),
+  feature_value text not null,
+  occurrences smallint not null default 1 check (occurrences > 0),
+  observed_at timestamptz not null,
+  primary key (source_type, source_key, feature_type, feature_value)
+);
+create index idx_ontology_observations_feature on public.ontology_observations(feature_type, feature_value, observed_at desc);
+
+create table public.ontology_evidence (
+  id bigint generated always as identity primary key,
+  source_type text not null,
+  source_key text not null,
+  theme_id text not null references public.ontology_themes(id) on delete cascade,
+  feature_type text not null,
+  feature_value text not null,
+  match_method text not null check (match_method in ('term', 'symbol', 'cooccurrence', 'manual', 'historical')),
+  score smallint not null check (score between 0 and 100),
+  observed_at timestamptz not null,
+  unique (source_type, source_key, theme_id, feature_type, feature_value, match_method)
+);
+create index idx_ontology_evidence_theme_date on public.ontology_evidence(theme_id, observed_at desc);
+create index idx_ontology_evidence_source on public.ontology_evidence(source_type, source_key);
+
+create table public.ontology_candidates (
+  id bigint generated always as identity primary key,
+  candidate_type text not null check (candidate_type in ('theme', 'term', 'membership')),
+  candidate_key text not null,
+  proposed_theme_id text references public.ontology_themes(id) on delete cascade,
+  proposed_label text not null,
+  proposed_description text not null default '',
+  score smallint not null default 0 check (score between 0 and 100),
+  evidence_count bigint not null default 0 check (evidence_count >= 0),
+  source_count bigint not null default 0 check (source_count >= 0),
+  status text not null default 'pending' check (status in ('pending', 'promoted', 'rejected')),
+  sample_context jsonb not null default '{}'::jsonb,
+  first_seen_at timestamptz not null,
+  last_seen_at timestamptz not null,
+  reviewed_at timestamptz,
+  review_note text,
+  unique (candidate_type, candidate_key)
+);
+create index idx_ontology_candidates_status_score on public.ontology_candidates(status, score desc, source_count desc);
+create index idx_ontology_candidates_theme_status on public.ontology_candidates(proposed_theme_id, status) where proposed_theme_id is not null;
+
+create table public.ontology_candidate_evidence (
+  candidate_id bigint not null references public.ontology_candidates(id) on delete cascade,
+  source_type text not null,
+  source_key text not null,
+  evidence_score smallint not null check (evidence_score between 0 and 100),
+  context jsonb not null default '{}'::jsonb,
+  observed_at timestamptz not null,
+  primary key (candidate_id, source_type, source_key)
+);
+create index idx_ontology_candidate_evidence_source on public.ontology_candidate_evidence(source_type, source_key);
 
 create table public.thesis_symbols (
   thesis_id text not null references public.theses(id) on delete cascade,
@@ -446,7 +624,9 @@ declare
   table_name text;
 begin
   foreach table_name in array array[
-    'runs','bookmarks','bookmark_urls','symbols','bookmark_symbols','claims','theses',
+    'runs','codex_automations','codex_automation_runs','bookmarks','bookmark_urls','symbols','bookmark_symbols','claims','theses',
+    'ontology_themes','ontology_terms','ontology_lexicon','symbol_theme_memberships',
+    'ontology_observations','ontology_evidence','ontology_candidates','ontology_candidate_evidence',
     'thesis_symbols','thesis_evidence','thesis_scores','catalysts','portfolio_exposure',
     'account_snapshots','trade_proposals','postmortems','articles','graph_nodes','graph_edges',
     'research_events','research_queue','predictions','insights','insight_links','thesis_relations',

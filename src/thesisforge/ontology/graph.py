@@ -26,7 +26,14 @@ def upsert_node(
           properties_json=excluded.properties_json,
           updated_at=excluded.updated_at
         """,
-        (node_id, node_type, label, json.dumps(props or {}, sort_keys=True), timestamp, timestamp),
+        (
+            node_id,
+            node_type,
+            label,
+            json.dumps(props or {}, sort_keys=True, default=str),
+            timestamp,
+            timestamp,
+        ),
     )
 
 
@@ -49,5 +56,13 @@ def upsert_edge(
           properties_json=excluded.properties_json,
           updated_at=excluded.updated_at
         """,
-        (src, dst, edge_type, weight, json.dumps(props or {}, sort_keys=True), timestamp, timestamp),
+        (
+            src,
+            dst,
+            edge_type,
+            weight,
+            json.dumps(props or {}, sort_keys=True, default=str),
+            timestamp,
+            timestamp,
+        ),
     )

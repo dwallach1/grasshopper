@@ -16,7 +16,9 @@ type EventRecord={id:number;label:string;event_date:string|null;decision:string;
 type TradeProposal={id:number;thesis_id:string|null;symbol:string;side:string;notional:number;order_type:string;status:string;rationale:string;created_at:string;reviewed_at:string|null;broker_alerts:string|null};
 type AccountState={observed_at:string;account_label:string;total_value:number;equity_value:number;cash:number;buying_power:number;source:string};
 type RunReport={id:number;run_type:string;started_at:string;completed_at:string|null;status:string;headline:string;summary:string;insights:string[];learnings:string[];actions:string[];metrics:Record<string,string|number>};
-export type Snapshot={generated_at:string;run_reports?:RunReport[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
+type Automation={id:string;name:string;prompt:string;kind:string;status:string;rrule:string;model:string|null;reasoning_effort:string|null;next_run_at:string|null;last_run_at:string|null;indexed_at:string;run_count:number;passed_count:number;failed_count:number};
+type AutomationRun={thread_id:string;automation_id:string;automation_name:string;status:string;outcome:'running'|'passed'|'failed'|'cancelled'|'unknown';started_at:string;completed_at:string|null;duration_ms:number|null;title:string|null;summary:string|null;final_output:string|null;findings:string[];learnings:string[];explored:string[];actions:string[];timeline:{at:string|null;text:string}[];error_text:string|null;tokens_used:number|null};
+export type Snapshot={generated_at:string;run_reports?:RunReport[];automations?:Automation[];automation_runs?:AutomationRun[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
 
 const stages=['research','code','backtest','live','postmortem','fine-tune'];
 const positions:Record<string,[number,number]>={ai_power_nuclear:[18,35],neocloud_compute:[45,20],semis_photonics:[73,32],software_ai_apps:[79,70],quantum:[52,80],crypto:[25,72],defense_drones_space:[10,58],biotech_royalty:[48,50]};
@@ -43,7 +45,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const [selectedCycleId,setSelectedCycleId]=useState(initialData.cycles[0]?.id);
   const [selectedTestId,setSelectedTestId]=useState(initialData.tests[0]?.id);
   const [selectedScenarioId,setSelectedScenarioId]=useState(initialData.test_scenarios[0]?.id);
-  const [surface,setSurface]=useState<'home'|'runs'|'cycles'|'memory'|'risk'>('home');
+  const [surface,setSurface]=useState<'home'|'automations'|'runs'|'cycles'|'memory'|'risk'>('home');
   useEffect(()=>{const tick=()=>setClock(new Date().toLocaleTimeString('en-US',{hour12:false,timeZone:'America/New_York'}));tick();const id=window.setInterval(tick,1000);return()=>window.clearInterval(id)},[]);
   const activeCycle=initialData.cycles.find(c=>c.id===selectedCycleId)||initialData.cycles[0];
   const activeTest=initialData.tests.find(t=>t.id===selectedTestId)||initialData.tests[0];
@@ -54,10 +56,11 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   function selectCycle(cycle:Cycle){setSelectedCycleId(cycle.id);const test=initialData.tests.find(t=>t.cycle_id===cycle.id);if(test){setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}}
 
   return <main className="terminal-shell">
-    <header className="command-bar"><div className="desk-id"><b>TF</b><span>THESISFORGE<small>ONTOLOGY / RESEARCH DESK</small></span></div><nav className="desk-tabs" aria-label="Workspace"><button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>HOME</button><button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>RUNS</button><button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>CYCLES</button><button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>MEMORY</button><button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>RISK</button></nav><div className="run-state"><span>RUNS <b>{initialData.run_reports?.length||0}</b></span><span>KILL RATE <b className="red">{killRate}%</b></span><span>READY <b className="amber">{readyCount}</b></span></div><div className="clock"><b>{clock||'--:--:--'}</b><span>NEW YORK · DATA {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div></header>
+    <header className="command-bar"><div className="desk-id"><b>TF</b><span>THESISFORGE<small>ONTOLOGY / RESEARCH DESK</small></span></div><nav className="desk-tabs" aria-label="Workspace"><button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>HOME</button><button className={surface==='automations'?'active':''} onClick={()=>setSurface('automations')}>AUTOMATIONS</button><button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>RUNS</button><button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>CYCLES</button><button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>MEMORY</button><button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>RISK</button></nav><div className="run-state"><span>JOBS <b>{initialData.automations?.length||0}</b></span><span>KILL RATE <b className="red">{killRate}%</b></span><span>READY <b className="amber">{readyCount}</b></span></div><div className="clock"><b>{clock||'--:--:--'}</b><span>NEW YORK · DATA {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div></header>
 
     <section className="page-shell">
       {surface==='home'&&<HomeSurface data={initialData} activeThesisId={activeCycle?.thesis_id}/>}
+      {surface==='automations'&&<AutomationsSurface data={initialData}/>}
       {surface==='runs'&&<RunsSurface data={initialData}/>}
       {surface==='cycles'&&<CyclesSurface data={initialData} activeCycle={activeCycle} activeTest={activeTest} selectedScenarioId={selectedScenarioId} onCycle={selectCycle} onTest={(test)=>{setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}} onScenario={setSelectedScenarioId}/>}
       {surface==='memory'&&<MemorySurface data={initialData}/>}
@@ -99,6 +102,51 @@ function RunsSurface({data}:{data:Snapshot}){
 }
 
 function RunReportColumn({label,items}:{label:string;items:string[]}){return <section><b>{label}</b>{items.length?<ul>{items.map((item,index)=><li key={`${label}-${index}`}>{item}</li>)}</ul>:<p>None recorded.</p>}</section>}
+
+function formatDuration(milliseconds:number|null){
+  if(milliseconds==null)return 'IN PROGRESS';
+  const seconds=Math.round(milliseconds/1000);
+  if(seconds<60)return `${seconds}s`;
+  const minutes=Math.floor(seconds/60),remaining=seconds%60;
+  return minutes<60?`${minutes}m ${remaining}s`:`${Math.floor(minutes/60)}h ${minutes%60}m`;
+}
+
+function describeSchedule(rrule:string){
+  const parts=Object.fromEntries(rrule.replace(/^RRULE:/,'').split(';').map(part=>part.split('=')));
+  const dayNames:Record<string,string>={MO:'MON',TU:'TUE',WE:'WED',TH:'THU',FR:'FRI',SA:'SAT',SU:'SUN'};
+  const days=(parts.BYDAY||'').split(',').filter(Boolean).map(day=>dayNames[day]||day).join(' · ');
+  const hours=(parts.BYHOUR||'').split(',').filter(Boolean).map(hour=>`${hour.padStart(2,'0')}:${(parts.BYMINUTE||'0').padStart(2,'0')}`).join(' / ');
+  return [days||clean(parts.FREQ||'scheduled'),hours].filter(Boolean).join(' · ');
+}
+
+function AutomationsSurface({data}:{data:Snapshot}){
+  const automations=data.automations||[];
+  const runs=data.automation_runs||[];
+  const [automationId,setAutomationId]=useState(automations[0]?.id||'all');
+  const filtered=automationId==='all'?runs:runs.filter(run=>run.automation_id===automationId);
+  const [runId,setRunId]=useState(filtered[0]?.thread_id||runs[0]?.thread_id);
+  const selected=filtered.find(run=>run.thread_id===runId)||filtered[0];
+  const passed=runs.filter(run=>run.outcome==='passed').length;
+  const failed=runs.filter(run=>run.outcome==='failed').length;
+  const durations=runs.filter(run=>run.duration_ms!=null).map(run=>run.duration_ms as number);
+  const average=durations.length?Math.round(durations.reduce((sum,value)=>sum+value,0)/durations.length):null;
+  const chooseAutomation=(id:string)=>{setAutomationId(id);const next=id==='all'?runs[0]:runs.find(run=>run.automation_id===id);setRunId(next?.thread_id)};
+  if(!automations.length)return <div className="empty-state"><h2>NO CODEX AUTOMATIONS INDEXED</h2><p>Run the automation indexer, then publish a fresh dashboard snapshot.</p></div>;
+  return <section className="automation-ledger">
+    <div className="automation-hero"><div><span>CODEX / SCHEDULED OPERATIONS</span><h1>Automation observability</h1><p>Every scheduled job and execution, with runtime health plus the evidence, exploration, decisions, and learning it left behind.</p></div><div className="automation-kpis"><span><b>{automations.length}</b> JOBS</span><span className="green"><b>{passed}</b> PASS</span><span className="red"><b>{failed}</b> FAIL</span><span><b>{formatDuration(average)}</b> AVG</span></div></div>
+    <div className="automation-layout">
+      <aside className="automation-list"><button className={automationId==='all'?'active':''} onClick={()=>chooseAutomation('all')}><span>PORTFOLIO VIEW</span><b>ALL AUTOMATIONS</b><small>{runs.length} INDEXED RUNS</small></button>{automations.map(job=><button className={automationId===job.id?'active':''} key={job.id} onClick={()=>chooseAutomation(job.id)}><span>{job.status} · {job.model||'DEFAULT MODEL'}</span><b>{job.name}</b><small>{describeSchedule(job.rrule)}</small><i>{job.passed_count} PASS / {job.failed_count} FAIL</i></button>)}</aside>
+      <section className="automation-runs"><div className="automation-table-head"><span>START</span><span>AUTOMATION</span><span>OUTCOME</span><span>DURATION</span><span>SUMMARY</span></div>{filtered.length?filtered.map(run=><button key={run.thread_id} className={`${run.outcome} ${selected?.thread_id===run.thread_id?'active':''}`} onClick={()=>setRunId(run.thread_id)}><span>{new Date(run.started_at).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span><b>{run.automation_name}</b><strong>{run.outcome}</strong><span>{formatDuration(run.duration_ms)}</span><p>{run.summary||run.title||'No run summary recorded.'}</p></button>):<div className="automation-empty">NO RUNS FOR THIS AUTOMATION YET</div>}
+      </section>
+    </div>
+    {selected&&<AutomationRunDetail run={selected}/>}
+  </section>;
+}
+
+function AutomationRunDetail({run}:{run:AutomationRun}){
+  const sections=[['FINDINGS',run.findings],['LEARNED',run.learnings],['EXPLORED',run.explored],['ACTIONS',run.actions]] as const;
+  return <article className="automation-detail"><header><div><span>RUN DOSSIER · {run.thread_id}</span><h2>{run.title||run.automation_name}</h2><p>{run.summary||'No concise summary was recorded.'}</p></div><div><strong className={run.outcome==='passed'?'green':run.outcome==='failed'?'red':'amber'}>{run.outcome}</strong><b>{formatDuration(run.duration_ms)}</b><span>{run.tokens_used?.toLocaleString()||'—'} TOKENS</span></div></header><div className="automation-findings">{sections.map(([label,items])=><section key={label}><b>{label}</b>{items.length?<ul>{items.map((item,index)=><li key={index}>{item}</li>)}</ul>:<p>Nothing separately classified.</p>}</section>)}</div>{run.timeline.length>0&&<details className="automation-timeline"><summary>INVESTIGATION TRAIL · {run.timeline.length} CHECKPOINTS</summary>{run.timeline.map((event,index)=><div key={index}><span>{event.at?new Date(event.at).toLocaleTimeString('en-US',{timeZone:'America/New_York'}):`0${index+1}`}</span><p>{event.text}</p></div>)}</details>}{run.final_output&&<details className="automation-output"><summary>FULL FINAL REPORT</summary><pre>{run.final_output}</pre></details>}{run.error_text&&<pre className="automation-error">{run.error_text}</pre>}</article>;
+}
 
 function SignalGraph({data,activeThesisId}:{data:Snapshot;activeThesisId?:string}){return <><div className="panel-title"><b>SIGNAL GRAPH · LIVE ONTOLOGY</b><span>EVERY NODE IS A THESIS · EVERY EDGE IS A SHARED DEPENDENCY</span><strong>CLUSTERING / ACTIVE</strong></div><div className="signal-graph">{data.relations.map(r=>{const a=positions[r.src_thesis_id],b=positions[r.dst_thesis_id];if(!a||!b)return null;const dx=b[0]-a[0],dy=b[1]-a[1],w=Math.sqrt(dx*dx+(dy/1.8)**2),angle=Math.atan2(dy/1.8,dx)*180/Math.PI;return <i className="graph-line" key={r.src_thesis_id+r.dst_thesis_id} title={`${clean(r.relation_type)} / ${Math.round(r.strength*100)}`} style={{left:`${a[0]}%`,top:`${a[1]}%`,width:`${w}%`,transform:`rotate(${angle}deg)`,opacity:r.strength}}/>})}{data.theses.map(t=><button key={t.id} className={`signal-node ${t.stance} ${t.id===activeThesisId?'active':''}`} style={{left:`${positions[t.id]?.[0]||50}%`,top:`${positions[t.id]?.[1]||50}%`}} title={t.summary}><span>{t.confidence}</span><b>{t.name.replace(' basket','').replace('AI ','')}</b><small>{t.symbols.slice(0,3).join(' · ')}</small></button>)}<div className="cluster-label c1">CLUSTER 01 · POWER / COMPUTE</div><div className="cluster-label c2">CLUSTER 02 · RISK BUDGET</div><div className="graph-scanline"/></div><div className="graph-log"><b>GRAPH LINK LOG</b>{data.relations.slice(0,3).map((r,i)=><span key={r.rationale}>EDGE {i+1} · {clean(r.relation_type)} · {r.rationale}</span>)}</div><div className="graph-stats"><span>NODES <b>{data.theses.length}</b></span><span>EDGES <b>{data.relations.length}</b></span><span>SOURCES <b>{data.counts.sources}</b></span><span>SYMBOLS <b>{data.counts.symbols}</b></span><span>BRIDGES <b>{data.relations.filter(r=>r.strength<.7).length}</b></span></div></>}
 

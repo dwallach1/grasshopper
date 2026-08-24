@@ -44,6 +44,8 @@ bun run dashboard:publish
 bun run research:refresh
 bun run thesis:report
 bun run ontology:report
+bun run ontology:learn
+bun run ontology:candidates
 bun run financial:stats
 bun run financial:test
 ```

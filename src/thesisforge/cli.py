@@ -8,11 +8,13 @@ from collections.abc import Sequence
 
 
 COMMANDS = {
+    ("automations", "sync"): "thesisforge.automations.sync",
     ("articles", "fetch"): "thesisforge.articles.fetch",
     ("bookmarks", "ingest"): "thesisforge.bookmarks.ingest",
     ("dashboard", "publish"): "thesisforge.dashboard.publish",
     ("event-map", "sunday"): "thesisforge.research.event_map",
     ("financial",): "thesisforge.financial.service",
+    ("ontology",): "thesisforge.ontology.manage",
     ("ontology", "refresh"): "thesisforge.ontology.refresh",
     ("ontology", "report"): "thesisforge.ontology.report",
     ("report", "run"): "thesisforge.reports.run",

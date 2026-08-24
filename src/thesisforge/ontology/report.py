@@ -9,6 +9,39 @@ def main() -> None:
     conn = database.connect()
     try:
         print("# ThesisForge Ontology\n")
+        print("## Adaptive Catalog")
+        for row in conn.execute(
+            """SELECT t.id, t.kind, t.name, t.status, COUNT(DISTINCT ot.id) AS terms,
+                      COUNT(DISTINCT m.symbol) AS symbols
+               FROM ontology_themes t
+               LEFT JOIN ontology_terms ot ON ot.theme_id=t.id AND ot.status='active'
+               LEFT JOIN symbol_theme_memberships m ON m.theme_id=t.id AND m.status='active'
+               GROUP BY t.id, t.kind, t.name, t.status
+               ORDER BY t.status, t.kind, t.name"""
+        ):
+            print(f"- {row['name']} [{row['kind']}/{row['status']}]: {row['terms']} terms, {row['symbols']} symbols")
+        print("\n## Learning Candidates")
+        for row in conn.execute(
+            """SELECT id, candidate_type, proposed_label, proposed_theme_id, score, source_count
+               FROM ontology_candidates c
+               WHERE status='pending' AND source_count >= 2
+                 AND (
+                   (candidate_type='membership' AND EXISTS (
+                     SELECT 1 FROM symbols s WHERE s.symbol=c.proposed_label
+                       AND s.status IN ('known', 'verified', 'active', 'public_comp')
+                   ))
+                   OR (candidate_type='term' AND lower(proposed_label)
+                       !~ '(^| )(http|https|www|t[.]co)( |$)')
+                   OR (candidate_type='theme' AND (
+                     position(' ' in proposed_label) > 0
+                     OR sample_context->>'feature_type'='hashtag'
+                   ))
+                 )
+               ORDER BY source_count DESC, score DESC LIMIT 20"""
+        ):
+            target = f" -> {row['proposed_theme_id']}" if row["proposed_theme_id"] else ""
+            print(f"- #{row['id']} {row['candidate_type']} {row['proposed_label']}{target} [{row['score']}, {row['source_count']} sources]")
+        print()
         print("## Conviction Map")
         for row in conn.execute("SELECT name, stance, status, confidence, variant_perception FROM theses ORDER BY confidence DESC, name"):
             print(f"- {row['name']} [{row['stance']}/{row['status']}, {row['confidence']}]: {row['variant_perception'] or 'No variant view captured'}")

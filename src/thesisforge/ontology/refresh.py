@@ -1,336 +1,221 @@
-#!/usr/bin/env python3
-"""Create and refresh the persistent ThesisForge ontology graph."""
+"""Refresh the ontology graph from database-backed adaptive knowledge."""
+
 from __future__ import annotations
 
 import json
-import re
 
 from thesisforge import db as database
-from thesisforge.clock import utc_now_iso
 from thesisforge.ontology.graph import upsert_edge, upsert_node
-
-CONCEPTS = {
-    "concept:ai_power": ["power", "electric", "grid", "energy", "data center", "datacenter", "10 gw", "831 mw"],
-    "concept:nuclear": ["nuclear", "uranium", "reactor", "smr", "criticality", "fuel"],
-    "concept:neocloud": ["neocloud", "gpu", "compute", "cloud", "nscale", "coreweave", "nebius", "iren"],
-    "concept:photonics": ["photonics", "optical", "800g", "1.6t", "transceiver"],
-    "concept:ipo_events": ["ipo", "listing", "public offering", "roadshow"],
-    "concept:earnings_events": ["earnings", "quarter", "eps", "guidance"],
-    "concept:crypto_ai": ["bittensor", "tao", "bitcoin", "crypto"],
-}
-
-PUBLIC_COMPS = {
-    "concept:ai_power": ["VST", "CEG", "GEV", "AEP", "DTE", "FE", "CMS"],
-    "concept:nuclear": ["OKLO", "XE", "LEU", "CEG", "CCJ", "SMR"],
-    "concept:neocloud": ["NBIS", "IREN", "CRWV", "HUT", "CORZ"],
-    "concept:photonics": ["AAOI", "COHR", "LITE", "AEHR"],
-    "concept:crypto_ai": ["TAO-USD", "BTC-USD", "HOOD", "COIN"],
-}
+from thesisforge.ontology.learning import OntologyLearner, Theme, ThemeMatch
 
 
-def now_iso() -> str:
-    return utc_now_iso()
+def theme_node_id(theme: Theme) -> str:
+    return f"concept:{theme.id}" if theme.kind == "concept" else f"theme:{theme.id}"
 
 
-def seed_research_views(conn, ts: str) -> None:
-    thesis_views = {
-        "ai_power_nuclear": ("bullish", "The market still underestimates how long grid, generation, and fuel constraints can persist.", "Utility capex or power prices fail to accelerate despite sustained compute demand."),
-        "neocloud_compute": ("bullish", "Capacity scarcity can outweigh financing anxiety during confirmed demand bursts.", "Utilization, contracted backlog, or financing access deteriorates materially."),
-        "semis_photonics": ("bullish", "Networking and optical suppliers may capture the second derivative of AI capex.", "800G/1.6T demand or supplier guidance rolls over across multiple quarters."),
-        "defense_drones_space": ("bullish", "Procurement is shifting toward cheaper autonomous systems faster than consensus models imply.", "Contract conversion and production scale continue to lag narrative momentum."),
-        "quantum": ("bearish", "Price action is running ahead of commercially measurable progress.", "Bookings and technical milestones begin compounding faster than dilution."),
-        "biotech_royalty": ("neutral", "The payoff can be asymmetric, but the evidence is too specialized for broad basket exposure.", "A validated catalyst and independently checked royalty economics emerge."),
-        "crypto": ("neutral", "Optionality is real, but conviction should stay separate from ideology and liquidity beta.", "Network usage grows independently of token price and risk appetite."),
-        "software_ai_apps": ("bearish", "Private-market excitement is easier to identify than a clean, attractively priced public expression.", "A public proxy shows durable monetization with falling inference costs."),
-    }
-    for thesis_id, (stance, variant, falsifier) in thesis_views.items():
-        conn.execute(
-            "UPDATE theses SET stance=?, variant_perception=?, falsifier=? WHERE id=?",
-            (stance, variant, falsifier, thesis_id),
-        )
-
-    predictions = [
-        ("ai-power-relative-strength", "ai_power_nuclear", "AI power and grid beneficiaries outperform broad software AI proxies into the next capex-guidance cycle.", "2026-11-30", 68),
-        ("neocloud-volatility-window", "neocloud_compute", "Neocloud public comps experience a material volatility expansion around the Nscale filing or roadshow window.", "2026-10-15", 64),
-        ("photonics-guidance-breadth", "semis_photonics", "At least two optical-networking suppliers raise forward demand commentary before year-end.", "2026-12-31", 58),
-        ("quantum-fundamentals-gap", "quantum", "The quantum basket underperforms the AI infrastructure basket when momentum cools.", "2026-12-31", 61),
-    ]
-    for key, thesis_id, statement, target_date, probability in predictions:
-        conn.execute(
-            """
-            INSERT INTO predictions(external_key, thesis_id, statement, target_date, probability, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'open', ?, ?)
-            ON CONFLICT(external_key) DO UPDATE SET statement=excluded.statement, target_date=excluded.target_date,
-              probability=excluded.probability, updated_at=excluded.updated_at
-            """,
-            (key, thesis_id, statement, target_date, probability, ts, ts),
-        )
-
-    relations = [
-        ("ai_power_nuclear", "neocloud_compute", "enables", 0.92, "Compute expansion depends on available power, interconnects, and grid timing."),
-        ("neocloud_compute", "semis_photonics", "pulls_through", 0.82, "GPU clusters pull networking and optical demand forward."),
-        ("ai_power_nuclear", "semis_photonics", "shares_capex_cycle", 0.64, "Both express different layers of the same data-center build cycle."),
-        ("quantum", "neocloud_compute", "competes_for_risk_budget", 0.57, "Both attract speculative capital, but only one currently has visible utilization economics."),
-    ]
-    for src, dst, relation_type, strength, rationale in relations:
-        conn.execute(
-            """
-            INSERT INTO thesis_relations(src_thesis_id, dst_thesis_id, relation_type, strength, rationale, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(src_thesis_id, dst_thesis_id, relation_type) DO UPDATE SET
-              strength=excluded.strength, rationale=excluded.rationale, updated_at=excluded.updated_at
-            """,
-            (src, dst, relation_type, strength, rationale, ts, ts),
-        )
-
-    insights = [
-        ("power-before-software", "Power may reprice before software", "The same AI demand signal touches neocloud capacity, grid scarcity, and optical interconnects. The less crowded expression may sit one layer below compute revenue.", "contrarian", 82, 70, ["thesis:ai_power_nuclear", "thesis:neocloud_compute", "thesis:semis_photonics"]),
-        ("event-volatility-not-ipo", "Trade the event graph, not the IPO", "Nscale may be untradeable directly, but its filing window can still reprice public neocloud and power comps. The event is useful even if participation is skipped.", "connection", 76, 66, ["thesis:neocloud_compute", "concept:ipo_events", "concept:ai_power"]),
-        ("risk-budget-substitution", "Narrative baskets compete for the same risk budget", "Quantum momentum can weaken when capital rotates toward infrastructure names with visible contracts and utilization.", "risk", 68, 59, ["thesis:quantum", "thesis:neocloud_compute"]),
-    ]
-    for slug, title, summary, insight_type, novelty, confidence, links in insights:
-        conn.execute(
-            """
-            INSERT INTO insights(slug, title, summary, insight_type, novelty, confidence, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-            ON CONFLICT(slug) DO UPDATE SET title=excluded.title, summary=excluded.summary,
-              novelty=excluded.novelty, confidence=excluded.confidence, updated_at=excluded.updated_at
-            """,
-            (slug, title, summary, insight_type, novelty, confidence, ts, ts),
-        )
-        insight_id = conn.execute("SELECT id FROM insights WHERE slug=?", (slug,)).fetchone()[0]
-        for node_id in links:
-            if conn.execute("SELECT 1 FROM graph_nodes WHERE id=?", (node_id,)).fetchone():
-                conn.execute(
-                    """INSERT INTO insight_links(insight_id, node_id, relationship)
-                       VALUES (?, ?, 'connects')
-                       ON CONFLICT(insight_id, node_id, relationship) DO NOTHING""",
-                    (insight_id, node_id),
-                )
-
-
-def seed_closed_loop(conn, ts: str) -> None:
-    cycles = [
-        ("cycle-ai-power-01", "ai_power_nuclear", "AI power beneficiaries sustain relative strength through the next capex-guidance cycle.", "Basket outperforms software AI proxies with improving breadth and no drawdown beyond the hard risk limit.", "live", "active", 4, "AI capex expansion"),
-        ("cycle-neocloud-01", "neocloud_compute", "A confirmed Nscale filing expands volatility and attention across listed neocloud comps.", "At least two public comps show volume expansion around the filing window without a financing-quality break.", "backtest", "open", 3, "event volatility"),
-        ("cycle-photonics-01", "semis_photonics", "Optical suppliers capture a second derivative of cluster capex.", "Two suppliers improve demand commentary before year-end and the basket holds after doubled-cost stress.", "research", "open", 2, "AI capex expansion"),
-        ("cycle-quantum-01", "quantum", "Quantum momentum fades relative to infrastructure when speculative liquidity contracts.", "Quantum basket underperforms neoclouds in the next risk-off rotation.", "postmortem", "killed", 5, "speculative risk-off"),
-    ]
-    for key, thesis_id, hypothesis, outcome, stage, status, iteration, regime in cycles:
-        conn.execute(
-            """
-            INSERT INTO research_cycles(external_key, thesis_id, hypothesis, preregistered_outcome, preregistered_at, stage, status, iteration, market_regime, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(external_key) DO UPDATE SET hypothesis=excluded.hypothesis,
-              preregistered_outcome=excluded.preregistered_outcome, stage=excluded.stage,
-              status=excluded.status, iteration=excluded.iteration, market_regime=excluded.market_regime,
-              updated_at=excluded.updated_at
-            """,
-            (key, thesis_id, hypothesis, outcome, ts, stage, status, iteration, regime, ts, ts),
-        )
-
-    tests = [
-        ("ai-power-base", "cycle-ai-power-01", "power-breadth-v4", "survived", 11.2, -7.4, 1.21, 2.0, "2022 rates shock", None, "Held positive expectancy after doubled costs; drawdown remained inside the hard limit."),
-        ("ai-power-fast", "cycle-ai-power-01", "fast-entry-v3", "killed", 3.1, -18.8, 0.22, 2.0, "2022 rates shock", "drawdown_breach", "Entry sensitivity overfit the recent momentum regime and failed during rate-volatility expansion."),
-        ("neocloud-equal", "cycle-neocloud-01", "equal-weight-event", "survived", 8.6, -10.2, 0.94, 2.0, "2025 financing scare", None, "Volume confirmation improved results; financing screens prevented the worst tail outcomes."),
-        ("neocloud-leverage", "cycle-neocloud-01", "levered-beta", "killed", -12.7, -27.5, -0.31, 2.0, "2025 financing scare", "crash_fail", "Leverage amplified correlated financing risk; the expression duplicated one underlying factor."),
-        ("photonics-earnings", "cycle-photonics-01", "earnings-drift", "queued", None, None, None, 2.0, "2022 semiconductor downcycle", None, None),
-        ("quantum-breakout", "cycle-quantum-01", "breakout-v5", "killed", -6.4, -24.1, -0.18, 2.0, "speculative risk-off", "regime_dependency", "The signal only survived high-liquidity momentum regimes and repeated a previously observed failure."),
-    ]
-    for key, cycle_key, variant, status, total_return, drawdown, sharpe, costs, regime, failure, autopsy in tests:
-        cycle_id = conn.execute("SELECT id FROM research_cycles WHERE external_key=?", (cycle_key,)).fetchone()[0]
-        conn.execute(
-            """
-            INSERT INTO strategy_tests(external_key, cycle_id, variant_label, status, total_return, max_drawdown, deflated_sharpe,
-              cost_multiplier, stress_regime, failure_reason, autopsy, tested_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(external_key) DO UPDATE SET status=excluded.status, total_return=excluded.total_return,
-              max_drawdown=excluded.max_drawdown, deflated_sharpe=excluded.deflated_sharpe,
-              cost_multiplier=excluded.cost_multiplier, stress_regime=excluded.stress_regime,
-              failure_reason=excluded.failure_reason, autopsy=excluded.autopsy, tested_at=excluded.tested_at
-            """,
-            (key, cycle_id, variant, status, total_return, drawdown, sharpe, costs, regime, failure, autopsy, ts),
-        )
-
-    regimes = ["base", "rate_shock", "liquidity_crunch", "earnings_gap", "crowded_unwind", "sideways_chop"]
-    for test_index, (key, _, _, status, total_return, _, _, _, _, failure, _) in enumerate(tests):
-        test_id = conn.execute("SELECT id FROM strategy_tests WHERE external_key=?", (key,)).fetchone()[0]
-        for regime_index, regime in enumerate(regimes):
-            for cost_multiplier in (1.0, 2.0):
-                scenario_key = f"{regime}-{int(cost_multiplier)}x"
-                if status == "queued":
-                    outcome, metric_value, breach = "queued", None, None
-                else:
-                    penalty = regime_index * 2.1 + (cost_multiplier - 1) * 3.4
-                    metric_value = round((total_return or 0) - penalty + ((test_index * 3 + regime_index) % 5) - 2, 2)
-                    outcome = "survived" if status == "survived" and metric_value > -5 and regime_index < 5 else "killed"
-                    breach = None if outcome == "survived" else (failure or ("cost_fail" if cost_multiplier > 1 else "regime_fail"))
-                conn.execute(
-                    """
-                    INSERT INTO test_scenarios(test_id, scenario_key, market_regime, cost_multiplier, outcome, metric_value, breach_type, tested_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(test_id, scenario_key) DO UPDATE SET outcome=excluded.outcome,
-                      metric_value=excluded.metric_value, breach_type=excluded.breach_type, tested_at=excluded.tested_at
-                    """,
-                    (test_id, scenario_key, regime, cost_multiplier, outcome, metric_value, breach, ts),
-                )
-
-    if not conn.execute("SELECT 1 FROM agent_runs LIMIT 1").fetchone():
-        roles = [
-            ("cycle-ai-power-01", "research", "power-specialists", 1, "Independent source agents found power, fuel, and grid bottleneck evidence without current-price context."),
-            ("cycle-ai-power-01", "breaker", "adversarial", 0, "Replayed the thesis at doubled transaction costs and in the 2022 rates shock."),
-            ("cycle-neocloud-01", "critic", "journal-review", 0, "Flagged repeated underweighting of financing risk in high-beta infrastructure expressions."),
-            ("cycle-quantum-01", "postmortem", "journal-review", 0, "Matched the failure to a prior speculative-liquidity regime dependency."),
-        ]
-        for cycle_key, role, group, blinded, summary in roles:
-            cycle_id = conn.execute("SELECT id FROM research_cycles WHERE external_key=?", (cycle_key,)).fetchone()[0]
-            conn.execute("INSERT INTO agent_runs(cycle_id, agent_role, independence_group, price_blinded, summary, created_at) VALUES (?, ?, ?, ?, ?, ?)", (cycle_id, role, group, bool(blinded), summary, ts))
-
-    lessons = [
-        ("cycle-ai-power-01", "ai-power-fast", "ai_power_nuclear", "negative_result", "Fast-entry variants overfit recent power momentum and breach drawdown limits during rate shocks.", "2022 rates shock", 1),
-        ("cycle-neocloud-01", "neocloud-leverage", "neocloud_compute", "factor_concentration", "Levered neocloud baskets conceal a shared financing factor; exposure must be capped at the factor level.", "financing stress", 1),
-        ("cycle-quantum-01", "quantum-breakout", "quantum", "regime_dependency", "Quantum breakout signals have not survived outside high-liquidity speculative regimes.", "speculative risk-off", 0),
-    ]
-    for cycle_key, test_key, thesis_id, lesson_type, summary, regime, incorporated in lessons:
-        cycle_id = conn.execute("SELECT id FROM research_cycles WHERE external_key=?", (cycle_key,)).fetchone()[0]
-        test_id = conn.execute("SELECT id FROM strategy_tests WHERE external_key=?", (test_key,)).fetchone()[0]
-        if conn.execute("SELECT 1 FROM research_lessons WHERE test_id=? AND lesson_type=?", (test_id, lesson_type)).fetchone():
-            continue
-        conn.execute("INSERT INTO research_lessons(cycle_id, test_id, thesis_id, lesson_type, summary, market_regime, incorporated, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (cycle_id, test_id, thesis_id, lesson_type, summary, regime, bool(incorporated), ts))
-
-    controls = [
-        ("portfolio-drawdown", "portfolio", "max_drawdown", {"percent": 8}, "code"),
-        ("thesis-notional", "thesis", "max_notional", {"percent_of_portfolio_value": 5}, "code"),
-        ("event-liquidity", "trade", "minimum_liquidity", {"max_spread_bps": 80}, "code"),
-        ("breaker-costs", "backtest", "transaction_cost_stress", {"multiplier": 2}, "code"),
-    ]
-    conn.execute(
-        "UPDATE risk_controls SET status='retired', updated_at=? "
-        "WHERE scope LIKE 'symbol:%%' AND control_type='max_notional' AND status='active'",
-        (ts,),
-    )
-    for key, scope, control_type, threshold, enforcement in controls:
-        conn.execute(
-            """
-            INSERT INTO risk_controls(control_key, scope, control_type, threshold_json, enforcement_level, status, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'active', ?)
-            ON CONFLICT(control_key) DO UPDATE SET threshold_json=excluded.threshold_json,
-              enforcement_level=excluded.enforcement_level, status=excluded.status, updated_at=excluded.updated_at
-            """,
-            (key, scope, control_type, json.dumps(threshold, sort_keys=True), enforcement, ts),
+def link_matches(conn, source_id: str, matches: list[ThemeMatch], *, context: dict) -> None:
+    for match in matches:
+        upsert_edge(
+            conn,
+            source_id,
+            theme_node_id(match.theme),
+            "classified_as",
+            weight=max(1.0, match.score / 20),
+            props={
+                **context,
+                "score": match.score,
+                "matched_terms": match.matched_terms,
+                "matched_symbols": match.matched_symbols,
+            },
         )
 
 
-def main():
+def main() -> None:
     conn = database.connect()
+    try:
+        learner = OntologyLearner(conn)
+        learner.sync_theme_theses()
+        promoted = learner.promote_ready_candidates()
 
-    for cid in CONCEPTS:
-        upsert_node(conn, cid, "concept", cid.split(":", 1)[1].replace("_", " "))
-
-    for row in conn.execute("SELECT symbol, status FROM symbols"):
-        symbol, status = row
-        upsert_node(conn, f"symbol:{symbol}", "symbol", symbol, {"status": status})
-
-    for row in conn.execute("SELECT id, name, status, confidence, summary FROM theses"):
-        tid, name, status, confidence, summary = row
-        upsert_node(conn, f"thesis:{tid}", "thesis", name, {"status": status, "confidence": confidence, "summary": summary})
-
-    for row in conn.execute("SELECT id, text, created_at, market_score FROM bookmarks WHERE is_market_related = TRUE"):
-        bid, text, created_at, score = row
-        src_id = f"source:x_bookmark:{bid}"
-        upsert_node(conn, src_id, "source", f"X bookmark {bid}", {"created_at": created_at, "market_score": score})
-        lower = (text or "").lower()
-        for cid, keywords in CONCEPTS.items():
-            if any(k in lower for k in keywords):
-                upsert_edge(conn, src_id, cid, "mentions", weight=max(1, score / 25), props={"snippet": text[:240]})
-
-    for row in conn.execute("SELECT id, title, url, text FROM articles WHERE text IS NOT NULL"):
-        aid, title, url, text = row
-        src_id = f"source:article:{aid}"
-        upsert_node(conn, src_id, "source", title or url, {"url": url})
-        lower = (text or "").lower()
-        for cid, keywords in CONCEPTS.items():
-            if any(k in lower for k in keywords):
-                upsert_edge(conn, src_id, cid, "mentions", weight=2.0, props={"url": url})
-
-    for cid, symbols in PUBLIC_COMPS.items():
-        for symbol in symbols:
-            upsert_node(conn, f"symbol:{symbol}", "symbol", symbol, {"status": "public_comp"})
-            upsert_edge(conn, cid, f"symbol:{symbol}", "public_comp", weight=1.5)
-
-    for row in conn.execute("SELECT id, symbol, thesis_id, status, rationale FROM trade_proposals"):
-        pid, symbol, thesis_id, status, rationale = row
-        trade_id = f"trade_proposal:{pid}"
-        upsert_node(conn, trade_id, "trade", f"{status} {symbol}", {"status": status, "rationale": rationale})
-        upsert_edge(conn, f"thesis:{thesis_id}", trade_id, "proposes", weight=3.0)
-        upsert_edge(conn, trade_id, f"symbol:{symbol}", "targets", weight=3.0)
-
-    ts = now_iso()
-    nscale_summary = (
-        "Nscale potential U.S. IPO as soon as September 2026; reports cite up to $3B raise, "
-        "$51B contracted revenue, Anyscale acquisition, and large power/data-center commitments. "
-        "Not confirmed for Aug 24 and not currently Robinhood-tradable."
-    )
-    existing_event = conn.execute(
-        "SELECT id FROM research_events WHERE label=? AND event_date=? ORDER BY id LIMIT 1",
-        ("Nscale possible U.S. IPO", "2026-09"),
-    ).fetchone()
-    if existing_event:
-        event_id = existing_event[0]
+        # Reconcile ontology-owned graph edges without requiring DELETE access.
+        # Active edges below overwrite these tombstones during the same run.
         conn.execute(
-            "UPDATE research_events SET summary=?, source_url=?, updated_at=? WHERE id=?",
-            (nscale_summary, "https://www.nscale.com/press-releases/nscale-acquires-anyscale", ts, event_id),
-        )
-    else:
-        conn.execute(
-        """
-        INSERT INTO research_events(event_type, label, event_date, status, source_url, summary, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        ("ipo_watch", "Nscale possible U.S. IPO", "2026-09", "watching", "https://www.nscale.com/press-releases/nscale-acquires-anyscale", nscale_summary, ts, ts),
-        )
-        event_id = conn.execute(
-            "SELECT id FROM research_events WHERE label=? AND event_date=? ORDER BY id LIMIT 1",
-            ("Nscale possible U.S. IPO", "2026-09"),
-        ).fetchone()[0]
-    upsert_node(conn, f"event:{event_id}", "event", "Nscale possible U.S. IPO", {"event_date": "2026-09", "status": "watching"})
-    for cid in ["concept:neocloud", "concept:ai_power", "concept:ipo_events"]:
-        upsert_edge(conn, f"event:{event_id}", cid, "catalyzes", weight=4.0)
-
-    for topic, reason in [
-        ("Nscale S-1 / F-1 filing detection", "Find confirmed filing, ticker, valuation, lockups, public comps, and whether direct or comp trade exists."),
-        ("Upcoming earnings swing map", "Build a rolling 14-day calendar of earnings likely to move existing theses."),
-        ("AI power public comps", "Track VST/CEG/GEV/XE/OKLO/LEU news, volume, and sentiment as Nscale IPO approaches."),
-    ]:
-        if conn.execute("SELECT 1 FROM research_queue WHERE topic=? AND status='open'", (topic,)).fetchone():
-            continue
-        conn.execute(
-            """
-            INSERT INTO research_queue(priority, topic, reason, source, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (80, topic, reason, "ontology_refresh", ts, ts),
+            """UPDATE graph_edges SET weight=0, evidence_count=0,
+                     properties_json='{"stale":true}'::jsonb, updated_at=now()
+               WHERE edge_type='classified_as'
+                  OR edge_type='expressed_as'
+                  OR (
+                    edge_type IN ('member','beneficiary','supplier','customer','competitor','proxy')
+                    AND (starts_with(src_id, 'theme:') OR starts_with(src_id, 'concept:'))
+                    AND starts_with(dst_id, 'symbol:')
+                  )"""
         )
 
-    conn.execute(
-        """
-        INSERT INTO event_decisions(event_id, decision, rationale, participation_trigger, decided_at, updated_at)
-        VALUES (?, 'watch', ?, ?, ?, ?)
-        ON CONFLICT(event_id) DO UPDATE SET rationale=excluded.rationale,
-          participation_trigger=excluded.participation_trigger, updated_at=excluded.updated_at
-        """,
-        (event_id, "No direct participation before a confirmed filing, terms, ticker, and Robinhood tradability. Use the event to monitor public comps.", "Reassess after filing terms are public and liquidity can be evaluated.", ts, ts),
-    )
+        for theme in learner.catalog.themes.values():
+            node_id = theme_node_id(theme)
+            upsert_node(
+                conn,
+                node_id,
+                "concept" if theme.kind == "concept" else "theme",
+                theme.name,
+                {
+                    "description": theme.description,
+                    "thesis_id": theme.thesis_id,
+                    "match_threshold": theme.match_threshold,
+                },
+            )
+            if theme.thesis_id:
+                thesis = conn.execute(
+                    "SELECT name, status, confidence, summary FROM theses WHERE id=?",
+                    (theme.thesis_id,),
+                ).fetchone()
+                if thesis:
+                    thesis_node = f"thesis:{theme.thesis_id}"
+                    upsert_node(
+                        conn,
+                        thesis_node,
+                        "thesis",
+                        thesis["name"],
+                        {
+                            "status": thesis["status"],
+                            "confidence": thesis["confidence"],
+                            "summary": thesis["summary"],
+                        },
+                    )
+                    upsert_edge(conn, node_id, thesis_node, "expressed_as", weight=2.0)
 
-    seed_research_views(conn, ts)
-    seed_closed_loop(conn, ts)
-    conn.commit()
-    nodes = conn.execute("SELECT COUNT(*) FROM graph_nodes").fetchone()[0]
-    edges = conn.execute("SELECT COUNT(*) FROM graph_edges").fetchone()[0]
-    events = conn.execute("SELECT COUNT(*) FROM research_events").fetchone()[0]
-    queue = conn.execute("SELECT COUNT(*) FROM research_queue WHERE status = 'open'").fetchone()[0]
-    print(json.dumps({"nodes": nodes, "edges": edges, "events": events, "open_research_queue": queue}, indent=2))
-    conn.close()
+        for row in conn.execute("SELECT symbol, status FROM symbols"):
+            upsert_node(conn, f"symbol:{row['symbol']}", "symbol", row["symbol"], {"status": row["status"]})
+
+        for row in conn.execute(
+            """SELECT m.symbol, m.theme_id, m.relationship, m.confidence, m.evidence_count,
+                      m.source_count, t.kind, t.name, t.description, t.thesis_id,
+                      t.match_threshold, t.auto_promote_sources
+               FROM symbol_theme_memberships m
+               JOIN ontology_themes t ON t.id=m.theme_id
+               WHERE m.status='active' AND t.status='active'"""
+        ):
+            theme = Theme(
+                id=row["theme_id"],
+                thesis_id=row["thesis_id"],
+                kind=row["kind"],
+                name=row["name"],
+                description=row["description"],
+                match_threshold=row["match_threshold"],
+                auto_promote_sources=row["auto_promote_sources"],
+            )
+            upsert_edge(
+                conn,
+                theme_node_id(theme),
+                f"symbol:{row['symbol']}",
+                row["relationship"],
+                weight=max(1.0, row["confidence"] / 25),
+                props={"confidence": row["confidence"], "source_count": row["source_count"]},
+            )
+
+        for row in conn.execute(
+            "SELECT id, text, created_at, market_score FROM bookmarks WHERE is_market_related=TRUE"
+        ):
+            source_id = f"source:x_bookmark:{row['id']}"
+            upsert_node(
+                conn,
+                source_id,
+                "source",
+                f"X bookmark {row['id']}",
+                {"created_at": row["created_at"], "market_score": row["market_score"]},
+            )
+            symbols = learner.catalog.extract_symbols(row["text"] or "")
+            matches = learner.catalog.classify(row["text"] or "", symbols)
+            learner.record_source(
+                source_type="bookmark",
+                source_key=row["id"],
+                text=row["text"] or "",
+                symbols=symbols,
+                matches=matches,
+                observed_at=str(row["created_at"]),
+            )
+            link_matches(conn, source_id, matches, context={"snippet": (row["text"] or "")[:240]})
+
+        for row in conn.execute("SELECT id, title, url, text, fetched_at FROM articles WHERE text IS NOT NULL"):
+            source_id = f"source:article:{row['id']}"
+            upsert_node(conn, source_id, "source", row["title"] or row["url"], {"url": row["url"]})
+            symbols = learner.catalog.extract_symbols(row["text"] or "")
+            matches = learner.catalog.classify(row["text"] or "", symbols)
+            learner.record_source(
+                source_type="article",
+                source_key=str(row["id"]),
+                text=row["text"] or "",
+                symbols=symbols,
+                matches=matches,
+                observed_at=str(row["fetched_at"]),
+            )
+            link_matches(conn, source_id, matches, context={"url": row["url"]})
+
+        for row in conn.execute(
+            "SELECT id, label, event_date, status, summary, updated_at FROM research_events"
+        ):
+            event_id = f"event:{row['id']}"
+            upsert_node(
+                conn,
+                event_id,
+                "event",
+                row["label"],
+                {"event_date": row["event_date"], "status": row["status"]},
+            )
+            symbols = learner.catalog.extract_symbols(row["summary"] or "")
+            matches = learner.catalog.classify(f"{row['label']} {row['summary']}", symbols)
+            learner.record_source(
+                source_type="research_event",
+                source_key=str(row["id"]),
+                text=f"{row['label']} {row['summary']}",
+                symbols=symbols,
+                matches=matches,
+                observed_at=str(row["updated_at"]),
+            )
+            link_matches(conn, event_id, matches, context={"event_date": row["event_date"]})
+
+        for row in conn.execute("SELECT id, symbol, thesis_id, status, rationale FROM trade_proposals"):
+            trade_id = f"trade_proposal:{row['id']}"
+            upsert_node(
+                conn,
+                trade_id,
+                "trade",
+                f"{row['status']} {row['symbol']}",
+                {"status": row["status"], "rationale": row["rationale"]},
+            )
+            if row["thesis_id"]:
+                upsert_edge(conn, f"thesis:{row['thesis_id']}", trade_id, "proposes", weight=3.0)
+            upsert_edge(conn, trade_id, f"symbol:{row['symbol']}", "targets", weight=3.0)
+
+        learner.recalculate_candidate_stats()
+        discovered = learner.discover_emerging_themes()
+        conn.commit()
+        result = conn.execute(
+            """SELECT
+                 (SELECT COUNT(*) FROM graph_nodes) AS nodes,
+                 (SELECT COUNT(*) FROM graph_edges) AS edges,
+                 (SELECT COUNT(*) FROM ontology_themes WHERE status='active') AS active_themes,
+                 (SELECT COUNT(*) FROM ontology_candidates c
+                  WHERE status='pending' AND source_count >= 2
+                    AND (
+                      (candidate_type='membership' AND EXISTS (
+                        SELECT 1 FROM symbols s WHERE s.symbol=c.proposed_label
+                          AND s.status IN ('known', 'verified', 'active', 'public_comp')
+                      ))
+                      OR (candidate_type='term' AND lower(proposed_label)
+                          !~ '(^| )(http|https|www|t[.]co)( |$)')
+                      OR (candidate_type='theme' AND (
+                        position(' ' in proposed_label) > 0
+                        OR sample_context->>'feature_type'='hashtag'
+                      ))
+                    )) AS pending_candidates"""
+        ).fetchone()
+        print(json.dumps({**dict(result), "auto_promoted": promoted, "emerging_candidates": discovered}, indent=2))
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
