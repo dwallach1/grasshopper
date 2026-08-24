@@ -11,7 +11,7 @@ export type PublicationResult = {
 
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
-export async function boundedJson(response: Response): Promise<unknown> {
+export async function boundedJson(response: Response): Promise<JsonValue> {
   const declaredLength = Number(response.headers.get('content-length') || 0);
   if (declaredLength > MAX_RESPONSE_BYTES) {
     throw new Error('Supabase publication response exceeded the size limit');
@@ -43,22 +43,30 @@ export async function boundedJson(response: Response): Promise<unknown> {
     offset += chunk.byteLength;
   }
   const text = new TextDecoder().decode(body);
-  return text ? JSON.parse(text) : null;
+  return text ? parseJson(text) : null;
 }
 
-export function isPublicationResult(value: unknown): value is PublicationResult {
-  if (!value || typeof value !== 'object') return false;
-  const result = value as Partial<PublicationResult>;
+export function isPublicationResult(value: JsonValue): value is PublicationResult {
+  if (!isJsonObject(value)) return false;
+  const result = value;
   return (
     (result.target_id === 'current' || result.target_id === 'cloudflare-shadow') &&
-    typeof result.generated_at === 'string' &&
-    typeof result.normalized_sha256 === 'string' &&
+    isJsonString(result.generated_at) &&
+    isJsonString(result.normalized_sha256) &&
     (result.current_normalized_sha256 === null ||
-      typeof result.current_normalized_sha256 === 'string') &&
-    typeof result.matches_current === 'boolean' &&
+      isJsonString(result.current_normalized_sha256)) &&
+    isJsonBoolean(result.matches_current) &&
     Array.isArray(result.changed_keys) &&
-    result.changed_keys.every((key) => typeof key === 'string') &&
-    typeof result.thesis_count === 'number' &&
+    result.changed_keys.every(isJsonString) &&
+    isJsonNumber(result.thesis_count) &&
     result.trading_enabled === false
   );
 }
+import {
+  isJsonBoolean,
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonValue,
+} from '../shared/json';

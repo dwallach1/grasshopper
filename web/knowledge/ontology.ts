@@ -80,7 +80,7 @@ export class OntologyCatalog {
       const symbol = match[0].toUpperCase();
       if (this.knownSymbols.has(symbol)) symbols.add(symbol);
     }
-    for (const symbol of [...symbols]) {
+    for (const symbol of symbols) {
       if (this.ignoredSymbols.has(symbol) || this.blacklistedSymbols.has(symbol) || /^\d+$/.test(symbol)) {
         symbols.delete(symbol);
       }

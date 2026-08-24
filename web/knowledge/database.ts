@@ -51,8 +51,8 @@ export async function withDatabase<Result>(
   }
 }
 
-function isTransientConnectionError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
+function isTransientConnectionError(error: Error): boolean {
+  const message = error.message.toLowerCase();
   return message.includes('connection terminated')
     || message.includes('connection error')
     || message.includes('not queryable')
@@ -69,7 +69,8 @@ export async function withDatabaseRetry<Result>(
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       return await withDatabase(connectionString, operation);
-    } catch (error) {
+    } catch (caught) {
+      const error = caught instanceof Error ? caught : new Error(String(caught));
       lastError = error;
       if (!isTransientConnectionError(error) || attempt === attempts) throw error;
       await new Promise((resolve) => setTimeout(resolve, attempt * 100));

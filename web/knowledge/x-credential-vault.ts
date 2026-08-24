@@ -1,8 +1,16 @@
 import { DurableObject } from 'cloudflare:workers';
 
-import type { XBookmarkPayload } from './bookmarks';
+import type { XBookmark, XBookmarkPayload, XContextAnnotation } from './bookmarks';
+import {
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonObject,
+  type JsonValue,
+} from '../shared/json';
 
-type TokenResponse = {
+type TokenResponse = JsonObject & {
   access_token: string;
   refresh_token?: string;
   expires_in?: number;
@@ -14,12 +22,6 @@ type StoredToken = {
   access_token: string;
   refresh_token: string | null;
   expires_at: number | null;
-};
-
-type XPage = {
-  data?: Array<Record<string, unknown>>;
-  includes?: Record<string, unknown>;
-  meta?: { next_token?: string };
 };
 
 const MAX_X_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -38,7 +40,7 @@ async function sha256Base64Url(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))));
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
+async function boundedJson(response: Response): Promise<JsonValue> {
   const declared = Number(response.headers.get('content-length') || 0);
   if (declared > MAX_X_RESPONSE_BYTES) throw new Error('X response exceeded its size limit');
   if (!response.body) return null;
@@ -66,11 +68,64 @@ async function boundedJson(response: Response): Promise<unknown> {
     offset += chunk.byteLength;
   }
   const text = new TextDecoder().decode(output);
-  return text ? JSON.parse(text) : null;
+  return text ? parseJson(text) : null;
 }
 
-function isTokenResponse(value: unknown): value is TokenResponse {
-  return Boolean(value) && typeof value === 'object' && typeof (value as { access_token?: unknown }).access_token === 'string';
+function isTokenResponse(value: JsonValue): value is TokenResponse {
+  return isJsonObject(value)
+    && isJsonString(value.access_token)
+    && (value.refresh_token === undefined || isJsonString(value.refresh_token))
+    && (value.expires_in === undefined || isJsonNumber(value.expires_in))
+    && (value.token_type === undefined || isJsonString(value.token_type))
+    && (value.scope === undefined || isJsonString(value.scope));
+}
+
+function optionalString(value: JsonValue | undefined): string | undefined {
+  return isJsonString(value) ? value : undefined;
+}
+
+function contextAnnotation(value: JsonValue): XContextAnnotation | null {
+  if (!isJsonObject(value)) return null;
+  const domain = isJsonObject(value.domain) ? {
+    id: optionalString(value.domain.id),
+    name: optionalString(value.domain.name),
+    description: optionalString(value.domain.description),
+  } : undefined;
+  const entity = isJsonObject(value.entity) ? {
+    id: optionalString(value.entity.id),
+    name: optionalString(value.entity.name),
+    description: optionalString(value.entity.description),
+  } : undefined;
+  return { domain, entity };
+}
+
+function bookmarkFromJson(value: JsonValue): XBookmark | null {
+  if (!isJsonObject(value) || !isJsonString(value.id)) return null;
+  const urls = isJsonObject(value.entities) && Array.isArray(value.entities.urls)
+    ? value.entities.urls.flatMap((candidate) => {
+        if (!isJsonObject(candidate)) return [];
+        return [{
+          url: optionalString(candidate.url),
+          expanded_url: optionalString(candidate.expanded_url),
+          display_url: optionalString(candidate.display_url),
+        }];
+      })
+    : undefined;
+  const annotations = Array.isArray(value.context_annotations)
+    ? value.context_annotations.flatMap((candidate) => {
+        const parsed = contextAnnotation(candidate);
+        return parsed ? [parsed] : [];
+      })
+    : undefined;
+  return {
+    id: value.id,
+    author_id: optionalString(value.author_id),
+    created_at: optionalString(value.created_at),
+    text: optionalString(value.text),
+    entities: urls ? { urls } : undefined,
+    context_annotations: annotations,
+    raw_json: JSON.stringify(value),
+  };
 }
 
 export type XVaultEnvironment = {
@@ -168,7 +223,7 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     }), 'X token refresh');
   }
 
-  private async xFetch(path: string, retry = true): Promise<unknown> {
+  private async xFetch(path: string, retry = true): Promise<JsonValue> {
     let token = this.bootstrapToken();
     if (token.expires_at !== null && token.expires_at <= Date.now() + 60_000) token = await this.refreshToken(token);
     const response = await fetch(`https://api.x.com${path}`, {
@@ -242,12 +297,10 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     );
     try {
       const user = await this.xFetch('/2/users/me');
-      const userRecord = user && typeof user === 'object' && !Array.isArray(user)
-        ? (user as { data?: Record<string, unknown> }).data
-        : null;
-      const userId = typeof userRecord?.id === 'string' ? userRecord.id : null;
-      if (!userId) throw new Error('X did not return the authorized user id');
-      const bookmarks: Array<Record<string, unknown>> = [];
+      const userRecord = isJsonObject(user) && isJsonObject(user.data) ? user.data : null;
+      const userId = isJsonString(userRecord?.id) ? userRecord.id : null;
+      if (!userRecord || !userId) throw new Error('X did not return the authorized user id');
+      const bookmarks: XBookmark[] = [];
       let paginationToken: string | undefined;
       for (let pageNumber = 0; pageNumber < MAX_PAGES && bookmarks.length < MAX_BOOKMARKS; pageNumber += 1) {
         const params = new URLSearchParams({
@@ -258,16 +311,22 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
         });
         if (paginationToken) params.set('pagination_token', paginationToken);
         const value = await this.xFetch(`/2/users/${encodeURIComponent(userId)}/bookmarks?${params.toString()}`);
-        const page = value && typeof value === 'object' && !Array.isArray(value) ? value as XPage : {};
-        if (Array.isArray(page.data)) bookmarks.push(...page.data);
-        paginationToken = page.meta?.next_token;
+        const page = isJsonObject(value) ? value : {};
+        if (Array.isArray(page.data)) {
+          bookmarks.push(...page.data.flatMap((candidate) => {
+            const bookmark = bookmarkFromJson(candidate);
+            return bookmark ? [bookmark] : [];
+          }));
+        }
+        const meta = isJsonObject(page.meta) ? page.meta : null;
+        paginationToken = isJsonString(meta?.next_token) ? meta.next_token : undefined;
         if (!paginationToken) break;
       }
       return {
         fetchedAt: new Date().toISOString(),
-        user: userRecord,
+        user: { id: userId },
         bookmarks: bookmarks.slice(0, MAX_BOOKMARKS),
-      } as XBookmarkPayload;
+      };
     } finally {
       this.ctx.storage.sql.exec('delete from sync_lease where singleton=1');
     }

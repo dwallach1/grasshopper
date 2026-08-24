@@ -6,6 +6,11 @@ import type { Snapshot } from './ontology-dashboard';
 
 type SnapshotRow = { payload?: Snapshot };
 
+async function fetchRows<Row>(url: string, requestHeaders: HeadersInit): Promise<Row[] | undefined> {
+  const response = await fetch(url, { headers: requestHeaders, cache: 'no-store' });
+  return response.ok ? response.json<Row[]>() : undefined;
+}
+
 export async function loadSnapshot(): Promise<Snapshot> {
   const requestHeaders = await headers();
   const viewerIdentity = await authenticatedIdentity(requestHeaders);
@@ -31,7 +36,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
     },
   );
   if (!response.ok) throw new Error(`Supabase snapshot request failed: ${response.status}`);
-  const rows = (await response.json()) as SnapshotRow[];
+  const rows = await response.json<SnapshotRow[]>();
   if (!rows[0]?.payload) throw new Error('Supabase has no current dashboard snapshot');
 
   const snapshot = rows[0].payload;
@@ -45,18 +50,16 @@ export async function loadSnapshot(): Promise<Snapshot> {
     'x-thesisforge-manager-user-id': viewerIdentity,
     'x-thesisforge-manager-token': managerToken,
   };
-  const endpoints = [
-    ['ontology_themes', 'ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status,name'],
-    ['ontology_symbols', 'symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300'],
-    ['ontology_candidates', 'ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,first_seen_at,last_seen_at,review_note&source_count=gte.2&order=status,source_count.desc,score.desc&limit=100'],
-    ['ontology_actions', 'ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100'],
-  ] as const;
-  const live = await Promise.all(endpoints.map(async ([key, path]) => {
-    const result = await fetch(`${apiBase}/${path}`, { headers: managerHeaders, cache: 'no-store' });
-    return [key, result.ok ? await result.json() : undefined] as const;
-  }));
-  for (const [key, value] of live) {
-    if (value !== undefined) (snapshot as unknown as Record<string, unknown>)[key] = value;
-  }
-  return snapshot;
+  const [themes, symbols, candidates, actions] = await Promise.all([
+    fetchRows<NonNullable<Snapshot['ontology_themes']>[number]>(`${apiBase}/ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status,name`, managerHeaders),
+    fetchRows<NonNullable<Snapshot['ontology_symbols']>[number]>(`${apiBase}/symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300`, managerHeaders),
+    fetchRows<NonNullable<Snapshot['ontology_candidates']>[number]>(`${apiBase}/ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,first_seen_at,last_seen_at,review_note&source_count=gte.2&order=status,source_count.desc,score.desc&limit=100`, managerHeaders),
+    fetchRows<NonNullable<Snapshot['ontology_actions']>[number]>(`${apiBase}/ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100`, managerHeaders),
+  ]);
+  const managerSnapshot: Snapshot = { ...snapshot };
+  if (themes) managerSnapshot.ontology_themes = themes;
+  if (symbols) managerSnapshot.ontology_symbols = symbols;
+  if (candidates) managerSnapshot.ontology_candidates = candidates;
+  if (actions) managerSnapshot.ontology_actions = actions;
+  return managerSnapshot;
 }

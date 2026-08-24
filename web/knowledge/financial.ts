@@ -1,4 +1,5 @@
 import type { Database } from './database';
+import { isJsonObject, parseJson, type JsonObject, type JsonValue } from '../shared/json';
 
 const PROVIDER = 'financialdatasets.ai';
 const BASE_URL = 'https://api.financialdatasets.ai';
@@ -10,22 +11,22 @@ export type FinancialRequest = {
   endpoint: string;
   params?: Record<string, string | number | boolean>;
   method?: 'GET' | 'POST';
-  body?: Record<string, unknown> | null;
+  body?: JsonObject | null;
   force?: boolean;
 };
 
-function stable(value: unknown): unknown {
+function stable(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map(stable);
-  if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stable(item)]));
+  if (!isJsonObject(value)) return value;
+  return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, stable(item)]));
 }
 
-function canonicalJson(value: unknown): string {
+function canonicalJson(value: JsonValue): string {
   return JSON.stringify(stable(value));
 }
 
 async function sha256(value: string | Uint8Array): Promise<string> {
-  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  const bytes = value instanceof Uint8Array ? value : new TextEncoder().encode(value);
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes).buffer));
   return [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -86,14 +87,14 @@ async function providerFetch(url: URL, spec: FinancialRequest, apiKey: string): 
   }
 }
 
-function records(payload: unknown): Array<Record<string, unknown>> {
-  if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
-  if (!payload || typeof payload !== 'object') return [];
-  const arrays = Object.values(payload).filter((item): item is Array<Record<string, unknown>> => Array.isArray(item) && item.every((row) => Boolean(row) && typeof row === 'object' && !Array.isArray(row)));
-  return arrays.sort((left, right) => right.length - left.length)[0] || [payload as Record<string, unknown>];
+function records(payload: JsonValue): JsonObject[] {
+  if (Array.isArray(payload)) return payload.filter(isJsonObject);
+  if (!isJsonObject(payload)) return [];
+  const arrays = Object.values(payload).filter((item): item is JsonObject[] => Array.isArray(item) && item.every(isJsonObject));
+  return arrays.sort((left, right) => right.length - left.length)[0] || [payload];
 }
 
-async function normalize(database: Database, spec: FinancialRequest, payload: unknown, requestId: number, fetchedAt: string): Promise<number> {
+async function normalize(database: Database, spec: FinancialRequest, payload: JsonValue, requestId: number, fetchedAt: string): Promise<number> {
   const dataset = spec.endpoint.replace(/^\/+|\/+$/g, '').replaceAll('/', '.');
   const fallback = String(spec.params?.ticker || '').toUpperCase() || null;
   const rows = await Promise.all(records(payload).map(async (record, index) => {
@@ -112,16 +113,24 @@ async function normalize(database: Database, spec: FinancialRequest, payload: un
   `, [JSON.stringify(rows)]);
 }
 
-async function decodeStored(body: Uint8Array, encoding: string): Promise<unknown> {
+async function decodeStored(body: Uint8Array, encoding: string): Promise<JsonValue> {
   let bytes = Uint8Array.from(body);
   if (encoding === 'gzip') {
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
     bytes = new Uint8Array(await new Response(stream).arrayBuffer());
   }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  return parseJson(new TextDecoder().decode(bytes));
 }
 
-export async function fetchFinancialData(database: Database, apiKey: string, spec: FinancialRequest): Promise<{ payload: unknown; source: 'cache' | 'network'; requestId: number; normalized: number; status: number }> {
+export type FinancialDataResult = {
+  payload: JsonValue;
+  source: 'cache' | 'network';
+  requestId: number;
+  normalized: number;
+  status: number;
+};
+
+export async function fetchFinancialData(database: Database, apiKey: string, spec: FinancialRequest): Promise<FinancialDataResult> {
   const requestFingerprint = await fingerprint(spec);
   if (!spec.force) {
     const cached = await database.query<{ id: number; response_body: Uint8Array; response_encoding: string; status_code: number }>(`
@@ -142,10 +151,11 @@ export async function fetchFinancialData(database: Database, apiKey: string, spe
   const bytes = await readBounded(response);
   const completedAt = new Date().toISOString();
   const text = new TextDecoder().decode(bytes);
-  let payload: unknown;
-  try { payload = JSON.parse(text); } catch { payload = { raw_text: text }; }
-  const responseHeaders: Record<string, string> = {};
-  response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+  let payload: JsonValue;
+  try { payload = parseJson(text); } catch { payload = { raw_text: text }; }
+  const responseHeaderMap = new Map<string, string>();
+  response.headers.forEach((value, key) => responseHeaderMap.set(key, value));
+  const responseHeaders = Object.fromEntries(responseHeaderMap);
   const inserted = await database.query<{ id: number }>(`
     insert into financial_api_requests(provider,request_fingerprint,method,endpoint,params_json,body_json,requested_at,completed_at,status_code,response_headers_json,response_sha256,response_encoding,response_body,error_text)
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'identity',$12,$13) returning id

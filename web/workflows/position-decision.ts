@@ -1,5 +1,9 @@
 import type { BrokerAccountSnapshot } from './broker-contract';
-import { actionableBrokerEvidence, type DecisionJsonObject } from './autonomous-decision';
+import {
+  actionableBrokerEvidence,
+  type DecisionJsonObject,
+  type DecisionJsonValue,
+} from './autonomous-decision';
 
 export type ManagedPosition = BrokerAccountSnapshot['positions'][number];
 
@@ -29,8 +33,8 @@ export type PositionAction = {
   evidence: DecisionJsonObject;
 };
 
-function isObject(value: unknown): value is DecisionJsonObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function isObject(value: DecisionJsonValue | undefined): value is DecisionJsonObject {
+  return value !== null && Object(value) === value && !Array.isArray(value);
 }
 
 function marketRow(context: DecisionJsonObject, symbol: string): DecisionJsonObject | null {
@@ -146,7 +150,7 @@ export function decidePositionAction(
   };
   const adverseReasons = deterministicAdverseEvidence(brokerContext, symbol);
   const hasStructuredFalsifier = theses.some((thesis) =>
-    thesis.symbols.includes(symbol) && typeof thesis.falsifier === 'string' && thesis.falsifier.trim().length >= 20);
+    thesis.symbols.includes(symbol) && (thesis.falsifier?.trim().length ?? 0) >= 20);
 
   // A deterministic loss limit does not depend on model permission.
   if (returnPercent !== null && returnPercent <= -8) {

@@ -1,5 +1,12 @@
-import type { XBookmark } from './bookmarks';
+import type { XBookmark, XContextAnnotation } from './bookmarks';
 import { normalizePhrase, type OntologyCatalog, type ThemeMatch } from './ontology';
+import {
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonObject,
+  type JsonValue,
+} from '../shared/json';
 
 export const ONTOLOGY_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 export const ONTOLOGY_PROMPT_VERSION = 'ontology-semantic-v1';
@@ -36,27 +43,23 @@ export type ClassifiedBookmark = {
   claim: { type: string; summary: string; confidence: number; evidenceExcerpt: string } | null;
   matches: ThemeMatch[];
   candidates: SemanticCandidate[];
-  classificationOutput: Record<string, unknown>;
+  classificationOutput: JsonObject;
 };
 
 export type AnalysisInput = {
   id: string;
   text: string;
-  contextAnnotations: unknown[];
+  contextAnnotations: XContextAnnotation[];
   bookmark: XBookmark;
   createdAt: string;
 };
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function requiredString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`Ontology AI output has an invalid ${field}`);
+function requiredString(value: JsonValue | undefined, field: string): string {
+  if (!isJsonString(value) || !value.trim()) throw new Error(`Ontology AI output has an invalid ${field}`);
   return value.trim();
 }
 
-function boundedInteger(value: unknown, field: string): number {
+function boundedInteger(value: JsonValue | undefined, field: string): number {
   const number = Number(value);
   if (!Number.isInteger(number) || number < 0 || number > 100) {
     throw new Error(`Ontology AI output has an invalid ${field}`);
@@ -64,7 +67,7 @@ function boundedInteger(value: unknown, field: string): number {
   return number;
 }
 
-function exactExcerpt(value: unknown, text: string, field: string): string {
+function exactExcerpt(value: JsonValue | undefined, text: string, field: string): string {
   const excerpt = requiredString(value, field);
   if (excerpt.length > 500 || !text.includes(excerpt)) {
     throw new Error(`Ontology AI output ${field} is not an exact source excerpt`);
@@ -72,23 +75,24 @@ function exactExcerpt(value: unknown, text: string, field: string): string {
   return excerpt;
 }
 
-function aiJson(result: unknown): Record<string, unknown> {
-  const text = typeof result === 'string'
-    ? result
-    : isObject(result) && typeof result.response === 'string'
-      ? result.response
-      : JSON.stringify(result);
+function aiJson<Result>(result: Result): JsonObject {
+  const normalized = parseJson(JSON.stringify(result));
+  const text = isJsonString(normalized)
+    ? normalized
+    : isJsonObject(normalized) && isJsonString(normalized.response)
+      ? normalized.response
+      : JSON.stringify(normalized);
   const fenced = text.trim().match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   try {
-    const parsed: unknown = JSON.parse(fenced || text);
-    if (isObject(parsed)) return parsed;
+    const parsed = parseJson(fenced || text);
+    if (isJsonObject(parsed)) return parsed;
   } catch {
     // The caller fails closed instead of persisting heuristic or partial output.
   }
   throw new Error('Ontology AI returned invalid structured output');
 }
 
-function validatedSymbols(value: unknown, catalog: OntologyCatalog): string[] {
+function validatedSymbols(value: JsonValue | undefined, catalog: OntologyCatalog): string[] {
   if (!Array.isArray(value)) throw new Error('Ontology AI output symbols must be an array');
   if (value.length > 20) throw new Error('Ontology AI output contains too many symbols');
   const symbols = new Set<string>();
@@ -100,24 +104,26 @@ function validatedSymbols(value: unknown, catalog: OntologyCatalog): string[] {
   return [...symbols].sort();
 }
 
-function validatedMatches(value: unknown, text: string, catalog: OntologyCatalog): ThemeMatch[] {
+function validatedMatches(value: JsonValue | undefined, text: string, catalog: OntologyCatalog): ThemeMatch[] {
   if (!Array.isArray(value)) throw new Error('Ontology AI output themes must be an array');
   if (value.length > 12) throw new Error('Ontology AI output contains too many theme matches');
   const matches = new Map<string, ThemeMatch>();
   for (const item of value) {
-    if (!isObject(item)) throw new Error('Ontology AI output contains an invalid theme match');
+    if (!isJsonObject(item)) throw new Error('Ontology AI output contains an invalid theme match');
     const themeId = requiredString(item.theme_id, 'theme_id');
     const theme = catalog.themes.get(themeId);
     if (!theme) throw new Error(`Ontology AI referenced unknown theme ${themeId}`);
     const score = boundedInteger(item.confidence, 'theme confidence');
     const direction = requiredString(item.direction, 'theme direction');
-    if (!DIRECTIONS.has(direction)) throw new Error('Ontology AI output contains an invalid theme direction');
+    if (direction !== 'supporting' && direction !== 'contradicting' && direction !== 'neutral') {
+      throw new Error('Ontology AI output contains an invalid theme direction');
+    }
     const evidenceExcerpt = exactExcerpt(item.evidence_excerpt, text, 'theme evidence_excerpt');
     if (score < theme.matchThreshold) continue;
     const match: ThemeMatch = {
       theme,
       score,
-      direction: direction as ThemeMatch['direction'],
+      direction,
       evidenceExcerpt,
     };
     const previous = matches.get(themeId);
@@ -127,7 +133,7 @@ function validatedMatches(value: unknown, text: string, catalog: OntologyCatalog
 }
 
 function validatedCandidates(
-  value: unknown,
+  value: JsonValue | undefined,
   text: string,
   symbols: string[],
   catalog: OntologyCatalog,
@@ -136,10 +142,12 @@ function validatedCandidates(
   if (value.length > 12) throw new Error('Ontology AI output contains too many candidates');
   const candidates = new Map<string, SemanticCandidate>();
   for (const item of value) {
-    if (!isObject(item)) throw new Error('Ontology AI output contains an invalid candidate');
+    if (!isJsonObject(item)) throw new Error('Ontology AI output contains an invalid candidate');
     const candidateType = requiredString(item.candidate_type, 'candidate_type');
-    if (!CANDIDATE_TYPES.has(candidateType)) throw new Error('Ontology AI output contains an invalid candidate_type');
-    const rawThemeId = typeof item.theme_id === 'string' ? item.theme_id.trim() : '';
+    if (candidateType !== 'theme' && candidateType !== 'term' && candidateType !== 'membership') {
+      throw new Error('Ontology AI output contains an invalid candidate_type');
+    }
+    const rawThemeId = isJsonString(item.theme_id) ? item.theme_id.trim() : '';
     const themeId = rawThemeId || null;
     if (candidateType === 'theme') {
       if (themeId) throw new Error('A new theme candidate cannot reference an existing theme');
@@ -156,7 +164,7 @@ function validatedCandidates(
     }
     const evidenceExcerpt = exactExcerpt(item.evidence_excerpt, text, 'candidate evidence_excerpt');
     const candidate: SemanticCandidate = {
-      candidateType: candidateType as SemanticCandidate['candidateType'],
+      candidateType,
       themeId,
       label,
       description: requiredString(item.description, 'candidate description').slice(0, 500),
@@ -171,7 +179,7 @@ function validatedCandidates(
 }
 
 export function parseOntologyAiOutput(
-  result: unknown,
+  result: JsonValue,
   inputs: AnalysisInput[],
   catalog: OntologyCatalog,
 ): ClassifiedBookmark[] {
@@ -180,7 +188,7 @@ export function parseOntologyAiOutput(
   const byId = new Map(inputs.map((input) => [input.id, input]));
   const classified = new Map<string, ClassifiedBookmark>();
   for (const value of parsed.analyses) {
-    if (!isObject(value)) throw new Error('Ontology AI output contains an invalid analysis');
+    if (!isJsonObject(value)) throw new Error('Ontology AI output contains an invalid analysis');
     const id = requiredString(value.bookmark_id, 'bookmark_id');
     const input = byId.get(id);
     if (!input || classified.has(id)) throw new Error('Ontology AI returned an unknown or duplicate bookmark_id');
@@ -188,9 +196,9 @@ export function parseOntologyAiOutput(
     const symbols = validatedSymbols(value.symbols, catalog);
     const matches = validatedMatches(value.themes, input.text, catalog);
     const claimType = requiredString(value.claim_type, 'claim_type');
-    const claimSummary = typeof value.claim_summary === 'string' ? value.claim_summary.trim().slice(0, 500) : '';
+    const claimSummary = isJsonString(value.claim_summary) ? value.claim_summary.trim().slice(0, 500) : '';
     const claimConfidence = boundedInteger(value.claim_confidence, 'claim_confidence');
-    const claimEvidence = typeof value.claim_evidence_excerpt === 'string' && value.claim_evidence_excerpt.trim()
+    const claimEvidence = isJsonString(value.claim_evidence_excerpt) && value.claim_evidence_excerpt.trim()
       ? exactExcerpt(value.claim_evidence_excerpt, input.text, 'claim_evidence_excerpt')
       : '';
     if (claimType !== 'none' && !CLAIM_TYPES.has(claimType)) throw new Error('Ontology AI output contains an invalid claim_type');
@@ -214,7 +222,11 @@ export function parseOntologyAiOutput(
     });
   }
   if (classified.size !== inputs.length) throw new Error('Ontology AI omitted one or more bookmarks');
-  return inputs.map((input) => classified.get(input.id)!);
+  return inputs.map((input) => {
+    const item = classified.get(input.id);
+    if (!item) throw new Error(`Ontology AI omitted bookmark ${input.id}`);
+    return item;
+  });
 }
 
 function promptFor(inputs: AnalysisInput[], catalog: OntologyCatalog): string {
@@ -314,7 +326,7 @@ async function analyzeBatch(ai: Ai, gatewayId: string, inputs: AnalysisInput[], 
       tags: ['thesisforge', 'ontology-learning'],
     },
   );
-  return parseOntologyAiOutput(result, inputs, catalog);
+  return parseOntologyAiOutput(parseJson(JSON.stringify(result)), inputs, catalog);
 }
 
 export async function classifyBookmarksWithAi(
@@ -326,10 +338,10 @@ export async function classifyBookmarksWithAi(
 ): Promise<ClassifiedBookmark[]> {
   const inputs: AnalysisInput[] = bookmarks.map((bookmark) => ({
     id: bookmark.id,
-    text: typeof bookmark.text === 'string' ? bookmark.text.slice(0, 2_000) : '',
-    contextAnnotations: Array.isArray(bookmark.context_annotations) ? bookmark.context_annotations.slice(0, 20) : [],
+    text: bookmark.text?.slice(0, 2_000) ?? '',
+    contextAnnotations: bookmark.context_annotations?.slice(0, 20) ?? [],
     bookmark,
-    createdAt: typeof bookmark.created_at === 'string' ? bookmark.created_at : fetchedAt,
+    createdAt: bookmark.created_at ?? fetchedAt,
   }));
   const batches: AnalysisInput[][] = [];
   for (let index = 0; index < inputs.length; index += BATCH_SIZE) batches.push(inputs.slice(index, index + BATCH_SIZE));

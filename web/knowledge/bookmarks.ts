@@ -6,20 +6,36 @@ import {
   type ClassifiedBookmark,
 } from './ontology-analysis';
 import { normalizePhrase, slugify, type OntologyCatalog, type ThemeMatch } from './ontology';
+import type { JsonObject } from '../shared/json';
+
+type XBookmarkUrl = {
+  url?: string;
+  expanded_url?: string;
+  display_url?: string;
+};
+
+type XBookmarkEntities = {
+  urls?: XBookmarkUrl[];
+};
+
+export type XContextAnnotation = {
+  domain?: { id?: string; name?: string; description?: string };
+  entity?: { id?: string; name?: string; description?: string };
+};
 
 export type XBookmark = {
   id: string;
   author_id?: string;
   created_at?: string;
   text?: string;
-  entities?: { urls?: Array<{ url?: string; expanded_url?: string; display_url?: string }> };
-  context_annotations?: unknown[];
-  [key: string]: unknown;
+  entities?: XBookmarkEntities;
+  context_annotations?: XContextAnnotation[];
+  raw_json?: string;
 };
 
 export type XBookmarkPayload = {
   fetchedAt: string;
-  user: Record<string, unknown>;
+  user: { id: string };
   bookmarks: XBookmark[];
 };
 
@@ -30,7 +46,7 @@ type CandidateInput = {
   proposed_label: string;
   description: string;
   score: number;
-  context: Record<string, unknown>;
+  context: JsonObject;
   source_type: string;
   source_key: string;
   observed_at: string;
@@ -42,11 +58,11 @@ export async function bookmarksNeedingAi(
 ): Promise<XBookmark[]> {
   const unique = new Map<string, XBookmark>();
   for (const bookmark of payload.bookmarks) {
-    if (typeof bookmark.id === 'string' && bookmark.id.length > 0) unique.set(bookmark.id, bookmark);
+    if (bookmark.id.length > 0) unique.set(bookmark.id, bookmark);
   }
   const rows = [...unique.values()].map((bookmark, ordinal) => ({
     id: bookmark.id,
-    text: typeof bookmark.text === 'string' ? bookmark.text.slice(0, 2_000) : '',
+    text: bookmark.text?.slice(0, 2_000) ?? '',
     ordinal,
   }));
   if (!rows.length) return [];
@@ -123,11 +139,11 @@ async function persistCoreRows(
   );
   const bookmarkRows = classified.map((item) => ({
     id: item.bookmark.id,
-    author_id: typeof item.bookmark.author_id === 'string' ? item.bookmark.author_id : null,
+    author_id: item.bookmark.author_id ?? null,
     created_at: item.createdAt,
     fetched_at: payload.fetchedAt,
     text: item.text,
-    raw_json: item.bookmark,
+    raw_json: item.bookmark.raw_json ? JSON.parse(item.bookmark.raw_json) : item.bookmark,
     market_score: item.marketScore,
     is_market_related: item.marketScore >= 35,
     classification_model: ONTOLOGY_AI_MODEL,
@@ -159,12 +175,12 @@ async function persistCoreRows(
 
   const urlMap = new Map<string, { bookmark_id: string; url: string; expanded_url: string | null; display_url: string | null }>();
   for (const item of classified) for (const url of item.bookmark.entities?.urls || []) {
-    if (typeof url.url !== 'string' || !url.url) continue;
+    if (!url.url) continue;
     const row = {
       bookmark_id: item.bookmark.id,
       url: url.url,
-      expanded_url: typeof url.expanded_url === 'string' ? url.expanded_url : null,
-      display_url: typeof url.display_url === 'string' ? url.display_url : null,
+      expanded_url: url.expanded_url ?? null,
+      display_url: url.display_url ?? null,
     };
     urlMap.set(`${row.bookmark_id}\u0000${row.url}`, row);
   }
@@ -534,7 +550,7 @@ export async function ingestXBookmarks(
     }), runId],
   );
   const incomingIds = payload.bookmarks
-    .filter((bookmark) => typeof bookmark.id === 'string' && bookmark.id.length > 0)
+    .filter((bookmark) => bookmark.id.length > 0)
     .map((bookmark) => bookmark.id);
   const summary = incomingIds.length ? await database.query<{ market_related: number; remaining_ai: number }>(`
     select

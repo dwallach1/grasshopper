@@ -7,7 +7,9 @@ export type MarketGate = {
   reason: string;
 };
 
-function nyParts(timestamp: number): { date: string; time: string; weekday: string } {
+type NewYorkParts = Pick<MarketGate, 'date' | 'time' | 'weekday'>;
+
+function nyParts(timestamp: number): NewYorkParts {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
     year: 'numeric',
@@ -29,13 +31,13 @@ function nyParts(timestamp: number): { date: string; time: string; weekday: stri
 
 export function marketGate(timestamp: number, forcedSlot?: string): MarketGate {
   const local = nyParts(timestamp);
-  const slots: Record<string, string> = {
-    '10:05': 'morning',
-    '13:05': 'midday',
-    '15:25': 'pre_close',
-  };
+  const slots = new Map([
+    ['10:05', 'morning'],
+    ['13:05', 'midday'],
+    ['15:25', 'pre_close'],
+  ]);
   const weekday = !['Sat', 'Sun'].includes(local.weekday);
-  const slot = forcedSlot || slots[local.time] || null;
+  const slot = forcedSlot || slots.get(local.time) || null;
   const actionable = weekday && slot !== null;
   return {
     ...local,

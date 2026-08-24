@@ -23,15 +23,22 @@ export type PreparedArticle = {
 export type Extraction = { text: string | null; status: 'complete' | 'pending' | 'unsupported' | 'failed'; error: string | null };
 
 function decodeEntities(value: string): string {
-  const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  const named = new Map([
+    ['amp', '&'],
+    ['lt', '<'],
+    ['gt', '>'],
+    ['quot', '"'],
+    ['apos', "'"],
+    ['nbsp', ' '],
+  ]);
   return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
     if (entity.startsWith('#x')) return String.fromCodePoint(Number.parseInt(entity.slice(2), 16));
     if (entity.startsWith('#')) return String.fromCodePoint(Number.parseInt(entity.slice(1), 10));
-    return named[entity.toLowerCase()] ?? match;
+    return named.get(entity.toLowerCase()) ?? match;
   });
 }
 
-export function cleanHtml(raw: string): { title: string | null; text: string } {
+export function cleanHtml(raw: string) {
   const titleMatch = raw.match(/<title[^>]*>(.*?)<\/title>/is);
   const title = titleMatch ? decodeEntities(titleMatch[1].replace(/\s+/g, ' ')).trim() : null;
   const withoutChrome = raw
@@ -85,11 +92,15 @@ function extensionFor(mimeType: string, sourceName: string): string {
   const suffix = new URL(sourceName).pathname.match(/\.([a-z0-9]{1,8})$/i)?.[0]?.toLowerCase();
   if (suffix) return suffix;
   const base = mimeType.split(';', 1)[0].toLowerCase();
-  const known: Record<string, string> = {
-    'application/pdf': '.pdf', 'text/html': '.html', 'application/xhtml+xml': '.html',
-    'application/json': '.json', 'text/plain': '.txt', 'text/csv': '.csv',
-  };
-  return known[base] || '.bin';
+  const known = new Map([
+    ['application/pdf', '.pdf'],
+    ['text/html', '.html'],
+    ['application/xhtml+xml', '.html'],
+    ['application/json', '.json'],
+    ['text/plain', '.txt'],
+    ['text/csv', '.csv'],
+  ]);
+  return known.get(base) || '.bin';
 }
 
 export function objectPathFor(checksum: string, documentType: string, capturedAt: string, mimeType: string, sourceName: string): string {
@@ -99,7 +110,7 @@ export function objectPathFor(checksum: string, documentType: string, capturedAt
 function isPrivateHostname(hostname: string): boolean {
   const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (lower === 'localhost' || lower.endsWith('.localhost') || lower.endsWith('.local')) return true;
-  if (/^(127|10)\./.test(lower) || /^169\.254\./.test(lower) || /^192\.168\./.test(lower)) return true;
+  if (/^(127|10)\./.test(lower) || lower.startsWith('169.254.') || lower.startsWith('192.168.')) return true;
   const match = lower.match(/^172\.(\d+)\./);
   if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) return true;
   return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:');

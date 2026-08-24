@@ -1,6 +1,23 @@
 import type { BrokerAccountSnapshot } from './broker-contract';
 
-export type DecisionJsonObject = Record<string, unknown>;
+export type DecisionJsonPrimitive = boolean | number | string | null;
+export type DecisionJsonValue =
+  | DecisionJsonPrimitive
+  | DecisionJsonObject
+  | DecisionJsonValue[];
+export type DecisionJsonObject = { [key: string]: DecisionJsonValue };
+
+export type BrokerEvidence = {
+  pass: boolean;
+  reasons: string[];
+};
+
+export type ApprovedCandidate = {
+  symbol: string;
+  notional: number;
+  rationale: string;
+  evidence: DecisionJsonObject;
+};
 
 export type DecisionThesisTask = {
   thesis: {
@@ -11,14 +28,18 @@ export type DecisionThesisTask = {
   };
 };
 
-function isObject(value: unknown): value is DecisionJsonObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function isObject(value: DecisionJsonValue | undefined): value is DecisionJsonObject {
+  return value !== null && Object(value) === value && !Array.isArray(value);
+}
+
+function stringValue(value: DecisionJsonValue | undefined): string | null {
+  return Object.prototype.toString.call(value) === '[object String]' ? String(value) : null;
 }
 
 export function actionableBrokerEvidence(
   context: DecisionJsonObject,
   symbol: string,
-): { pass: boolean; reasons: string[] } {
+): BrokerEvidence {
   const reasons: string[] = [];
   const market = isObject(context.market) && Array.isArray(context.market.symbols)
     ? context.market.symbols.find((row) => isObject(row) && row.symbol === symbol)
@@ -36,8 +57,10 @@ export function actionableBrokerEvidence(
     ? earningsRow.data.results.filter(isObject)
     : [];
   for (const row of earningsResults) {
-    if (!isObject(row.report) || !isObject(row.eps) || row.eps.actual == null || typeof row.report.date !== 'string') continue;
-    const reportDate = Date.parse(`${row.report.date}T12:00:00-04:00`);
+    if (!isObject(row.report) || !isObject(row.eps) || row.eps.actual == null) continue;
+    const reportDateValue = stringValue(row.report.date ?? null);
+    if (!reportDateValue) continue;
+    const reportDate = Date.parse(`${reportDateValue}T12:00:00-04:00`);
     if (Number.isFinite(reportDate) && Math.abs(Date.now() - reportDate) <= 3 * 24 * 60 * 60 * 1_000) {
       reasons.push('recent_reported_earnings');
       break;
@@ -69,7 +92,7 @@ export function approvedCandidate(
   output: DecisionJsonObject,
   brokerContext: DecisionJsonObject,
   snapshot: BrokerAccountSnapshot,
-): { symbol: string; notional: number; rationale: string; evidence: DecisionJsonObject } | null {
+): ApprovedCandidate | null {
   if (String(output.trade_decision) !== 'buy' || output.material_change !== true) return null;
   if (task.thesis.status !== 'hardening' || task.thesis.stance !== 'bullish' || task.thesis.confidence < 80) return null;
   const symbol = String(output.symbol || '').trim().toUpperCase();

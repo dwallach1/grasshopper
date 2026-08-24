@@ -15,6 +15,14 @@ import type {
   RobinhoodBrokerRpc,
 } from './broker-contract';
 import { readSecret } from '../shared/secrets';
+import {
+  isJsonNumber,
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonObject,
+  type JsonValue,
+} from '../shared/json';
 
 type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
   ROBINHOOD_BROKER_AGENT: DurableObjectNamespace<RobinhoodBrokerRpc>;
@@ -27,7 +35,13 @@ const PROMPT_VERSION = 'thesis-autonomous-v2';
 const MAX_CONTROL_BYTES = 512 * 1024;
 const MAX_THESES_PER_RUN = 12;
 
-type JsonObject = Record<string, unknown>;
+type DeduplicationResult = { duplicate: boolean };
+
+type ShadowIntentReservation = {
+  intentId: string;
+  status: 'blocked_no_broker_gateway';
+  duplicate: boolean;
+};
 
 type Thesis = {
   id: string;
@@ -105,11 +119,7 @@ type PositionObservation = {
   evidence: JsonObject;
 };
 
-function isObject(value: unknown): value is JsonObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-async function boundedJson(response: Response): Promise<unknown> {
+async function boundedJson(response: Response): Promise<JsonValue> {
   const declared = Number(response.headers.get('content-length') || 0);
   if (declared > MAX_CONTROL_BYTES) throw new Error('Cloud control response exceeded its size limit');
   if (!response.body) return null;
@@ -137,10 +147,10 @@ async function boundedJson(response: Response): Promise<unknown> {
     offset += chunk.byteLength;
   }
   const text = new TextDecoder().decode(output);
-  return text ? JSON.parse(text) : null;
+  return text ? parseJson(text) : null;
 }
 
-async function cloudControl(env: PublicationEnv, action: string, payload?: unknown): Promise<unknown> {
+async function cloudControl<Payload>(env: PublicationEnv, action: string, payload?: Payload): Promise<JsonValue> {
   const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
   const response = await fetch(
     `${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/cloud-control`,
@@ -160,7 +170,7 @@ async function cloudControl(env: PublicationEnv, action: string, payload?: unkno
 
 async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
   const result = await cloudControl(env, 'finalize_run', { run_id: runId });
-  if (!isObject(result) || result.finalized !== true) return;
+  if (!isJsonObject(result) || result.finalized !== true) return;
   const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
@@ -174,97 +184,143 @@ async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promis
   if (!response.ok) throw new Error(`Dashboard projection failed with status ${response.status}`);
 }
 
-function parseTheses(context: unknown): Thesis[] {
-  if (!isObject(context) || !isObject(context.snapshot) || !isObject(context.snapshot.payload)) return [];
+function parseTheses(context: JsonValue): Thesis[] {
+  if (!isJsonObject(context) || !isJsonObject(context.snapshot) || !isJsonObject(context.snapshot.payload)) return [];
   const rows = context.snapshot.payload.theses;
   if (!Array.isArray(rows)) return [];
   const theses: Thesis[] = [];
   for (const row of rows) {
-    if (!isObject(row) || typeof row.id !== 'string' || typeof row.name !== 'string' || typeof row.summary !== 'string') continue;
+    if (!isJsonObject(row) || !isJsonString(row.id) || !isJsonString(row.name) || !isJsonString(row.summary)) continue;
     theses.push({
       id: row.id,
       name: row.name,
       summary: row.summary,
-      status: typeof row.status === 'string' ? row.status : 'unknown',
-      confidence: typeof row.confidence === 'number' ? row.confidence : 0,
-      stance: typeof row.stance === 'string' ? row.stance : 'neutral',
-      time_horizon: typeof row.time_horizon === 'string' ? row.time_horizon : undefined,
-      variant_perception: typeof row.variant_perception === 'string' ? row.variant_perception : null,
-      falsifier: typeof row.falsifier === 'string' ? row.falsifier : null,
-      symbols: Array.isArray(row.symbols) ? row.symbols.filter((item): item is string => typeof item === 'string').slice(0, 8) : [],
+      status: isJsonString(row.status) ? row.status : 'unknown',
+      confidence: isJsonNumber(row.confidence) ? row.confidence : 0,
+      stance: isJsonString(row.stance) ? row.stance : 'neutral',
+      time_horizon: isJsonString(row.time_horizon) ? row.time_horizon : undefined,
+      variant_perception: isJsonString(row.variant_perception) ? row.variant_perception : null,
+      falsifier: isJsonString(row.falsifier) ? row.falsifier : null,
+      symbols: Array.isArray(row.symbols) ? row.symbols.filter(isJsonString).slice(0, 8) : [],
     });
   }
   return theses.slice(0, MAX_THESES_PER_RUN);
 }
 
-function contextVersion(context: unknown): string {
-  return isObject(context) && isObject(context.snapshot) && typeof context.snapshot.generated_at === 'string'
+function contextVersion(context: JsonValue): string {
+  return isJsonObject(context) && isJsonObject(context.snapshot) && isJsonString(context.snapshot.generated_at)
     ? context.snapshot.generated_at
     : 'missing-snapshot-version';
 }
 
-function latestThesisHashes(context: unknown): Record<string, string> {
-  if (!isObject(context) || !isObject(context.latest_thesis_input_sha256)) return {};
-  const hashes: Record<string, string> = {};
+function latestThesisHashes(context: JsonValue) {
+  const hashes = new Map<string, string>();
+  if (!isJsonObject(context) || !isJsonObject(context.latest_thesis_input_sha256)) return hashes;
   for (const [key, value] of Object.entries(context.latest_thesis_input_sha256)) {
-    if (typeof value === 'string') hashes[key] = value;
+    if (isJsonString(value)) hashes.set(key, value);
   }
   return hashes;
 }
 
-function approvedTradeProposals(context: unknown): ApprovedTradeProposal[] {
-  if (!isObject(context) || !Array.isArray(context.approved_proposals)) return [];
+function approvedTradeProposals(context: JsonValue): ApprovedTradeProposal[] {
+  if (!isJsonObject(context) || !Array.isArray(context.approved_proposals)) return [];
   const proposals: ApprovedTradeProposal[] = [];
   for (const row of context.approved_proposals) {
-    if (!isObject(row) || !Number.isInteger(row.id) || typeof row.symbol !== 'string') continue;
+    if (!isJsonObject(row) || !Number.isInteger(row.id) || !isJsonString(row.symbol)) continue;
     const side = row.side === 'buy' || row.side === 'sell' ? row.side : null;
     const notional = Number(row.notional);
-    if (!side || !Number.isFinite(notional) || notional <= 0 || typeof row.rationale !== 'string') continue;
-    const alerts = isObject(row.broker_alerts) ? row.broker_alerts : {};
+    if (!side || !Number.isFinite(notional) || notional <= 0 || !isJsonString(row.rationale)) continue;
+    const alerts = isJsonObject(row.broker_alerts) ? row.broker_alerts : {};
     const quantity = Number(alerts.position_quantity);
     const positionAction = ['open', 'add', 'reduce', 'exit'].includes(String(alerts.position_action))
-      ? String(alerts.position_action) as ApprovedTradeProposal['positionAction']
+      ? positionActionValue(String(alerts.position_action))
       : side === 'buy' ? 'open' : undefined;
     if (side === 'sell' && (!Number.isFinite(quantity) || quantity <= 0)) continue;
     proposals.push({
       id: Number(row.id),
-      thesisId: typeof row.thesis_id === 'string' ? row.thesis_id : null,
+      thesisId: isJsonString(row.thesis_id) ? row.thesis_id : null,
       symbol: row.symbol.trim().toUpperCase(),
       side,
       notional,
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
-      positionEpisodeId: typeof alerts.position_episode_id === 'string' ? alerts.position_episode_id : undefined,
+      positionEpisodeId: isJsonString(alerts.position_episode_id) ? alerts.position_episode_id : undefined,
       positionAction,
       rationale: row.rationale,
-      createdAt: typeof row.created_at === 'string' ? row.created_at : '',
+      createdAt: isJsonString(row.created_at) ? row.created_at : '',
     });
   }
   return proposals.slice(0, 3);
 }
 
-function autonomousExecutionActive(context: unknown): boolean {
-  if (!isObject(context) || !Array.isArray(context.risk_controls)) return false;
+function autonomousExecutionActive(context: JsonValue): boolean {
+  if (!isJsonObject(context) || !Array.isArray(context.risk_controls)) return false;
   return context.risk_controls.some((row) =>
-    isObject(row)
+    isJsonObject(row)
     && row.control_key === 'autonomous-execution'
     && row.status === 'active'
     && row.enforcement_level === 'code');
 }
 
-function autonomousPositionManagementActive(context: unknown): boolean {
-  if (!isObject(context) || !Array.isArray(context.risk_controls)) return false;
+function autonomousPositionManagementActive(context: JsonValue): boolean {
+  if (!isJsonObject(context) || !Array.isArray(context.risk_controls)) return false;
   return context.risk_controls.some((row) =>
-    isObject(row)
+    isJsonObject(row)
     && row.control_key === 'autonomous-position-management'
     && row.status === 'active'
     && row.enforcement_level === 'code');
 }
 
-function firstRow(value: unknown): JsonObject | null {
-  return Array.isArray(value) && isObject(value[0]) ? value[0] : null;
+function firstRow(value: JsonValue): JsonObject | null {
+  return Array.isArray(value) && isJsonObject(value[0]) ? value[0] : null;
 }
 
-async function sha256(value: unknown): Promise<string> {
+function positionConfiguration(text: string): PositionConfiguration {
+  const value = parseJson(text);
+  if (
+    !isJsonObject(value)
+    || !isJsonString(value.positionKey)
+    || !isJsonString(value.episodeId)
+    || !isJsonString(value.symbol)
+    || !isJsonString(value.accountKey)
+    || (value.nextReviewAt !== null && !isJsonNumber(value.nextReviewAt))
+  ) {
+    throw new Error('Stored position configuration is invalid');
+  }
+  return {
+    positionKey: value.positionKey,
+    episodeId: value.episodeId,
+    symbol: value.symbol,
+    accountKey: value.accountKey,
+    nextReviewAt: value.nextReviewAt,
+  };
+}
+
+function autonomousExecutionResult(text: string): AutonomousExecutionResult {
+  const value = parseJson(text);
+  if (
+    !isJsonObject(value)
+    || !isJsonString(value.refId)
+    || (value.status !== 'submitted' && value.status !== 'duplicate')
+    || !isJsonString(value.accountKey)
+    || !isJsonString(value.brokerOrderId)
+    || !isJsonString(value.orderJson)
+    || !isJsonString(value.reviewJson)
+    || !isJsonString(value.submittedAt)
+  ) {
+    throw new Error('Stored autonomous execution result is invalid');
+  }
+  return {
+    refId: value.refId,
+    status: value.status,
+    accountKey: value.accountKey,
+    brokerOrderId: value.brokerOrderId,
+    orderJson: value.orderJson,
+    reviewJson: value.reviewJson,
+    submittedAt: value.submittedAt,
+  };
+}
+
+async function sha256<Value>(value: Value): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -304,18 +360,24 @@ async function persistBrokerSnapshot(env: PublicationEnv, snapshot: BrokerAccoun
   return Number(row.id);
 }
 
-function aiText(result: unknown): string {
-  if (typeof result === 'string') return result;
-  if (isObject(result) && typeof result.response === 'string') return result.response;
-  return JSON.stringify(result);
+function positionActionValue(value: string): ApprovedTradeProposal['positionAction'] {
+  if (value === 'open' || value === 'add' || value === 'reduce' || value === 'exit') return value;
+  return undefined;
 }
 
-function parseAiOutput(result: unknown): JsonObject {
+function aiText<Result>(result: Result): string {
+  const value = parseJson(JSON.stringify(result));
+  if (isJsonString(value)) return value;
+  if (isJsonObject(value) && isJsonString(value.response)) return value.response;
+  return JSON.stringify(value);
+}
+
+function parseAiOutput<Result>(result: Result): JsonObject {
   const text = aiText(result).trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   try {
-    const parsed: unknown = JSON.parse(fenced || text);
-    if (isObject(parsed)) return parsed;
+    const parsed = parseJson(fenced || text);
+    if (isJsonObject(parsed)) return parsed;
   } catch {
     // The output remains audit-only and cannot become a trade intent.
   }
@@ -478,10 +540,10 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         updated_at: new Date().toISOString(),
       });
       const row = firstRow(result);
-      if (!row || typeof row.id !== 'string') throw new Error('Cloud control did not return a run id');
+      if (!row || !isJsonString(row.id)) throw new Error('Cloud control did not return a run id');
       return {
         id: row.id,
-        startedAt: typeof row.started_at === 'string' ? row.started_at : null,
+        startedAt: isJsonString(row.started_at) ? row.started_at : null,
       };
     });
 
@@ -494,7 +556,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
       timeout: '2 minutes',
     }, async () => JSON.stringify(await cloudControl(this.env, 'context')));
-    const context: unknown = JSON.parse(contextJson);
+    const context = parseJson(contextJson);
     const theses = parseTheses(context);
     const snapshotVersion = contextVersion(context);
     const previousHashes = latestThesisHashes(context);
@@ -546,7 +608,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       for (const thesis of theses) {
         const idempotencyKey = `${runId}:thesis:${thesis.id}:${PROMPT_VERSION}`;
         const inputSha256 = await sha256({ thesis, snapshotVersion });
-        const unchanged = !event.payload.force && previousHashes[thesis.id] === inputSha256;
+        const unchanged = !event.payload.force && previousHashes.get(thesis.id) === inputSha256;
         await cloudControl(this.env, 'upsert_task', {
           run_id: runId,
           idempotency_key: idempotencyKey,
@@ -578,7 +640,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       const snapshot = brokerReadiness.snapshot;
       const messages: MessageSendRequest<CloudTask>[] = [];
       for (const row of positionEpisodes) {
-        if (!isObject(row) || typeof row.id !== 'string' || typeof row.symbol !== 'string') continue;
+        if (!isJsonObject(row) || !isJsonString(row.id) || !isJsonString(row.symbol)) continue;
         const position = snapshot.positions.find((item) => item.symbol === row.symbol);
         if (!position || position.quantity <= 0) continue;
         const positionKey = `${snapshot.accountKey}:${position.symbol}`;
@@ -697,7 +759,7 @@ export class ThesisCoordinator extends DurableObject<PublicationEnv> {
     });
   }
 
-  recordAnalysis(jobId: string, runId: string, output: JsonObject): { duplicate: boolean } {
+  recordAnalysis(jobId: string, runId: string, output: JsonObject): DeduplicationResult {
     const existing = this.ctx.storage.sql.exec<{ job_id: string }>(
       'SELECT job_id FROM analyses WHERE job_id = ?', jobId,
     ).toArray()[0];
@@ -719,7 +781,9 @@ export class ThesisCoordinator extends DurableObject<PublicationEnv> {
     const row = this.ctx.storage.sql.exec<{ value: string }>(
       "SELECT value FROM coordinator_state WHERE key = 'latest'",
     ).toArray()[0];
-    return row ? JSON.parse(row.value) as JsonObject : null;
+    if (!row) return null;
+    const value = parseJson(row.value);
+    return isJsonObject(value) ? value : null;
   }
 }
 
@@ -749,7 +813,7 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
     else await this.ctx.storage.setAlarm(configuration.nextReviewAt);
   }
 
-  recordObservation(observation: PositionObservation): { duplicate: boolean } {
+  recordObservation(observation: PositionObservation): DeduplicationResult {
     const existing = this.ctx.storage.sql.exec<{ event_id: string }>(
       'SELECT event_id FROM observations WHERE event_id = ?', observation.eventId,
     ).toArray()[0];
@@ -792,7 +856,7 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
       "SELECT value FROM monitor_state WHERE key = 'configuration'",
     ).toArray()[0];
     if (!row) return;
-    const configuration = JSON.parse(row.value) as PositionConfiguration;
+    const configuration = positionConfiguration(row.value);
     const now = new Date();
     const triggerKey = `position-alarm:${configuration.positionKey}:${now.toISOString()}`;
     const run = firstRow(await cloudControl(this.env, 'upsert_run', {
@@ -807,7 +871,7 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
       summary: { position_key: configuration.positionKey, trading_enabled: String(this.env.TRADING_ENABLED) === 'true' },
       updated_at: now.toISOString(),
     }));
-    if (!run || typeof run.id !== 'string') throw new Error('Position alarm could not create a canonical run');
+    if (!run || !isJsonString(run.id)) throw new Error('Position alarm could not create a canonical run');
     await this.env.RESEARCH_TASK_QUEUE.send({
       kind: 'position_review',
       runId: run.id,
@@ -842,7 +906,7 @@ export class BrokerExecutionCoordinator extends DurableObject<PublicationEnv> {
     });
   }
 
-  reserveShadowIntent(intentId: string): { intentId: string; status: 'blocked_no_broker_gateway'; duplicate: boolean } {
+  reserveShadowIntent(intentId: string): ShadowIntentReservation {
     const existing = this.ctx.storage.sql.exec<{ intent_id: string }>(
       'SELECT intent_id FROM intents WHERE intent_id = ?', intentId,
     ).toArray()[0];
@@ -868,7 +932,7 @@ export class BrokerExecutionCoordinator extends DurableObject<PublicationEnv> {
     if (existing) {
       if (existing.request_sha256 !== requestSha256) throw new Error('Intent id was reused with different content');
       if (existing.status === 'submitted' && existing.result_json) {
-        return JSON.parse(existing.result_json) as AutonomousExecutionResult;
+        return autonomousExecutionResult(existing.result_json);
       }
       throw new Error('Intent is already reserved or blocked');
     }
@@ -919,8 +983,8 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
       broker.readEquityResearchContext(task.thesis.symbols),
       broker.readAccountSnapshot(),
     ]);
-    const parsed: unknown = JSON.parse(researchJson);
-    if (!isObject(parsed)) throw new Error('Broker research context was invalid');
+    const parsed = parseJson(researchJson);
+    if (!isJsonObject(parsed)) throw new Error('Broker research context was invalid');
     brokerContext = parsed;
     snapshot = accountSnapshot;
   }
@@ -1017,8 +1081,8 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
     broker.readAccountSnapshot(),
     broker.readEquityResearchContext([task.symbol]),
   ]);
-  const brokerContextValue: unknown = JSON.parse(researchJson);
-  if (!isObject(brokerContextValue)) throw new Error('Broker position context was invalid');
+  const brokerContextValue = parseJson(researchJson);
+  if (!isJsonObject(brokerContextValue)) throw new Error('Broker position context was invalid');
   const position = snapshot.positions.find((item) => item.symbol === task.symbol && item.quantity > 0);
   if (!position) {
     await cloudControl(env, 'patch_position_episode', {
@@ -1069,7 +1133,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
         : Math.floor(Number(quantity) * Number(decision.evidence.last) * 100) / 100;
       if (Number.isFinite(notional) && notional > 0) {
         const proposal = firstRow(await cloudControl(env, 'create_trade_proposal', {
-          thesis_id: typeof decision.evidence.thesis_id === 'string' ? decision.evidence.thesis_id : null,
+          thesis_id: isJsonString(decision.evidence.thesis_id) ? decision.evidence.thesis_id : null,
           symbol: decision.symbol,
           side,
           notional,
@@ -1094,7 +1158,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
           idempotencyKey: `${task.runId}:trade-proposal:${approvedProposalId}`,
           proposal: {
             id: approvedProposalId,
-            thesisId: typeof decision.evidence.thesis_id === 'string' ? decision.evidence.thesis_id : null,
+            thesisId: isJsonString(decision.evidence.thesis_id) ? decision.evidence.thesis_id : null,
             symbol: decision.symbol,
             side,
             notional,
@@ -1215,7 +1279,7 @@ async function processTradeExecutionTask(
     confirmed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }));
-  if (!intentRow || typeof intentRow.id !== 'string') throw new Error('Trade intent could not be persisted');
+  if (!intentRow || !isJsonString(intentRow.id)) throw new Error('Trade intent could not be persisted');
   const tradeIntentId = intentRow.id;
   await cloudControl(env, 'upsert_execution_attempt', {
     trade_intent_id: tradeIntentId,
@@ -1229,9 +1293,9 @@ async function processTradeExecutionTask(
     const coordinator = env.BROKER_EXECUTION_COORDINATOR.getByName(snapshot.accountKey);
     const execution = await coordinator.executeLiveIntent(tradeIntentId, requestFingerprint, brokerIntent);
     const orderId = execution.brokerOrderId;
-    const orderPayload: unknown = JSON.parse(execution.orderJson);
-    const reviewPayload: unknown = JSON.parse(execution.reviewJson);
-    if (!isObject(orderPayload) || !isObject(reviewPayload)) throw new Error('Broker returned an invalid audit payload');
+    const orderPayload = parseJson(execution.orderJson);
+    const reviewPayload = parseJson(execution.reviewJson);
+    if (!isJsonObject(orderPayload) || !isJsonObject(reviewPayload)) throw new Error('Broker returned an invalid audit payload');
     await cloudControl(env, 'upsert_trade_intent', {
       trade_proposal_id: proposal.id,
       position_episode_id: proposal.positionEpisodeId || null,
@@ -1265,7 +1329,7 @@ async function processTradeExecutionTask(
       started_at: startedAt,
       completed_at: new Date().toISOString(),
     });
-    const executions = Array.isArray(orderPayload.executions) ? orderPayload.executions.filter(isObject) : [];
+    const executions = Array.isArray(orderPayload.executions) ? orderPayload.executions.filter(isJsonObject) : [];
     const fills = [];
     for (let index = 0; index < executions.length; index += 1) {
       const execution = executions[index];
@@ -1274,7 +1338,7 @@ async function processTradeExecutionTask(
       if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price < 0) continue;
       fills.push({
         trade_intent_id: tradeIntentId,
-        broker_fill_id: typeof execution.id === 'string' ? execution.id : `${orderId}:${index}:${String(execution.timestamp || '')}`,
+        broker_fill_id: isJsonString(execution.id) ? execution.id : `${orderId}:${index}:${String(execution.timestamp || '')}`,
         broker_order_id: orderId,
         quantity,
         price,

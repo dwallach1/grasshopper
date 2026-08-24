@@ -8,6 +8,13 @@ import type {
   BrokerMarketContext,
 } from './broker-contract';
 import { validateBrokerExecutionPolicy } from './broker-execution-policy';
+import {
+  isJsonObject,
+  isJsonString,
+  parseJson,
+  type JsonObject,
+  type JsonValue,
+} from '../shared/json';
 
 import {
   ROBINHOOD_EXECUTION_TOOL_ALLOWLIST,
@@ -41,8 +48,6 @@ export type BrokerCapabilityStatus = {
   lastCheckedAt: string;
 };
 
-type JsonObject = Record<string, unknown>;
-
 type BeginConnectionResult =
   | { state: 'ready' }
   | { state: 'authenticating'; authUrl: string };
@@ -55,27 +60,24 @@ function brokerExecutionEnabled(env: Cloudflare.Env): boolean {
   return String(env.BROKER_EXECUTION_ENABLED) === 'true';
 }
 
-function isObject(value: unknown): value is JsonObject {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function finiteNumber(value: unknown, label: string): number {
-  const parsed = typeof value === 'number' ? value : Number(value);
+function finiteNumber(value: JsonValue | undefined, label: string): number {
+  const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`${label} is unavailable`);
   return parsed;
 }
 
-function dataFromToolResult(result: unknown): JsonObject {
-  if (!isObject(result)) throw new Error('Robinhood returned an invalid tool result');
-  const structured = result.structuredContent;
-  if (isObject(structured) && isObject(structured.data)) return structured.data;
-  const content = result.content;
+function dataFromToolResult<Result>(result: Result): JsonObject {
+  const normalized = parseJson(JSON.stringify(result));
+  if (!isJsonObject(normalized)) throw new Error('Robinhood returned an invalid tool result');
+  const structured = normalized.structuredContent;
+  if (isJsonObject(structured) && isJsonObject(structured.data)) return structured.data;
+  const content = normalized.content;
   if (Array.isArray(content)) {
     for (const item of content) {
-      if (!isObject(item) || item.type !== 'text' || typeof item.text !== 'string') continue;
+      if (!isJsonObject(item) || item.type !== 'text' || !isJsonString(item.text)) continue;
       try {
-        const parsed: unknown = JSON.parse(item.text);
-        if (isObject(parsed) && isObject(parsed.data)) return parsed.data;
+        const parsed = parseJson(item.text);
+        if (isJsonObject(parsed) && isJsonObject(parsed.data)) return parsed.data;
       } catch {
         // Ignore prose content. A structured data object is required below.
       }
@@ -84,7 +86,32 @@ function dataFromToolResult(result: unknown): JsonObject {
   throw new Error('Robinhood tool result did not include structured data');
 }
 
-async function stableHash(value: unknown): Promise<string> {
+function storedExecutionResult(text: string): AutonomousExecutionResult {
+  const value = parseJson(text);
+  if (
+    !isJsonObject(value)
+    || !isJsonString(value.refId)
+    || (value.status !== 'submitted' && value.status !== 'duplicate')
+    || !isJsonString(value.accountKey)
+    || !isJsonString(value.brokerOrderId)
+    || !isJsonString(value.orderJson)
+    || !isJsonString(value.reviewJson)
+    || !isJsonString(value.submittedAt)
+  ) {
+    throw new Error('Stored autonomous execution result is invalid');
+  }
+  return {
+    refId: value.refId,
+    status: value.status,
+    accountKey: value.accountKey,
+    brokerOrderId: value.brokerOrderId,
+    orderJson: value.orderJson,
+    reviewJson: value.reviewJson,
+    submittedAt: value.submittedAt,
+  };
+}
+
+async function stableHash<Value>(value: Value): Promise<string> {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -151,11 +178,11 @@ async function isOwnerRequest(request: Request, env: Cloudflare.Env): Promise<bo
   const issuer = accessIssuer(env);
   try {
     const jwks = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
-    const { payload } = await jwtVerify(token, jwks, {
+    const { payload } = await jwtVerify<{ email?: JsonValue }>(token, jwks, {
       audience: env.CF_ACCESS_AUD,
       issuer,
     });
-    return typeof payload.email === 'string'
+    return isJsonString(payload.email)
       && normalizeIdentity(payload.email) === normalizeIdentity(env.BROKER_OWNER_EMAIL);
   } catch {
     return false;
@@ -184,7 +211,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
   }
 
   onStart(): void {
-    this.sql`CREATE TABLE IF NOT EXISTS autonomous_orders (
+    void this.sql`CREATE TABLE IF NOT EXISTS autonomous_orders (
       ref_id TEXT PRIMARY KEY,
       request_sha256 TEXT NOT NULL,
       status TEXT NOT NULL,
@@ -274,13 +301,13 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
 
   private async agenticAccount(): Promise<JsonObject> {
     const data = await this.callRobinhoodTool('get_accounts', {});
-    const accounts = Array.isArray(data.accounts) ? data.accounts.filter(isObject) : [];
+    const accounts = Array.isArray(data.accounts) ? data.accounts.filter(isJsonObject) : [];
     const eligible = accounts.filter((account) =>
       account.agentic_allowed === true
       && account.state === 'active'
       && account.deactivated !== true
       && account.permanently_deactivated !== true
-      && typeof account.account_number === 'string');
+      && isJsonString(account.account_number));
     if (eligible.length !== 1) throw new Error('Exactly one active Agentic account is required');
     return eligible[0];
   }
@@ -297,12 +324,12 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         placed_agent: 'agentic',
       }),
     ]);
-    const buyingPower = isObject(portfolio.buying_power)
+    const buyingPower = isJsonObject(portfolio.buying_power)
       ? finiteNumber(portfolio.buying_power.buying_power, 'buying power')
       : NaN;
     if (!Number.isFinite(buyingPower)) throw new Error('buying power is unavailable');
     const normalizedPositions = (Array.isArray(positions.positions) ? positions.positions : [])
-      .filter(isObject)
+      .filter(isJsonObject)
       .map((position) => ({
         symbol: String(position.symbol || '').toUpperCase(),
         quantity: finiteNumber(position.quantity, 'position quantity'),
@@ -312,7 +339,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           : finiteNumber(position.average_buy_price, 'average buy price'),
       }))
       .filter((position) => /^[A-Z][A-Z0-9.]{0,9}$/.test(position.symbol));
-    const todayOrders = (Array.isArray(orders.orders) ? orders.orders : []).filter(isObject);
+    const todayOrders = (Array.isArray(orders.orders) ? orders.orders : []).filter(isJsonObject);
     const todayBuyOrders = todayOrders.filter((order) => order.side === 'buy');
     const pendingStates = new Set(['queued', 'unconfirmed', 'confirmed', 'partially_filled', 'pending']);
     const pendingOrderSymbols = [...new Set(todayOrders
@@ -321,7 +348,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       .filter((symbol) => /^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)))];
     let todayNotional = 0;
     for (const order of todayBuyOrders) {
-      if (isObject(order.dollar_based_amount)) {
+      if (isJsonObject(order.dollar_based_amount)) {
         todayNotional += finiteNumber(order.dollar_based_amount.amount, 'daily order notional');
       } else {
         const quantity = finiteNumber(order.quantity ?? order.cumulative_quantity, 'daily order quantity');
@@ -356,13 +383,13 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols }),
       this.callRobinhoodTool('get_equity_quotes', { symbols }),
     ]);
-    const tradabilityRows = (Array.isArray(tradability.results) ? tradability.results : []).filter(isObject);
-    const quoteRows = (Array.isArray(quotes.results) ? quotes.results : []).filter(isObject);
+    const tradabilityRows = (Array.isArray(tradability.results) ? tradability.results : []).filter(isJsonObject);
+    const quoteRows = (Array.isArray(quotes.results) ? quotes.results : []).filter(isJsonObject);
     const normalized = [];
     for (const symbol of symbols) {
       const tradable = tradabilityRows.find((row) => row.symbol === symbol);
-      const quoteResult = quoteRows.find((row) => isObject(row.quote) && row.quote.symbol === symbol);
-      const quote = quoteResult && isObject(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteResult = quoteRows.find((row) => isJsonObject(row.quote) && row.quote.symbol === symbol);
+      const quote = quoteResult && isJsonObject(quoteResult.quote) ? quoteResult.quote : null;
       if (!tradable || !quote) continue;
       const bid = finiteNumber(quote.bid_price, 'bid price');
       const ask = finiteNumber(quote.ask_price, 'ask price');
@@ -447,12 +474,12 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
     if (existing) {
       if (existing.request_sha256 !== requestSha256) throw new Error('refId was reused with a different order');
       if (existing.status === 'submitted' && existing.result_json) {
-        return { ...(JSON.parse(existing.result_json) as AutonomousExecutionResult), status: 'duplicate' };
+        return { ...storedExecutionResult(existing.result_json), status: 'duplicate' };
       }
       throw new Error('An execution with this refId is already in progress or failed closed');
     }
     const now = new Date().toISOString();
-    this.sql`INSERT INTO autonomous_orders(ref_id, request_sha256, status, created_at, updated_at)
+    void this.sql`INSERT INTO autonomous_orders(ref_id, request_sha256, status, created_at, updated_at)
       VALUES (${intent.refId}, ${requestSha256}, 'reserved', ${now}, ${now})`;
 
     try {
@@ -468,14 +495,12 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols: [symbol] }),
         this.callRobinhoodTool('get_equity_quotes', { symbols: [symbol] }),
       ]);
-      const tradable = (Array.isArray(tradability.results) ? tradability.results : []).find(
-        (row) => isObject(row) && row.symbol === symbol,
-      );
+      const tradabilityRows = Array.isArray(tradability.results) ? tradability.results.filter(isJsonObject) : [];
+      const tradable = tradabilityRows.find((row) => row.symbol === symbol);
       if (!tradable || tradable.tradeable !== true || tradable.state !== 'active') throw new Error('Symbol is not currently tradable');
-      const quoteResult = (Array.isArray(quotes.results) ? quotes.results : []).find(
-        (row) => isObject(row) && isObject(row.quote) && row.quote.symbol === symbol,
-      );
-      const quote = quoteResult && isObject(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteRows = Array.isArray(quotes.results) ? quotes.results.filter(isJsonObject) : [];
+      const quoteResult = quoteRows.find((row) => isJsonObject(row.quote) && row.quote.symbol === symbol);
+      const quote = quoteResult && isJsonObject(quoteResult.quote) ? quoteResult.quote : null;
       if (!quote || quote.has_traded !== true || quote.state !== 'active') throw new Error('A valid live quote is unavailable');
       const ask = finiteNumber(quote.ask_price, 'ask price');
       const bid = finiteNumber(quote.bid_price, 'bid price');
@@ -488,7 +513,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         : quote.venue_bid_time || quote.venue_last_trade_time || ''));
       if (!Number.isFinite(sideQuoteTime) || Date.now() - sideQuoteTime > 120_000) throw new Error('Quote is stale');
 
-      const orderArgs: JsonObject = {
+      const orderArgs = {
         account_number: accountNumber,
         symbol,
         side: intent.side,
@@ -500,17 +525,17 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           : { quantity: requestedNotional.toFixed(6).replace(/\.?0+$/, '') }),
       };
       const review = await this.callRobinhoodTool('review_equity_order', orderArgs);
-      if (!isObject(review.order_checks) || Object.keys(review.order_checks).length > 0) {
+      if (!isJsonObject(review.order_checks) || Object.keys(review.order_checks).length > 0) {
         throw new Error('Robinhood pre-trade review returned an alert');
       }
-      if (!isObject(review.quote_data)) throw new Error('Robinhood pre-trade review did not return a quote');
+      if (!isJsonObject(review.quote_data)) throw new Error('Robinhood pre-trade review did not return a quote');
       const reviewedAt = Date.parse(String(intent.side === 'buy'
         ? review.quote_data.venue_ask_time || review.quote_data.venue_last_trade_time || ''
         : review.quote_data.venue_bid_time || review.quote_data.venue_last_trade_time || ''));
       if (!Number.isFinite(reviewedAt) || Date.now() - reviewedAt > 120_000) throw new Error('Reviewed quote is stale');
 
       const placed = await this.callRobinhoodTool('place_equity_order', { ...orderArgs, ref_id: intent.refId });
-      if (!isObject(placed.order) || typeof placed.order.id !== 'string') throw new Error('Broker did not return an order id');
+      if (!isJsonObject(placed.order) || !isJsonString(placed.order.id)) throw new Error('Broker did not return an order id');
       const result: AutonomousExecutionResult = {
         refId: intent.refId,
         status: 'submitted',
@@ -521,12 +546,12 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         submittedAt: new Date().toISOString(),
       };
       const resultJson = JSON.stringify(result);
-      this.sql`UPDATE autonomous_orders SET status = 'submitted', result_json = ${resultJson}, updated_at = ${result.submittedAt}
+      void this.sql`UPDATE autonomous_orders SET status = 'submitted', result_json = ${resultJson}, updated_at = ${result.submittedAt}
         WHERE ref_id = ${intent.refId}`;
       return result;
     } catch (error) {
       const failedAt = new Date().toISOString();
-      this.sql`UPDATE autonomous_orders SET status = 'blocked', updated_at = ${failedAt} WHERE ref_id = ${intent.refId}`;
+      void this.sql`UPDATE autonomous_orders SET status = 'blocked', updated_at = ${failedAt} WHERE ref_id = ${intent.refId}`;
       throw error;
     }
   }
@@ -601,7 +626,7 @@ async function validCsrf(request: Request): Promise<boolean> {
   if (!cookie) return false;
   const form = await request.formData();
   const submitted = form.get('csrf');
-  return typeof submitted === 'string' && submitted === cookie;
+  return submitted === cookie;
 }
 
 const worker = {

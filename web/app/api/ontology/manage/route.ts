@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
+import { isJsonString, type JsonObject } from '../../../../shared/json';
 
 const entityTypes = new Set(['theme', 'symbol']);
 const actions = new Set(['promote', 'demote', 'blacklist', 'restore']);
@@ -12,15 +13,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ontology manager access required' }, { status: 403 });
   }
 
-  let body: { entity_type?: string; entity_key?: string; action?: string };
+  let body: JsonObject;
   try {
-    body = await request.json();
+    body = await request.json<JsonObject>();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const entityType = body.entity_type || '';
-  const entityKey = (body.entity_key || '').trim();
-  const action = body.action || '';
+  const entityType = isJsonString(body.entity_type) ? body.entity_type : '';
+  const entityKey = isJsonString(body.entity_key) ? body.entity_key.trim() : '';
+  const action = isJsonString(body.action) ? body.action : '';
   if (!entityTypes.has(entityType) || !actions.has(action) || !entityKey || entityKey.length > 120) {
     return NextResponse.json({ error: 'Invalid ontology management action' }, { status: 400 });
   }
@@ -51,11 +52,11 @@ export async function POST(request: NextRequest) {
       }),
     },
   );
-  const result = await response.json().catch(() => ({
+  const result = await response.json<JsonObject>().catch((): JsonObject => ({
     error: 'Supabase returned an invalid response',
-  })) as { message?: unknown };
+  }));
   if (!response.ok) {
-    const message = typeof result.message === 'string' ? result.message : 'Ontology action failed';
+    const message = isJsonString(result.message) ? result.message : 'Ontology action failed';
     return NextResponse.json({ error: message }, { status: response.status });
   }
   return NextResponse.json(result);

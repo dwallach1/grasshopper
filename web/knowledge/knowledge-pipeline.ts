@@ -1,6 +1,6 @@
 import type { ArticleTask } from './documents';
 import { bookmarksNeedingAi, ingestXBookmarks, type XBookmarkPayload } from './bookmarks';
-import { captureResearch } from './capture';
+import { captureResearch, type Capture } from './capture';
 import { withDatabase, withDatabaseRetry, withReadOnlyDatabase } from './database';
 import { persistPreparedArticle, prepareArticleTask } from './documents';
 import { fetchFinancialData, type FinancialRequest } from './financial';
@@ -28,7 +28,7 @@ type KnowledgeEnvironment = {
   FINANCIAL_DATASETS_API_KEY_SECRET: SecretBinding;
 };
 
-function json(value: unknown, init: ResponseInit = {}): Response {
+function json<Value>(value: Value, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set('content-type', 'application/json; charset=utf-8');
   headers.set('cache-control', 'no-store');
@@ -42,7 +42,7 @@ async function authorized(request: Request, env: KnowledgeEnvironment): Promise<
   return secretsEqual(supplied, current);
 }
 
-async function syncBookmarks(env: KnowledgeEnvironment): Promise<Record<string, unknown>> {
+async function syncBookmarks(env: KnowledgeEnvironment) {
   const payload: XBookmarkPayload = await env.X_CREDENTIAL_VAULT.getByName('primary').fetchBookmarks();
   const { catalog, pending } = await withReadOnlyDatabase(env.HYPERDRIVE.connectionString, async (database) => ({
     catalog: await loadOntologyCatalog(database),
@@ -106,7 +106,7 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   }
   if (url.pathname === '/research/capture' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
-    const body = await request.json<Record<string, unknown> & { operation: string }>();
+    const body = await request.json<Capture>();
     const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => captureResearch(database, body));
     await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
     await publishDashboard(env);
