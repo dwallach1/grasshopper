@@ -1,22 +1,29 @@
 import { DurableObject } from 'cloudflare:workers';
+import { z } from 'zod';
 
-import type { XBookmark, XBookmarkPayload, XContextAnnotation } from './bookmarks';
-import {
-  isJsonNumber,
-  isJsonObject,
-  isJsonString,
-  parseJson,
-  type JsonObject,
-  type JsonValue,
-} from '@thesisforge/shared/json';
+import { bookmarkFromUnknown, type XBookmark, type XBookmarkPayload } from './bookmarks';
+import { readBoundedJson } from '@thesisforge/shared/http';
 
-type TokenResponse = JsonObject & {
-  access_token: string;
-  refresh_token?: string;
-  expires_in?: number;
-  token_type?: string;
-  scope?: string;
-};
+const TokenResponseSchema = z.object({
+  access_token: z.string().min(1),
+  refresh_token: z.string().optional(),
+  expires_in: z.number().optional(),
+  token_type: z.string().optional(),
+  scope: z.string().optional(),
+});
+
+const XUserMeSchema = z.object({
+  data: z.object({
+    id: z.string().min(1),
+  }).passthrough(),
+}).passthrough();
+
+const XBookmarksPageSchema = z.object({
+  data: z.array(z.unknown()).optional(),
+  meta: z.object({
+    next_token: z.string().optional(),
+  }).passthrough().optional(),
+}).passthrough();
 
 type StoredToken = {
   access_token: string;
@@ -38,94 +45,6 @@ function base64Url(bytes: Uint8Array): string {
 
 async function sha256Base64Url(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))));
-}
-
-async function boundedJson(response: Response): Promise<JsonValue> {
-  const declared = Number(response.headers.get('content-length') || 0);
-  if (declared > MAX_X_RESPONSE_BYTES) throw new Error('X response exceeded its size limit');
-  if (!response.body) return null;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_X_RESPONSE_BYTES) {
-        await reader.cancel('response size limit exceeded');
-        throw new Error('X response exceeded its size limit');
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const output = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const text = new TextDecoder().decode(output);
-  return text ? parseJson(text) : null;
-}
-
-function isTokenResponse(value: JsonValue): value is TokenResponse {
-  return isJsonObject(value)
-    && isJsonString(value.access_token)
-    && (value.refresh_token === undefined || isJsonString(value.refresh_token))
-    && (value.expires_in === undefined || isJsonNumber(value.expires_in))
-    && (value.token_type === undefined || isJsonString(value.token_type))
-    && (value.scope === undefined || isJsonString(value.scope));
-}
-
-function optionalString(value: JsonValue | undefined): string | undefined {
-  return isJsonString(value) ? value : undefined;
-}
-
-function contextAnnotation(value: JsonValue): XContextAnnotation | null {
-  if (!isJsonObject(value)) return null;
-  const domain = isJsonObject(value.domain) ? {
-    id: optionalString(value.domain.id),
-    name: optionalString(value.domain.name),
-    description: optionalString(value.domain.description),
-  } : undefined;
-  const entity = isJsonObject(value.entity) ? {
-    id: optionalString(value.entity.id),
-    name: optionalString(value.entity.name),
-    description: optionalString(value.entity.description),
-  } : undefined;
-  return { domain, entity };
-}
-
-function bookmarkFromJson(value: JsonValue): XBookmark | null {
-  if (!isJsonObject(value) || !isJsonString(value.id)) return null;
-  const urls = isJsonObject(value.entities) && Array.isArray(value.entities.urls)
-    ? value.entities.urls.flatMap((candidate) => {
-        if (!isJsonObject(candidate)) return [];
-        return [{
-          url: optionalString(candidate.url),
-          expanded_url: optionalString(candidate.expanded_url),
-          display_url: optionalString(candidate.display_url),
-        }];
-      })
-    : undefined;
-  const annotations = Array.isArray(value.context_annotations)
-    ? value.context_annotations.flatMap((candidate) => {
-        const parsed = contextAnnotation(candidate);
-        return parsed ? [parsed] : [];
-      })
-    : undefined;
-  return {
-    id: value.id,
-    author_id: optionalString(value.author_id),
-    created_at: optionalString(value.created_at),
-    text: optionalString(value.text),
-    entities: urls ? { urls } : undefined,
-    context_annotations: annotations,
-    raw_json: JSON.stringify(value),
-  };
 }
 
 export type XVaultEnvironment = {
@@ -202,13 +121,16 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
       headers.set('authorization', `Basic ${btoa(`${this.env.X_CLIENT_ID}:${this.env.X_CLIENT_SECRET}`)}`);
     }
     const response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers, body });
-    const payload = await boundedJson(response);
-    if (!response.ok || !isTokenResponse(payload)) throw new Error(`${operation} failed with status ${response.status}`);
+    const payload = await readBoundedJson(response, MAX_X_RESPONSE_BYTES);
+    const parsed = TokenResponseSchema.safeParse(payload);
+    if (!response.ok || !parsed.success) throw new Error(`${operation} failed with status ${response.status}`);
     const previous = this.storedToken();
     const token = {
-      access_token: payload.access_token,
-      refresh_token: payload.refresh_token || previous?.refresh_token || null,
-      expires_at: Number.isFinite(payload.expires_in) ? Date.now() + Number(payload.expires_in) * 1000 : null,
+      access_token: parsed.data.access_token,
+      refresh_token: parsed.data.refresh_token || previous?.refresh_token || null,
+      expires_at: Number.isFinite(parsed.data.expires_in)
+        ? Date.now() + Number(parsed.data.expires_in) * 1000
+        : null,
     };
     this.persistToken(token);
     return token;
@@ -223,7 +145,7 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     }), 'X token refresh');
   }
 
-  private async xFetch(path: string, retry = true): Promise<JsonValue> {
+  private async xFetch(path: string, retry = true): Promise<unknown> {
     let token = this.bootstrapToken();
     if (token.expires_at !== null && token.expires_at <= Date.now() + 60_000) token = await this.refreshToken(token);
     const response = await fetch(`https://api.x.com${path}`, {
@@ -233,7 +155,7 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
       await this.refreshToken(token);
       return this.xFetch(path, false);
     }
-    const payload = await boundedJson(response);
+    const payload = await readBoundedJson(response, MAX_X_RESPONSE_BYTES);
     if (!response.ok) throw new Error(`X API failed with status ${response.status}`);
     return payload;
   }
@@ -296,10 +218,8 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
       Date.now() + SYNC_LEASE_MS,
     );
     try {
-      const user = await this.xFetch('/2/users/me');
-      const userRecord = isJsonObject(user) && isJsonObject(user.data) ? user.data : null;
-      const userId = isJsonString(userRecord?.id) ? userRecord.id : null;
-      if (!userRecord || !userId) throw new Error('X did not return the authorized user id');
+      const user = XUserMeSchema.parse(await this.xFetch('/2/users/me'));
+      const userId = user.data.id;
       const bookmarks: XBookmark[] = [];
       let paginationToken: string | undefined;
       for (let pageNumber = 0; pageNumber < MAX_PAGES && bookmarks.length < MAX_BOOKMARKS; pageNumber += 1) {
@@ -310,16 +230,16 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
           'user.fields': 'username,name,verified,description,public_metrics',
         });
         if (paginationToken) params.set('pagination_token', paginationToken);
-        const value = await this.xFetch(`/2/users/${encodeURIComponent(userId)}/bookmarks?${params.toString()}`);
-        const page = isJsonObject(value) ? value : {};
-        if (Array.isArray(page.data)) {
+        const page = XBookmarksPageSchema.parse(
+          await this.xFetch(`/2/users/${encodeURIComponent(userId)}/bookmarks?${params.toString()}`),
+        );
+        if (page.data) {
           bookmarks.push(...page.data.flatMap((candidate) => {
-            const bookmark = bookmarkFromJson(candidate);
+            const bookmark = bookmarkFromUnknown(candidate);
             return bookmark ? [bookmark] : [];
           }));
         }
-        const meta = isJsonObject(page.meta) ? page.meta : null;
-        paginationToken = isJsonString(meta?.next_token) ? meta.next_token : undefined;
+        paginationToken = page.meta?.next_token;
         if (!paginationToken) break;
       }
       return {

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
+import { bookmarkFromUnknown } from './bookmarks';
+import { CaptureSchema } from './capture';
 import { cleanHtml, documentTypeFor, extractDocumentText, objectPathFor } from './documents';
+import { FinancialRequestSchema } from './financial';
 import { parseOntologyAiOutput, type AnalysisInput } from './ontology-analysis';
 import { normalizePhrase, OntologyCatalog, slugify } from './ontology';
 
@@ -8,6 +11,26 @@ describe('worker knowledge primitives', () => {
   test('normalizes ontology identifiers deterministically', () => {
     expect(normalizePhrase('AI_Infrastructure / Power')).toBe('ai infrastructure power');
     expect(slugify('AI Infrastructure & Power')).toBe('ai-infrastructure-power');
+  });
+
+  test('parses X tweet payloads and rejects malformed bookmarks', () => {
+    expect(bookmarkFromUnknown({ id: '1', text: 'hello $VST' })).toMatchObject({ id: '1', text: 'hello $VST' });
+    expect(bookmarkFromUnknown({ text: 'missing id' })).toBeNull();
+  });
+
+  test('validates financial and capture request boundaries', () => {
+    expect(FinancialRequestSchema.parse({ endpoint: 'prices/snapshot', params: { ticker: 'VST' } })).toMatchObject({
+      endpoint: 'prices/snapshot',
+    });
+    expect(() => FinancialRequestSchema.parse({ endpoint: '../etc/passwd' })).toThrow();
+    expect(CaptureSchema.parse({
+      operation: 'thesis_view',
+      thesis_id: 'power',
+      stance: 'bullish',
+      variant: 'data-center demand',
+      falsifier: 'capex cuts',
+    }).operation).toBe('thesis_view');
+    expect(() => CaptureSchema.parse({ operation: 'thesis_view', thesis_id: 'power' })).toThrow();
   });
 
   test('validates structured semantic ontology analysis with exact evidence', () => {

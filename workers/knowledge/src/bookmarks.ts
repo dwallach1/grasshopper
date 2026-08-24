@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { Database } from './database';
 import {
   MAX_ONTOLOGY_BOOKMARKS_PER_SYNC,
@@ -8,36 +10,57 @@ import {
 import { normalizePhrase, slugify, type OntologyCatalog, type ThemeMatch } from './ontology';
 import type { JsonObject } from '@thesisforge/shared/json';
 
-type XBookmarkUrl = {
-  url?: string;
-  expanded_url?: string;
-  display_url?: string;
-};
+const XNamedRefSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+}).passthrough();
 
-type XBookmarkEntities = {
-  urls?: XBookmarkUrl[];
-};
+export const XContextAnnotationSchema = z.object({
+  domain: XNamedRefSchema.optional(),
+  entity: XNamedRefSchema.optional(),
+}).passthrough();
 
-export type XContextAnnotation = {
-  domain?: { id?: string; name?: string; description?: string };
-  entity?: { id?: string; name?: string; description?: string };
-};
+const XUrlEntitySchema = z.object({
+  url: z.string().optional(),
+  expanded_url: z.string().optional(),
+  display_url: z.string().optional(),
+}).passthrough();
 
-export type XBookmark = {
-  id: string;
-  author_id?: string;
-  created_at?: string;
-  text?: string;
-  entities?: XBookmarkEntities;
-  context_annotations?: XContextAnnotation[];
-  raw_json?: string;
-};
+/** Subset of an X tweet payload used for bookmark ingestion. */
+export const XApiTweetSchema = z.object({
+  id: z.string().min(1),
+  author_id: z.string().optional(),
+  created_at: z.string().optional(),
+  text: z.string().optional(),
+  entities: z.object({
+    urls: z.array(XUrlEntitySchema).optional(),
+  }).passthrough().optional(),
+  context_annotations: z.array(XContextAnnotationSchema).optional(),
+}).passthrough();
 
-export type XBookmarkPayload = {
-  fetchedAt: string;
-  user: { id: string };
-  bookmarks: XBookmark[];
-};
+export const XBookmarkSchema = XApiTweetSchema.extend({
+  raw_json: z.string().optional(),
+});
+
+export const XBookmarkPayloadSchema = z.object({
+  fetchedAt: z.string().min(1),
+  user: z.object({ id: z.string().min(1) }),
+  bookmarks: z.array(XBookmarkSchema),
+});
+
+export type XContextAnnotation = z.infer<typeof XContextAnnotationSchema>;
+export type XBookmark = z.infer<typeof XBookmarkSchema>;
+export type XBookmarkPayload = z.infer<typeof XBookmarkPayloadSchema>;
+
+export function bookmarkFromUnknown(value: unknown): XBookmark | null {
+  const parsed = XApiTweetSchema.safeParse(value);
+  if (!parsed.success) return null;
+  return {
+    ...parsed.data,
+    raw_json: JSON.stringify(value),
+  };
+}
 
 type CandidateInput = {
   candidate_type: string;

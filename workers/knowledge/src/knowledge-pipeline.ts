@@ -1,15 +1,16 @@
 import type { ArticleTask } from './documents';
 import { bookmarksNeedingAi, ingestXBookmarks, type XBookmarkPayload } from './bookmarks';
-import { captureResearch, type Capture } from './capture';
+import { CaptureSchema, captureResearch } from './capture';
 import { withDatabase, withDatabaseRetry, withReadOnlyDatabase } from './database';
 import { persistPreparedArticle, prepareArticleTask } from './documents';
-import { fetchFinancialData, type FinancialRequest } from './financial';
+import { FinancialRequestSchema, fetchFinancialData } from './financial';
 import { rebuildKnowledgeGraph, refreshWeeklyEventMap } from './graph';
 import { publishDashboard } from './publication';
 import { XCredentialVault } from './x-credential-vault';
 import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
+import { ZodError } from 'zod';
 
 export { XCredentialVault } from './x-credential-vault';
 
@@ -93,8 +94,7 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   }
   if (url.pathname === '/financial' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
-    const spec = await request.json<FinancialRequest>();
-    if (!spec.endpoint || !/^[a-z0-9/_-]+$/i.test(spec.endpoint)) return json({ error: 'valid endpoint is required' }, { status: 400 });
+    const spec = FinancialRequestSchema.parse(await request.json());
     const apiKey = await readSecret(env.FINANCIAL_DATASETS_API_KEY_SECRET, 'FINANCIAL_DATASETS_API_KEY');
     const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => fetchFinancialData(database, apiKey, spec));
     await publishDashboard(env);
@@ -106,7 +106,7 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   }
   if (url.pathname === '/research/capture' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
-    const body = await request.json<Capture>();
+    const body = CaptureSchema.parse(await request.json());
     const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => captureResearch(database, body));
     await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
     await publishDashboard(env);
@@ -117,8 +117,12 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
 
 const worker = {
   async fetch(request: Request, env: KnowledgeEnvironment): Promise<Response> {
-    try { return await route(request, env); }
-    catch (error) {
+    try {
+      return await route(request, env);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return json({ error: 'invalid_request', issues: error.issues }, { status: 400 });
+      }
       console.error(JSON.stringify({ event: 'knowledge_request_failed', path: new URL(request.url).pathname, error: error instanceof Error ? error.message : 'unknown' }));
       return json({ error: error instanceof Error ? error.message : 'internal_error' }, { status: 500 });
     }
