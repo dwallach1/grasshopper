@@ -1,18 +1,19 @@
 import { Agent, DurableObjectOAuthClientProvider, getAgentByName } from 'agents';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { z } from 'zod';
 
-import type {
-  AutonomousEquityIntent,
-  AutonomousExecutionResult,
-  BrokerAccountSnapshot,
-  BrokerMarketContext,
+import {
+  AutonomousExecutionResultSchema,
+  BrokerAccountSnapshotSchema,
+  BrokerMarketContextSchema,
+  type AutonomousEquityIntent,
+  type AutonomousExecutionResult,
+  type BrokerAccountSnapshot,
+  type BrokerMarketContext,
 } from '@thesisforge/contracts/broker';
 import { validateBrokerExecutionPolicy } from './broker-execution-policy';
 import {
-  isJsonObject,
   isJsonString,
-  parseJson,
-  type JsonObject,
   type JsonValue,
 } from '@thesisforge/shared/json';
 
@@ -28,6 +29,22 @@ const ROBINHOOD_MCP_HOST = 'agent.robinhood.com';
 const PRIMARY_AGENT_NAME = 'primary';
 const THESISFORGE_OAUTH_CLIENT_NAME = 'ThesisForge';
 const THESISFORGE_CLIENT_URI = 'https://thesisforge-dashboard.davidwallach2.workers.dev/';
+
+const ToolResultEnvelopeSchema = z.object({
+  structuredContent: z.object({
+    data: z.record(z.string(), z.unknown()),
+  }).passthrough().optional(),
+  content: z.array(z.unknown()).optional(),
+}).passthrough();
+
+const ToolTextContentSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+}).passthrough();
+
+const ToolTextDataSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+}).passthrough();
 
 type BrokerConnectionState =
   | 'not_connected'
@@ -60,55 +77,48 @@ function brokerExecutionEnabled(env: Cloudflare.Env): boolean {
   return String(env.BROKER_EXECUTION_ENABLED) === 'true';
 }
 
-function finiteNumber(value: JsonValue | undefined, label: string): number {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function recordRows(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function finiteNumber(value: unknown, label: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`${label} is unavailable`);
   return parsed;
 }
 
-function dataFromToolResult<Result>(result: Result): JsonObject {
-  const normalized = parseJson(JSON.stringify(result));
-  if (!isJsonObject(normalized)) throw new Error('Robinhood returned an invalid tool result');
-  const structured = normalized.structuredContent;
-  if (isJsonObject(structured) && isJsonObject(structured.data)) return structured.data;
-  const content = normalized.content;
-  if (Array.isArray(content)) {
-    for (const item of content) {
-      if (!isJsonObject(item) || item.type !== 'text' || !isJsonString(item.text)) continue;
-      try {
-        const parsed = parseJson(item.text);
-        if (isJsonObject(parsed) && isJsonObject(parsed.data)) return parsed.data;
-      } catch {
-        // Ignore prose content. A structured data object is required below.
-      }
+function dataFromToolResult(result: unknown): Record<string, unknown> {
+  const normalized = ToolResultEnvelopeSchema.parse(
+    typeof result === 'string' ? JSON.parse(result) : JSON.parse(JSON.stringify(result)),
+  );
+  if (normalized.structuredContent?.data) return normalized.structuredContent.data;
+  for (const item of normalized.content ?? []) {
+    const textItem = ToolTextContentSchema.safeParse(item);
+    if (!textItem.success) continue;
+    try {
+      const parsed = ToolTextDataSchema.safeParse(JSON.parse(textItem.data.text) as unknown);
+      if (parsed.success) return parsed.data.data;
+    } catch {
+      // Ignore prose content. A structured data object is required below.
     }
   }
   throw new Error('Robinhood tool result did not include structured data');
 }
 
 function storedExecutionResult(text: string): AutonomousExecutionResult {
-  const value = parseJson(text);
-  if (
-    !isJsonObject(value)
-    || !isJsonString(value.refId)
-    || (value.status !== 'submitted' && value.status !== 'duplicate')
-    || !isJsonString(value.accountKey)
-    || !isJsonString(value.brokerOrderId)
-    || !isJsonString(value.orderJson)
-    || !isJsonString(value.reviewJson)
-    || !isJsonString(value.submittedAt)
-  ) {
+  let value: unknown;
+  try {
+    value = JSON.parse(text) as unknown;
+  } catch {
     throw new Error('Stored autonomous execution result is invalid');
   }
-  return {
-    refId: value.refId,
-    status: value.status,
-    accountKey: value.accountKey,
-    brokerOrderId: value.brokerOrderId,
-    orderJson: value.orderJson,
-    reviewJson: value.reviewJson,
-    submittedAt: value.submittedAt,
-  };
+  const parsed = AutonomousExecutionResultSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Stored autonomous execution result is invalid');
+  return parsed.data;
 }
 
 async function stableHash<Value>(value: Value): Promise<string> {
@@ -268,7 +278,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
     };
   }
 
-  private async callRobinhoodTool(name: string, args: JsonObject): Promise<JsonObject> {
+  private async callRobinhoodTool(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const permitted = ROBINHOOD_READ_ONLY_TOOL_ALLOWLIST.has(name)
       || (brokerExecutionEnabled(this.env) && ROBINHOOD_EXECUTION_TOOL_ALLOWLIST.has(name));
     if (!permitted) throw new Error('Robinhood tool is not permitted by the gateway policy');
@@ -299,15 +309,18 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
     return dataFromToolResult(await tool.execute(args));
   }
 
-  private async agenticAccount(): Promise<JsonObject> {
+  private async agenticAccount(): Promise<Record<string, unknown>> {
     const data = await this.callRobinhoodTool('get_accounts', {});
-    const accounts = Array.isArray(data.accounts) ? data.accounts.filter(isJsonObject) : [];
-    const eligible = accounts.filter((account) =>
-      account.agentic_allowed === true
-      && account.state === 'active'
-      && account.deactivated !== true
-      && account.permanently_deactivated !== true
-      && isJsonString(account.account_number));
+    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    const eligible = accounts.filter((account): account is Record<string, unknown> => {
+      if (!account || typeof account !== 'object' || Array.isArray(account)) return false;
+      const row = account as Record<string, unknown>;
+      return row.agentic_allowed === true
+        && row.state === 'active'
+        && row.deactivated !== true
+        && row.permanently_deactivated !== true
+        && typeof row.account_number === 'string';
+    });
     if (eligible.length !== 1) throw new Error('Exactly one active Agentic account is required');
     return eligible[0];
   }
@@ -324,12 +337,15 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         placed_agent: 'agentic',
       }),
     ]);
-    const buyingPower = isJsonObject(portfolio.buying_power)
-      ? finiteNumber(portfolio.buying_power.buying_power, 'buying power')
+    const buyingPowerObject = portfolio.buying_power;
+    const buyingPower = buyingPowerObject && typeof buyingPowerObject === 'object' && !Array.isArray(buyingPowerObject)
+      ? finiteNumber((buyingPowerObject as Record<string, unknown>).buying_power, 'buying power')
       : NaN;
     if (!Number.isFinite(buyingPower)) throw new Error('buying power is unavailable');
-    const normalizedPositions = (Array.isArray(positions.positions) ? positions.positions : [])
-      .filter(isJsonObject)
+    const positionRows = Array.isArray(positions.positions) ? positions.positions : [];
+    const normalizedPositions = positionRows
+      .filter((position): position is Record<string, unknown> =>
+        Boolean(position) && typeof position === 'object' && !Array.isArray(position))
       .map((position) => ({
         symbol: String(position.symbol || '').toUpperCase(),
         quantity: finiteNumber(position.quantity, 'position quantity'),
@@ -339,7 +355,9 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           : finiteNumber(position.average_buy_price, 'average buy price'),
       }))
       .filter((position) => /^[A-Z][A-Z0-9.]{0,9}$/.test(position.symbol));
-    const todayOrders = (Array.isArray(orders.orders) ? orders.orders : []).filter(isJsonObject);
+    const todayOrders = (Array.isArray(orders.orders) ? orders.orders : [])
+      .filter((order): order is Record<string, unknown> =>
+        Boolean(order) && typeof order === 'object' && !Array.isArray(order));
     const todayBuyOrders = todayOrders.filter((order) => order.side === 'buy');
     const pendingStates = new Set(['queued', 'unconfirmed', 'confirmed', 'partially_filled', 'pending']);
     const pendingOrderSymbols = [...new Set(todayOrders
@@ -348,8 +366,9 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       .filter((symbol) => /^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)))];
     let todayNotional = 0;
     for (const order of todayBuyOrders) {
-      if (isJsonObject(order.dollar_based_amount)) {
-        todayNotional += finiteNumber(order.dollar_based_amount.amount, 'daily order notional');
+      const dollarBased = order.dollar_based_amount;
+      if (dollarBased && typeof dollarBased === 'object' && !Array.isArray(dollarBased)) {
+        todayNotional += finiteNumber((dollarBased as Record<string, unknown>).amount, 'daily order notional');
       } else {
         const quantity = finiteNumber(order.quantity ?? order.cumulative_quantity, 'daily order quantity');
         const price = finiteNumber(order.average_price ?? order.price, 'daily order price');
@@ -357,7 +376,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       }
     }
     const accountHash = await stableHash({ accountNumber });
-    return {
+    return BrokerAccountSnapshotSchema.parse({
       accountKey: `rh:${accountHash.slice(0, 24)}`,
       accountLast4: accountNumber.slice(-4),
       observedAt: new Date().toISOString(),
@@ -369,7 +388,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       todayAgenticOrderCount: todayBuyOrders.length,
       todayAgenticOrderNotional: todayNotional,
       pendingOrderSymbols,
-    };
+    });
   }
 
   async readEquityMarketContext(inputSymbols: string[]): Promise<BrokerMarketContext> {
@@ -383,13 +402,13 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols }),
       this.callRobinhoodTool('get_equity_quotes', { symbols }),
     ]);
-    const tradabilityRows = (Array.isArray(tradability.results) ? tradability.results : []).filter(isJsonObject);
-    const quoteRows = (Array.isArray(quotes.results) ? quotes.results : []).filter(isJsonObject);
+    const tradabilityRows = recordRows(tradability.results);
+    const quoteRows = recordRows(quotes.results);
     const normalized = [];
     for (const symbol of symbols) {
       const tradable = tradabilityRows.find((row) => row.symbol === symbol);
-      const quoteResult = quoteRows.find((row) => isJsonObject(row.quote) && row.quote.symbol === symbol);
-      const quote = quoteResult && isJsonObject(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteResult = quoteRows.find((row) => isRecord(row.quote) && row.quote.symbol === symbol);
+      const quote = quoteResult && isRecord(quoteResult.quote) ? quoteResult.quote : null;
       if (!tradable || !quote) continue;
       const bid = finiteNumber(quote.bid_price, 'bid price');
       const ask = finiteNumber(quote.ask_price, 'ask price');
@@ -408,7 +427,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         spreadBps: bid > 0 && ask > 0 ? ((ask - bid) / ((ask + bid) / 2)) * 10_000 : Number.POSITIVE_INFINITY,
       });
     }
-    return { observedAt: new Date().toISOString(), symbols: normalized };
+    return BrokerMarketContextSchema.parse({ observedAt: new Date().toISOString(), symbols: normalized });
   }
 
   async readEquityResearchContext(inputSymbols: string[]): Promise<string> {
@@ -495,12 +514,12 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols: [symbol] }),
         this.callRobinhoodTool('get_equity_quotes', { symbols: [symbol] }),
       ]);
-      const tradabilityRows = Array.isArray(tradability.results) ? tradability.results.filter(isJsonObject) : [];
+      const tradabilityRows = recordRows(tradability.results);
       const tradable = tradabilityRows.find((row) => row.symbol === symbol);
       if (!tradable || tradable.tradeable !== true || tradable.state !== 'active') throw new Error('Symbol is not currently tradable');
-      const quoteRows = Array.isArray(quotes.results) ? quotes.results.filter(isJsonObject) : [];
-      const quoteResult = quoteRows.find((row) => isJsonObject(row.quote) && row.quote.symbol === symbol);
-      const quote = quoteResult && isJsonObject(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteRows = recordRows(quotes.results);
+      const quoteResult = quoteRows.find((row) => isRecord(row.quote) && row.quote.symbol === symbol);
+      const quote = quoteResult && isRecord(quoteResult.quote) ? quoteResult.quote : null;
       if (!quote || quote.has_traded !== true || quote.state !== 'active') throw new Error('A valid live quote is unavailable');
       const ask = finiteNumber(quote.ask_price, 'ask price');
       const bid = finiteNumber(quote.bid_price, 'bid price');
@@ -525,17 +544,17 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           : { quantity: requestedNotional.toFixed(6).replace(/\.?0+$/, '') }),
       };
       const review = await this.callRobinhoodTool('review_equity_order', orderArgs);
-      if (!isJsonObject(review.order_checks) || Object.keys(review.order_checks).length > 0) {
+      if (!isRecord(review.order_checks) || Object.keys(review.order_checks).length > 0) {
         throw new Error('Robinhood pre-trade review returned an alert');
       }
-      if (!isJsonObject(review.quote_data)) throw new Error('Robinhood pre-trade review did not return a quote');
+      if (!isRecord(review.quote_data)) throw new Error('Robinhood pre-trade review did not return a quote');
       const reviewedAt = Date.parse(String(intent.side === 'buy'
         ? review.quote_data.venue_ask_time || review.quote_data.venue_last_trade_time || ''
         : review.quote_data.venue_bid_time || review.quote_data.venue_last_trade_time || ''));
       if (!Number.isFinite(reviewedAt) || Date.now() - reviewedAt > 120_000) throw new Error('Reviewed quote is stale');
 
       const placed = await this.callRobinhoodTool('place_equity_order', { ...orderArgs, ref_id: intent.refId });
-      if (!isJsonObject(placed.order) || !isJsonString(placed.order.id)) throw new Error('Broker did not return an order id');
+      if (!isRecord(placed.order) || typeof placed.order.id !== 'string') throw new Error('Broker did not return an order id');
       const result: AutonomousExecutionResult = {
         refId: intent.refId,
         status: 'submitted',

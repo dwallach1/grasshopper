@@ -15,6 +15,7 @@
     "./src/market-clock.ts",
     "./src/autonomous-decision.ts",
     "./src/position-decision.ts",
+    "./src/schemas.ts",
     "./worker-configuration.d.ts"
   ]
 }

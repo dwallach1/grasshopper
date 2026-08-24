@@ -6,7 +6,7 @@
   "scripts": {
     "types": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler types --config wrangler.jsonc --include-runtime false worker-configuration.d.ts",
     "typecheck": "bun --bun tsc --project tsconfig.json",
-    "test": "bun test src/market-clock.test.ts src/autonomous-decision.test.ts src/position-decision.test.ts",
+    "test": "bun test src/market-clock.test.ts src/autonomous-decision.test.ts src/position-decision.test.ts src/schemas.test.ts",
     "dry-run": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc --dry-run",
     "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc",
     "trigger": "bun --bun wrangler workflows trigger thesisforge-research-cycle --config wrangler.jsonc --params '{\"force\":true,\"requestedBy\":\"manual\"}'",

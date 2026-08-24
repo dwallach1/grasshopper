@@ -8,15 +8,32 @@ import {
 import { marketGate } from './market-clock';
 import { approvedCandidate } from './autonomous-decision';
 import { decidePositionAction, type PositionHistory, type PositionThesis } from './position-decision';
+import {
+  approvedTradeProposals,
+  autonomousExecutionActive,
+  autonomousPositionManagementActive,
+  contextVersion,
+  firstIdRow,
+  firstObject,
+  isFinalizeRunSuccess,
+  latestThesisHashes,
+  parseAiJsonObject,
+  parseAutonomousExecutionResult,
+  parsePositionConfiguration,
+  parseTheses,
+  type ApprovedTradeProposal,
+  type PositionConfiguration,
+  type Thesis,
+} from './schemas';
 import type {
   AutonomousEquityIntent,
   AutonomousExecutionResult,
   BrokerAccountSnapshot,
   RobinhoodBrokerRpc,
 } from '@thesisforge/contracts/broker';
+import { readBoundedJson } from '@thesisforge/shared/http';
 import { readSecret } from '@thesisforge/shared/secrets';
 import {
-  isJsonNumber,
   isJsonObject,
   isJsonString,
   parseJson,
@@ -33,7 +50,6 @@ type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
 const AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const PROMPT_VERSION = 'thesis-autonomous-v2';
 const MAX_CONTROL_BYTES = 512 * 1024;
-const MAX_THESES_PER_RUN = 12;
 
 type DeduplicationResult = { duplicate: boolean };
 
@@ -41,19 +57,6 @@ type ShadowIntentReservation = {
   intentId: string;
   status: 'blocked_no_broker_gateway';
   duplicate: boolean;
-};
-
-type Thesis = {
-  id: string;
-  name: string;
-  summary: string;
-  status: string;
-  confidence: number;
-  stance: string;
-  time_horizon?: string;
-  variant_perception?: string | null;
-  falsifier?: string | null;
-  symbols: string[];
 };
 
 type ResearchCycleParams = {
@@ -82,19 +85,6 @@ type PositionReviewTask = {
   theses?: PositionThesis[];
 };
 
-type ApprovedTradeProposal = {
-  id: number;
-  thesisId: string | null;
-  symbol: string;
-  side: 'buy' | 'sell';
-  notional: number;
-  quantity?: number;
-  positionEpisodeId?: string;
-  positionAction?: 'open' | 'add' | 'reduce' | 'exit';
-  rationale: string;
-  createdAt: string;
-};
-
 type TradeExecutionTask = {
   kind: 'trade_execution';
   runId: string;
@@ -104,14 +94,6 @@ type TradeExecutionTask = {
 
 type CloudTask = ResearchTask | PositionReviewTask | TradeExecutionTask;
 
-type PositionConfiguration = {
-  positionKey: string;
-  episodeId: string;
-  symbol: string;
-  accountKey: string;
-  nextReviewAt: number | null;
-};
-
 type PositionObservation = {
   eventId: string;
   observedAt: string;
@@ -119,38 +101,7 @@ type PositionObservation = {
   evidence: JsonObject;
 };
 
-async function boundedJson(response: Response): Promise<JsonValue> {
-  const declared = Number(response.headers.get('content-length') || 0);
-  if (declared > MAX_CONTROL_BYTES) throw new Error('Cloud control response exceeded its size limit');
-  if (!response.body) return null;
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_CONTROL_BYTES) {
-        await reader.cancel('response size limit exceeded');
-        throw new Error('Cloud control response exceeded its size limit');
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const output = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const text = new TextDecoder().decode(output);
-  return text ? parseJson(text) : null;
-}
-
-async function cloudControl<Payload>(env: PublicationEnv, action: string, payload?: Payload): Promise<JsonValue> {
+async function cloudControl<Payload>(env: PublicationEnv, action: string, payload?: Payload): Promise<unknown> {
   const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
   const response = await fetch(
     `${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/cloud-control`,
@@ -163,14 +114,14 @@ async function cloudControl<Payload>(env: PublicationEnv, action: string, payloa
       body: JSON.stringify({ action, payload }),
     },
   );
-  const body = await boundedJson(response);
+  const body = await readBoundedJson(response, MAX_CONTROL_BYTES);
   if (!response.ok) throw new Error(`Cloud control failed with status ${response.status}`);
   return body;
 }
 
 async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
   const result = await cloudControl(env, 'finalize_run', { run_id: runId });
-  if (!isJsonObject(result) || result.finalized !== true) return;
+  if (!isFinalizeRunSuccess(result)) return;
   const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
@@ -180,144 +131,8 @@ async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promis
     },
     body: JSON.stringify({ publishCurrent: true }),
   });
-  await boundedJson(response);
+  await readBoundedJson(response, MAX_CONTROL_BYTES);
   if (!response.ok) throw new Error(`Dashboard projection failed with status ${response.status}`);
-}
-
-function parseTheses(context: JsonValue): Thesis[] {
-  if (!isJsonObject(context) || !isJsonObject(context.snapshot) || !isJsonObject(context.snapshot.payload)) return [];
-  const rows = context.snapshot.payload.theses;
-  if (!Array.isArray(rows)) return [];
-  const theses: Thesis[] = [];
-  for (const row of rows) {
-    if (!isJsonObject(row) || !isJsonString(row.id) || !isJsonString(row.name) || !isJsonString(row.summary)) continue;
-    theses.push({
-      id: row.id,
-      name: row.name,
-      summary: row.summary,
-      status: isJsonString(row.status) ? row.status : 'unknown',
-      confidence: isJsonNumber(row.confidence) ? row.confidence : 0,
-      stance: isJsonString(row.stance) ? row.stance : 'neutral',
-      time_horizon: isJsonString(row.time_horizon) ? row.time_horizon : undefined,
-      variant_perception: isJsonString(row.variant_perception) ? row.variant_perception : null,
-      falsifier: isJsonString(row.falsifier) ? row.falsifier : null,
-      symbols: Array.isArray(row.symbols) ? row.symbols.filter(isJsonString).slice(0, 8) : [],
-    });
-  }
-  return theses.slice(0, MAX_THESES_PER_RUN);
-}
-
-function contextVersion(context: JsonValue): string {
-  return isJsonObject(context) && isJsonObject(context.snapshot) && isJsonString(context.snapshot.generated_at)
-    ? context.snapshot.generated_at
-    : 'missing-snapshot-version';
-}
-
-function latestThesisHashes(context: JsonValue) {
-  const hashes = new Map<string, string>();
-  if (!isJsonObject(context) || !isJsonObject(context.latest_thesis_input_sha256)) return hashes;
-  for (const [key, value] of Object.entries(context.latest_thesis_input_sha256)) {
-    if (isJsonString(value)) hashes.set(key, value);
-  }
-  return hashes;
-}
-
-function approvedTradeProposals(context: JsonValue): ApprovedTradeProposal[] {
-  if (!isJsonObject(context) || !Array.isArray(context.approved_proposals)) return [];
-  const proposals: ApprovedTradeProposal[] = [];
-  for (const row of context.approved_proposals) {
-    if (!isJsonObject(row) || !Number.isInteger(row.id) || !isJsonString(row.symbol)) continue;
-    const side = row.side === 'buy' || row.side === 'sell' ? row.side : null;
-    const notional = Number(row.notional);
-    if (!side || !Number.isFinite(notional) || notional <= 0 || !isJsonString(row.rationale)) continue;
-    const alerts = isJsonObject(row.broker_alerts) ? row.broker_alerts : {};
-    const quantity = Number(alerts.position_quantity);
-    const positionAction = ['open', 'add', 'reduce', 'exit'].includes(String(alerts.position_action))
-      ? positionActionValue(String(alerts.position_action))
-      : side === 'buy' ? 'open' : undefined;
-    if (side === 'sell' && (!Number.isFinite(quantity) || quantity <= 0)) continue;
-    proposals.push({
-      id: Number(row.id),
-      thesisId: isJsonString(row.thesis_id) ? row.thesis_id : null,
-      symbol: row.symbol.trim().toUpperCase(),
-      side,
-      notional,
-      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
-      positionEpisodeId: isJsonString(alerts.position_episode_id) ? alerts.position_episode_id : undefined,
-      positionAction,
-      rationale: row.rationale,
-      createdAt: isJsonString(row.created_at) ? row.created_at : '',
-    });
-  }
-  return proposals.slice(0, 3);
-}
-
-function autonomousExecutionActive(context: JsonValue): boolean {
-  if (!isJsonObject(context) || !Array.isArray(context.risk_controls)) return false;
-  return context.risk_controls.some((row) =>
-    isJsonObject(row)
-    && row.control_key === 'autonomous-execution'
-    && row.status === 'active'
-    && row.enforcement_level === 'code');
-}
-
-function autonomousPositionManagementActive(context: JsonValue): boolean {
-  if (!isJsonObject(context) || !Array.isArray(context.risk_controls)) return false;
-  return context.risk_controls.some((row) =>
-    isJsonObject(row)
-    && row.control_key === 'autonomous-position-management'
-    && row.status === 'active'
-    && row.enforcement_level === 'code');
-}
-
-function firstRow(value: JsonValue): JsonObject | null {
-  return Array.isArray(value) && isJsonObject(value[0]) ? value[0] : null;
-}
-
-function positionConfiguration(text: string): PositionConfiguration {
-  const value = parseJson(text);
-  if (
-    !isJsonObject(value)
-    || !isJsonString(value.positionKey)
-    || !isJsonString(value.episodeId)
-    || !isJsonString(value.symbol)
-    || !isJsonString(value.accountKey)
-    || (value.nextReviewAt !== null && !isJsonNumber(value.nextReviewAt))
-  ) {
-    throw new Error('Stored position configuration is invalid');
-  }
-  return {
-    positionKey: value.positionKey,
-    episodeId: value.episodeId,
-    symbol: value.symbol,
-    accountKey: value.accountKey,
-    nextReviewAt: value.nextReviewAt,
-  };
-}
-
-function autonomousExecutionResult(text: string): AutonomousExecutionResult {
-  const value = parseJson(text);
-  if (
-    !isJsonObject(value)
-    || !isJsonString(value.refId)
-    || (value.status !== 'submitted' && value.status !== 'duplicate')
-    || !isJsonString(value.accountKey)
-    || !isJsonString(value.brokerOrderId)
-    || !isJsonString(value.orderJson)
-    || !isJsonString(value.reviewJson)
-    || !isJsonString(value.submittedAt)
-  ) {
-    throw new Error('Stored autonomous execution result is invalid');
-  }
-  return {
-    refId: value.refId,
-    status: value.status,
-    accountKey: value.accountKey,
-    brokerOrderId: value.brokerOrderId,
-    orderJson: value.orderJson,
-    reviewJson: value.reviewJson,
-    submittedAt: value.submittedAt,
-  };
 }
 
 async function sha256<Value>(value: Value): Promise<string> {
@@ -355,33 +170,13 @@ async function persistBrokerSnapshot(env: PublicationEnv, snapshot: BrokerAccoun
       source: 'robinhood_mcp_cloudflare',
     })),
   });
-  const row = firstRow(result);
-  if (!row || !Number.isInteger(row.id)) throw new Error('Account snapshot was not persisted');
+  const row = firstIdRow(result);
+  if (!row || !Number.isInteger(Number(row.id))) throw new Error('Account snapshot was not persisted');
   return Number(row.id);
 }
 
-function positionActionValue(value: string): ApprovedTradeProposal['positionAction'] {
-  if (value === 'open' || value === 'add' || value === 'reduce' || value === 'exit') return value;
-  return undefined;
-}
-
-function aiText<Result>(result: Result): string {
-  const value = parseJson(JSON.stringify(result));
-  if (isJsonString(value)) return value;
-  if (isJsonObject(value) && isJsonString(value.response)) return value.response;
-  return JSON.stringify(value);
-}
-
 function parseAiOutput<Result>(result: Result): JsonObject {
-  const text = aiText(result).trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
-  try {
-    const parsed = parseJson(fenced || text);
-    if (isJsonObject(parsed)) return parsed;
-  } catch {
-    // The output remains audit-only and cannot become a trade intent.
-  }
-  return { material_change: false, summary: text.slice(0, 4000), actions: [], risks: ['unstructured_model_output'] };
+  return parseAiJsonObject(result) as JsonObject;
 }
 
 async function analyzeThesis(
@@ -539,11 +334,11 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         summary: { gate, requested_by: event.payload.requestedBy || source, trading_enabled: tradingEnabled },
         updated_at: new Date().toISOString(),
       });
-      const row = firstRow(result);
-      if (!row || !isJsonString(row.id)) throw new Error('Cloud control did not return a run id');
+      const row = firstObject(result);
+      if (!row || typeof row.id !== 'string') throw new Error('Cloud control did not return a run id');
       return {
         id: row.id,
-        startedAt: isJsonString(row.started_at) ? row.started_at : null,
+        startedAt: typeof row.started_at === 'string' ? row.started_at : null,
       };
     });
 
@@ -856,10 +651,10 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
       "SELECT value FROM monitor_state WHERE key = 'configuration'",
     ).toArray()[0];
     if (!row) return;
-    const configuration = positionConfiguration(row.value);
+    const configuration = parsePositionConfiguration(row.value);
     const now = new Date();
     const triggerKey = `position-alarm:${configuration.positionKey}:${now.toISOString()}`;
-    const run = firstRow(await cloudControl(this.env, 'upsert_run', {
+    const run = firstObject(await cloudControl(this.env, 'upsert_run', {
       trigger_key: triggerKey,
       trigger_source: 'event',
       market_slot: 'position_alarm',
@@ -871,7 +666,7 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
       summary: { position_key: configuration.positionKey, trading_enabled: String(this.env.TRADING_ENABLED) === 'true' },
       updated_at: now.toISOString(),
     }));
-    if (!run || !isJsonString(run.id)) throw new Error('Position alarm could not create a canonical run');
+    if (!run || typeof run.id !== 'string') throw new Error('Position alarm could not create a canonical run');
     await this.env.RESEARCH_TASK_QUEUE.send({
       kind: 'position_review',
       runId: run.id,
@@ -932,7 +727,7 @@ export class BrokerExecutionCoordinator extends DurableObject<PublicationEnv> {
     if (existing) {
       if (existing.request_sha256 !== requestSha256) throw new Error('Intent id was reused with different content');
       if (existing.status === 'submitted' && existing.result_json) {
-        return autonomousExecutionResult(existing.result_json);
+        return parseAutonomousExecutionResult(existing.result_json);
       }
       throw new Error('Intent is already reserved or blocked');
     }
@@ -1006,7 +801,7 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
   if (!recorded.duplicate && snapshot && String(env.TRADING_ENABLED) === 'true') {
     const candidate = approvedCandidate(task, output, brokerContext, snapshot);
     if (candidate) {
-      const proposal = firstRow(await cloudControl(env, 'create_trade_proposal', {
+      const proposal = firstObject(await cloudControl(env, 'create_trade_proposal', {
         thesis_id: task.thesis.id,
         symbol: candidate.symbol,
         side: 'buy',
@@ -1023,7 +818,7 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
           evidence: candidate.evidence,
         },
       }));
-      if (!proposal || !Number.isInteger(proposal.id)) throw new Error('Approved proposal could not be persisted');
+      if (!proposal || !Number.isInteger(Number(proposal.id))) throw new Error('Approved proposal could not be persisted');
       approvedProposalId = Number(proposal.id);
       await env.RESEARCH_TASK_QUEUE.send({
         kind: 'trade_execution',
@@ -1132,7 +927,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
         ? Number(decision.dollarAmount)
         : Math.floor(Number(quantity) * Number(decision.evidence.last) * 100) / 100;
       if (Number.isFinite(notional) && notional > 0) {
-        const proposal = firstRow(await cloudControl(env, 'create_trade_proposal', {
+        const proposal = firstObject(await cloudControl(env, 'create_trade_proposal', {
           thesis_id: isJsonString(decision.evidence.thesis_id) ? decision.evidence.thesis_id : null,
           symbol: decision.symbol,
           side,
@@ -1151,7 +946,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
             evidence: decision.evidence,
           },
         }));
-        if (!proposal || !Number.isInteger(proposal.id)) throw new Error('Position proposal could not be persisted');
+        if (!proposal || !Number.isInteger(Number(proposal.id))) throw new Error('Position proposal could not be persisted');
         approvedProposalId = Number(proposal.id);
         await env.RESEARCH_TASK_QUEUE.send({
           kind: 'trade_execution', runId: task.runId,
@@ -1254,7 +1049,7 @@ async function processTradeExecutionTask(
     maxSpreadBps: policy.maxSpreadBps,
   };
   const requestFingerprint = await sha256(brokerIntent);
-  const intentRow = firstRow(await cloudControl(env, 'upsert_trade_intent', {
+  const intentRow = firstObject(await cloudControl(env, 'upsert_trade_intent', {
     trade_proposal_id: proposal.id,
     position_episode_id: proposal.positionEpisodeId || null,
     account_key: snapshot.accountKey,
@@ -1279,7 +1074,7 @@ async function processTradeExecutionTask(
     confirmed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }));
-  if (!intentRow || !isJsonString(intentRow.id)) throw new Error('Trade intent could not be persisted');
+  if (!intentRow || typeof intentRow.id !== 'string') throw new Error('Trade intent could not be persisted');
   const tradeIntentId = intentRow.id;
   await cloudControl(env, 'upsert_execution_attempt', {
     trade_intent_id: tradeIntentId,
