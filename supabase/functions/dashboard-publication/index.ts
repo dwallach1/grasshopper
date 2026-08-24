@@ -1,14 +1,15 @@
 import tradePolicy from './trade-policy.json' with { type: 'json' };
+import { z } from 'npm:zod@4';
 
 const EXPECTED_TOKEN_SHA256 = '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c';
 const MAX_REQUEST_BYTES = 8 * 1024;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
-function isPublicationBody(value: unknown): value is { publishCurrent?: boolean } {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const publishCurrent = (value as { publishCurrent?: unknown }).publishCurrent;
-  return publishCurrent === undefined || typeof publishCurrent === 'boolean';
-}
+const PublicationBodySchema = z.object({
+  publishCurrent: z.boolean().optional(),
+}).passthrough();
+
+const SecretKeysSchema = z.record(z.string(), z.string());
 
 function jsonResponse(body: unknown, status: number): Response {
   return Response.json(body, {
@@ -73,8 +74,8 @@ async function authorized(request: Request): Promise<boolean> {
 function secretApiKey(): string {
   const namedSecrets = Deno.env.get('SUPABASE_SECRET_KEYS');
   if (namedSecrets) {
-    const parsed = JSON.parse(namedSecrets) as Record<string, string>;
-    if (parsed.default) return parsed.default;
+    const parsed = SecretKeysSchema.safeParse(JSON.parse(namedSecrets));
+    if (parsed.success && parsed.data.default) return parsed.data.default;
   }
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (legacy) return legacy;
@@ -92,10 +93,7 @@ Deno.serve(async (request: Request) => {
   let publishCurrent = false;
   try {
     const rawBody = await boundedText(request.body, MAX_REQUEST_BYTES);
-    const body = rawBody ? JSON.parse(rawBody) as unknown : {};
-    if (!isPublicationBody(body)) {
-      return jsonResponse({ error: 'publishCurrent must be boolean' }, 400);
-    }
+    const body = PublicationBodySchema.parse(rawBody ? JSON.parse(rawBody) as unknown : {});
     publishCurrent = body.publishCurrent === true;
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, 400);

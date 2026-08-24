@@ -1,8 +1,71 @@
+import { z } from 'npm:zod@4';
+
 const EXPECTED_TOKEN_SHA256 = '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c';
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 
 type JsonObject = Record<string, unknown>;
+
+const JsonObjectSchema = z.record(z.string(), z.unknown());
+
+const CloudControlRequestSchema = z.object({
+  action: z.enum([
+    'context',
+    'upsert_run',
+    'upsert_task',
+    'finalize_run',
+    'record_account_snapshot',
+    'upsert_trade_intent',
+    'upsert_execution_attempt',
+    'update_trade_proposal',
+    'create_trade_proposal',
+    'sync_position_episodes',
+    'record_position_monitor_event',
+    'patch_position_episode',
+    'record_broker_fills',
+  ]),
+  payload: z.unknown().optional(),
+});
+
+const FinalizeRunSchema = z.object({
+  run_id: z.string().min(1),
+}).passthrough();
+
+const AccountSnapshotPayloadSchema = z.object({
+  snapshot: JsonObjectSchema,
+  positions: z.array(JsonObjectSchema).optional(),
+}).passthrough();
+
+const UpdateTradeProposalSchema = z.object({
+  id: z.number().int(),
+  status: z.string().optional(),
+  reviewed_at: z.string().optional(),
+  broker_alerts: JsonObjectSchema.optional(),
+}).passthrough();
+
+const SyncPositionEpisodesSchema = z.object({
+  account_key: z.string().min(1),
+  observed_at: z.string().min(1),
+  positions: z.array(JsonObjectSchema).optional(),
+}).passthrough();
+
+const PositionMonitorEventSchema = z.object({
+  position_episode_id: z.string().min(1),
+  event_type: z.string().optional(),
+  recommendation: z.union([z.string(), z.null()]).optional(),
+  evidence: JsonObjectSchema.optional(),
+  observed_at: z.string().optional(),
+}).passthrough();
+
+const PatchPositionEpisodeSchema = z.object({
+  id: z.string().min(1),
+}).passthrough();
+
+const BrokerFillsSchema = z.object({
+  fills: z.array(JsonObjectSchema).optional(),
+}).passthrough();
+
+const SecretKeysSchema = z.record(z.string(), z.string());
 
 function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -62,8 +125,8 @@ async function authorized(request: Request): Promise<boolean> {
 function secretApiKey(): string {
   const namedSecrets = Deno.env.get('SUPABASE_SECRET_KEYS');
   if (namedSecrets) {
-    const parsed = JSON.parse(namedSecrets) as Record<string, string>;
-    if (parsed.default) return parsed.default;
+    const parsed = SecretKeysSchema.safeParse(JSON.parse(namedSecrets));
+    if (parsed.success && parsed.data.default) return parsed.data.default;
   }
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (legacy) return legacy;
@@ -90,12 +153,11 @@ async function rest(path: string, init: RequestInit = {}): Promise<unknown> {
   });
   const raw = await boundedText(response.body, MAX_RESPONSE_BYTES);
   if (!response.ok) throw new Error(`Data API ${response.status}: ${raw.slice(0, 400)}`);
-  return raw ? JSON.parse(raw) : null;
+  return raw ? JSON.parse(raw) as unknown : null;
 }
 
 function requireObject(value: unknown): JsonObject {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('payload must be an object');
-  return value as JsonObject;
+  return JsonObjectSchema.parse(value);
 }
 
 async function context(): Promise<unknown> {
@@ -133,8 +195,7 @@ async function upsert(table: 'cloud_runs' | 'cloud_tasks', payload: unknown): Pr
 }
 
 async function finalizeRun(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  if (typeof record.run_id !== 'string') throw new Error('run_id is required');
+  const record = FinalizeRunSchema.parse(payload);
   const runId = encodeURIComponent(record.run_id);
   const tasks = await rest(`cloud_tasks?run_id=eq.${runId}&select=status`);
   const rows = Array.isArray(tasks) ? tasks : [];
@@ -150,13 +211,12 @@ async function finalizeRun(payload: unknown): Promise<unknown> {
 }
 
 async function recordAccountSnapshot(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  const snapshot = requireObject(record.snapshot);
-  const positions = Array.isArray(record.positions) ? record.positions.map(requireObject) : [];
+  const record = AccountSnapshotPayloadSchema.parse(payload);
+  const positions = record.positions || [];
   const inserted = await rest('account_snapshots', {
     method: 'POST',
     headers: { prefer: 'return=representation' },
-    body: JSON.stringify(snapshot),
+    body: JSON.stringify(record.snapshot),
   });
   if (positions.length > 0) {
     await rest('portfolio_exposure', {
@@ -187,14 +247,12 @@ async function upsertExecutionAttempt(payload: unknown): Promise<unknown> {
 }
 
 async function updateTradeProposal(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  if (!Number.isInteger(record.id)) throw new Error('proposal id is required');
-  const id = Number(record.id);
+  const record = UpdateTradeProposalSchema.parse(payload);
   const patch: JsonObject = {};
   if (typeof record.status === 'string') patch.status = record.status;
   if (typeof record.reviewed_at === 'string') patch.reviewed_at = record.reviewed_at;
-  if (isObject(record.broker_alerts)) patch.broker_alerts = record.broker_alerts;
-  return rest(`trade_proposals?id=eq.${id}`, {
+  if (record.broker_alerts) patch.broker_alerts = record.broker_alerts;
+  return rest(`trade_proposals?id=eq.${record.id}`, {
     method: 'PATCH',
     headers: { prefer: 'return=representation' },
     body: JSON.stringify(patch),
@@ -211,13 +269,10 @@ async function createTradeProposal(payload: unknown): Promise<unknown> {
 }
 
 async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  if (typeof record.account_key !== 'string' || typeof record.observed_at !== 'string') {
-    throw new Error('account_key and observed_at are required');
-  }
+  const record = SyncPositionEpisodesSchema.parse(payload);
   const accountKey = record.account_key;
   const observedAt = record.observed_at;
-  const positions = Array.isArray(record.positions) ? record.positions.map(requireObject) : [];
+  const positions = record.positions || [];
   const accountFilter = encodeURIComponent(accountKey);
   const existingValue = await rest(
     `position_episodes?account_key=eq.${accountFilter}&status=in.(proposed,open,closing)&select=*`,
@@ -276,20 +331,18 @@ async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
 }
 
 async function recordPositionMonitorEvent(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  const episodeId = String(record.position_episode_id || '');
-  if (!episodeId) throw new Error('position_episode_id is required');
+  const record = PositionMonitorEventSchema.parse(payload);
   const event = {
-    position_episode_id: episodeId,
-    event_type: String(record.event_type || 'scheduled_review'),
+    position_episode_id: record.position_episode_id,
+    event_type: record.event_type || 'scheduled_review',
     recommendation: record.recommendation == null ? null : String(record.recommendation),
-    evidence: isObject(record.evidence) ? record.evidence : {},
-    observed_at: String(record.observed_at || new Date().toISOString()),
+    evidence: record.evidence || {},
+    observed_at: record.observed_at || new Date().toISOString(),
   };
   const inserted = await rest('position_monitor_events', {
     method: 'POST', headers: { prefer: 'return=representation' }, body: JSON.stringify(event),
   });
-  await rest(`position_episodes?id=eq.${encodeURIComponent(episodeId)}`, {
+  await rest(`position_episodes?id=eq.${encodeURIComponent(record.position_episode_id)}`, {
     method: 'PATCH',
     headers: { prefer: 'return=minimal' },
     body: JSON.stringify({
@@ -305,21 +358,19 @@ async function recordPositionMonitorEvent(payload: unknown): Promise<unknown> {
 }
 
 async function patchPositionEpisode(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  const id = String(record.id || '');
-  if (!id) throw new Error('position episode id is required');
+  const record = PatchPositionEpisodeSchema.parse(payload);
   const patch: JsonObject = {};
   for (const key of ['status', 'quantity', 'average_cost', 'closed_at', 'next_review_at', 'last_recommendation', 'monitor_policy', 'updated_at']) {
     if (key in record) patch[key] = record[key];
   }
-  return rest(`position_episodes?id=eq.${encodeURIComponent(id)}`, {
+  return rest(`position_episodes?id=eq.${encodeURIComponent(record.id)}`, {
     method: 'PATCH', headers: { prefer: 'return=representation' }, body: JSON.stringify(patch),
   });
 }
 
 async function recordBrokerFills(payload: unknown): Promise<unknown> {
-  const record = requireObject(payload);
-  const fills = Array.isArray(record.fills) ? record.fills.map(requireObject) : [];
+  const record = BrokerFillsSchema.parse(payload);
+  const fills = record.fills || [];
   if (fills.length === 0) return [];
   return rest('broker_fills?on_conflict=broker_fill_id', {
     method: 'POST',
@@ -334,7 +385,7 @@ Deno.serve(async (request: Request) => {
 
   try {
     const raw = await boundedText(request.body, MAX_REQUEST_BYTES);
-    const body = requireObject(raw ? JSON.parse(raw) : {});
+    const body = CloudControlRequestSchema.parse(raw ? JSON.parse(raw) as unknown : {});
     const action = body.action;
     if (action === 'context') return json(await context());
     if (action === 'upsert_run') return json(await upsert('cloud_runs', body.payload));
@@ -355,6 +406,10 @@ Deno.serve(async (request: Request) => {
       event: 'cloud_control_error',
       error: error instanceof Error ? error.message : 'unknown',
     }));
-    return json({ error: 'Cloud control request failed' }, 502);
+    const badRequest = error instanceof z.ZodError;
+    return json(
+      { error: badRequest ? 'Invalid cloud control request' : 'Cloud control request failed' },
+      badRequest ? 400 : 502,
+    );
   }
 });
