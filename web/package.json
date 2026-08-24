@@ -10,16 +10,30 @@
     "dev": "bun --bun vinext dev",
     "build": "bun --bun vinext build",
     "start": "bun --bun vinext start",
-    "lint": "bun --bun eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "bun --bun eslint . --ignore-pattern dist --ignore-pattern .next",
+    "workflow:types": "bun --bun wrangler types --config wrangler.publication.jsonc --include-runtime false worker-publication-configuration.d.ts",
+    "workflow:typecheck": "bun --bun tsc --project workflows/tsconfig.json",
+    "workflow:test": "bun test workflows/dashboard-publication.test.ts workflows/market-clock.test.ts workflows/autonomous-decision.test.ts workflows/position-decision.test.ts",
+    "workflow:dry-run": "bun --bun wrangler deploy --config wrangler.publication.jsonc --dry-run",
+    "broker:types": "bun --bun wrangler types --config wrangler.broker.jsonc --include-runtime false worker-broker-configuration.d.ts",
+    "broker:typecheck": "bun --bun tsc --project workflows/tsconfig.broker.json",
+    "broker:test": "bun test workflows/robinhood-broker-agent.test.ts workflows/broker-execution-policy.test.ts",
+    "broker:oauth-relay": "bun scripts/robinhood-oauth-relay.ts",
+    "broker:dry-run": "bun --bun wrangler deploy --config wrangler.broker.jsonc --dry-run",
+    "broker:deploy": "bun --bun wrangler deploy --config wrangler.broker.jsonc",
+    "cloud:trigger": "bun --bun wrangler workflows trigger thesisforge-cloud-research-cycle --config wrangler.publication.jsonc --params '{\"force\":true,\"requestedBy\":\"manual\"}'",
+    "cloud:tail": "bun --bun wrangler tail thesisforge-dashboard-publication --config wrangler.publication.jsonc"
   },
   "dependencies": {
+    "agents": "0.20.0",
+    "jose": "6.2.10",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
+    "@cloudflare/vite-plugin": "1.53.1",
+    "@cloudflare/workers-types": "5.20260823.1",
     "@openai/sites-vite-plugin": "^0.1.0 || ^0.2.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
@@ -34,7 +48,7 @@
     "typescript": "5.9.3",
     "vinext": "1.0.0-beta.3",
     "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "wrangler": "4.125.0"
   },
   "type": "module"
 }

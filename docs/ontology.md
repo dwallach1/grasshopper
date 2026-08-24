@@ -67,6 +67,33 @@ bun run cli -- ontology add-lexicon "low information phrase" --type candidate_st
 
 The initial vocabulary in `supabase/seed.sql` is only a bootstrap. Once loaded, taxonomy growth and review happen through Supabase records rather than code edits.
 
+## Durable Source Archive
+
+Supabase Storage preserves immutable originals in the private
+`research-originals` bucket. Storage holds bytes; Postgres remains the canonical
+index and judgment layer:
+
+- `research_documents` records the SHA-256 checksum, private object path, MIME
+  type, extraction state, and searchable text.
+- `research_document_sources` connects one deduplicated original to its URLs,
+  article record, publisher, and mutable usefulness judgment.
+- `research_document_annotations` records sentiment and evidence role per
+  market, symbol, theme, or thesis with provenance and model version.
+
+Paths use `<document-type>/<year>/<month>/<sha256>.<extension>`. They never
+encode `bullish`, `bearish`, `useful`, a ticker, or a theme because those
+judgments overlap and change. Article-linked originals retain the existing
+`source:article:<id>` ontology key; standalone documents use
+`source:document:<id>`, preventing the same evidence from inflating independent
+source counts.
+
+```sh
+bun run documents:setup
+bun run cli -- documents archive URL_OR_FILE --usefulness useful
+bun run cli -- documents verify DOCUMENT_ID
+bun run documents:status
+```
+
 ## Node Types
 
 - `concept`: AI power, neoclouds, nuclear fuel, photonics, defense autonomy, crypto AI.

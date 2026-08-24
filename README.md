@@ -1,327 +1,311 @@
 # ThesisForge
 
-ThesisForge is a persistent research and decision system for active investing. It
-turns X bookmarks, linked articles, financial data, market events, portfolio
-state, and explicit research judgments into a living investment ontology: a
-traceable map of sources, themes, symbols, theses, catalysts, predictions,
-decisions, trades, and lessons.
+ThesisForge is a cloud-native research and autonomous equity-trading operating system. It turns source material, market data, portfolio state, explicit theses, model judgments, executions, and outcomes into a persistent, auditable decision loop.
 
-The goal is not to produce another disposable market summary. ThesisForge is
-designed to remember what the research process believed, why it believed it,
-what would prove it wrong, what action followed, and what the outcome should
-change next time.
+The production research and trading path runs in Cloudflare and Supabase. It does not require Codex, a terminal session, or a powered-on laptop. Robinhood access is held by a Cloudflare Agent Durable Object through Robinhood's remote MCP endpoint.
 
-## Intent
+> ThesisForge is experimental software, not a promise of investment performance. It fails closed: missing evidence, stale data, broker warnings, unavailable controls, conflicting intent, or an invalid execution window blocks an order.
 
-ThesisForge is intended to become an evidence-driven operating system for
-short-horizon, catalyst-aware investing. It should help answer:
+## Production status
 
-- What investable themes are emerging across otherwise disconnected sources?
-- Which verified public symbols express those themes, and through what
-  relationship?
-- Which theses are hardening, softening, or approaching a falsifier?
-- What events could reprice a thesis over the next days or weeks?
-- Where does the current portfolio already carry the same exposure?
-- Which proposed trades survive bull, bear, portfolio-risk, and execution
-  review?
-- What did prior predictions, tests, trades, and failures teach the next
-  research cycle?
+- Cloudflare Workers: private dashboard, cloud control plane, Robinhood gateway
+- Supabase: canonical Postgres, Edge Functions, RLS, and private research Storage
+- Autonomous equity actions: open, hold, add, reduce, and exit
+- Per-order human approval: not required
+- Unsupported live products: options, crypto, margin, and shorting
+- Scheduled runs: 10:05, 13:05, and 15:25 America/New_York on weekdays
+- Execution window: 09:45–15:45 America/New_York on weekdays
 
-The repository supports research ingestion, structured judgment, ontology
-learning, financial-data retention, run observability, and dashboard
-publication. Live broker inspection and order placement are performed through
-external Robinhood tooling during an orchestrated run; this repository defines
-the policy, persistence, validation gates, and audit trail rather than embedding
-broker credentials or a standalone order router.
-
-## How the system works
+## Production architecture
 
 ```mermaid
-flowchart LR
-    subgraph Inputs
-        X[X bookmarks]
-        A[Linked articles]
-        F[Financial datasets]
-        B[Broker account and market state]
-        J[Research judgments]
-        R[Automation run history]
+flowchart TB
+    subgraph CF[Cloudflare]
+        Access[Cloudflare Access]
+        Dashboard[thesisforge-dashboard<br/>private Next.js/vinext UI]
+        Control[thesisforge-dashboard-publication<br/>Cron + Workflows + Queue]
+        Queue[thesisforge-research-tasks<br/>Queue + DLQ]
+        AI[Workers AI<br/>AI Gateway]
+        ThesisDO[ThesisCoordinator<br/>per thesis]
+        PositionDO[PositionMonitor<br/>per account + symbol]
+        AccountDO[BrokerExecutionCoordinator<br/>per account]
+        Broker[thesisforge-broker-gateway]
+        BrokerAgent[RobinhoodBrokerAgent<br/>durable MCP OAuth]
     end
 
-    subgraph Workers[Python and Bun workers]
-        I[Ingest and normalize]
-        C[Classify and score]
-        L[Learn ontology candidates]
-        D[Record decisions and outcomes]
+    subgraph SB[Supabase]
+        CloudControl[cloud-control Edge Function]
+        Publication[dashboard-publication Edge Function]
+        DB[(Postgres<br/>canonical system of record)]
+        Storage[(private research-originals<br/>Storage bucket)]
     end
 
-    DB[(Supabase Postgres<br/>canonical source of truth)]
-    G[Knowledge graph and<br/>judgment ledger]
-    P[Current dashboard snapshot]
-    UI[Private Next.js dashboard]
+    RH[Robinhood Agentic Trading MCP]
 
-    X --> I
-    A --> I
-    F --> I
-    B --> D
-    J --> D
-    R --> I
-    I --> DB
-    DB --> C
-    C --> G
-    G --> DB
-    C --> L
-    L --> DB
-    D --> DB
-    DB --> P
-    P --> UI
+    Access --> Dashboard --> DB
+    Control --> CloudControl --> DB
+    Control --> Publication --> DB
+    Control --> Queue --> AI
+    Queue --> ThesisDO
+    Queue --> PositionDO
+    Queue --> AccountDO --> BrokerAgent --> RH
+    Broker --> BrokerAgent
+    DB --- Storage
 ```
 
-The major layers are:
+Durable Object SQLite stores coordination, deduplication, and broker-connection state. It is not a second research database. Supabase remains canonical.
 
-1. **Acquisition.** Small workers fetch private X bookmarks, readable linked
-   article text, paid financial datasets, and Codex automation history. Broker
-   state is refreshed by the orchestrating agent when a trading run requires
-   it.
-2. **Canonical storage.** Supabase Postgres is the only database and system of
-   record. Raw source material, normalized facts, derived judgments, candidate
-   knowledge, decisions, and outcomes remain queryable together.
-3. **Ontology and judgment.** Sources become graph nodes and evidence edges.
-   Themes connect to theses and verified symbols; predictions, insights,
-   catalysts, event decisions, and trade proposals preserve the system's
-   current point of view.
-4. **Governed learning.** Repeated evidence proposes new vocabulary, theme
-   memberships, and emerging themes. Strict promotion rules and a review queue
-   prevent one noisy post from silently rewriting the taxonomy.
-5. **Decision and feedback.** Research cycles preregister an expected outcome,
-   retain test variants and adversarial scenarios, record trade or no-trade
-   decisions, and turn postmortems into reusable lessons.
-6. **Presentation.** A publisher composes the current state into a single
-   `dashboard_snapshots` record. The private Next.js dashboard reads that
-   server-side snapshot and exposes no database credentials to the browser.
+## Cloudflare components
 
-## How ThesisForge self-learns
+| Component | Responsibility | Boundary |
+|---|---|---|
+| `thesisforge-dashboard` | Serves the private dashboard | Cloudflare Access; server-side Supabase reads; no service-role secret in the browser |
+| `thesisforge-dashboard-publication` | Cron, Workflows, Queue producer/consumer, Workers AI, deterministic decisions | Route-less control Worker with bounded Supabase control access |
+| `thesisforge-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
+| `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
+| `DashboardPublicationWorkflow` | Publishes shadow/current dashboard snapshots | Calls Supabase publication function and can never enable trading |
+| `thesisforge-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
+| Workers AI | Typed recommendations | No broker credentials, tools, or placement authority |
 
-“Self-learning” here means evidence-backed updates to persistent knowledge, not
-an opaque model retraining itself or changing trading rules without review.
+### Durable Objects
 
-### 1. Observe
+| Durable Object | Coordination atom | Purpose |
+|---|---|---|
+| `ThesisCoordinator` | Thesis ID | Deduplicates analyses and retains the latest typed result |
+| `PositionMonitor` | Account key + symbol | Persists observations/action history and enforces add/reduce cooldowns |
+| `BrokerExecutionCoordinator` | Agentic account key | Serializes and idempotently reserves live intents |
+| `RobinhoodBrokerAgent` | Primary Robinhood connection | Restores durable MCP OAuth, reads account/market state, and enforces final order rules |
 
-Ingestion extracts known symbols, phrases, hashtags, and n-grams from bookmarks,
-articles, and research events. Each observation is stored with its source key
-and timestamp, so the learner can distinguish repeated independent evidence
-from repetition inside one source.
+## Schedule and cost posture
 
-### 2. Classify
-
-At the start of a run, the worker loads an immutable view of the active ontology
-from Postgres. Weighted terms, negative terms, verified symbol memberships, and
-per-theme thresholds determine whether a source matches a theme. The resulting
-score and exact matched features are written to the evidence ledger.
-
-The classifier deliberately does not feed its own derived `thesis_symbols` back
-into the active ontology. That avoids a circular loop in which a weak guess
-amplifies itself merely because the system made it before.
-
-### 3. Propose
-
-The learner turns repeated co-occurrence into governed candidates:
-
-- a verified symbol repeatedly associated with a theme can become a membership
-  candidate;
-- a distinctive phrase repeatedly associated with a theme can become a term
-  candidate;
-- a multi-source cluster that does not resemble an active theme can become an
-  emerging-theme candidate.
-
-Every candidate retains its supporting source records, score, source count, and
-sample context. URL fragments, unverified uppercase prose, common stopwords,
-and weak one-off clusters are suppressed from the default evidence surface.
-
-### 4. Promote carefully
-
-Term and membership candidates may auto-promote only after crossing the active
-theme's multi-source threshold and additional quality gates. Symbol membership
-requires a symbol that has already been verified; learned terms must show enough
-precision across all observations. Brand-new themes also activate autonomously
-after a stricter six-source evidence threshold. Managers can promote, demote,
-restore, or blacklist themes and symbols without becoming a required step in
-the learning loop.
-
-Operators can inspect and govern the queue explicitly:
-
-```sh
-bun run ontology:learn
-bun run ontology:candidates
-bun run cli -- ontology verify-symbol SYMBOL
-bun run cli -- ontology approve CANDIDATE_ID
-bun run cli -- ontology reject CANDIDATE_ID --note "reason"
-```
-
-### 5. Learn from decisions and outcomes
-
-Ontology growth is only one learning loop. ThesisForge also stores falsifiable
-predictions, thesis stance and falsifiers, event participation decisions,
-research cycles, strategy tests, stress scenarios, specialist agent views,
-postmortems, and regime-tagged lessons.
-
-The intended closed loop is:
+Paired UTC Cron candidates preserve the New York schedule through daylight-saving changes:
 
 ```text
-research -> preregister -> test -> stress -> decide -> act or abstain
-         -> resolve outcome -> postmortem -> incorporate lesson -> research
+5 14,15 * * 1-5    -> 10:05 America/New_York
+5 17,18 * * 1-5    -> 13:05 America/New_York
+25 19,20 * * 1-5   -> 15:25 America/New_York
 ```
 
-Negative results and killed variants are retained. A lesson remains visible as
-an open loop until it has been incorporated into a later research cycle. This
-makes learning auditable: a future decision can point to the evidence and prior
-failure that changed it.
+`marketGate` admits only the candidate matching the exact New York slot and rejects weekends, yielding three useful weekday runs rather than six. It is not a complete exchange-holiday or early-close calendar; Robinhood market state, tradability, quotes, and review remain authoritative.
 
-## Safety and governance
+Costs stay bounded through three useful wakes, thesis-input hashes that skip unchanged LLM work, at most 12 theses per run, a small structured-output Workers AI model, Queue concurrency of two, and hibernating Durable Objects. Position management does not poll every minute.
 
-ThesisForge separates learned knowledge from execution authority.
+## One run, end to end
 
-- The adaptive ontology can expand vocabulary and verified memberships, but it
-  cannot rewrite `config/trade_policy.json`.
-- Brand-new themes activate autonomously after stricter evidence gates;
-  manager blacklists are hard stops, and candidate evidence is never discarded.
-- Risk and sizing controls are code- and data-enforced rather than prompt-only.
-- A fresh broker account snapshot and positions are required before sizing;
-  stale or unavailable account state rejects the sizing attempt.
-- Symbols must resolve through the broker before they are treated as tradable.
-- Live placement is limited to the configured asset classes, sizing caps, buying
-  power, and regular US market hours, with broker review immediately before an
-  order.
-- Every proposal, rejection, placement, outcome, and lesson is intended to be
-  persisted in Postgres.
-- The dashboard secret stays server-side. Public browser code never receives a
-  Supabase secret or database connection string.
+1. Cron creates one idempotent `CloudResearchWorkflow` instance for the admitted slot.
+2. The Workflow registers `cloud_runs` and loads bounded canonical context through `cloud-control`.
+3. `RobinhoodBrokerAgent` refreshes the Agentic account, buying power, positions, and agentic orders.
+4. The snapshot is stored in `account_snapshots` and `portfolio_exposure`.
+5. Broker positions reconcile into `position_episodes`; missing positions close their prior episode.
+6. Unchanged thesis hashes skip unnecessary inference.
+7. Queue tasks fan out thesis research and one review per open account+symbol episode.
+8. Workers AI returns guided JSON; the thesis or position Durable Object deduplicates it.
+9. Deterministic policy converts the recommendation into hold, open, add, reduce, exit, or no-trade.
+10. An approved action becomes a `trade_proposals` row and a separate execution task.
+11. Execution re-reads both Supabase kill switches, refreshes the broker, persists `trade_intents` and `broker_execution_attempts`, and enters the account coordinator.
+12. The broker Agent recomputes action semantics, buying power or sellable shares, pending orders, quote age, spread, portfolio caps, and session time.
+13. Robinhood `review_equity_order` runs immediately before `place_equity_order`; any `order_checks` entry blocks placement.
+14. Submission, immediate fills, failures, observations, and episode transitions are persisted. Later snapshots reconcile quantities and closures.
+15. The cloud run finalizes after its tasks are terminal.
 
-See [`config/trade_policy.json`](config/trade_policy.json) and
-[`docs/live-trading-checklist.md`](docs/live-trading-checklist.md) for the
-current execution contract.
+## Where decisions are made
 
-## Repository layout
+| Layer | Recommends | Authorizes | Places |
+|---|---:|---:|---:|
+| Workers AI | Yes | No | No |
+| Deterministic TypeScript policy | Yes | Within hard rules | No |
+| Supabase `risk_controls` | No | Global permit/stop | No |
+| `BrokerExecutionCoordinator` | No | Serializes/reserves | No |
+| `RobinhoodBrokerAgent` | No | Revalidates every broker invariant | Yes |
+| Robinhood | No | Authoritative broker checks | Accepts/rejects |
+
+Workers AI uses `@cf/meta/llama-3.1-8b-instruct-fast` through AI Gateway. It sees bounded thesis, portfolio, and broker research context. It never receives OAuth tokens, raw account numbers, or the broker tool catalog.
+
+## Autonomous entry policy
+
+A new position requires:
+
+- material change and an explicit `buy` recommendation;
+- a hardening bullish thesis with confidence at least 80;
+- model confidence at least 85 and passing bull, bear, and portfolio-risk panels;
+- a substantive catalyst and invalidation;
+- a symbol linked to the thesis, with no existing position or pending same-symbol order;
+- active tradability, quote age at most 120 seconds, and spread at most 80 bps;
+- recent reported earnings or deterministic price/volume dislocation;
+- at least $25 notional, sized 1–5%, then capped by buying power and 5% of portfolio value.
+
+## Autonomous position management
+
+Each reconciled position gets a scheduled typed review and a `PositionMonitor`.
+
+### Add
+
+- linked hardening bullish thesis, confidence at least 80;
+- model confidence at least 90 and all review panels passing;
+- deterministic positive evidence;
+- never average down: market price must be at or above average cost;
+- one add/day, two lifetime adds, and at least 24 hours between adds;
+- add tranche of 1–2%; total post-add position capped at 5%;
+- fresh buying power and no pending same-symbol order.
+
+### Reduce
+
+- model confidence at least 88;
+- weakening or invalidated thesis state;
+- deterministic adverse evidence, such as a negative high-volume dislocation or recent negative earnings surprise;
+- one reduction/day; sell 25–50% of available shares;
+- a reduction cannot silently become a full exit.
+
+### Exit
+
+- sell all available shares after the deterministic -8% hard-loss threshold; or
+- sell all available shares when high-confidence invalidation has deterministic adverse evidence.
+
+Risk-reducing sells bypass exhausted buy-count and buy-notional quotas. They still require the regular execution window, a fresh bid, acceptable spread, no pending same-symbol order, broker review, idempotency, and available shares.
+
+## Broker boundary
+
+Permitted reads:
 
 ```text
-src/thesisforge/
-  bookmarks/      X bookmark normalization and evidence capture
-  articles/       linked-article fetching and text extraction
-  ontology/       database-backed classification, learning, graph, and review
-  research/       structured judgments and event mapping
-  financial/      cache-first paid financial-data vault
-  reports/        thesis and durable run reports
-  automations/    Codex automation/run-history indexing
-  dashboard/      canonical dashboard snapshot publisher
-  db/             Supabase Postgres connection adapter
-scripts/x/        Bun entry points for X OAuth and bookmark retrieval
-supabase/
-  schemas/        declarative desired database state
-  migrations/     generated migration history
-web/              private Next.js dashboard
-tests/            Python unit and integration-oriented tests
-config/           execution policy
-docs/             deeper design notes and operating runbooks
+get_accounts              get_portfolio
+get_equity_positions      get_equity_orders
+get_equity_quotes         get_equity_tradability
+get_equity_fundamentals   get_equity_historicals
+get_earnings_results      search
 ```
 
-## Runtime and setup
+Permitted writes:
 
-- **Bun 1.4** is the JavaScript package manager and task orchestrator.
-- **Python 3.11+** workers live in the installable `src/thesisforge/` package and
-  run from a local `.venv`.
-- **Supabase Postgres** is required; there is no SQLite or bundled local-data
-  fallback for application state.
-- **Next.js** in `web/` serves the private dashboard.
+```text
+review_equity_order
+place_equity_order
+```
 
-Install the Python package and dashboard dependencies:
+Options, crypto, cancellation, watchlist mutation, and unknown future tools remain blocked. Buys are dollar-based; reductions and exits are quantity-based. The gateway requires exactly one active Robinhood Agentic account and persists only a stable hashed account key plus last four digits outside the Agent.
+
+Hard gateway ceilings include the 09:45–15:45 New York window, 120-second side-aware quotes, 80-bps spread, 5% per buy, 20% daily buy notional, three agentic buys/day, no averaging down, no pending same-symbol order, UUIDv4 idempotency, and fail-closed Robinhood review.
+
+## Supabase data plane
+
+| Domain | Canonical surfaces |
+|---|---|
+| Sources/documents | bookmarks, URLs, articles, research documents/sources/annotations, private `research-originals` bucket |
+| Research ontology | symbols, theses, evidence, scores, catalysts, themes, terms, observations, candidates/actions, graph nodes/edges |
+| Decision learning | research events/queue/cycles, predictions, insights, strategy tests/scenarios, agent runs, lessons, postmortems |
+| Trading/audit | account snapshots, portfolio exposure, proposals, position episodes/events, intents, attempts, fills, risk controls |
+| Cloud observability | `cloud_runs`, `cloud_tasks`, input hashes, prompt versions, outputs, AI Gateway log IDs |
+| Publication | `dashboard_snapshots` |
+| Financial vault | request cache, compressed responses, access log, normalized financial records |
+
+`cloud-control` and `dashboard-publication` use custom SHA-256 token authentication. The service role remains inside Supabase Edge Functions. Public tables use RLS, and cloud execution tables are unavailable to `anon` and `authenticated` roles. Original files are immutable and content-addressed in private Storage; metadata and judgment remain queryable in Postgres.
+
+## How the system learns
+
+Learning means persistent evidence-backed memory, not hidden model retraining or self-modifying execution rules.
+
+```text
+observe -> classify -> propose ontology changes -> promote after quality gates
+
+research -> preregister -> test -> stress -> decide -> act/abstain
+-> observe fills and position state -> resolve -> postmortem
+-> persist lesson -> incorporate in a later research cycle
+```
+
+The ontology learner keeps source evidence and avoids feeding its own derived symbol guesses back into the active ontology. Cloud runs persist typed research decisions, position observations, proposals, intents, attempts, immediate fills, and reconciled episodes. Formal postmortem generation and lesson incorporation remain explicit repository workflows; models never rewrite `config/trade_policy.json` or Supabase risk thresholds.
+
+## Security and emergency stops
+
+Position actions require active code-level Supabase controls:
+
+```text
+autonomous-execution
+autonomous-position-management
+```
+
+Either can be paused. Defense-in-depth Worker switches are `TRADING_ENABLED=false` and `BROKER_EXECUTION_ENABLED=false`. Disconnecting the Robinhood MCP connection is the broker-boundary emergency stop. Never delete audit rows to stop execution.
+
+## Cloud versus local
+
+| Capability | Location |
+|---|---|
+| Dashboard serving | Cloudflare |
+| Scheduled thesis research | Cloudflare Cron, Workflow, Queue, Workers AI |
+| Account/market refresh | Cloudflare broker Agent |
+| Open/add/reduce/exit execution | Cloudflare control Worker, Durable Objects, Robinhood MCP |
+| Canonical persistence/private objects | Supabase Postgres and Storage |
+| X/bookmark ingestion | Local Bun workflow today |
+| Article/PDF extraction and archival | Local Python workflow today |
+| Ontology refresh/promotion | Local Python workflow today |
+| Paid financial-data acquisition | Local Python workflow today |
+| Formal postmortem/lesson incorporation | Repository workflow today |
+| Dashboard publication | Cloudflare Workflow available; local publisher is fallback |
+
+The laptop-off promise covers scheduled cloud research, position management, trading, persistence, and serving. Source ingestion and several knowledge-maintenance jobs remain auxiliary local workflows.
+
+## Repository map
+
+```text
+web/app/                         private dashboard
+web/workflows/cloud-native-control.ts
+web/workflows/robinhood-broker-agent.ts
+web/workflows/autonomous-decision.ts
+web/workflows/position-decision.ts
+web/wrangler*.jsonc              three Worker configurations
+supabase/schemas/                declarative Postgres state
+supabase/migrations/             migration history
+supabase/functions/              cloud-control and publication functions
+src/thesisforge/                 local research, ontology, storage, reports, CLI
+config/trade_policy.json         human-authored execution contract
+docs/                            architecture and runbooks
+```
+
+## Development and operations
+
+Requirements: Bun 1.4, Node.js 22.13+, Python 3.11+, Supabase, Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI, and a Robinhood Agentic connection.
 
 ```sh
 bun run setup:python
 cd web && bun install
+
+bun run workflow:types
+bun run workflow:typecheck
+bun run workflow:test
+bun run workflow:dry-run
+bun run broker:types
+bun run broker:typecheck
+bun run broker:test
+bun run broker:dry-run
 ```
 
-Copy `.env.example` to `.env.local` and configure the integrations you intend to
-use. At minimum, database-backed commands require:
+Operational commands:
 
 ```sh
-THESISFORGE_DATABASE_URL=postgresql://...
+cd web
+bun run cloud:tail
+bun run broker:oauth-relay
+bun run broker:deploy
 ```
 
-The dashboard server additionally requires `SUPABASE_URL` and
-`SUPABASE_SECRET_KEY`. X ingestion and paid financial-data ingestion require
-their respective credentials. Do not commit `.env.local`.
+`bun run cloud:trigger` forces a Workflow. In live mode during the execution window, it can create real orders if every gate passes.
 
-This project uses Supabase declarative schemas. The desired schema lives in
-`supabase/schemas/`, while `supabase/migrations/` records migration history.
-After applying the schema to the target project, verify the least-privilege
-worker connection:
+Local knowledge workflows:
 
 ```sh
-bun run supabase:verify
-```
-
-## Common workflows
-
-Refresh research from X through the ontology and dashboard:
-
-```sh
-bun run research:refresh
-```
-
-Inspect the core research surfaces independently:
-
-```sh
-bun run thesis:report
-bun run ontology:report
+bun run x:bookmarks
+bun run articles:fetch
+bun run ontology:refresh
 bun run ontology:learn
 bun run ontology:candidates
 bun run dashboard:publish
+bun run research:refresh
 ```
 
-Capture structured judgments:
-
-```sh
-bun run research:capture -- --help
-bun run cli -- research capture thesis-view THESIS_ID \
-  --stance bullish \
-  --variant "What the market is missing" \
-  --falsifier "The observation that would invalidate the thesis"
-```
-
-Inspect or populate the cache-first financial-data vault:
-
-```sh
-bun run financial:plan
-bun run financial:stats
-bun run financial:test
-```
-
-See [`docs/financial-data-vault.md`](docs/financial-data-vault.md) before
-executing a paid fetch. The dry-run plan is the default, and paid requests have
-an explicit cap.
-
-Explore the unified command surface and run the test suite:
-
-```sh
-bun run cli -- --help
-bun run test
-```
+Never commit `.env.local`, `.dev.vars`, OAuth tokens, Supabase secret keys, or database connection strings.
 
 ## Further reading
 
-- [`docs/ontology.md`](docs/ontology.md) — graph model, judgment model, and
-  adaptive-taxonomy design
-- [`docs/financial-data-vault.md`](docs/financial-data-vault.md) — raw response
-  retention, normalization, and cache semantics
-- [`docs/live-trading-checklist.md`](docs/live-trading-checklist.md) — broker,
-  sizing, review, and persistence gates
-- [`docs/scheduled-run-prompt.md`](docs/scheduled-run-prompt.md) — end-to-end
-  orchestration contract for a scheduled research run
-
-## Project status
-
-ThesisForge is a private, evolving research system. The database schema and
-workers already implement the persistent ontology, governed candidate learning,
-financial-data vault, research ledger, run history, and dashboard snapshot. The
-broader autonomous research-to-trade loop depends on configured external data
-and broker tooling and should be treated as an auditable operating workflow,
-not as a promise of investment performance.
+- [`config/trade_policy.json`](config/trade_policy.json)
+- [`docs/cloudflare-migration.md`](docs/cloudflare-migration.md)
+- [`docs/live-trading-checklist.md`](docs/live-trading-checklist.md)
+- [`docs/scheduled-run-prompt.md`](docs/scheduled-run-prompt.md) — legacy local fallback

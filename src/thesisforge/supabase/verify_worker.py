@@ -15,6 +15,9 @@ def main() -> None:
     try:
         role = conn.execute("select current_user").fetchone()[0]
         thesis_count = conn.execute("select count(*) from theses").fetchone()[0]
+        document_count = conn.execute("select count(*) from research_documents").fetchone()[0]
+        source_count = conn.execute("select count(*) from research_document_sources").fetchone()[0]
+        annotation_count = conn.execute("select count(*) from research_document_annotations").fetchone()[0]
         conn.execute(
             "insert into dashboard_snapshots (id, generated_at, payload) "
             "values (?, now(), ?::jsonb)",
@@ -41,6 +44,8 @@ def main() -> None:
 
     print(
         f"backend=postgres role={role} theses={thesis_count} "
+        f"documents={document_count} document_sources={source_count} "
+        f"document_annotations={annotation_count} "
         f"read_ok=true write_ok={str(write_ok).lower()} "
         f"delete_denied={str(delete_denied).lower()}"
     )

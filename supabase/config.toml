@@ -117,12 +117,11 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Private immutable source archive. Hosted bucket creation is performed through
+# `thesisforge documents setup`; Storage's internal tables remain read-only.
+[storage.buckets."research-originals"]
+public = false
+file_size_limit = "50MiB"
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
@@ -219,6 +218,7 @@ web3 = 30
 [auth.email]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
+
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -370,6 +370,12 @@ enabled = false
 authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
+
+[functions.dashboard-publication]
+verify_jwt = false
+
+[functions.cloud-control]
+verify_jwt = false
 
 [edge_runtime]
 enabled = true

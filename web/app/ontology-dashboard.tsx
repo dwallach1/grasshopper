@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Thesis={id:string;name:string;summary:string;stance:string;confidence:number;status:string;variant_perception:string|null;falsifier:string|null;symbols:string[]};
 type Cycle={id:number;external_key:string;thesis_id:string;thesis_name:string;hypothesis:string;preregistered_outcome:string;preregistered_at:string;stage:string;status:string;iteration:number;market_regime:string};
@@ -15,6 +16,7 @@ type Insight={id:number|string;title:string;summary:string;insight_type:string;n
 type EventRecord={id:number;label:string;event_date:string|null;decision:string;rationale:string|null;participation_trigger:string|null};
 type TradeProposal={id:number;thesis_id:string|null;symbol:string;side:string;notional:number;order_type:string;status:string;rationale:string;created_at:string;reviewed_at:string|null;broker_alerts:string|null};
 type AccountState={observed_at:string;account_label:string;total_value:number;equity_value:number;cash:number;buying_power:number;source:string};
+type TradePolicy={sizing:{max_single_trade_percent_of_portfolio_value:number;standing_cash_target_percent:number;tactical_swing_sleeve:{target_percent_of_portfolio_value:number;target_positions:number;max_percent_per_position:number}}};
 type RunReport={id:number;run_type:string;started_at:string;completed_at:string|null;status:string;headline:string;summary:string;insights:string[];learnings:string[];actions:string[];metrics:Record<string,string|number>};
 type Automation={id:string;name:string;prompt:string;kind:string;status:string;rrule:string;model:string|null;reasoning_effort:string|null;next_run_at:string|null;last_run_at:string|null;indexed_at:string;run_count:number;passed_count:number;failed_count:number};
 type AutomationRun={thread_id:string;automation_id:string;automation_name:string;status:string;outcome:'running'|'passed'|'failed'|'cancelled'|'unknown';started_at:string;completed_at:string|null;duration_ms:number|null;title:string|null;summary:string|null;final_output:string|null;findings:string[];learnings:string[];explored:string[];actions:string[];timeline:{at:string|null;text:string}[];error_text:string|null;tokens_used:number|null};
@@ -22,8 +24,10 @@ type OntologyTheme={id:string;thesis_id:string|null;kind:string;name:string;desc
 type OntologyCandidate={id:number;candidate_type:string;candidate_key:string;proposed_theme_id:string|null;proposed_label:string;proposed_description:string;score:number;evidence_count:number;source_count:number;status:string;first_seen_at:string;last_seen_at:string;review_note:string|null};
 type OntologySymbol={symbol:string;status:string;mention_count:number;source_count:number;first_seen_at:string;last_seen_at:string};
 type OntologyAction={id:number;actor_id:string;entity_type:string;entity_key:string;action:string;created_at:string};
-export type Snapshot={generated_at:string;run_reports?:RunReport[];automations?:Automation[];automation_runs?:AutomationRun[];ontology_themes?:OntologyTheme[];ontology_candidates?:OntologyCandidate[];ontology_symbols?:OntologySymbol[];ontology_actions?:OntologyAction[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
+export type Snapshot={generated_at:string;trade_policy?:TradePolicy;run_reports?:RunReport[];automations?:Automation[];automation_runs?:AutomationRun[];ontology_themes?:OntologyTheme[];ontology_candidates?:OntologyCandidate[];ontology_symbols?:OntologySymbol[];ontology_actions?:OntologyAction[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
 
+const SNAPSHOT_POLL_MS=60_000;
+const ROBINHOOD_MAX_AGE_MS=300_000;
 const stages=['research','code','backtest','live','postmortem','fine-tune'];
 const positions:Record<string,[number,number]>={ai_power_nuclear:[18,35],neocloud_compute:[45,20],semis_photonics:[73,32],software_ai_apps:[79,70],quantum:[52,80],crypto:[25,72],defense_drones_space:[10,58],biotech_royalty:[48,50]};
 const clean=(value:string)=>value.replaceAll('_',' ').replaceAll('-',' ');
@@ -45,12 +49,15 @@ const regimeDescriptions:Record<string,string>={
 };
 
 export function OntologyDashboard({initialData}:{initialData:Snapshot}){
+  const router=useRouter();
   const [clock,setClock]=useState('');
+  const [now,setNow]=useState<number|null>(null);
   const [selectedCycleId,setSelectedCycleId]=useState(initialData.cycles[0]?.id);
   const [selectedTestId,setSelectedTestId]=useState(initialData.tests[0]?.id);
   const [selectedScenarioId,setSelectedScenarioId]=useState(initialData.test_scenarios[0]?.id);
   const [surface,setSurface]=useState<'home'|'automations'|'runs'|'cycles'|'memory'|'ontology'|'risk'>('home');
-  useEffect(()=>{const tick=()=>setClock(new Date().toLocaleTimeString('en-US',{hour12:false,timeZone:'America/New_York'}));tick();const id=window.setInterval(tick,1000);return()=>window.clearInterval(id)},[]);
+  useEffect(()=>{const tick=()=>{const current=new Date();setNow(current.getTime());setClock(current.toLocaleTimeString('en-US',{hour12:false,timeZone:'America/New_York'}))};tick();const id=window.setInterval(tick,1000);return()=>window.clearInterval(id)},[]);
+  useEffect(()=>{const id=window.setInterval(()=>router.refresh(),SNAPSHOT_POLL_MS);return()=>window.clearInterval(id)},[router]);
   const activeCycle=initialData.cycles.find(c=>c.id===selectedCycleId)||initialData.cycles[0];
   const activeTest=initialData.tests.find(t=>t.id===selectedTestId)||initialData.tests[0];
   const scenarioCounts=useMemo(()=>initialData.test_scenarios.reduce<Record<string,number>>((a,s)=>({...a,[s.outcome]:(a[s.outcome]||0)+1}),{}),[initialData.test_scenarios]);
@@ -61,6 +68,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
 
   return <main className="terminal-shell">
     <header className="command-bar"><div className="desk-id"><b>TF</b><span>THESISFORGE<small>ONTOLOGY / RESEARCH DESK</small></span></div><nav className="desk-tabs" aria-label="Workspace"><button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>HOME</button><button className={surface==='automations'?'active':''} onClick={()=>setSurface('automations')}>AUTOMATIONS</button><button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>RUNS</button><button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>CYCLES</button><button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>MEMORY</button><button className={surface==='ontology'?'active':''} onClick={()=>setSurface('ontology')}>ONTOLOGY</button><button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>RISK</button></nav><div className="run-state"><span>JOBS <b>{initialData.automations?.length||0}</b></span><span>KILL RATE <b className="red">{killRate}%</b></span><span>READY <b className="amber">{readyCount}</b></span></div><div className="clock"><b>{clock||'--:--:--'}</b><span>NEW YORK · DATA {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div></header>
+    <FreshnessBar snapshotAt={initialData.generated_at} robinhoodAt={initialData.account_state?.observed_at} now={now}/>
 
     <section className="page-shell">
       {surface==='home'&&<HomeSurface data={initialData} activeThesisId={activeCycle?.thesis_id}/>}
@@ -76,26 +84,53 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   </main>
 }
 
+function formatAge(timestamp:string|undefined,now:number|null){
+  if(!timestamp||now===null)return 'UNKNOWN';
+  const elapsed=Math.max(0,now-new Date(timestamp).getTime());
+  if(elapsed<60_000)return `${Math.floor(elapsed/1000)}S AGO`;
+  if(elapsed<3_600_000)return `${Math.floor(elapsed/60_000)}M AGO`;
+  if(elapsed<86_400_000)return `${Math.floor(elapsed/3_600_000)}H AGO`;
+  return `${Math.floor(elapsed/86_400_000)}D AGO`;
+}
+
+function FreshnessBar({snapshotAt,robinhoodAt,now}:{snapshotAt:string;robinhoodAt?:string;now:number|null}){
+  const snapshotAge=now===null?null:Math.max(0,now-new Date(snapshotAt).getTime());
+  const robinhoodAge=!robinhoodAt||now===null?null:Math.max(0,now-new Date(robinhoodAt).getTime());
+  const snapshotTone=snapshotAge===null?'unknown':snapshotAge<=SNAPSHOT_POLL_MS*2?'fresh':snapshotAge<=900_000?'aging':'stale';
+  const robinhoodTone=robinhoodAge===null?'unknown':robinhoodAge<=ROBINHOOD_MAX_AGE_MS?'fresh':'stale';
+  return <section className="freshness-bar" aria-label="Data freshness">
+    <div><b className={snapshotTone}><i/>SUPABASE</b><span>SNAPSHOT {formatAge(snapshotAt,now)}</span><small>CHECKS EVERY 60S</small></div>
+    <div><b className={robinhoodTone}><i/>ROBINHOOD</b><span>ACCOUNT {formatAge(robinhoodAt,now)}</span><small>{robinhoodAt?'WORKFLOW REFRESH · 5M TRADE LIMIT':'NO ACCOUNT SNAPSHOT'}</small></div>
+    <p>SUPABASE POLLING CHECKS FOR A NEW PUBLISHED SNAPSHOT; IT DOES NOT TRIGGER A ROBINHOOD REFRESH.</p>
+  </section>
+}
+
 function HomeSurface({data,activeThesisId}:{data:Snapshot;activeThesisId?:string}){
   const ready=(data.trade_proposals||[]).filter(p=>p.status==='ready_for_review');
   const planned=ready.reduce((sum,p)=>sum+p.notional,0);
-  const cash=data.account_state?.cash||planned;
-  const tacticalCapacity=Math.max(0,cash-planned);
+  const portfolioValue=data.account_state?.total_value||0;
+  const buyingPower=data.account_state?.buying_power||0;
+  const maxSinglePercent=data.trade_policy?.sizing.max_single_trade_percent_of_portfolio_value||0;
+  const tacticalPercent=data.trade_policy?.sizing.tactical_swing_sleeve.target_percent_of_portfolio_value||0;
+  const tacticalPositions=data.trade_policy?.sizing.tactical_swing_sleeve.target_positions||0;
+  const tacticalTarget=portfolioValue*tacticalPercent/100;
   const alerts=(proposal:TradeProposal)=>{try{return JSON.parse(proposal.broker_alerts||'{}') as {gates?:string[]}}catch{return {gates:[]}}};
+  const proposalGates=(proposal:TradeProposal)=>alerts(proposal).gates?.length?alerts(proposal).gates as string[]:['Awaiting recorded quote, evidence, portfolio-risk, and execution gates.'];
+  const isDangerGate=(gates:string[])=>gates.some(gate=>/cancel|fail|invalid|reject|stop|weak/i.test(gate));
   return <>
     <div className="home-command-grid">
       <section className="home-graph-pane"><SignalGraph data={data} activeThesisId={activeThesisId}/></section>
       <aside className="run-console">
-        <div className="run-console-head"><span>NEXT MARKET SESSION</span><b>MON · 24 AUG</b><strong>{ready.length} REVIEWS READY</strong></div>
-        <div className="capital-readout"><span>ACCOUNT · {data.account_state?.account_label||'LOCAL MODEL'}</span><b>${cash.toLocaleString()}</b><small>CASH / BUYING POWER</small></div>
-        <div className="deployment-meter"><i style={{width:`${cash?Math.round(planned/cash*100):0}%`}}/><span><b>${planned.toLocaleString()}</b> CORE + NAMED SWINGS</span><span><b>${tacticalCapacity.toLocaleString()}</b> TACTICAL SLEEVE</span></div>
+        <div className="run-console-head"><span>NEXT REGULAR SESSION</span><b>DYNAMIC RE-SCREEN</b><strong>{ready.length} REVIEWS READY</strong></div>
+        <div className="capital-readout"><span>ACCOUNT · {data.account_state?.account_label||'AWAITING LIVE REFRESH'}</span><b>${buyingPower.toLocaleString()}</b><small>BUYING POWER</small></div>
+        <div className="deployment-meter"><i style={{width:`${portfolioValue?Math.min(100,Math.round(planned/portfolioValue*100)):0}%`}}/><span><b>${planned.toLocaleString()}</b> CURRENT QUEUE</span><span><b>{maxSinglePercent}%</b> MAX / TRADE</span></div>
         <div className="session-sequence"><div><b>09:30</b><span>OBSERVE OPEN</span></div><div><b>09:45</b><span>REFRESH QUOTES</span></div><div><b>09:46+</b><span>REVIEW GATES</span></div></div>
         <p className="authorization-note"><b>AUTONOMOUS EXECUTION AUTHORIZED</b> Ready means sizing and evidence are prepared. Placement requires fresh prices, passing gates, and an open US regular market session; no per-trade user confirmation is required.</p>
       </aside>
     </div>
     <div className="home-run-grid">
-      <section><div className="panel-title"><b>TOMORROW&apos;S DEPLOYMENT PLAN</b><span>60% BROAD-MARKET CORE · THESIS SATELLITES CAPPED AT 10% EACH</span><strong>${planned.toLocaleString()} / ${cash.toLocaleString()}</strong></div>{ready.map((p,index)=>{const gates=alerts(p).gates||[];return <article className="review-row" key={p.id}><div className="review-rank">0{index+1}</div><div className="review-symbol"><b>{p.symbol}</b><span>{p.notional/cash*100}% OF CASH</span></div><div><p>{p.rationale}</p><ul>{gates.map(g=><li key={g}>{g}</li>)}</ul></div><strong>READY<br/>FOR EXECUTION</strong></article>})}</section>
-      <aside className="watch-console"><div className="panel-title"><b>DECISION GATES</b><span>WHAT CAN STOP THE PLAN</span></div><div className="gate-line"><b>VTI</b><p>Split the $3,000 core into two $1,500 tranches. Pause tranche two if the broad market is disorderly or sharply extended.</p></div><div className="gate-line"><b>VST</b><p>Ten-percent power satellite. Do not chase an opening gap above 3%.</p></div><div className="gate-line danger"><b>AAOI</b><p>Ten-percent maximum optics satellite. A falling open cancels the entry; it is not an invitation to average down.</p></div><div className="reserve-box"><span>TACTICAL SWING SLEEVE</span><b>${tacticalCapacity.toLocaleString()}</b><p>Zero standing cash target. Deploy into one or two validated quick-swing setups; keep cash only transiently when the market is closed or every candidate fails a gate.</p></div></aside>
+      <section><div className="panel-title"><b>CURRENT DEPLOYMENT QUEUE</b><span>{maxSinglePercent}% MAX PER TRADE · {tacticalPercent}% TACTICAL SLEEVE</span><strong>${planned.toLocaleString()} / ${portfolioValue.toLocaleString()}</strong></div>{ready.length?ready.map((p,index)=>{const gates=proposalGates(p);return <article className="review-row" key={p.id}><div className="review-rank">{String(index+1).padStart(2,'0')}</div><div className="review-symbol"><b>{p.symbol}</b><span>{portfolioValue?`${(p.notional/portfolioValue*100).toFixed(1)}% OF EQUITY`:'EQUITY REFRESH REQUIRED'}</span></div><div><p>{p.rationale}</p><ul>{gates.map(g=><li key={g}>{g}</li>)}</ul></div><strong>READY<br/>FOR REVIEW</strong></article>}):<div className="empty-state"><h2>NO READY PROPOSALS</h2><p>The next workflow run will screen the live ontology and publish only candidates that pass every gate.</p></div>}</section>
+      <aside className="watch-console"><div className="panel-title"><b>DECISION GATES</b><span>LIVE PROPOSALS ONLY</span></div>{ready.length?ready.map(proposal=>{const gates=proposalGates(proposal);return <div className={`gate-line ${isDangerGate(gates)?'danger':''}`} key={proposal.id}><b>{proposal.symbol}</b><p>{gates.join(' · ')}</p></div>}):<div className="gate-line"><b>—</b><p>No ticker is selected until current evidence, account state, and execution checks produce a ready proposal.</p></div>}<div className="reserve-box"><span>TACTICAL SWING SLEEVE TARGET</span><b>${tacticalTarget.toLocaleString()}</b><p>{tacticalPercent}% of fresh portfolio value across up to {tacticalPositions} catalyst-driven positions. Unused buying power remains transient until a candidate passes every gate.</p></div></aside>
     </div>
   </>;
 }

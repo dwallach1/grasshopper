@@ -3,38 +3,21 @@
 from __future__ import annotations
 
 import argparse
-import html
-import re
 import sys
-import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
 from thesisforge import db as database
 from thesisforge.clock import utc_now_iso
+from thesisforge.research.documents import MAX_DOWNLOAD_BYTES, archive_bytes, clean_html, extract_text
+from thesisforge.storage import StorageClient
 
 SKIP_HOSTS = {"x.com", "twitter.com", "pic.x.com", "youtube.com", "www.youtube.com", "youtu.be"}
 
 
-def clean_html(raw: str) -> tuple[str | None, str]:
-    title = None
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", raw, re.I | re.S)
-    if title_match:
-        title = html.unescape(re.sub(r"\s+", " ", title_match.group(1))).strip()
-
-    raw = re.sub(r"(?is)<(script|style|noscript|svg|header|footer|nav)[^>]*>.*?</\1>", " ", raw)
-    raw = re.sub(r"(?is)<br\s*/?>", "\n", raw)
-    raw = re.sub(r"(?is)</p>|</h[1-6]>|</li>|</blockquote>", "\n", raw)
-    text = re.sub(r"(?is)<[^>]+>", " ", raw)
-    text = html.unescape(text)
-    text = re.sub(r"[ \t\r\f\v]+", " ", text)
-    text = re.sub(r"\n\s*\n+", "\n\n", text)
-    lines = [line.strip() for line in text.splitlines()]
-    text = "\n".join(line for line in lines if len(line) > 1)
-    return title, text[:50000]
-
-
-def fetch(url: str, timeout: int) -> tuple[int | None, str | None, str | None, str | None]:
+def fetch(
+    url: str, timeout: int
+) -> tuple[int | None, str | None, str | None, str | None, bytes | None, str]:
     req = urllib.request.Request(
         url,
         headers={
@@ -46,19 +29,37 @@ def fetch(url: str, timeout: int) -> tuple[int | None, str | None, str | None, s
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = getattr(resp, "status", None)
             content_type = resp.headers.get("content-type", "")
-            body = resp.read(2_000_000)
+            body = resp.read(MAX_DOWNLOAD_BYTES + 1)
+            if len(body) > MAX_DOWNLOAD_BYTES:
+                raise ValueError(f"response exceeds {MAX_DOWNLOAD_BYTES} bytes")
             charset = resp.headers.get_content_charset() or "utf-8"
-            raw = body.decode(charset, errors="replace")
-            title, text = clean_html(raw)
-            return status, content_type, title, text
+            base_mime = content_type.split(";", 1)[0].lower()
+            if base_mime in {"text/html", "application/xhtml+xml"}:
+                title, text = clean_html(body.decode(charset, errors="replace"))
+                text = text[:50000]
+            else:
+                title = None
+                extraction = extract_text(body, content_type, charset=charset)
+                text = extraction.text[:50000] if extraction.text else None
+            return status, content_type, title, text, body, resp.geturl()
     except Exception as exc:  # Store failures; article availability changes constantly.
-        return None, None, None, f"ERROR: {type(exc).__name__}: {exc}"
+        return None, None, None, f"ERROR: {type(exc).__name__}: {exc}", None, url
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--timeout", type=int, default=12)
+    parser.add_argument(
+        "--archive-html",
+        action="store_true",
+        help="Also preserve raw HTML snapshots; PDFs and other file-like originals archive automatically",
+    )
+    parser.add_argument(
+        "--no-archive-originals",
+        action="store_true",
+        help="Disable automatic archiving of non-HTML originals",
+    )
     args = parser.parse_args()
 
     conn = database.connect()
@@ -86,7 +87,7 @@ def main() -> None:
             skipped += 1
             continue
 
-        status, content_type, title, text_or_error = fetch(url, args.timeout)
+        status, content_type, title, text_or_error, body, final_url = fetch(url, args.timeout)
         error = text_or_error if text_or_error and text_or_error.startswith("ERROR:") else None
         text = None if error else text_or_error
         conn.execute(
@@ -100,6 +101,32 @@ def main() -> None:
             """,
             (bookmark_id, url, title, utc_now_iso(), status, content_type, text, error),
         )
+        article = conn.execute("SELECT id FROM articles WHERE url=?", (url,)).fetchone()
+        base_mime = (content_type or "").split(";", 1)[0].lower()
+        should_archive = bool(
+            article
+            and body
+            and not error
+            and (
+                args.archive_html
+                or not args.no_archive_originals
+                and base_mime not in {"text/html", "application/xhtml+xml"}
+            )
+        )
+        if should_archive:
+            try:
+                archive_bytes(
+                    conn,
+                    StorageClient(),
+                    body,
+                    source_url=final_url,
+                    mime_type=content_type or "application/octet-stream",
+                    title=title,
+                    publisher=urlparse(final_url).netloc.lower().removeprefix("www.") or None,
+                    article_id=int(article["id"]),
+                )
+            except Exception as exc:
+                print(f"archive warning for {url}: {type(exc).__name__}: {exc}", file=sys.stderr)
         fetched += 1
         print(f"fetched {url} -> {status or 'error'}", file=sys.stderr)
 

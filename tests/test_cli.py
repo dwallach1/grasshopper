@@ -15,6 +15,7 @@ class CliTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             cli.main(["--help"])
         self.assertIn("bookmarks ingest", output.getvalue())
+        self.assertIn("documents", output.getvalue())
         self.assertIn("ontology refresh", output.getvalue())
         self.assertIn("research capture", output.getvalue())
 

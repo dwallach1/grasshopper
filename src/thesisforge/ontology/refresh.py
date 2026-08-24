@@ -44,6 +44,7 @@ def main() -> None:
                      properties_json='{"stale":true}'::jsonb, updated_at=now()
                WHERE edge_type='classified_as'
                   OR edge_type='expressed_as'
+                  OR properties_json->>'annotation_provenance'='research_document'
                   OR (
                     edge_type IN ('member','beneficiary','supplier','customer','competitor','proxy')
                     AND (starts_with(src_id, 'theme:') OR starts_with(src_id, 'concept:'))
@@ -137,9 +138,28 @@ def main() -> None:
             )
             link_matches(conn, source_id, matches, context={"snippet": (row["text"] or "")[:240]})
 
-        for row in conn.execute("SELECT id, title, url, text, fetched_at FROM articles WHERE text IS NOT NULL"):
+        for row in conn.execute(
+            """SELECT a.id, a.title, a.url, a.text, a.fetched_at,
+                      d.id AS document_id, d.storage_bucket, d.storage_path, d.sha256
+               FROM articles a
+               LEFT JOIN research_document_sources ds ON ds.article_id=a.id
+               LEFT JOIN research_documents d ON d.id=ds.document_id
+               WHERE a.text IS NOT NULL"""
+        ):
             source_id = f"source:article:{row['id']}"
-            upsert_node(conn, source_id, "source", row["title"] or row["url"], {"url": row["url"]})
+            upsert_node(
+                conn,
+                source_id,
+                "source",
+                row["title"] or row["url"],
+                {
+                    "url": row["url"],
+                    "document_id": row["document_id"],
+                    "storage_bucket": row["storage_bucket"],
+                    "storage_path": row["storage_path"],
+                    "sha256": row["sha256"],
+                },
+            )
             symbols = learner.catalog.extract_symbols(row["text"] or "")
             matches = learner.catalog.classify(row["text"] or "", symbols)
             learner.record_source(
@@ -151,6 +171,112 @@ def main() -> None:
                 observed_at=str(row["fetched_at"]),
             )
             link_matches(conn, source_id, matches, context={"url": row["url"]})
+
+        # Standalone PDFs, filings, transcripts, and other archived research are
+        # first-class ontology sources. Article-linked documents stay under the
+        # existing article source key so one original cannot inflate evidence.
+        for row in conn.execute(
+            """SELECT d.id, d.extracted_text, d.captured_at, d.storage_bucket,
+                      d.storage_path, d.sha256,
+                      coalesce(
+                        (SELECT s.title FROM research_document_sources s
+                         WHERE s.document_id=d.id ORDER BY s.id LIMIT 1),
+                        d.storage_path
+                      ) AS title,
+                      (SELECT s.source_url FROM research_document_sources s
+                       WHERE s.document_id=d.id ORDER BY s.id LIMIT 1) AS source_url
+               FROM research_documents d
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM research_document_sources s
+                   WHERE s.document_id=d.id AND s.article_id IS NOT NULL
+                 )"""
+        ):
+            source_id = f"source:document:{row['id']}"
+            upsert_node(
+                conn,
+                source_id,
+                "source",
+                row["title"],
+                {
+                    "url": row["source_url"],
+                    "storage_bucket": row["storage_bucket"],
+                    "storage_path": row["storage_path"],
+                    "sha256": row["sha256"],
+                },
+            )
+            if row["extracted_text"]:
+                symbols = learner.catalog.extract_symbols(row["extracted_text"])
+                matches = learner.catalog.classify(row["extracted_text"], symbols)
+                learner.record_source(
+                    source_type="document",
+                    source_key=str(row["id"]),
+                    text=row["extracted_text"],
+                    symbols=symbols,
+                    matches=matches,
+                    observed_at=str(row["captured_at"]),
+                )
+                link_matches(
+                    conn,
+                    source_id,
+                    matches,
+                    context={"url": row["source_url"], "sha256": row["sha256"]},
+                )
+
+        for row in conn.execute(
+            """SELECT a.document_id, a.entity_type, a.entity_key, a.relevance,
+                      a.sentiment, a.sentiment_score, a.confidence,
+                      a.evidence_role, a.rationale
+               FROM research_document_annotations a"""
+        ):
+            source_id = f"source:document:{row['document_id']}"
+            if not conn.execute("SELECT 1 FROM graph_nodes WHERE id=?", (source_id,)).fetchone():
+                # An article-linked original uses the article node instead.
+                article = conn.execute(
+                    "SELECT article_id FROM research_document_sources WHERE document_id=? AND article_id IS NOT NULL LIMIT 1",
+                    (row["document_id"],),
+                ).fetchone()
+                if not article:
+                    continue
+                source_id = f"source:article:{article['article_id']}"
+
+            entity_type = row["entity_type"]
+            entity_key = row["entity_key"]
+            if entity_type == "symbol":
+                target_id = f"symbol:{entity_key.upper()}"
+                upsert_node(conn, target_id, "symbol", entity_key.upper(), {"annotation_only": True})
+            elif entity_type == "theme":
+                theme = learner.catalog.themes.get(entity_key)
+                target_id = theme_node_id(theme) if theme else f"theme:{entity_key}"
+                if not conn.execute("SELECT 1 FROM graph_nodes WHERE id=?", (target_id,)).fetchone():
+                    upsert_node(conn, target_id, "theme", entity_key, {"annotation_only": True})
+            elif entity_type == "thesis":
+                target_id = f"thesis:{entity_key}"
+                if not conn.execute("SELECT 1 FROM graph_nodes WHERE id=?", (target_id,)).fetchone():
+                    upsert_node(conn, target_id, "thesis", entity_key, {"annotation_only": True})
+            else:
+                target_id = "concept:market"
+                upsert_node(conn, target_id, "concept", "Market", {})
+            relation = {
+                "supports": "supports",
+                "contradicts": "contradicts",
+                "context": "context_for",
+                "unknown": "annotates",
+            }[row["evidence_role"]]
+            upsert_edge(
+                conn,
+                source_id,
+                target_id,
+                relation,
+                weight=max(1.0, row["confidence"] / 25),
+                props={
+                    "relevance": row["relevance"],
+                    "sentiment": row["sentiment"],
+                    "sentiment_score": row["sentiment_score"],
+                    "confidence": row["confidence"],
+                    "rationale": row["rationale"],
+                    "annotation_provenance": "research_document",
+                },
+            )
 
         for row in conn.execute(
             "SELECT id, label, event_date, status, summary, updated_at FROM research_events"

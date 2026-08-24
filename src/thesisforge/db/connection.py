@@ -7,7 +7,15 @@ from pathlib import Path
 from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[3]
-AUTO_RETURNING_TABLES = {"financial_api_requests", "research_events", "runs", "trade_proposals"}
+AUTO_RETURNING_TABLES = {
+    "financial_api_requests",
+    "research_document_annotations",
+    "research_document_sources",
+    "research_documents",
+    "research_events",
+    "runs",
+    "trade_proposals",
+}
 
 
 class Row(dict):

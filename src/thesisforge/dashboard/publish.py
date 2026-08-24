@@ -5,9 +5,18 @@ from __future__ import annotations
 import datetime as dt
 import json
 from decimal import Decimal
+from pathlib import Path
 
 from thesisforge import db as database
 from thesisforge.clock import utc_now_iso
+
+
+POLICY_PATH = Path(__file__).resolve().parents[3] / "config" / "trade_policy.json"
+
+
+def trade_policy() -> dict:
+    """Load the same generic execution policy used by scheduled workers."""
+    return json.loads(POLICY_PATH.read_text())
 
 def rows(conn, query: str, params=()) -> list[dict]:
     return [dict(row) for row in conn.execute(query, params)]
@@ -57,6 +66,7 @@ def main() -> None:
 
     payload = {
         "generated_at": utc_now_iso(),
+        "trade_policy": trade_policy(),
         "run_reports": run_reports(conn),
         "automations": rows(conn, """
             SELECT a.id, a.name, a.prompt, a.kind, a.status, a.rrule, a.model,

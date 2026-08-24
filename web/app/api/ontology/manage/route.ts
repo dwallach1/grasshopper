@@ -1,15 +1,14 @@
 import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
+
 const entityTypes = new Set(['theme', 'symbol']);
 const actions = new Set(['promote', 'demote', 'blacklist', 'restore']);
 
 export async function POST(request: NextRequest) {
-  const managerId = request.headers.get('oai-authenticated-user-id') || '';
-  const managerIds = new Set(
-    (env.THESISFORGE_MANAGER_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean),
-  );
-  if (!managerId || !managerIds.has(managerId)) {
+  const managerId = await authenticatedIdentity(request.headers);
+  if (!managerId || !isManagerIdentity(managerId)) {
     return NextResponse.json({ error: 'Ontology manager access required' }, { status: 403 });
   }
 
@@ -52,9 +51,11 @@ export async function POST(request: NextRequest) {
       }),
     },
   );
-  const result = await response.json().catch(() => ({ error: 'Supabase returned an invalid response' }));
+  const result = await response.json().catch(() => ({
+    error: 'Supabase returned an invalid response',
+  })) as { message?: unknown };
   if (!response.ok) {
-    const message = typeof result?.message === 'string' ? result.message : 'Ontology action failed';
+    const message = typeof result.message === 'string' ? result.message : 'Ontology action failed';
     return NextResponse.json({ error: message }, { status: response.status });
   }
   return NextResponse.json(result);

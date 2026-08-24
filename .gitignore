@@ -1,16 +1,71 @@
-# Local secrets and OAuth tokens
+# Local secrets, credentials, and OAuth tokens
 .env
 .env.*
-.venv/
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+secrets.json
+secrets.*.json
+!secrets.example.json
+!secrets.*.example.json
+credentials.json
+credentials.*.json
+!credentials.example.json
+!credentials.*.example.json
+*.pem
+*.key
+*.p12
+*.pfx
 
-# Node/build artifacts
+# Local databases and Cloudflare development state
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.wrangler/
+
+# Python environments, caches, and test output
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node dependencies, caches, build output, and logs
 node_modules/
 dist/
+build/
+out/
+coverage/
 .cache/
+.turbo/
+*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Agent-local state
 .agents/
-__pycache__/
-*.pyc
-*.egg-info/
 
 # The nested Sites checkout is also tracked by the managing repository.

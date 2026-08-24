@@ -23,6 +23,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 .clock{text-align:right}
 .clock>b{display:block;font-size:15px}
 .clock>span{font-size:7px}
+.freshness-bar{display:flex;align-items:center;min-height:29px;border:1px solid var(--ink);border-top:0;background:var(--panel);font-size:7px}
+.freshness-bar>div{display:flex;align-items:center;gap:9px;align-self:stretch;padding:0 12px;border-right:1px solid var(--grid)}
+.freshness-bar b{display:flex;align-items:center;gap:5px;font-size:8px}
+.freshness-bar b i{width:6px;height:6px;border-radius:50%;background:#7d837e;box-shadow:0 0 0 2px rgba(125,131,126,.14)}
+.freshness-bar b.fresh i{background:var(--green);box-shadow:0 0 0 2px rgba(7,141,70,.16)}
+.freshness-bar b.aging i{background:var(--amber);box-shadow:0 0 0 2px rgba(211,148,0,.17)}
+.freshness-bar b.stale i{background:var(--red);box-shadow:0 0 0 2px rgba(210,76,60,.16)}
+.freshness-bar small{color:#69716b;font-size:6px}
+.freshness-bar p{margin:0 12px 0 auto;color:#69716b;font-size:6px;text-align:right}
 .stage-rail{height:31px;display:flex;align-items:center;border:1px solid var(--ink);border-top:0;background:var(--panel)}
 .stage-rail>span{margin-left:auto;padding:0 12px;font-size:8px}
 .stage-rail button{height:100%;padding:0 15px;border:0;border-right:1px solid var(--grid);background:transparent;font:800 8px var(--mono);text-transform:uppercase;cursor:pointer}
@@ -480,6 +489,9 @@ html,body{width:100%;min-width:0;min-height:100%}
   .ontology-kpis span{text-align:left}
   .ontology-toolbar{grid-template-columns:1fr}
   footer{gap:8px;flex-wrap:wrap}
+  .freshness-bar{flex-wrap:wrap}
+  .freshness-bar>div{min-height:29px;flex:1}
+  .freshness-bar p{width:100%;margin:0;padding:6px 10px;border-top:1px solid var(--grid);text-align:left}
 }
 @media(max-width:560px){
   .run-state{display:none}
@@ -500,4 +512,6 @@ html,body{width:100%;min-width:0;min-height:100%}
   .automation-detail>header{grid-template-columns:1fr}
   .automation-detail>header>div:last-child{justify-items:start;border-top:1px solid var(--grid)}
   .automation-findings section{min-height:0;border-right:0;border-bottom:1px solid var(--grid)}
+  .freshness-bar>div{flex-basis:100%;border-right:0;border-bottom:1px solid var(--grid)}
+  .freshness-bar p{border-top:0}
 }

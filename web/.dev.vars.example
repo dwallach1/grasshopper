@@ -1,0 +1,21 @@
+# Supabase is accessed from the Worker over HTTPS. Never expose these values to
+# browser bundles or commit a populated .dev.vars file.
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+THESISFORGE_DASHBOARD_TOKEN=
+THESISFORGE_MANAGER_TOKEN=
+
+# Comma-separated Sites user IDs and/or Cloudflare Access email identities.
+THESISFORGE_MANAGER_USER_IDS=
+
+# Route Workers AI requests through AI Gateway. "default" is created on first use.
+AI_GATEWAY_ID=default
+
+# Defense in depth: cloud research can be scheduled while broker writes remain off.
+TRADING_ENABLED=false
+BROKER_GATEWAY_MODE=unavailable
+
+# Cloudflare Access verifies every request before the Worker reads Supabase.
+CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+CF_ACCESS_AUD=
+BROKER_OWNER_EMAIL=

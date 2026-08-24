@@ -1,0 +1,3 @@
+# Populate workflows/.dev.vars for local development. Never commit real values.
+SUPABASE_URL=
+THESISFORGE_PUBLICATION_TOKEN=

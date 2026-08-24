@@ -1,11 +1,18 @@
 import { env } from 'cloudflare:workers';
 import { headers } from 'next/headers';
 
+import { authenticatedIdentity, isManagerIdentity } from './access-identity';
 import type { Snapshot } from './ontology-dashboard';
 
 type SnapshotRow = { payload?: Snapshot };
 
 export async function loadSnapshot(): Promise<Snapshot> {
+  const requestHeaders = await headers();
+  const viewerIdentity = await authenticatedIdentity(requestHeaders);
+  if (!viewerIdentity) {
+    throw new Error('Dashboard authentication required');
+  }
+
   const url = env.SUPABASE_URL;
   const publishableKey = env.SUPABASE_PUBLISHABLE_KEY;
   const dashboardToken = env.THESISFORGE_DASHBOARD_TOKEN;
@@ -28,19 +35,14 @@ export async function loadSnapshot(): Promise<Snapshot> {
   if (!rows[0]?.payload) throw new Error('Supabase has no current dashboard snapshot');
 
   const snapshot = rows[0].payload;
-  const requestHeaders = await headers();
-  const managerId = requestHeaders.get('oai-authenticated-user-id') || '';
   const managerToken = env.THESISFORGE_MANAGER_TOKEN;
-  const managerIds = new Set(
-    (env.THESISFORGE_MANAGER_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean),
-  );
-  if (!managerId || !managerToken || !managerIds.has(managerId)) return snapshot;
+  if (!managerToken || !isManagerIdentity(viewerIdentity)) return snapshot;
 
   const apiBase = `${url.replace(/\/$/, '')}/rest/v1`;
   const managerHeaders = {
     apikey: publishableKey,
     'x-thesisforge-dashboard-token': dashboardToken,
-    'x-thesisforge-manager-user-id': managerId,
+    'x-thesisforge-manager-user-id': viewerIdentity,
     'x-thesisforge-manager-token': managerToken,
   };
   const endpoints = [
