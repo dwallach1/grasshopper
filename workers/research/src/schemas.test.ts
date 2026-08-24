@@ -4,6 +4,7 @@ import {
   approvedTradeProposals,
   autonomousExecutionActive,
   parseAutonomousExecutionResult,
+  parseBrokerOrderAudit,
   parsePositionConfiguration,
   parseTheses,
 } from './schemas';
@@ -69,5 +70,18 @@ describe('research cloud-control schemas', () => {
       submittedAt: '2026-08-24T12:00:00Z',
     })).brokerOrderId).toBe('ord-1');
     expect(() => parseAutonomousExecutionResult('{"status":"submitted"}')).toThrow('invalid');
+  });
+
+  test('parses broker order audit fills', () => {
+    const { fills } = parseBrokerOrderAudit(
+      JSON.stringify({
+        executions: [
+          { id: 'fill-1', quantity: 2, price: 10.5, timestamp: '2026-08-24T15:00:00Z' },
+          { quantity: -1, price: 10 },
+        ],
+      }),
+      JSON.stringify({ order_checks: {} }),
+    );
+    expect(fills).toEqual([expect.objectContaining({ id: 'fill-1', quantity: 2, price: 10.5 })]);
   });
 });

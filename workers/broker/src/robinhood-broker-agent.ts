@@ -12,10 +12,6 @@ import {
   type BrokerMarketContext,
 } from '@thesisforge/contracts/broker';
 import { validateBrokerExecutionPolicy } from './broker-execution-policy';
-import {
-  isJsonString,
-  type JsonValue,
-} from '@thesisforge/shared/json';
 
 import {
   ROBINHOOD_EXECUTION_TOOL_ALLOWLIST,
@@ -188,12 +184,13 @@ async function isOwnerRequest(request: Request, env: Cloudflare.Env): Promise<bo
   const issuer = accessIssuer(env);
   try {
     const jwks = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
-    const { payload } = await jwtVerify<{ email?: JsonValue }>(token, jwks, {
+    const { payload } = await jwtVerify(token, jwks, {
       audience: env.CF_ACCESS_AUD,
       issuer,
     });
-    return isJsonString(payload.email)
-      && normalizeIdentity(payload.email) === normalizeIdentity(env.BROKER_OWNER_EMAIL);
+    const email = z.string().email().safeParse(payload.email);
+    return email.success
+      && normalizeIdentity(email.data) === normalizeIdentity(env.BROKER_OWNER_EMAIL);
   } catch {
     return false;
   }

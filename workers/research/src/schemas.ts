@@ -251,3 +251,77 @@ export function parseAiJsonObject(result: unknown): Record<string, unknown> {
     risks: ['unstructured_model_output'],
   };
 }
+
+export function parseJsonObject(text: string): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(text) as unknown;
+  } catch {
+    throw new Error('Stored JSON object is invalid');
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Stored JSON object is invalid');
+  }
+  return value as Record<string, unknown>;
+}
+
+export function parseJsonObjectOrNull(text: string): Record<string, unknown> | null {
+  try {
+    return parseJsonObject(text);
+  } catch {
+    return null;
+  }
+}
+
+export const PositionEpisodeRowSchema = z.object({
+  id: z.string().min(1),
+  symbol: z.string().min(1),
+}).passthrough();
+
+export type PositionEpisodeRow = z.infer<typeof PositionEpisodeRowSchema>;
+
+export function parsePositionEpisodeRows(value: unknown): PositionEpisodeRow[] {
+  if (!Array.isArray(value)) return [];
+  const rows: PositionEpisodeRow[] = [];
+  for (const row of value) {
+    const parsed = PositionEpisodeRowSchema.safeParse(row);
+    if (parsed.success) rows.push(parsed.data);
+  }
+  return rows;
+}
+
+export const BrokerFillSchema = z.object({
+  id: z.string().optional(),
+  quantity: z.coerce.number().positive(),
+  price: z.coerce.number().nonnegative(),
+  timestamp: z.string().optional(),
+  executed_at: z.string().optional(),
+  updated_at: z.string().optional(),
+}).passthrough();
+
+export const BrokerOrderAuditSchema = z.object({
+  executions: z.array(z.unknown()).optional(),
+}).passthrough();
+
+export function parseBrokerOrderAudit(orderJson: string, reviewJson: string): {
+  order: Record<string, unknown>;
+  review: Record<string, unknown>;
+  fills: Array<{
+    id?: string;
+    quantity: number;
+    price: number;
+    timestamp?: string;
+    executed_at?: string;
+    updated_at?: string;
+  } & Record<string, unknown>>;
+} {
+  const order = BrokerOrderAuditSchema.parse(parseJsonObject(orderJson));
+  const review = parseJsonObject(reviewJson);
+  const fills = [];
+  for (const row of order.executions ?? []) {
+    const fill = BrokerFillSchema.safeParse(row);
+    if (!fill.success) continue;
+    fills.push(fill.data);
+  }
+  return { order, review, fills };
+}

@@ -19,7 +19,11 @@ import {
   latestThesisHashes,
   parseAiJsonObject,
   parseAutonomousExecutionResult,
+  parseBrokerOrderAudit,
+  parseJsonObject,
+  parseJsonObjectOrNull,
   parsePositionConfiguration,
+  parsePositionEpisodeRows,
   parseTheses,
   type ApprovedTradeProposal,
   type PositionConfiguration,
@@ -33,13 +37,7 @@ import type {
 } from '@thesisforge/contracts/broker';
 import { readBoundedJson } from '@thesisforge/shared/http';
 import { readSecret } from '@thesisforge/shared/secrets';
-import {
-  isJsonObject,
-  isJsonString,
-  parseJson,
-  type JsonObject,
-  type JsonValue,
-} from '@thesisforge/shared/json';
+import type { JsonObject } from '@thesisforge/shared/json';
 
 type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
   ROBINHOOD_BROKER_AGENT: DurableObjectNamespace<RobinhoodBrokerRpc>;
@@ -351,7 +349,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
       timeout: '2 minutes',
     }, async () => JSON.stringify(await cloudControl(this.env, 'context')));
-    const context = parseJson(contextJson);
+    const context = JSON.parse(contextJson) as unknown;
     const theses = parseTheses(context);
     const snapshotVersion = contextVersion(context);
     const previousHashes = latestThesisHashes(context);
@@ -434,8 +432,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       if (!brokerReadiness.ready || !('snapshot' in brokerReadiness) || !brokerReadiness.snapshot || !Array.isArray(positionEpisodes)) return 0;
       const snapshot = brokerReadiness.snapshot;
       const messages: MessageSendRequest<CloudTask>[] = [];
-      for (const row of positionEpisodes) {
-        if (!isJsonObject(row) || !isJsonString(row.id) || !isJsonString(row.symbol)) continue;
+      for (const row of parsePositionEpisodeRows(positionEpisodes)) {
         const position = snapshot.positions.find((item) => item.symbol === row.symbol);
         if (!position || position.quantity <= 0) continue;
         const positionKey = `${snapshot.accountKey}:${position.symbol}`;
@@ -577,8 +574,7 @@ export class ThesisCoordinator extends DurableObject<PublicationEnv> {
       "SELECT value FROM coordinator_state WHERE key = 'latest'",
     ).toArray()[0];
     if (!row) return null;
-    const value = parseJson(row.value);
-    return isJsonObject(value) ? value : null;
+    return parseJsonObjectOrNull(row.value) as JsonObject | null;
   }
 }
 
@@ -778,9 +774,8 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
       broker.readEquityResearchContext(task.thesis.symbols),
       broker.readAccountSnapshot(),
     ]);
-    const parsed = parseJson(researchJson);
-    if (!isJsonObject(parsed)) throw new Error('Broker research context was invalid');
-    brokerContext = parsed;
+    const parsed = parseJsonObject(researchJson);
+    brokerContext = parsed as JsonObject;
     snapshot = accountSnapshot;
   }
   const decisionContext: JsonObject = {
@@ -876,8 +871,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
     broker.readAccountSnapshot(),
     broker.readEquityResearchContext([task.symbol]),
   ]);
-  const brokerContextValue = parseJson(researchJson);
-  if (!isJsonObject(brokerContextValue)) throw new Error('Broker position context was invalid');
+  const brokerContextValue = parseJsonObject(researchJson) as JsonObject;
   const position = snapshot.positions.find((item) => item.symbol === task.symbol && item.quantity > 0);
   if (!position) {
     await cloudControl(env, 'patch_position_episode', {
@@ -928,7 +922,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
         : Math.floor(Number(quantity) * Number(decision.evidence.last) * 100) / 100;
       if (Number.isFinite(notional) && notional > 0) {
         const proposal = firstObject(await cloudControl(env, 'create_trade_proposal', {
-          thesis_id: isJsonString(decision.evidence.thesis_id) ? decision.evidence.thesis_id : null,
+          thesis_id: typeof decision.evidence.thesis_id === 'string' ? decision.evidence.thesis_id : null,
           symbol: decision.symbol,
           side,
           notional,
@@ -953,7 +947,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
           idempotencyKey: `${task.runId}:trade-proposal:${approvedProposalId}`,
           proposal: {
             id: approvedProposalId,
-            thesisId: isJsonString(decision.evidence.thesis_id) ? decision.evidence.thesis_id : null,
+            thesisId: typeof decision.evidence.thesis_id === 'string' ? decision.evidence.thesis_id : null,
             symbol: decision.symbol,
             side,
             notional,
@@ -1088,9 +1082,10 @@ async function processTradeExecutionTask(
     const coordinator = env.BROKER_EXECUTION_COORDINATOR.getByName(snapshot.accountKey);
     const execution = await coordinator.executeLiveIntent(tradeIntentId, requestFingerprint, brokerIntent);
     const orderId = execution.brokerOrderId;
-    const orderPayload = parseJson(execution.orderJson);
-    const reviewPayload = parseJson(execution.reviewJson);
-    if (!isJsonObject(orderPayload) || !isJsonObject(reviewPayload)) throw new Error('Broker returned an invalid audit payload');
+    const { order: orderPayload, review: reviewPayload, fills: parsedFills } = parseBrokerOrderAudit(
+      execution.orderJson,
+      execution.reviewJson,
+    );
     await cloudControl(env, 'upsert_trade_intent', {
       trade_proposal_id: proposal.id,
       position_episode_id: proposal.positionEpisodeId || null,
@@ -1124,23 +1119,15 @@ async function processTradeExecutionTask(
       started_at: startedAt,
       completed_at: new Date().toISOString(),
     });
-    const executions = Array.isArray(orderPayload.executions) ? orderPayload.executions.filter(isJsonObject) : [];
-    const fills = [];
-    for (let index = 0; index < executions.length; index += 1) {
-      const execution = executions[index];
-      const quantity = Number(execution.quantity);
-      const price = Number(execution.price);
-      if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price < 0) continue;
-      fills.push({
-        trade_intent_id: tradeIntentId,
-        broker_fill_id: isJsonString(execution.id) ? execution.id : `${orderId}:${index}:${String(execution.timestamp || '')}`,
-        broker_order_id: orderId,
-        quantity,
-        price,
-        executed_at: String(execution.timestamp || execution.executed_at || execution.updated_at || new Date().toISOString()),
-        payload: execution,
-      });
-    }
+    const fills = parsedFills.map((fill, index) => ({
+      trade_intent_id: tradeIntentId,
+      broker_fill_id: fill.id || `${orderId}:${index}:${String(fill.timestamp || '')}`,
+      broker_order_id: orderId,
+      quantity: fill.quantity,
+      price: fill.price,
+      executed_at: String(fill.timestamp || fill.executed_at || fill.updated_at || new Date().toISOString()),
+      payload: fill,
+    }));
     if (fills.length > 0) await cloudControl(env, 'record_broker_fills', { fills });
     if (proposal.positionEpisodeId) {
       await cloudControl(env, 'patch_position_episode', {

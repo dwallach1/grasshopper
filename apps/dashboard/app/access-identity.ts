@@ -1,11 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-
-import { isJsonString, type JsonValue } from '@thesisforge/shared/json';
-
-type AccessClaims = {
-  email?: JsonValue;
-};
+import { z } from 'zod';
 
 function normalizeIdentity(value: string): string {
   return value.trim().toLowerCase();
@@ -25,11 +20,12 @@ async function cloudflareAccessIdentity(requestHeaders: Headers): Promise<string
 
   try {
     const jwks = createRemoteJWKSet(new URL(`${teamDomain}/cdn-cgi/access/certs`));
-    const { payload } = await jwtVerify<AccessClaims>(token, jwks, {
+    const { payload } = await jwtVerify(token, jwks, {
       audience,
       issuer: teamDomain,
     });
-    return isJsonString(payload.email) ? normalizeIdentity(payload.email) : null;
+    const email = z.string().email().safeParse(payload.email);
+    return email.success ? normalizeIdentity(email.data) : null;
   } catch {
     return null;
   }

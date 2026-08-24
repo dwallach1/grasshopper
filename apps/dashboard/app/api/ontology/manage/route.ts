@@ -1,11 +1,18 @@
 import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
-import { isJsonString, type JsonObject } from '@thesisforge/shared/json';
 
-const entityTypes = new Set(['theme', 'symbol']);
-const actions = new Set(['promote', 'demote', 'blacklist', 'restore']);
+const OntologyManageSchema = z.object({
+  entity_type: z.enum(['theme', 'symbol']),
+  entity_key: z.string().trim().min(1).max(120),
+  action: z.enum(['promote', 'demote', 'blacklist', 'restore']),
+});
+
+const SupabaseErrorSchema = z.object({
+  message: z.string().optional(),
+}).passthrough();
 
 export async function POST(request: NextRequest) {
   const managerId = await authenticatedIdentity(request.headers);
@@ -13,18 +20,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Ontology manager access required' }, { status: 403 });
   }
 
-  let body: JsonObject;
+  let raw: unknown;
   try {
-    body = await request.json<JsonObject>();
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const entityType = isJsonString(body.entity_type) ? body.entity_type : '';
-  const entityKey = isJsonString(body.entity_key) ? body.entity_key.trim() : '';
-  const action = isJsonString(body.action) ? body.action : '';
-  if (!entityTypes.has(entityType) || !actions.has(action) || !entityKey || entityKey.length > 120) {
+  const parsed = OntologyManageSchema.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid ontology management action' }, { status: 400 });
   }
+  const { entity_type: entityType, entity_key: entityKey, action } = parsed.data;
 
   const url = env.SUPABASE_URL;
   const publishableKey = env.SUPABASE_PUBLISHABLE_KEY;
@@ -52,11 +58,9 @@ export async function POST(request: NextRequest) {
       }),
     },
   );
-  const result = await response.json<JsonObject>().catch((): JsonObject => ({
-    error: 'Supabase returned an invalid response',
-  }));
+  const result: unknown = await response.json().catch(() => ({ error: 'Supabase returned an invalid response' }));
   if (!response.ok) {
-    const message = isJsonString(result.message) ? result.message : 'Ontology action failed';
+    const message = SupabaseErrorSchema.safeParse(result).data?.message || 'Ontology action failed';
     return NextResponse.json({ error: message }, { status: response.status });
   }
   return NextResponse.json(result);

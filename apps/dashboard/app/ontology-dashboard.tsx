@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-import { isJsonObject, isJsonString, parseJson } from '@thesisforge/shared/json';
+import { z } from 'zod';
 
 type Thesis={id:string;name:string;summary:string;stance:string;confidence:number;status:string;variant_perception:string|null;falsifier:string|null;symbols:string[]};
 type Cycle={id:number;external_key:string;thesis_id:string;thesis_name:string;hypothesis:string;preregistered_outcome:string;preregistered_at:string;stage:string;status:string;iteration:number;market_regime:string};
@@ -116,7 +115,13 @@ function HomeSurface({data,activeThesisId}:{data:Snapshot;activeThesisId?:string
   const tacticalPercent=data.trade_policy?.sizing.tactical_swing_sleeve.target_percent_of_portfolio_value||0;
   const tacticalPositions=data.trade_policy?.sizing.tactical_swing_sleeve.target_positions||0;
   const tacticalTarget=portfolioValue*tacticalPercent/100;
-  const alerts=(proposal:TradeProposal)=>{try{const parsed=parseJson(proposal.broker_alerts||'{}');if(!isJsonObject(parsed)||!Array.isArray(parsed.gates))return [];return parsed.gates.filter(isJsonString)}catch{return []}};
+  const BrokerAlertsSchema=z.object({gates:z.array(z.string()).optional()}).passthrough();
+  const alerts=(proposal:TradeProposal)=>{
+    try{
+      const parsed=BrokerAlertsSchema.safeParse(JSON.parse(proposal.broker_alerts||'{}'));
+      return parsed.success?parsed.data.gates||[]:[];
+    }catch{return [];}
+  };
   const proposalGates=(proposal:TradeProposal)=>{const gates=alerts(proposal);return gates.length?gates:['Awaiting recorded quote, evidence, portfolio-risk, and execution gates.']};
   const isDangerGate=(gates:string[])=>gates.some(gate=>/cancel|fail|invalid|reject|stop|weak/i.test(gate));
   return <>
