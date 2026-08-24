@@ -1,8 +1,14 @@
 import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
 import { readSecret } from '@thesisforge/shared/secrets';
+
+const AuthorizeResponseSchema = z.object({
+  url: z.string().url().optional(),
+  error: z.string().optional(),
+}).passthrough();
 
 export async function GET(request: NextRequest) {
   const managerId = await authenticatedIdentity(request.headers);
@@ -14,7 +20,12 @@ export async function GET(request: NextRequest) {
     headers: { 'content-type': 'application/json', 'x-thesisforge-internal-token': internalToken },
     body: JSON.stringify({ redirectUri }),
   });
-  const result = await response.json<{ url?: string; error?: string }>();
-  if (!response.ok || !result.url) return NextResponse.json({ error: result.error || 'X authorization failed' }, { status: response.status });
-  return NextResponse.redirect(result.url);
+  const result = AuthorizeResponseSchema.safeParse(await response.json());
+  if (!response.ok || !result.success || !result.data.url) {
+    return NextResponse.json(
+      { error: result.success ? result.data.error || 'X authorization failed' : 'X authorization failed' },
+      { status: response.status },
+    );
+  }
+  return NextResponse.redirect(result.data.url);
 }

@@ -1,8 +1,13 @@
 import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
 import { readSecret } from '@thesisforge/shared/secrets';
+
+const CallbackErrorSchema = z.object({
+  error: z.string().optional(),
+}).passthrough();
 
 export async function GET(request: NextRequest) {
   const managerId = await authenticatedIdentity(request.headers);
@@ -18,6 +23,12 @@ export async function GET(request: NextRequest) {
     headers: { 'content-type': 'application/json', 'x-thesisforge-internal-token': internalToken },
     body: JSON.stringify({ code, state, redirectUri }),
   });
-  if (!response.ok) return NextResponse.json(await response.json(), { status: response.status });
+  if (!response.ok) {
+    const parsed = CallbackErrorSchema.safeParse(await response.json());
+    return NextResponse.json(
+      parsed.success ? parsed.data : { error: 'X callback failed' },
+      { status: response.status },
+    );
+  }
   return NextResponse.redirect(`${url.origin}/?x=authorized`);
 }

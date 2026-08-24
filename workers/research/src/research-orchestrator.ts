@@ -17,15 +17,19 @@ import {
   firstObject,
   isFinalizeRunSuccess,
   latestThesisHashes,
-  parseAiJsonObject,
   parseAutonomousExecutionResult,
   parseBrokerOrderAudit,
+  parseBrokerResearchContext,
+  parseCloudTask,
   parseJsonObject,
   parseJsonObjectOrNull,
+  parsePositionAiOutput,
   parsePositionConfiguration,
   parsePositionEpisodeRows,
   parseTheses,
+  parseThesisAiOutput,
   type ApprovedTradeProposal,
+  type CloudTask,
   type PositionConfiguration,
   type Thesis,
 } from './schemas';
@@ -63,34 +67,9 @@ type ResearchCycleParams = {
   slot?: string;
 };
 
-type ResearchTask = {
-  kind: 'thesis_research';
-  runId: string;
-  idempotencyKey: string;
-  thesis: Thesis;
-  contextVersion: string;
-  marketSlot: string;
-};
-
-type PositionReviewTask = {
-  kind: 'position_review';
-  runId: string;
-  idempotencyKey: string;
-  positionKey: string;
-  reason: string;
-  episodeId?: string;
-  symbol?: string;
-  theses?: PositionThesis[];
-};
-
-type TradeExecutionTask = {
-  kind: 'trade_execution';
-  runId: string;
-  idempotencyKey: string;
-  proposal: ApprovedTradeProposal;
-};
-
-type CloudTask = ResearchTask | PositionReviewTask | TradeExecutionTask;
+type ResearchTask = Extract<CloudTask, { kind: 'thesis_research' }>;
+type PositionReviewTask = Extract<CloudTask, { kind: 'position_review' }>;
+type TradeExecutionTask = Extract<CloudTask, { kind: 'trade_execution' }>;
 
 type PositionObservation = {
   eventId: string;
@@ -173,8 +152,12 @@ async function persistBrokerSnapshot(env: PublicationEnv, snapshot: BrokerAccoun
   return Number(row.id);
 }
 
-function parseAiOutput<Result>(result: Result): JsonObject {
-  return parseAiJsonObject(result) as JsonObject;
+function parseAiOutput(result: unknown): JsonObject {
+  return parseThesisAiOutput(result) as JsonObject;
+}
+
+function parsePositionOutput(result: unknown): JsonObject {
+  return parsePositionAiOutput(result) as JsonObject;
 }
 
 async function analyzeThesis(
@@ -304,7 +287,7 @@ async function analyzePosition(
     },
     tags: ['thesisforge', 'autonomous-position-management'],
   });
-  return parseAiOutput(result);
+  return parsePositionOutput(result);
 }
 
 export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, ResearchCycleParams> {
@@ -774,7 +757,7 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
       broker.readEquityResearchContext(task.thesis.symbols),
       broker.readAccountSnapshot(),
     ]);
-    const parsed = parseJsonObject(researchJson);
+    const parsed = parseBrokerResearchContext(researchJson);
     brokerContext = parsed as JsonObject;
     snapshot = accountSnapshot;
   }
@@ -871,7 +854,7 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
     broker.readAccountSnapshot(),
     broker.readEquityResearchContext([task.symbol]),
   ]);
-  const brokerContextValue = parseJsonObject(researchJson) as JsonObject;
+  const brokerContextValue = parseBrokerResearchContext(researchJson) as JsonObject;
   const position = snapshot.positions.find((item) => item.symbol === task.symbol && item.quantity > 0);
   if (!position) {
     await cloudControl(env, 'patch_position_episode', {
@@ -1238,37 +1221,39 @@ const worker = {
   },
   async queue(batch: MessageBatch<CloudTask>, env: PublicationEnv): Promise<void> {
     for (const message of batch.messages) {
+      let task: CloudTask | null = null;
       try {
-        if (message.body.kind === 'thesis_research') await processResearchTask(env, message.body, message.attempts);
-        else if (message.body.kind === 'position_review') await processPositionTask(env, message.body, message.attempts);
-        else await processTradeExecutionTask(env, message.body, message.attempts);
+        task = parseCloudTask(message.body);
+        if (task.kind === 'thesis_research') await processResearchTask(env, task, message.attempts);
+        else if (task.kind === 'position_review') await processPositionTask(env, task, message.attempts);
+        else await processTradeExecutionTask(env, task, message.attempts);
         message.ack();
       } catch (error) {
         console.error(JSON.stringify({
           event: 'cloud_task_failed',
           messageId: message.id,
           attempt: message.attempts,
-          kind: message.body.kind,
+          kind: task?.kind,
           error: error instanceof Error ? error.message : 'unknown',
         }));
-        if (message.attempts >= 4) {
+        if (message.attempts >= 4 && task) {
           await cloudControl(env, 'upsert_task', {
-            run_id: message.body.runId,
-            idempotency_key: message.body.idempotencyKey,
-            task_type: message.body.kind,
-            entity_type: message.body.kind === 'thesis_research'
+            run_id: task.runId,
+            idempotency_key: task.idempotencyKey,
+            task_type: task.kind,
+            entity_type: task.kind === 'thesis_research'
               ? 'thesis'
-              : message.body.kind === 'position_review' ? 'position' : 'trade_proposal',
-            entity_key: message.body.kind === 'thesis_research'
-              ? message.body.thesis.id
-              : message.body.kind === 'position_review' ? message.body.positionKey : String(message.body.proposal.id),
+              : task.kind === 'position_review' ? 'position' : 'trade_proposal',
+            entity_key: task.kind === 'thesis_research'
+              ? task.thesis.id
+              : task.kind === 'position_review' ? task.positionKey : String(task.proposal.id),
             status: 'failed',
             attempt_count: message.attempts,
             error_text: error instanceof Error ? error.message : 'unknown',
             completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-          await finalizeRunAndPublish(env, message.body.runId);
+          await finalizeRunAndPublish(env, task.runId);
         }
         message.retry({ delaySeconds: Math.min(900, 30 * (2 ** Math.min(message.attempts, 5))) });
       }

@@ -4,6 +4,12 @@ const EXPECTED_TOKEN_SHA256 = '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d0258
 const MAX_REQUEST_BYTES = 8 * 1024;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
+function isPublicationBody(value: unknown): value is { publishCurrent?: boolean } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const publishCurrent = (value as { publishCurrent?: unknown }).publishCurrent;
+  return publishCurrent === undefined || typeof publishCurrent === 'boolean';
+}
+
 function jsonResponse(body: unknown, status: number): Response {
   return Response.json(body, {
     status,
@@ -86,8 +92,8 @@ Deno.serve(async (request: Request) => {
   let publishCurrent = false;
   try {
     const rawBody = await boundedText(request.body, MAX_REQUEST_BYTES);
-    const body = rawBody ? JSON.parse(rawBody) as { publishCurrent?: unknown } : {};
-    if (body.publishCurrent !== undefined && typeof body.publishCurrent !== 'boolean') {
+    const body = rawBody ? JSON.parse(rawBody) as unknown : {};
+    if (!isPublicationBody(body)) {
       return jsonResponse({ error: 'publishCurrent must be boolean' }, 400);
     }
     publishCurrent = body.publishCurrent === true;

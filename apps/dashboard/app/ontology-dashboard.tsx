@@ -270,6 +270,20 @@ function OntologyManager({data}:{data:Snapshot}){
 function RiskSurface({data}:{data:Snapshot}){
   const purpose=new Map(Object.entries({max_drawdown:'Stop adding risk when portfolio drawdown reaches the configured ceiling.',max_notional:'Prevent one thesis from consuming too much portfolio equity.',minimum_liquidity:'Reject trades whose spread is too wide for controlled execution.',transaction_cost_stress:'Require every backtest survivor to remain viable after costs are doubled.'}));
   const applied=new Map(Object.entries({max_drawdown:'Before sizing or adding exposure',max_notional:'Before an order may be approved',minimum_liquidity:'At the execution gate',transaction_cost_stress:'Automatically in the scenario matrix'}));
-  const value=(control:RiskControl)=>{const threshold=JSON.parse(control.threshold_json);return threshold.percent?`${threshold.percent}%`:threshold.percent_of_portfolio_value?`${threshold.percent_of_portfolio_value}% OF PORTFOLIO`:threshold.percent_of_equity?`${threshold.percent_of_equity}% OF EQUITY`:threshold.max_spread_bps?`${threshold.max_spread_bps} BPS`:threshold.multiplier?`${threshold.multiplier}× COST`:'—'};
+  const RiskThresholdSchema=z.object({
+    percent:z.number().optional(),
+    percent_of_portfolio_value:z.number().optional(),
+    percent_of_equity:z.number().optional(),
+    max_spread_bps:z.number().optional(),
+    multiplier:z.number().optional(),
+  }).passthrough();
+  const value=(control:RiskControl)=>{
+    try{
+      const threshold=RiskThresholdSchema.safeParse(JSON.parse(control.threshold_json));
+      if(!threshold.success)return '—';
+      const t=threshold.data;
+      return t.percent!=null?`${t.percent}%`:t.percent_of_portfolio_value!=null?`${t.percent_of_portfolio_value}% OF PORTFOLIO`:t.percent_of_equity!=null?`${t.percent_of_equity}% OF EQUITY`:t.max_spread_bps!=null?`${t.max_spread_bps} BPS`:t.multiplier!=null?`${t.multiplier}× COST`:'—';
+    }catch{return '—';}
+  };
   return <><div className="risk-status"><div><span>CURRENT REALITY</span><h1>1 control runs automatically</h1><p>The doubled-cost breaker is active in backtests. The portfolio, thesis-sizing, and liquidity limits are defined policies but are not yet wired to broker execution.</p></div><div><b>THRESHOLDS</b><strong>MANUALLY CONFIGURED</strong><span>They change when we deliberately update the research configuration—not from model output.</span></div></div><div className="panel-title"><b>RISK CONTROLS · WHAT THEY DO AND WHEN</b><span>DEFINED IN CODE · NEVER OVERRIDDEN BY A THESIS</span><strong>{data.risk_controls.length} POLICIES</strong></div><div className="risk-grid ergonomic">{data.risk_controls.map(r=>{const automated=r.control_type==='transaction_cost_stress';return <article key={r.id}><span>{r.scope}</span><h2>{clean(r.control_type)}</h2><strong>{value(r)}</strong><p>{purpose.get(r.control_type)}</p><dl><div><dt>APPLIED</dt><dd>{applied.get(r.control_type)}</dd></div><div><dt>AUTOMATION</dt><dd className={automated?'green':'amber'}>{automated?'RUNS IN BACKTEST':'POLICY ONLY'}</dd></div><div><dt>UPDATED</dt><dd>MANUAL CONFIG</dd></div></dl></article>})}</div><div className="risk-lower single"><section><div className="panel-title"><b>BREAKER EVIDENCE</b><span>ADVERSARIAL TESTS THAT ACTUALLY RAN</span></div>{data.agent_runs.filter(a=>a.agent_role==='breaker').map(a=><div className="breaker-row" key={a.id}><b>2× TRANSACTION COSTS</b><p>{a.summary}</p><span>INDEPENDENCE GROUP {a.independence_group}</span></div>)}</section></div></>;
 }

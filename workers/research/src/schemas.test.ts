@@ -5,8 +5,11 @@ import {
   autonomousExecutionActive,
   parseAutonomousExecutionResult,
   parseBrokerOrderAudit,
+  parseCloudTask,
+  parsePositionAiOutput,
   parsePositionConfiguration,
   parseTheses,
+  parseThesisAiOutput,
 } from './schemas';
 
 describe('research cloud-control schemas', () => {
@@ -83,5 +86,54 @@ describe('research cloud-control schemas', () => {
       JSON.stringify({ order_checks: {} }),
     );
     expect(fills).toEqual([expect.objectContaining({ id: 'fill-1', quantity: 2, price: 10.5 })]);
+  });
+
+  test('parses thesis AI output and fails closed on garbage', () => {
+    expect(parseThesisAiOutput({
+      response: JSON.stringify({
+        material_change: true,
+        trade_decision: 'buy',
+        symbol: 'VST',
+        notional_percent: 2,
+        decision_confidence: 90,
+      }),
+    })).toMatchObject({ material_change: true, trade_decision: 'buy', symbol: 'VST' });
+    expect(parseThesisAiOutput('not-json')).toMatchObject({
+      material_change: false,
+      risks: ['unstructured_model_output'],
+    });
+  });
+
+  test('parses position AI output and defaults to hold on garbage', () => {
+    expect(parsePositionAiOutput({
+      response: JSON.stringify({
+        position_action: 'reduce',
+        decision_confidence: 80,
+        thesis_state: 'weakening',
+        summary: 'risk rising',
+      }),
+    }).position_action).toBe('reduce');
+    expect(parsePositionAiOutput('@@@')).toMatchObject({
+      position_action: 'hold',
+      decision_confidence: 0,
+    });
+  });
+
+  test('parses cloud queue tasks and rejects unknown kinds', () => {
+    const task = parseCloudTask({
+      kind: 'thesis_research',
+      runId: 'run-1',
+      idempotencyKey: 'run-1:thesis:power',
+      contextVersion: 'v1',
+      marketSlot: 'midday',
+      thesis: {
+        id: 'power',
+        name: 'Power',
+        summary: 'Demand',
+        symbols: ['VST'],
+      },
+    });
+    expect(task.kind).toBe('thesis_research');
+    expect(() => parseCloudTask({ kind: 'unknown', runId: 'x' })).toThrow();
   });
 });

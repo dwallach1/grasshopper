@@ -10,9 +10,19 @@ import { XCredentialVault } from './x-credential-vault';
 import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 export { XCredentialVault } from './x-credential-vault';
+
+const XAuthorizeBodySchema = z.object({
+  redirectUri: z.string().url(),
+});
+
+const XCallbackBodySchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+  redirectUri: z.string().url(),
+});
 
 type KnowledgeTask = ArticleTask;
 
@@ -78,14 +88,12 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   }
   if (url.pathname === '/x/authorize' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
-    const body = await request.json<{ redirectUri?: string }>();
-    if (!body.redirectUri) return json({ error: 'redirectUri is required' }, { status: 400 });
+    const body = XAuthorizeBodySchema.parse(await request.json());
     return json({ url: await env.X_CREDENTIAL_VAULT.getByName('primary').authorizationUrl(body.redirectUri) });
   }
   if (url.pathname === '/x/callback' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
-    const body = await request.json<{ code?: string; state?: string; redirectUri?: string }>();
-    if (!body.code || !body.state || !body.redirectUri) return json({ error: 'code, state, and redirectUri are required' }, { status: 400 });
+    const body = XCallbackBodySchema.parse(await request.json());
     return json(await env.X_CREDENTIAL_VAULT.getByName('primary').completeAuthorization(body.code, body.state, body.redirectUri));
   }
   if (url.pathname === '/x/sync' && request.method === 'POST') {

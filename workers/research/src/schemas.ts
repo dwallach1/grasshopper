@@ -233,23 +233,144 @@ export function unwrapAiText(result: unknown): string {
   return JSON.stringify(result);
 }
 
-export function parseAiJsonObject(result: unknown): Record<string, unknown> {
+export const ThesisAiOutputSchema = z.object({
+  material_change: z.boolean(),
+  stance: z.enum(['bullish', 'bearish', 'neutral']).optional(),
+  confidence_delta: z.number().optional(),
+  summary: z.string().optional(),
+  risks: z.array(z.string()).optional(),
+  actions: z.array(z.string()).optional(),
+  trade_decision: z.enum(['no_trade', 'buy']).optional(),
+  symbol: z.string().optional(),
+  notional_percent: z.number().optional(),
+  decision_confidence: z.number().optional(),
+  catalyst: z.string().optional(),
+  invalidation: z.string().optional(),
+  bull_case_pass: z.boolean().optional(),
+  bear_case_answered: z.boolean().optional(),
+  portfolio_risk_pass: z.boolean().optional(),
+}).passthrough();
+
+export type ThesisAiOutput = z.infer<typeof ThesisAiOutputSchema>;
+
+export const PositionAiOutputSchema = z.object({
+  position_action: z.enum(['hold', 'add', 'reduce', 'exit']),
+  decision_confidence: z.number(),
+  thesis_state: z.enum(['intact', 'weakening', 'invalidated']),
+  summary: z.string().optional(),
+  risks: z.array(z.string()).optional(),
+  catalyst: z.string().optional(),
+  invalidation: z.string().optional(),
+  add_percent: z.number().optional(),
+  reduce_percent: z.number().optional(),
+  invalidation_confirmed: z.boolean().optional(),
+  adverse_evidence: z.boolean().optional(),
+  bull_case_pass: z.boolean().optional(),
+  bear_case_answered: z.boolean().optional(),
+  portfolio_risk_pass: z.boolean().optional(),
+}).passthrough();
+
+export type PositionAiOutput = z.infer<typeof PositionAiOutputSchema>;
+
+function extractAiJson(result: unknown): { text: string; value: unknown | null } {
   const text = unwrapAiText(result).trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   try {
-    const parsed = JSON.parse(fenced || text) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
+    return { text, value: JSON.parse(fenced || text) as unknown };
   } catch {
-    // The output remains audit-only and cannot become a trade intent.
+    return { text, value: null };
   }
+}
+
+/** Audit-safe fallback: never actionable for buys. */
+export function parseThesisAiOutput(result: unknown): ThesisAiOutput {
+  const { text, value } = extractAiJson(result);
+  const parsed = ThesisAiOutputSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
   return {
     material_change: false,
     summary: text.slice(0, 4000),
     actions: [],
     risks: ['unstructured_model_output'],
   };
+}
+
+/** Audit-safe fallback: defaults to hold. */
+export function parsePositionAiOutput(result: unknown): PositionAiOutput {
+  const { text, value } = extractAiJson(result);
+  const parsed = PositionAiOutputSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  return {
+    position_action: 'hold',
+    decision_confidence: 0,
+    thesis_state: 'intact',
+    summary: text.slice(0, 4000),
+    risks: ['unstructured_model_output'],
+  };
+}
+
+export function parseAiJsonObject(result: unknown): Record<string, unknown> {
+  return parseThesisAiOutput(result);
+}
+
+export const BrokerResearchContextSchema = z.object({
+  market: z.object({
+    symbols: z.array(z.record(z.string(), z.unknown())).optional(),
+  }).passthrough().optional(),
+  fundamentals: z.object({
+    results: z.array(z.unknown()).optional(),
+  }).passthrough().optional(),
+  earnings: z.array(z.unknown()).optional(),
+}).passthrough();
+
+export type BrokerResearchContext = z.infer<typeof BrokerResearchContextSchema>;
+
+export function parseBrokerResearchContext(text: string): BrokerResearchContext {
+  const parsed = BrokerResearchContextSchema.safeParse(parseJsonObject(text));
+  return parsed.success ? parsed.data : {};
+}
+
+const PositionThesisSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  status: z.string(),
+  stance: z.string(),
+  confidence: z.number(),
+  symbols: z.array(z.string()),
+  falsifier: z.string().nullable().optional(),
+});
+
+export const CloudTaskSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('thesis_research'),
+    runId: z.string().min(1),
+    idempotencyKey: z.string().min(1),
+    thesis: ThesisSchema,
+    contextVersion: z.string().min(1),
+    marketSlot: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('position_review'),
+    runId: z.string().min(1),
+    idempotencyKey: z.string().min(1),
+    positionKey: z.string().min(1),
+    reason: z.string().min(1),
+    episodeId: z.string().optional(),
+    symbol: z.string().optional(),
+    theses: z.array(PositionThesisSchema).optional(),
+  }),
+  z.object({
+    kind: z.literal('trade_execution'),
+    runId: z.string().min(1),
+    idempotencyKey: z.string().min(1),
+    proposal: ApprovedTradeProposalSchema,
+  }),
+]);
+
+export type CloudTask = z.infer<typeof CloudTaskSchema>;
+
+export function parseCloudTask(value: unknown): CloudTask {
+  return CloudTaskSchema.parse(value);
 }
 
 export function parseJsonObject(text: string): Record<string, unknown> {
