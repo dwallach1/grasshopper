@@ -12,6 +12,11 @@
       "service": "thesisforge-knowledge-pipeline"
     }
   ],
+  "secrets_store_secrets": [{
+    "binding": "INTERNAL_SERVICE_TOKEN_SECRET",
+    "store_id": "9161ea4b738144c0accc37e724812d93",
+    "secret_name": "INTERNAL_SERVICE_TOKEN"
+  }],
   "secrets": {
     "required": [
       "SUPABASE_URL",
@@ -20,8 +25,7 @@
       "THESISFORGE_MANAGER_TOKEN",
       "THESISFORGE_MANAGER_USER_IDS",
       "CF_ACCESS_TEAM_DOMAIN",
-      "CF_ACCESS_AUD",
-      "INTERNAL_SERVICE_TOKEN"
+      "CF_ACCESS_AUD"
     ]
   },
   "observability": {

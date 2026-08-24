@@ -6,17 +6,34 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  "ai": { "binding": "AI" },
+  "secrets_store_secrets": [
+    {
+      "binding": "INTERNAL_SERVICE_TOKEN_SECRET",
+      "store_id": "9161ea4b738144c0accc37e724812d93",
+      "secret_name": "INTERNAL_SERVICE_TOKEN"
+    },
+    {
+      "binding": "THESISFORGE_PUBLICATION_TOKEN_SECRET",
+      "store_id": "9161ea4b738144c0accc37e724812d93",
+      "secret_name": "THESISFORGE_PUBLICATION_TOKEN"
+    },
+    {
+      "binding": "FINANCIAL_DATASETS_API_KEY_SECRET",
+      "store_id": "9161ea4b738144c0accc37e724812d93",
+      "secret_name": "FINANCIAL_DATASETS_API_KEY"
+    }
+  ],
   "secrets": {
     "required": [
       "SUPABASE_URL",
-      "THESISFORGE_PUBLICATION_TOKEN",
-      "INTERNAL_SERVICE_TOKEN",
       "X_CLIENT_ID",
       "X_ACCESS_TOKEN",
       "X_REFRESH_TOKEN"
     ]
   },
   "vars": {
+    "AI_GATEWAY_ID": "default",
     "X_REDIRECT_URI": "https://thesisforge-dashboard.davidwallach2.workers.dev/api/x/callback"
   },
   "hyperdrive": [{

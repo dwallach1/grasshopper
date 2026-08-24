@@ -1,9 +1,7 @@
 import type { Database } from './database';
 
-const TOKEN_RE = /[a-z0-9]+(?:[.-][a-z0-9]+)*/g;
 const CASHTAG_RE = /\$([A-Z][A-Z0-9.]{0,9})\b/g;
 const UPPERCASE_RE = /\b[A-Z]{2,10}\b/g;
-const HASHTAG_RE = /#([A-Za-z][A-Za-z0-9_]{2,40})/g;
 
 export type Theme = {
   id: string;
@@ -18,8 +16,8 @@ export type Theme = {
 export type ThemeMatch = {
   theme: Theme;
   score: number;
-  matchedTerms: string[];
-  matchedSymbols: string[];
+  direction: 'supporting' | 'contradicting' | 'neutral';
+  evidenceExcerpt: string;
 };
 
 type TermRow = { theme_id: string; normalized_term: string; weight: number; term_type: string };
@@ -27,22 +25,11 @@ type MembershipRow = { symbol: string; theme_id: string; confidence: number };
 type LexiconRow = { token: string; token_type: string; weight: number };
 
 export function normalizePhrase(value: string): string {
-  return (value.toLowerCase().replaceAll('_', ' ').match(TOKEN_RE) || []).join(' ');
+  return value.toLowerCase().replaceAll('_', ' ').replace(/[^a-z0-9.-]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
 
 export function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-export function textFeatures(text: string, maxNgram = 4): Set<string> {
-  const tokens = text.toLowerCase().replaceAll('_', ' ').match(TOKEN_RE) || [];
-  const features = new Set(tokens);
-  for (let width = 2; width <= Math.min(maxNgram, tokens.length); width += 1) {
-    for (let index = 0; index <= tokens.length - width; index += 1) {
-      features.add(tokens.slice(index, index + width).join(' '));
-    }
-  }
-  return features;
 }
 
 export class OntologyCatalog {
@@ -101,81 +88,16 @@ export class OntologyCatalog {
     return symbols;
   }
 
-  marketScore(text: string, symbols: Set<string>, annotations: unknown[]): number {
-    const features = textFeatures(text);
-    let score = Math.min(symbols.size * 12, 48);
-    for (const [term, weight] of this.marketKeywords) if (features.has(term)) score += weight;
-    const context = normalizePhrase(JSON.stringify(annotations || []));
-    for (const [term, weight] of this.marketContext) if (term && context.includes(term)) score += weight;
-    return Math.min(score, 100);
-  }
-
-  classify(text: string, sourceSymbols: Set<string>): ThemeMatch[] {
-    const symbols = new Set([...sourceSymbols].filter((symbol) => !this.blacklistedSymbols.has(symbol)));
-    const features = textFeatures(text);
-    const scores = new Map<string, number>();
-    const termHits = new Map<string, Set<string>>();
-    const symbolHits = new Map<string, Set<string>>();
-    for (const [themeId, terms] of this.termsByTheme) {
-      for (const [term, entry] of terms) {
-        if (!features.has(term)) continue;
-        const adjustment = entry.type === 'negative' ? -entry.weight : Math.round(entry.weight * 0.55);
-        scores.set(themeId, (scores.get(themeId) || 0) + adjustment);
-        const hits = termHits.get(themeId) || new Set<string>();
-        hits.add(term);
-        termHits.set(themeId, hits);
-      }
-    }
-    for (const symbol of symbols) {
-      for (const [themeId, confidence] of this.membershipsBySymbol.get(symbol) || []) {
-        scores.set(themeId, (scores.get(themeId) || 0) + Math.round(confidence * 0.5));
-        const hits = symbolHits.get(themeId) || new Set<string>();
-        hits.add(symbol);
-        symbolHits.set(themeId, hits);
-      }
-    }
-    return [...scores.entries()].flatMap(([themeId, rawScore]) => {
-      const theme = this.themes.get(themeId);
-      const score = Math.max(0, Math.min(100, rawScore));
-      if (!theme || score < theme.matchThreshold) return [];
-      return [{
-        theme,
-        score,
-        matchedTerms: [...(termHits.get(themeId) || [])].sort(),
-        matchedSymbols: [...(symbolHits.get(themeId) || [])].sort(),
-      }];
-    }).sort((left, right) => right.score - left.score || left.theme.id.localeCompare(right.theme.id));
-  }
-
-  salientFeatures(text: string, limit = 40): Array<[string, string]> {
-    const normalized = normalizePhrase(text.replace(/https?:\/\/\S+/gi, ' '));
-    const tokens = normalized.split(' ').filter(Boolean);
-    const counts = new Map<string, { feature: [string, string]; count: number; first: number }>();
-    let order = 0;
-    const add = (type: string, value: string) => {
-      const key = `${type}:${value}`;
-      const current = counts.get(key);
-      if (current) current.count += 1;
-      else counts.set(key, { feature: [type, value], count: 1, first: order++ });
-    };
-    for (const match of text.matchAll(HASHTAG_RE)) {
-      const value = normalizePhrase(match[1]);
-      if (value) add('hashtag', value);
-    }
-    for (const token of tokens) {
-      if (token.length >= 5 && !this.candidateStopwords.has(token) && !/^\d+$/.test(token)) add('term', token);
-    }
-    for (let index = 0; index + 1 < tokens.length; index += 1) {
-      const left = tokens[index];
-      const right = tokens[index + 1];
-      if (left.length >= 4 && right.length >= 4 && !this.candidateStopwords.has(left) && !this.candidateStopwords.has(right)) {
-        add('term', `${left} ${right}`);
-      }
-    }
-    return [...counts.values()]
-      .sort((left, right) => right.count - left.count || left.first - right.first)
-      .slice(0, limit)
-      .map((entry) => entry.feature);
+  promptContext(): Array<{ id: string; kind: string; name: string; description: string; terms: string[] }> {
+    return [...this.themes.values()]
+      .sort((left, right) => left.id.localeCompare(right.id))
+      .map((theme) => ({
+        id: theme.id,
+        kind: theme.kind,
+        name: theme.name,
+        description: theme.description,
+        terms: [...(this.termsByTheme.get(theme.id)?.keys() || [])].sort().slice(0, 16),
+      }));
   }
 }
 

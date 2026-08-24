@@ -1,5 +1,5 @@
 import type { ArticleTask } from './documents';
-import { ingestXBookmarks } from './bookmarks';
+import { bookmarksNeedingAi, ingestXBookmarks, type XBookmarkPayload } from './bookmarks';
 import { captureResearch } from './capture';
 import { withDatabase, withDatabaseRetry, withReadOnlyDatabase } from './database';
 import { persistPreparedArticle, prepareArticleTask } from './documents';
@@ -7,6 +7,9 @@ import { fetchFinancialData, type FinancialRequest } from './financial';
 import { rebuildKnowledgeGraph, refreshWeeklyEventMap } from './graph';
 import { publishDashboard } from './publication';
 import { XCredentialVault } from './x-credential-vault';
+import { readSecret, secretsEqual, type SecretBinding } from '../shared/secrets';
+import { classifyBookmarksWithAi } from './ontology-analysis';
+import { loadOntologyCatalog } from './ontology';
 
 export { XCredentialVault } from './x-credential-vault';
 
@@ -17,10 +20,12 @@ type KnowledgeEnvironment = {
   RESEARCH_ORIGINALS: R2Bucket;
   ARTICLE_QUEUE: Queue<KnowledgeTask>;
   X_CREDENTIAL_VAULT: DurableObjectNamespace<XCredentialVault>;
+  AI: Ai;
+  AI_GATEWAY_ID: string;
   SUPABASE_URL: string;
-  THESISFORGE_PUBLICATION_TOKEN: string;
-  INTERNAL_SERVICE_TOKEN: string;
-  FINANCIAL_DATASETS_API_KEY?: string;
+  THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretBinding;
+  INTERNAL_SERVICE_TOKEN_SECRET: SecretBinding;
+  FINANCIAL_DATASETS_API_KEY_SECRET: SecretBinding;
 };
 
 function json(value: unknown, init: ResponseInit = {}): Response {
@@ -30,17 +35,24 @@ function json(value: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(value), { ...init, headers });
 }
 
-function authorized(request: Request, env: KnowledgeEnvironment): boolean {
+async function authorized(request: Request, env: KnowledgeEnvironment): Promise<boolean> {
   const supplied = request.headers.get('x-thesisforge-internal-token') || '';
-  if (!supplied || supplied.length !== env.INTERNAL_SERVICE_TOKEN.length) return false;
-  let mismatch = 0;
-  for (let index = 0; index < supplied.length; index += 1) mismatch |= supplied.charCodeAt(index) ^ env.INTERNAL_SERVICE_TOKEN.charCodeAt(index);
-  return mismatch === 0;
+  if (!supplied) return false;
+  const current = await readSecret(env.INTERNAL_SERVICE_TOKEN_SECRET, 'INTERNAL_SERVICE_TOKEN');
+  return secretsEqual(supplied, current);
 }
 
 async function syncBookmarks(env: KnowledgeEnvironment): Promise<Record<string, unknown>> {
-  const payload = await env.X_CREDENTIAL_VAULT.getByName('primary').fetchBookmarks();
-  const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => ingestXBookmarks(database, payload));
+  const payload: XBookmarkPayload = await env.X_CREDENTIAL_VAULT.getByName('primary').fetchBookmarks();
+  const { catalog, pending } = await withReadOnlyDatabase(env.HYPERDRIVE.connectionString, async (database) => ({
+    catalog: await loadOntologyCatalog(database),
+    pending: await bookmarksNeedingAi(database, payload),
+  }));
+  const classified = await classifyBookmarksWithAi(env.AI, env.AI_GATEWAY_ID, pending, payload.fetchedAt, catalog);
+  const result = await withDatabase(
+    env.HYPERDRIVE.connectionString,
+    (database) => ingestXBookmarks(database, payload, catalog, classified),
+  );
   if (result.articleTasks.length) {
     await env.ARTICLE_QUEUE.sendBatch(result.articleTasks.map((task) => ({ body: { kind: 'article' as const, ...task } })));
   }
@@ -53,7 +65,7 @@ async function syncBookmarks(env: KnowledgeEnvironment): Promise<Record<string, 
 async function route(request: Request, env: KnowledgeEnvironment): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === '/health' && request.method === 'GET') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const [database, x] = await Promise.all([
       withReadOnlyDatabase(env.HYPERDRIVE.connectionString, async (db) => {
         const rows = await db.query<{ imported_at: string | null; bookmarks: number }>("select max(fetched_at)::text as imported_at,count(*)::integer as bookmarks from bookmarks");
@@ -64,35 +76,36 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
     return json({ ok: true, worker: 'thesisforge-knowledge-pipeline', database, x });
   }
   if (url.pathname === '/x/authorize' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const body = await request.json<{ redirectUri?: string }>();
     if (!body.redirectUri) return json({ error: 'redirectUri is required' }, { status: 400 });
     return json({ url: await env.X_CREDENTIAL_VAULT.getByName('primary').authorizationUrl(body.redirectUri) });
   }
   if (url.pathname === '/x/callback' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const body = await request.json<{ code?: string; state?: string; redirectUri?: string }>();
     if (!body.code || !body.state || !body.redirectUri) return json({ error: 'code, state, and redirectUri are required' }, { status: 400 });
     return json(await env.X_CREDENTIAL_VAULT.getByName('primary').completeAuthorization(body.code, body.state, body.redirectUri));
   }
   if (url.pathname === '/x/sync' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     return json(await syncBookmarks(env));
   }
   if (url.pathname === '/financial' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const spec = await request.json<FinancialRequest>();
     if (!spec.endpoint || !/^[a-z0-9/_-]+$/i.test(spec.endpoint)) return json({ error: 'valid endpoint is required' }, { status: 400 });
-    const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => fetchFinancialData(database, env.FINANCIAL_DATASETS_API_KEY || '', spec));
+    const apiKey = await readSecret(env.FINANCIAL_DATASETS_API_KEY_SECRET, 'FINANCIAL_DATASETS_API_KEY');
+    const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => fetchFinancialData(database, apiKey, spec));
     await publishDashboard(env);
     return json(result);
   }
   if (url.pathname === '/publication/refresh' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     return json(await publishDashboard(env));
   }
   if (url.pathname === '/research/capture' && request.method === 'POST') {
-    if (!authorized(request, env)) return json({ error: 'unauthorized' }, { status: 401 });
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const body = await request.json<Record<string, unknown> & { operation: string }>();
     const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => captureResearch(database, body));
     await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);

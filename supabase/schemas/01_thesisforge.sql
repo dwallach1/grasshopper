@@ -70,7 +70,16 @@ create table public.bookmarks (
   text text not null,
   raw_json jsonb not null,
   market_score smallint not null default 0 check (market_score between 0 and 100),
-  is_market_related boolean not null default false
+  is_market_related boolean not null default false,
+  classification_model text,
+  classification_prompt_version text,
+  classification_output jsonb,
+  classified_at timestamptz,
+  constraint bookmarks_classification_complete_check check (
+    (classification_model is null and classification_prompt_version is null and classification_output is null and classified_at is null)
+    or
+    (classification_model is not null and classification_prompt_version is not null and classification_output is not null and classified_at is not null)
+  )
 );
 
 create table public.bookmark_urls (
@@ -208,7 +217,7 @@ create table public.ontology_evidence (
   theme_id text not null references public.ontology_themes(id) on delete cascade,
   feature_type text not null,
   feature_value text not null,
-  match_method text not null check (match_method in ('term', 'symbol', 'cooccurrence', 'manual', 'historical')),
+  match_method text not null check (match_method in ('term', 'symbol', 'cooccurrence', 'manual', 'historical', 'llm')),
   score smallint not null check (score between 0 and 100),
   observed_at timestamptz not null,
   unique (source_type, source_key, theme_id, feature_type, feature_value, match_method)

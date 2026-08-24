@@ -489,7 +489,7 @@ begin
     current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-publication-token',
     ''
   );
-  if encode(extensions.digest(supplied_token, 'sha256'), 'hex') <> 'ad743c9c4b7eb01fb40d8d0d4510ef8e0915f620e080a9fdbba116e2a9a06ac2' then
+  if encode(extensions.digest(supplied_token, 'sha256'), 'hex') <> '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c' then
     raise insufficient_privilege using message = 'Dashboard publication authorization required';
   end if;
   if p_trade_policy is null or jsonb_typeof(p_trade_policy) <> 'object' then

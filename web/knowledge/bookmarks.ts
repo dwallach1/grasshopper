@@ -1,5 +1,11 @@
 import type { Database } from './database';
-import { loadOntologyCatalog, normalizePhrase, slugify, type OntologyCatalog, type ThemeMatch } from './ontology';
+import {
+  MAX_ONTOLOGY_BOOKMARKS_PER_SYNC,
+  ONTOLOGY_AI_MODEL,
+  ONTOLOGY_PROMPT_VERSION,
+  type ClassifiedBookmark,
+} from './ontology-analysis';
+import { normalizePhrase, slugify, type OntologyCatalog, type ThemeMatch } from './ontology';
 
 export type XBookmark = {
   id: string;
@@ -17,16 +23,6 @@ export type XBookmarkPayload = {
   bookmarks: XBookmark[];
 };
 
-type ClassifiedBookmark = {
-  bookmark: XBookmark;
-  createdAt: string;
-  text: string;
-  symbols: string[];
-  marketScore: number;
-  matches: ThemeMatch[];
-  salient: Array<[string, string]>;
-};
-
 type CandidateInput = {
   candidate_type: string;
   candidate_key: string;
@@ -40,35 +36,35 @@ type CandidateInput = {
   observed_at: string;
 };
 
-function claimType(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes('price target') || lower.includes('%') || lower.includes('+')) return 'price_target_or_momentum';
-  if (lower.includes('earnings') || lower.includes('quarter')) return 'earnings_catalyst';
-  if (lower.includes('13f') || lower.includes('portfolio')) return 'investor_positioning';
-  if (lower.includes('deal') || lower.includes('contract') || lower.includes('announced')) return 'company_event';
-  if (lower.includes('cheap') || lower.includes('valuation') || lower.includes('multiple')) return 'valuation';
-  return 'opinion_or_theme';
-}
-
-function classifyBookmarks(payload: XBookmarkPayload, catalog: OntologyCatalog): ClassifiedBookmark[] {
+export async function bookmarksNeedingAi(
+  database: Database,
+  payload: XBookmarkPayload,
+): Promise<XBookmark[]> {
   const unique = new Map<string, XBookmark>();
   for (const bookmark of payload.bookmarks) {
     if (typeof bookmark.id === 'string' && bookmark.id.length > 0) unique.set(bookmark.id, bookmark);
   }
-  return [...unique.values()]
-    .map((bookmark) => {
-      const text = typeof bookmark.text === 'string' ? bookmark.text : '';
-      const symbolSet = catalog.extractSymbols(text);
-      return {
-        bookmark,
-        createdAt: typeof bookmark.created_at === 'string' ? bookmark.created_at : payload.fetchedAt,
-        text,
-        symbols: [...symbolSet].sort(),
-        marketScore: catalog.marketScore(text, symbolSet, Array.isArray(bookmark.context_annotations) ? bookmark.context_annotations : []),
-        matches: catalog.classify(text, symbolSet),
-        salient: catalog.salientFeatures(text),
-      };
-    });
+  const rows = [...unique.values()].map((bookmark, ordinal) => ({
+    id: bookmark.id,
+    text: typeof bookmark.text === 'string' ? bookmark.text.slice(0, 2_000) : '',
+    ordinal,
+  }));
+  if (!rows.length) return [];
+  const pending = await database.query<{ id: string }>(`
+    select incoming.id
+    from jsonb_to_recordset($1::jsonb) as incoming(id text, text text, ordinal integer)
+    left join bookmarks b on b.id=incoming.id
+    where b.id is null
+       or b.text<>incoming.text
+       or b.classification_prompt_version is distinct from $2
+       or b.classification_model is distinct from $3
+    order by incoming.ordinal
+    limit $4
+  `, [JSON.stringify(rows), ONTOLOGY_PROMPT_VERSION, ONTOLOGY_AI_MODEL, MAX_ONTOLOGY_BOOKMARKS_PER_SYNC]);
+  return pending.flatMap((row) => {
+    const bookmark = unique.get(row.id);
+    return bookmark ? [bookmark] : [];
+  });
 }
 
 async function syncThemeTheses(database: Database): Promise<void> {
@@ -83,6 +79,38 @@ async function syncThemeTheses(database: Database): Promise<void> {
     update ontology_themes set thesis_id=id, updated_at=now()
     where status='active' and kind='theme' and thesis_id is null
   `);
+}
+
+async function clearPriorAiClassification(database: Database, classified: ClassifiedBookmark[]): Promise<string[]> {
+  const bookmarkIds = classified.map((item) => item.bookmark.id);
+  if (!bookmarkIds.length) return [];
+  const oldSymbols = await database.query<{ symbol: string }>(
+    'delete from bookmark_symbols where bookmark_id=any($1::text[]) returning symbol',
+    [bookmarkIds],
+  );
+  await database.execute("delete from claims where bookmark_id=any($1::text[])", [bookmarkIds]);
+  await database.execute("delete from ontology_evidence where source_type='bookmark' and source_key=any($1::text[]) and match_method='llm'", [bookmarkIds]);
+  await database.execute("delete from ontology_observations where source_type='bookmark' and source_key=any($1::text[])", [bookmarkIds]);
+  await database.execute(`
+    delete from ontology_candidate_evidence
+    where source_type='bookmark' and source_key=any($1::text[])
+  `, [bookmarkIds]);
+  await database.execute(`
+    delete from thesis_evidence
+    where bookmark_id=any($1::text[]) and evidence_type='x_bookmark_llm'
+  `, [bookmarkIds]);
+  return oldSymbols.map((row) => row.symbol);
+}
+
+async function recountSymbols(database: Database, symbols: string[]): Promise<void> {
+  const unique = [...new Set(symbols)];
+  if (!unique.length) return;
+  await database.execute(`
+    update symbols s set
+      mention_count=(select count(*) from bookmark_symbols bs where bs.symbol=s.symbol),
+      source_count=(select count(*) from bookmark_symbols bs where bs.symbol=s.symbol)
+    where s.symbol=any($1::text[])
+  `, [unique]);
 }
 
 async function persistCoreRows(
@@ -102,17 +130,31 @@ async function persistCoreRows(
     raw_json: item.bookmark,
     market_score: item.marketScore,
     is_market_related: item.marketScore >= 35,
+    classification_model: ONTOLOGY_AI_MODEL,
+    classification_prompt_version: ONTOLOGY_PROMPT_VERSION,
+    classification_output: item.classificationOutput,
+    classified_at: payload.fetchedAt,
   }));
   await database.execute(`
-    insert into bookmarks(id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related)
-    select id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related
+    insert into bookmarks(
+      id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related,
+      classification_model, classification_prompt_version, classification_output, classified_at
+    )
+    select id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related,
+           classification_model, classification_prompt_version, classification_output, classified_at
     from jsonb_to_recordset($1::jsonb) as x(
       id text, author_id text, created_at timestamptz, fetched_at timestamptz,
-      text text, raw_json jsonb, market_score smallint, is_market_related boolean
+      text text, raw_json jsonb, market_score smallint, is_market_related boolean,
+      classification_model text, classification_prompt_version text,
+      classification_output jsonb, classified_at timestamptz
     )
     on conflict(id) do update set
       fetched_at=excluded.fetched_at, text=excluded.text, raw_json=excluded.raw_json,
-      market_score=excluded.market_score, is_market_related=excluded.is_market_related
+      market_score=excluded.market_score, is_market_related=excluded.is_market_related,
+      classification_model=excluded.classification_model,
+      classification_prompt_version=excluded.classification_prompt_version,
+      classification_output=excluded.classification_output,
+      classified_at=excluded.classified_at
   `, [JSON.stringify(bookmarkRows)]);
 
   const urlMap = new Map<string, { bookmark_id: string; url: string; expanded_url: string | null; display_url: string | null }>();
@@ -154,24 +196,18 @@ async function persistCoreRows(
       with incoming as (
         select * from jsonb_to_recordset($1::jsonb)
           as x(bookmark_id text, symbol text, seen_at timestamptz)
-      ), inserted as (
-        insert into bookmark_symbols(bookmark_id, symbol, source)
-        select bookmark_id, symbol, 'cashtag_or_uppercase' from incoming
-        on conflict(bookmark_id, symbol) do nothing
-        returning symbol
-      ), counts as (
-        select symbol, count(*)::bigint as added from inserted group by symbol
       )
-      update symbols s set mention_count=s.mention_count+c.added, source_count=s.source_count+c.added
-      from counts c where c.symbol=s.symbol
+        insert into bookmark_symbols(bookmark_id, symbol, source)
+        select bookmark_id, symbol, 'llm_semantic' from incoming
+        on conflict(bookmark_id, symbol) do nothing
     `, [JSON.stringify(symbolRows)]);
   }
 
-  const claims = classified.filter((item) => item.marketScore >= 35).map((item) => ({
+  const claims = classified.filter((item) => item.marketScore >= 35 && item.claim).map((item) => ({
     bookmark_id: item.bookmark.id,
-    claim_text: item.text.slice(0, 500),
-    claim_type: claimType(item.text),
-    confidence: Math.min(70, Math.max(30, item.marketScore)),
+    claim_text: item.claim!.summary,
+    claim_type: item.claim!.type,
+    confidence: item.claim!.confidence,
   }));
   if (claims.length > 0) {
     await database.execute(`
@@ -194,7 +230,12 @@ async function persistOntologyEvidence(
 ): Promise<void> {
   const observations = classified.flatMap((item) => [
     ...item.symbols.map((symbol) => ({ source_type: 'bookmark', source_key: item.bookmark.id, feature_type: 'symbol', feature_value: symbol, observed_at: item.createdAt })),
-    ...item.salient.map(([featureType, featureValue]) => ({ source_type: 'bookmark', source_key: item.bookmark.id, feature_type: featureType, feature_value: featureValue, observed_at: item.createdAt })),
+    ...item.candidates
+      .filter((candidate) => candidate.candidateType === 'term' || candidate.candidateType === 'theme')
+      .map((candidate) => ({
+        source_type: 'bookmark', source_key: item.bookmark.id, feature_type: 'term',
+        feature_value: normalizePhrase(candidate.label), observed_at: item.createdAt,
+      })),
   ]);
   if (observations.length > 0) {
     await database.execute(`
@@ -208,10 +249,16 @@ async function persistOntologyEvidence(
     `, [JSON.stringify(observations)]);
   }
 
-  const evidence = classified.flatMap((item) => item.matches.flatMap((match) => [
-    ...match.matchedTerms.map((term) => ({ source_type: 'bookmark', source_key: item.bookmark.id, theme_id: match.theme.id, feature_type: 'term', feature_value: term, match_method: 'term', score: match.score, observed_at: item.createdAt })),
-    ...match.matchedSymbols.map((symbol) => ({ source_type: 'bookmark', source_key: item.bookmark.id, theme_id: match.theme.id, feature_type: 'symbol', feature_value: symbol, match_method: 'symbol', score: match.score, observed_at: item.createdAt })),
-  ]));
+  const evidence = classified.flatMap((item) => item.matches.map((match) => ({
+    source_type: 'bookmark',
+    source_key: item.bookmark.id,
+    theme_id: match.theme.id,
+    feature_type: 'llm_evidence',
+    feature_value: match.evidenceExcerpt,
+    match_method: 'llm',
+    score: match.score,
+    observed_at: item.createdAt,
+  })));
   if (evidence.length > 0) {
     await database.execute(`
       insert into ontology_evidence(source_type, source_key, theme_id, feature_type, feature_value, match_method, score, observed_at)
@@ -227,27 +274,29 @@ async function persistOntologyEvidence(
 
   const candidates: CandidateInput[] = [];
   for (const item of classified) {
-    for (const match of item.matches) {
-      for (const symbol of item.symbols.filter((symbol) => !match.matchedSymbols.includes(symbol))) {
-        candidates.push({
-          candidate_type: 'membership', candidate_key: `${match.theme.id}:${symbol}`,
-          proposed_theme_id: match.theme.id, proposed_label: symbol,
-          description: `${symbol} repeatedly co-occurs with ${match.theme.name} evidence.`,
-          score: match.score, context: { symbol, theme: match.theme.id, excerpt: item.text.slice(0, 500) },
-          source_type: 'bookmark', source_key: item.bookmark.id, observed_at: item.createdAt,
-        });
-      }
-      for (const [featureType, featureValue] of item.salient.slice(0, 8)) {
-        if (catalog.termsByTheme.get(match.theme.id)?.has(featureValue)) continue;
-        candidates.push({
-          candidate_type: 'term', candidate_key: `${match.theme.id}:${featureValue}`,
-          proposed_theme_id: match.theme.id, proposed_label: featureValue,
-          description: `Learned vocabulary candidate for ${match.theme.name}.`,
-          score: Math.max(1, match.score - (featureType === 'term' ? 5 : 0)),
-          context: { feature_type: featureType, theme: match.theme.id, excerpt: item.text.slice(0, 500) },
-          source_type: 'bookmark', source_key: item.bookmark.id, observed_at: item.createdAt,
-        });
-      }
+    for (const candidate of item.candidates) {
+      if (
+        candidate.candidateType === 'term'
+        && candidate.themeId
+        && catalog.termsByTheme.get(candidate.themeId)?.has(normalizePhrase(candidate.label))
+      ) continue;
+      const keyTheme = candidate.themeId || 'new';
+      candidates.push({
+        candidate_type: candidate.candidateType,
+        candidate_key: `${keyTheme}:${normalizePhrase(candidate.label)}`,
+        proposed_theme_id: candidate.themeId,
+        proposed_label: candidate.label,
+        description: candidate.description,
+        score: candidate.confidence,
+        context: {
+          evidence_excerpt: candidate.evidenceExcerpt,
+          classification_model: ONTOLOGY_AI_MODEL,
+          prompt_version: ONTOLOGY_PROMPT_VERSION,
+        },
+        source_type: 'bookmark',
+        source_key: item.bookmark.id,
+        observed_at: item.createdAt,
+      });
     }
   }
   if (candidates.length > 0) {
@@ -290,34 +339,60 @@ async function persistOntologyEvidence(
   }
   await database.execute(`
     update ontology_candidates c set
-      evidence_count=stats.evidence_count,
-      source_count=stats.source_count,
-      score=stats.score
-    from (
-      select candidate_id, count(*) as evidence_count,
-             count(distinct source_type || ':' || source_key) as source_count,
-             round(avg(evidence_score))::integer as score
-      from ontology_candidate_evidence group by candidate_id
-    ) stats where stats.candidate_id=c.id
+      evidence_count=(select count(*) from ontology_candidate_evidence e where e.candidate_id=c.id),
+      source_count=(select count(distinct e.source_type || ':' || e.source_key) from ontology_candidate_evidence e where e.candidate_id=c.id),
+      score=coalesce((select round(avg(e.evidence_score))::integer from ontology_candidate_evidence e where e.candidate_id=c.id),0)
+    where c.status='pending'
   `);
 }
 
-async function updateThesisEvidence(database: Database, classified: ClassifiedBookmark[]): Promise<void> {
-  const byTheme = new Map<string, { scores: number[]; bookmarks: Set<string>; symbols: Map<string, number>; name: string }>();
+async function updateThesisEvidence(
+  database: Database,
+  classified: ClassifiedBookmark[],
+  catalog: OntologyCatalog,
+): Promise<void> {
+  const byTheme = new Map<string, {
+    supportingScores: number[];
+    contradictingScores: number[];
+    evidence: Map<string, { direction: ThemeMatch['direction']; excerpt: string; confidence: number }>;
+    symbols: Map<string, number>;
+  }>();
   for (const item of classified) {
     for (const match of item.matches) {
       if (match.theme.kind !== 'theme') continue;
-      const entry: { scores: number[]; bookmarks: Set<string>; symbols: Map<string, number>; name: string } =
-        byTheme.get(match.theme.id) || { scores: [], bookmarks: new Set<string>(), symbols: new Map<string, number>(), name: match.theme.name };
-      entry.scores.push(match.score);
-      entry.bookmarks.add(item.bookmark.id);
-      for (const symbol of item.symbols) entry.symbols.set(symbol, (entry.symbols.get(symbol) || 0) + 1);
+      const entry = byTheme.get(match.theme.id) || {
+        supportingScores: [],
+        contradictingScores: [],
+        evidence: new Map<string, { direction: ThemeMatch['direction']; excerpt: string; confidence: number }>(),
+        symbols: new Map<string, number>(),
+      };
+      if (match.direction === 'supporting') entry.supportingScores.push(match.score);
+      if (match.direction === 'contradicting') entry.contradictingScores.push(match.score);
+      entry.evidence.set(item.bookmark.id, {
+        direction: match.direction,
+        excerpt: match.evidenceExcerpt,
+        confidence: match.score,
+      });
+      const membershipCandidates = new Set(item.candidates
+        .filter((candidate) => candidate.candidateType === 'membership' && candidate.themeId === match.theme.id)
+        .map((candidate) => candidate.label));
+      for (const symbol of item.symbols) {
+        if (membershipCandidates.has(symbol) || catalog.membershipsBySymbol.get(symbol)?.has(match.theme.id)) {
+          entry.symbols.set(symbol, (entry.symbols.get(symbol) || 0) + 1);
+        }
+      }
       byTheme.set(match.theme.id, entry);
     }
   }
   for (const [themeId, entry] of byTheme) {
-    const average = Math.round(entry.scores.reduce((sum, score) => sum + score, 0) / Math.max(1, entry.scores.length));
-    const confidence = Math.min(85, Math.max(40, Math.round(average * 0.65) + entry.bookmarks.size * 3));
+    const supporting = entry.supportingScores.length
+      ? entry.supportingScores.reduce((sum, score) => sum + score, 0) / entry.supportingScores.length
+      : 40;
+    const contradicting = entry.contradictingScores.length
+      ? entry.contradictingScores.reduce((sum, score) => sum + score, 0) / entry.contradictingScores.length
+      : 0;
+    const average = Math.round(Math.max(0, Math.min(100, supporting - contradicting * 0.6)));
+    const confidence = Math.min(85, Math.max(20, Math.round(average * 0.65) + entry.evidence.size * 3));
     await database.execute(
       "update theses set status=$1, confidence=$2, updated_at=now() where id=(select coalesce(thesis_id,id) from ontology_themes where id=$3)",
       [confidence < 60 ? 'forming' : 'hardening', confidence, themeId],
@@ -334,22 +409,22 @@ async function updateThesisEvidence(database: Database, classified: ClassifiedBo
         on conflict(thesis_id, symbol) do update set role=excluded.role, weight_hint=excluded.weight_hint
       `, [themeId, symbol, active[0]?.active ? 'member' : 'candidate', Number((count / total).toFixed(4))]);
     }
-    for (const bookmarkId of entry.bookmarks) {
+    for (const [bookmarkId, evidence] of entry.evidence) {
       await database.execute(`
         insert into thesis_evidence(thesis_id, bookmark_id, evidence_type, direction, summary, confidence, created_at)
-        select coalesce(t.thesis_id,t.id), b.id, 'x_bookmark', 'supporting', left(b.text,350), $3, now()
+        select coalesce(t.thesis_id,t.id), b.id, 'x_bookmark_llm', $3, $4, $5, now()
         from ontology_themes t join bookmarks b on b.id=$2 where t.id=$1
           and not exists (
             select 1 from thesis_evidence e where e.thesis_id=coalesce(t.thesis_id,t.id)
-              and e.bookmark_id=b.id and e.evidence_type='x_bookmark'
+              and e.bookmark_id=b.id and e.evidence_type='x_bookmark_llm'
           )
-      `, [themeId, bookmarkId, average]);
+      `, [themeId, bookmarkId, evidence.direction, evidence.excerpt, evidence.confidence]);
     }
     await database.execute(`
       insert into thesis_scores(thesis_id, scored_at, confidence, momentum, evidence_quality, catalyst_strength, portfolio_fit, risk, notes)
       values ((select coalesce(thesis_id,id) from ontology_themes where id=$1), now(), $2, $3, $4, 25, 50, 65,
-        'Adaptive score from the worker-based ontology pipeline.')
-    `, [themeId, confidence, Math.min(85, 30 + entry.bookmarks.size * 6), Math.min(80, average)]);
+        'Adaptive score from the LLM-backed ontology pipeline.')
+    `, [themeId, confidence, Math.min(85, 30 + entry.evidence.size * 6), Math.min(80, average)]);
   }
 }
 
@@ -361,9 +436,11 @@ async function promoteReadyCandidates(database: Database): Promise<number> {
   }>(`
     select c.*, t.auto_promote_sources from ontology_candidates c
     left join ontology_themes t on t.id=c.proposed_theme_id
-    where c.status='pending' and c.candidate_type in ('theme','term','membership')
+    where c.status='pending'
+      and c.candidate_type in ('theme','term','membership')
+      and c.sample_context->>'prompt_version'=$1
     order by c.score desc, c.source_count desc
-  `);
+  `, [ONTOLOGY_PROMPT_VERSION]);
   let promoted = 0;
   for (const row of rows) {
     const required = Number(row.auto_promote_sources || 4);
@@ -378,7 +455,7 @@ async function promoteReadyCandidates(database: Database): Promise<number> {
       if (!verified[0]?.allowed || !row.proposed_theme_id) continue;
       await database.execute(`
         insert into symbol_theme_memberships(symbol, theme_id, confidence, evidence_count, source_count, status, learned_by, first_seen_at, last_seen_at)
-        values ($1,$2,$3,$4,$5,'active','auto_cooccurrence',$6,now())
+        values ($1,$2,$3,$4,$5,'active','llm_semantic',$6,now())
         on conflict(symbol,theme_id) do update set
           confidence=greatest(symbol_theme_memberships.confidence,excluded.confidence),
           evidence_count=excluded.evidence_count, source_count=excluded.source_count,
@@ -394,7 +471,7 @@ async function promoteReadyCandidates(database: Database): Promise<number> {
       if (Number(row.source_count) < required + 1 || Number(row.source_count) / Math.max(1, Number(totals[0]?.count || 0)) < 0.65) continue;
       await database.execute(`
         insert into ontology_terms(theme_id,term,normalized_term,term_type,weight,status,evidence_count,source_count,created_by,created_at,updated_at)
-        values ($1,$2,$3,'alias',$4,'active',$5,$6,'auto_cooccurrence',now(),now())
+        values ($1,$2,$3,'alias',$4,'active',$5,$6,'llm_semantic',now(),now())
         on conflict(theme_id,normalized_term) do update set
           weight=greatest(ontology_terms.weight,excluded.weight), status='active',
           evidence_count=excluded.evidence_count, source_count=excluded.source_count, updated_at=excluded.updated_at
@@ -410,39 +487,65 @@ async function promoteReadyCandidates(database: Database): Promise<number> {
       `, [themeId, row.proposed_label, row.proposed_description]);
       await database.execute(`
         insert into ontology_themes(id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources,created_by,created_at,updated_at)
-        values ($1,$1,'theme',$2,$3,'active',35,6,'auto_emergence',now(),now())
+        values ($1,$1,'theme',$2,$3,'active',35,6,'llm_semantic',now(),now())
         on conflict(id) do update set thesis_id=coalesce(ontology_themes.thesis_id,excluded.thesis_id), status='active', updated_at=now()
       `, [themeId, row.proposed_label, row.proposed_description]);
     }
     await database.execute(
       "update ontology_candidates set status='promoted', reviewed_at=now(), review_note=$1 where id=$2",
-      [row.candidate_type === 'theme' ? 'auto_emergence' : 'auto_cooccurrence', row.id],
+      ['llm_semantic_quality_gates', row.id],
     );
     promoted += 1;
   }
   return promoted;
 }
 
-export async function ingestXBookmarks(database: Database, payload: XBookmarkPayload): Promise<{
+export async function ingestXBookmarks(
+  database: Database,
+  payload: XBookmarkPayload,
+  catalog: OntologyCatalog,
+  classified: ClassifiedBookmark[],
+): Promise<{
   bookmarks: number;
   marketRelated: number;
+  remainingAi: number;
   autoPromoted: number;
   pendingCandidates: number;
   articleTasks: Array<{ bookmarkId: string; url: string }>;
 }> {
   await database.execute("select pg_advisory_xact_lock(hashtextextended('thesisforge-x-bookmark-ingest',0))");
   await syncThemeTheses(database);
-  const catalog = await loadOntologyCatalog(database);
-  const classified = classifyBookmarks(payload, catalog);
+  const oldSymbols = await clearPriorAiClassification(database, classified);
   const runId = await persistCoreRows(database, payload, classified);
+  await recountSymbols(database, [...oldSymbols, ...classified.flatMap((item) => item.symbols)]);
   await persistOntologyEvidence(database, classified, catalog);
-  await updateThesisEvidence(database, classified);
+  await updateThesisEvidence(database, classified, catalog);
   const autoPromoted = await promoteReadyCandidates(database);
   const pending = await database.query<{ count: number }>("select count(*)::integer as count from ontology_candidates where status='pending'");
   await database.execute(
     'update runs set completed_at=now(), notes=$1 where id=$2',
-    [JSON.stringify({ bookmarks: classified.length, auto_promoted: autoPromoted, pending_candidates: Number(pending[0]?.count || 0), runtime: 'cloudflare' }), runId],
+    [JSON.stringify({
+      bookmarks_analyzed: classified.length,
+      classification_model: ONTOLOGY_AI_MODEL,
+      prompt_version: ONTOLOGY_PROMPT_VERSION,
+      auto_promoted: autoPromoted,
+      pending_candidates: Number(pending[0]?.count || 0),
+      runtime: 'cloudflare',
+    }), runId],
   );
+  const incomingIds = payload.bookmarks
+    .filter((bookmark) => typeof bookmark.id === 'string' && bookmark.id.length > 0)
+    .map((bookmark) => bookmark.id);
+  const summary = incomingIds.length ? await database.query<{ market_related: number; remaining_ai: number }>(`
+    select
+      count(*) filter (where b.is_market_related)::integer as market_related,
+      count(*) filter (
+        where b.classification_prompt_version is distinct from $2
+           or b.classification_model is distinct from $3
+      )::integer as remaining_ai
+    from unnest($1::text[]) incoming(id)
+    left join bookmarks b using(id)
+  `, [incomingIds, ONTOLOGY_PROMPT_VERSION, ONTOLOGY_AI_MODEL]) : [{ market_related: 0, remaining_ai: 0 }];
   const articleTasks = await database.query<{ bookmark_id: string; target: string }>(`
     select u.bookmark_id, coalesce(u.expanded_url,u.url) as target
     from bookmark_urls u left join articles a on a.url=coalesce(u.expanded_url,u.url)
@@ -450,7 +553,8 @@ export async function ingestXBookmarks(database: Database, payload: XBookmarkPay
   `);
   return {
     bookmarks: classified.length,
-    marketRelated: classified.filter((item) => item.marketScore >= 35).length,
+    marketRelated: Number(summary[0]?.market_related || 0),
+    remainingAi: Number(summary[0]?.remaining_ai || 0),
     autoPromoted,
     pendingCandidates: Number(pending[0]?.count || 0),
     articleTasks: articleTasks.map((row) => ({ bookmarkId: row.bookmark_id, url: row.target })),

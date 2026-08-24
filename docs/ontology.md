@@ -44,25 +44,22 @@ The graph should answer:
 Themes and ticker baskets are data, not Python constants. Supabase owns:
 
 - `ontology_themes`: active, candidate, merged, retired, and blacklisted themes or concepts.
-- `ontology_terms`: weighted keywords, aliases, phrases, entities, and negative terms.
+- `ontology_terms`: reviewed vocabulary supplied to the model as ontology context, not a keyword classifier.
 - `symbol_theme_memberships`: evidence-backed relationships between verified symbols and themes.
 - `ontology_observations` and `ontology_evidence`: the source-level audit trail behind classification.
 - `ontology_candidates` and `ontology_candidate_evidence`: observable proposed themes, vocabulary, and memberships with their source trail.
-- `ontology_lexicon`: ignored uppercase tokens, market-scoring vocabulary, and learning stopwords.
+- `ontology_lexicon`: operator-managed normalization and symbol-validation metadata.
 
-The default candidate queue suppresses one-off observations, URL tokens, unverified uppercase prose, and weak single-word theme clusters. The underlying evidence remains queryable for audit and future rescoring.
+The knowledge Worker sends bounded bookmark batches and the active ontology to Workers AI. The model reasons about market relevance, claims, explicitly stated symbols, theme matches, supporting or contradictory direction, and proposed themes, vocabulary, and memberships. Its structured output is rejected unless every bookmark is present, every existing theme ID is valid, and every claim, match, or candidate cites an exact contiguous source excerpt. There is no keyword, regex, n-gram, or co-occurrence fallback for semantic classification.
 
-Bookmark, article, and event ingestion first matches active database terms and symbol memberships. New symbols are persisted with `candidate` status. Repeated co-occurrence creates membership or vocabulary candidates; only verified symbols and sufficiently distinctive, multi-source evidence can auto-promote. Repeated source clusters that do not resemble an active theme create a new `candidate` theme, which activates autonomously after six independent sources and a higher score threshold. Managers can promote, demote, restore, or blacklist themes and symbols through the hosted ontology manager; blacklists are enforced by ingestion and classification, but no manager action is required for learning to continue.
+Validated model proposals enter the candidate queue. Only LLM-origin candidates with sufficiently strong, multi-source evidence can auto-promote; membership promotion additionally requires a verified symbol, and vocabulary promotion requires source distinctiveness. Prompt/model versions and validated output are stored on each bookmark, so unchanged inputs skip inference while a prompt or model upgrade triggers bounded backfill. Managers can promote, demote, restore, or blacklist themes and symbols through the hosted ontology manager.
 
 ```sh
-bun run ontology:learn
-bun run ontology:candidates
-bun run cli -- ontology verify-symbol SYMBOL
-bun run cli -- ontology approve CANDIDATE_ID
-bun run cli -- ontology add-theme theme_id "Theme name" --status active
-bun run cli -- ontology add-term theme_id "learned phrase"
-bun run cli -- ontology add-membership theme_id SYMBOL --relationship beneficiary
-bun run cli -- ontology add-lexicon "low information phrase" --type candidate_stopword
+cd web
+bun run knowledge:types
+bun run knowledge:typecheck
+bun run knowledge:test
+bun run knowledge:dry-run
 ```
 
 The initial vocabulary in `supabase/seed.sql` is only a bootstrap. Once loaded, taxonomy growth and review happen through Supabase records rather than code edits.

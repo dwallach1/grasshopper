@@ -7,7 +7,7 @@ ThesisForge's production runtime is Cloudflare-first. Supabase remains the canon
 | Worker | Owns | Does not own |
 |---|---|---|
 | `thesisforge-dashboard` | Private UI, Access identity verification, authenticated operator routes, read-only dashboard projection | Scheduling, ingestion, model decisions, broker state |
-| `thesisforge-knowledge-pipeline` | X OAuth/token rotation, bookmark sync, article/PDF extraction, R2 archival, ontology learning/graph refresh, financial-data cache, research capture, projection refresh after knowledge mutations | Trading decisions or broker tools |
+| `thesisforge-knowledge-pipeline` | X OAuth/token rotation, bookmark sync, Workers AI semantic ontology analysis, article/PDF extraction, R2 archival, ontology promotion/graph refresh, financial-data cache, research capture, projection refresh after knowledge mutations | Trading decisions or broker tools |
 | `thesisforge-research-orchestrator` | Market-slot schedule, durable research Workflow, Workers AI tasks, position decisions, trade-intent coordination, projection refresh when a run becomes terminal | Source ingestion, X credentials, broker OAuth |
 | `thesisforge-broker-gateway` | Robinhood MCP OAuth, read/review/place allowlist, final deterministic broker enforcement | Research or source ingestion |
 
@@ -24,10 +24,10 @@ The old `thesisforge-dashboard-publication` name was misleading: that Worker had
 
 ## Knowledge pipeline
 
-A 30-minute Cron calls the single `XCredentialVault` Durable Object. The object serializes syncs, refreshes rotating OAuth credentials, and fetches bounded X pages. One Postgres transaction then:
+A 30-minute Cron calls the single `XCredentialVault` Durable Object. The object serializes syncs, refreshes rotating OAuth credentials, and fetches bounded X pages. The Worker loads the active ontology and bookmarks whose model/prompt version is stale, then sends bounded batches to Workers AI through AI Gateway. Invalid, incomplete, or source-ungrounded model output aborts the learning run. A short Postgres transaction then:
 
 1. upserts bookmarks, URLs, verified symbol evidence, and claims;
-2. classifies source text against database-owned themes, terms, memberships, and lexicon;
+2. persists validated semantic claims, symbols, theme matches, evidence direction, model version, and raw typed output;
 3. records ontology observations, evidence, and reviewable candidates;
 4. updates thesis evidence/scores and promotes candidates that meet source-quality gates;
 5. enqueues previously unseen URLs.
@@ -48,7 +48,7 @@ When all tasks are terminal, run finalization immediately rebuilds the `current`
 
 - Dashboard traffic is protected by Cloudflare Access and application-level identity verification.
 - The knowledge Worker has no public route; dashboard calls use a service binding plus a shared internal token.
-- Cloudflare stores the Hyperdrive connection, X OAuth values, and internal tokens as encrypted secrets or bindings. The optional paid financial-data API remains disabled until `FINANCIAL_DATASETS_API_KEY` is configured.
+- Account-shared credentials live in Cloudflare Secrets Store: `INTERNAL_SERVICE_TOKEN` is bound only to dashboard and knowledge, `THESISFORGE_PUBLICATION_TOKEN` only to knowledge and research, and `FINANCIAL_DATASETS_API_KEY` only to knowledge. Worker-local encrypted secrets remain for single-owner values such as X OAuth and Supabase configuration.
 - Supabase Edge Functions retain the service-role key; Workers receive only narrow publication/control tokens.
 - R2 is private and has no public development URL or custom domain.
 - Worker HTTP responses are bounded and no secrets are logged.
@@ -70,7 +70,7 @@ A release is complete only after:
 8. duplicate Cron/Queue delivery is harmless;
 9. the old publication Worker and local Python/X runtime are removed only after the live checks pass.
 
-The cutover validation on 2026-08-24 confirmed live X token refresh and bookmark ingestion, Hyperdrive writes, Queue delivery and retry, private R2 archival, event-driven dashboard publication, Durable Object state transfer, and a completed non-actionable smoke instance of `thesisforge-research-cycle`. The one-minute sync cadence used during validation was restored to 30 minutes.
+The cutover validation on 2026-08-24 confirmed live X token refresh and bookmark ingestion, Hyperdrive writes, Queue delivery and retry, private R2 archival, event-driven dashboard publication, Durable Object state transfer, and a completed non-actionable smoke instance of `thesisforge-research-cycle`. Secrets Store validation also confirmed dashboard-to-knowledge authentication, new-token-only Supabase publication, and a live Financial Datasets `company/facts` network response normalized into Postgres. The one-minute sync cadence used during validation was restored to 30 minutes.
 
 ## Emergency stop
 

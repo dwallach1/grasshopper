@@ -3,6 +3,8 @@ import type { Database } from './database';
 const PROVIDER = 'financialdatasets.ai';
 const BASE_URL = 'https://api.financialdatasets.ai';
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [500, 1_500];
 
 export type FinancialRequest = {
   endpoint: string;
@@ -71,6 +73,19 @@ async function readBounded(response: Response): Promise<Uint8Array> {
   return result;
 }
 
+async function providerFetch(url: URL, spec: FinancialRequest, apiKey: string): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, {
+      method: spec.method || 'GET',
+      headers: { 'x-api-key': apiKey, accept: 'application/json', 'content-type': 'application/json', 'user-agent': 'ThesisForge/1.0 knowledge-pipeline' },
+      body: spec.body ? canonicalJson(spec.body) : undefined,
+    });
+    if (!RETRYABLE_STATUS.has(response.status) || attempt >= RETRY_DELAYS_MS.length) return response;
+    await response.body?.cancel('retryable provider response');
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+  }
+}
+
 function records(payload: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(payload)) return payload.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item));
   if (!payload || typeof payload !== 'object') return [];
@@ -123,11 +138,7 @@ export async function fetchFinancialData(database: Database, apiKey: string, spe
   const url = new URL(endpoint, BASE_URL);
   for (const [key, value] of Object.entries(spec.params || {}).sort()) url.searchParams.set(key, String(value));
   const startedAt = new Date().toISOString();
-  const response = await fetch(url, {
-    method: spec.method || 'GET',
-    headers: { 'x-api-key': apiKey, accept: 'application/json', 'content-type': 'application/json', 'user-agent': 'ThesisForge/1.0 knowledge-pipeline' },
-    body: spec.body ? canonicalJson(spec.body) : undefined,
-  });
+  const response = await providerFetch(url, spec, apiKey);
   const bytes = await readBounded(response);
   const completedAt = new Date().toISOString();
   const text = new TextDecoder().decode(bytes);

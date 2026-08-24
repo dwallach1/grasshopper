@@ -4,48 +4,27 @@ ThesisForge treats Financial Datasets as a paid upstream source, not as its data
 
 ## Safety properties
 
-- The API key is read only from `FINANCIAL_DATASETS_API_KEY` and is never included in fingerprints, logs, or stored request headers.
+- The API key is resolved only from the knowledge Worker's `FINANCIAL_DATASETS_API_KEY_SECRET` binding to the account-level Cloudflare Secrets Store entry `FINANCIAL_DATASETS_API_KEY`. It is never included in fingerprints, logs, or stored request headers.
 - Raw response bytes, response headers, request parameters, status, timestamp, and SHA-256 are retained for every upstream call, including API errors.
-- Raw JSON is gzip-compressed in Postgres. Normalized records keep their source request ID, so every fact is traceable to the exact purchased payload.
+- Raw response bytes are retained in Postgres. Normalized records keep their source request ID, so every fact is traceable to the exact purchased payload.
 - Identical normalized records are deduplicated. Changed records are appended rather than overwritten.
-- Pilot runs are dry by default and have a hard paid-request cap.
-- Financial Datasets MCP results are imported under the same request fingerprint as direct HTTP results, preventing transport-specific duplicate purchases.
+- Retryable 429/5xx responses receive two bounded retries; the final response is retained for diagnosis.
+- Paid requests are never scheduled and can only be initiated through the Access-authenticated manager route and internal service binding.
 
-## Trial workflow
+## Operator workflow
 
-Add the purchased key to `.env.local`:
+The dashboard's manager-only `POST /api/knowledge/financial` route accepts the upstream endpoint, query parameters, optional request body, and `force` flag. It forwards through the private `KNOWLEDGE_PIPELINE` service binding; neither the browser nor dashboard Worker can read the financial API key.
 
-```sh
-FINANCIAL_DATASETS_API_KEY=...
+For example, a company-facts request body is:
+
+```json
+{
+  "endpoint": "company/facts",
+  "params": { "ticker": "TSLA" },
+  "force": false
+}
 ```
 
-Load it into the shell, then inspect a three-ticker pilot without spending credits:
+Use `force` only when a new purchased response is intentionally worth another request. Otherwise the persistent endpoint-specific cache is authoritative until its freshness window expires.
 
-```sh
-set -a
-source .env.local
-set +a
-bun run financial:plan
-```
-
-After reviewing the request count, execute it:
-
-```sh
-bun run financial:plan -- --execute --max-paid-requests 40
-```
-
-The pilot requests 11 core datasets per ticker: company facts, quarterly metrics, three standardized statements, earnings, filings, insider trades, institutional holdings, news, and one year of daily prices. A repeated identical run uses the vault where the response remains fresh.
-
-Inspect usage and storage:
-
-```sh
-bun run financial:stats
-```
-
-Fetch an individual endpoint through the same cache:
-
-```sh
-bun run financial:fetch -- /financial-metrics --param ticker=GEV --param period=quarterly --param limit=4
-```
-
-Use `--force` only when a fresh upstream snapshot is intentionally worth another request. Historical price queries whose end date is already in the past are cached for ten years.
+Production validation on 2026-08-24 forced the documented TSLA company-facts query through dashboard → service binding → knowledge Worker → Financial Datasets. The provider returned HTTP 200 from the network; request ID 32 was retained and one normalized record was written to Postgres.

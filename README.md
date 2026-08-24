@@ -2,9 +2,93 @@
 
 ThesisForge is a cloud-native research and autonomous equity-trading operating system. It turns source material, market data, portfolio state, explicit theses, model judgments, executions, and outcomes into a persistent, auditable decision loop.
 
-The production research and trading path runs in Cloudflare and Supabase. It does not require Codex, a terminal session, or a powered-on laptop. Robinhood access is held by a Cloudflare Agent Durable Object through Robinhood's remote MCP endpoint.
+The production research and trading path runs in Cloudflare and Supabase. It does not require Codex, a terminal session, or a powered-on laptop; semantic ontology learning and scheduled research reasoning require Cloudflare Workers AI. Robinhood access is held by a Cloudflare Agent Durable Object through Robinhood's remote MCP endpoint.
 
 > ThesisForge is experimental software, not a promise of investment performance. It fails closed: missing evidence, stale data, broker warnings, unavailable controls, conflicting intent, or an invalid execution window blocks an order.
+
+## System design at a glance
+
+```text
+LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
+         [( )] durable storage                       [DO] Durable Object state
+
+ TRIGGERS + SOURCES                    CLOUDFLARE WORKERS                        DATA + EXTERNAL SYSTEMS
+ =============================================================================================================
+
+ Browser / operator
+        |
+        | Cloudflare Access
+        v
+ +---------------------------+        private service binding       +-------------------------------+
+ | thesisforge-dashboard     | ------------------------------------> | thesisforge-knowledge-pipeline |
+ | webapp + manager API      |                                       | LLM learning + knowledge graph |
+ +-------------+-------------+                                       +----+-----------+----------+---+
+               |                                                          |           |          |
+               | read-only Supabase API                                   |           |          +--> Financial
+               |                                                          |           |               Datasets API
+               |             manager-triggered: X sync, financial query,  |           |
+               |             research capture, projection refresh         |           +==> article Queue + DLQ
+               |                                                          |                       |
+               |             Cron: every 30m X sync ---------------------->+                       v
+               |             Cron: Sunday event map ---------------------->+                  [(private R2)]
+               |                                                          |                  original HTML/PDF
+               |             X API <--> [DO: XCredentialVault] <----------+                       |
+               |                                                          |                       |
+               |                                                          +--> Workers AI / AI Gateway
+               |                                                          +--> Hyperdrive --------+----+
+               |                                                                                       |
+               |                                                                                       v
+               |                                                                              [(Supabase Postgres)]
+               |                                                                              canonical system of record
+               |                                                                                       ^
+               v                                                                                       |
+       reads dashboard_snapshots.current                                                               |
+                                                                                                       |
+ Cloudflare Cron                                                                                       |
+  10:05 / 13:05 / 15:25 ET                                                                            |
+        |                                                                                              |
+        v                                                                                              |
+ +-----------------------------------+       ==> research Queue + DLQ                                   |
+ | thesisforge-research-orchestrator | -------------------------------+                                |
+ | Workflow + deterministic policy   |                                |                                |
+ +-----------+-----------------------+                                v                                |
+             |                                                Workers AI / AI Gateway                   |
+             |                                                [DO: ThesisCoordinator]                   |
+             |                                                [DO: PositionMonitor]                     |
+             |                                                        |                                |
+             |                                                        +--> approved trade intent        |
+             |                                                                 |                       |
+             |                                                                 v                       |
+             |                                                [DO: BrokerExecutionCoordinator]          |
+             |                                                                 |                       |
+             |                                                                 v                       |
+             |                                   +-----------------------------+------+                |
+             +---------------------------------> | thesisforge-broker-gateway         |                |
+                  broker Agent DO binding         | Robinhood policy + OAuth boundary |                |
+                                                 +------------------+-----------------+                |
+                                                                    |                                  |
+                                                       [DO: RobinhoodBrokerAgent]                       |
+                                                                    |                                  |
+                                                                    v                                  |
+                                                        Robinhood Agentic Trading MCP                   |
+                                                                                                       |
+ +-----------------------------------------------------------------------------------------------------+
+ | SUPABASE CONTROL + READ-MODEL LOOP                                                                   |
+ |                                                                                                     |
+ | research orchestrator --> cloud-control Edge Function --------------------------------------------> |
+ | knowledge mutations ---+                                                                            |
+ | terminal research run --+--> dashboard-publication Edge Function --> rebuild dashboard_snapshots    |
+ |                                                                                                     |
+ | Canonical rows are the write model. dashboard_snapshots.current is their bounded UI-ready exhaust.  |
+ +-----------------------------------------------------------------------------------------------------+
+
+ Cloudflare Secrets Store supplies only the Workers that need each shared credential:
+   dashboard + knowledge: INTERNAL_SERVICE_TOKEN
+   knowledge + research:  THESISFORGE_PUBLICATION_TOKEN
+   knowledge only:        FINANCIAL_DATASETS_API_KEY
+```
+
+The webapp never runs ingestion, research, publication, or trading jobs. It reads the bounded `dashboard_snapshots.current` projection produced from canonical Postgres rows, then exposes manager-only commands through the private knowledge service binding. Knowledge mutations and terminal research runs refresh that projection immediately, so the UI consumes the system's data exhaust without becoming part of the decision loop.
 
 ## Production status
 
@@ -19,47 +103,6 @@ The production research and trading path runs in Cloudflare and Supabase. It doe
 
 ## Production architecture
 
-```mermaid
-flowchart TB
-    subgraph CF[Cloudflare]
-        Access[Cloudflare Access]
-        Dashboard[thesisforge-dashboard<br/>private Next.js/vinext UI]
-        Knowledge[thesisforge-knowledge-pipeline<br/>X + documents + ontology + financial]
-        Control[thesisforge-research-orchestrator<br/>Cron + Workflows + Queue]
-        ResearchQueue[thesisforge-research-tasks<br/>Queue + DLQ]
-        ArticleQueue[thesisforge-knowledge-articles<br/>Queue + DLQ]
-        R2[(private R2<br/>research originals)]
-        Hyperdrive[Hyperdrive<br/>scoped Postgres]
-        AI[Workers AI<br/>AI Gateway]
-        ThesisDO[ThesisCoordinator<br/>per thesis]
-        PositionDO[PositionMonitor<br/>per account + symbol]
-        AccountDO[BrokerExecutionCoordinator<br/>per account]
-        Broker[thesisforge-broker-gateway]
-        BrokerAgent[RobinhoodBrokerAgent<br/>durable MCP OAuth]
-    end
-
-    subgraph SB[Supabase]
-        CloudControl[cloud-control Edge Function]
-        Publication[dashboard-publication Edge Function]
-        DB[(Postgres<br/>canonical system of record)]
-    end
-
-    RH[Robinhood Agentic Trading MCP]
-
-    Access --> Dashboard --> DB
-    Dashboard --> Knowledge
-    Knowledge --> Hyperdrive --> DB
-    Knowledge --> ArticleQueue --> R2
-    Knowledge --> Publication
-    Control --> CloudControl --> DB
-    Control --> ResearchQueue --> AI
-    ResearchQueue --> ThesisDO
-    ResearchQueue --> PositionDO
-    ResearchQueue --> AccountDO --> BrokerAgent --> RH
-    Control --> Publication --> DB
-    Broker --> BrokerAgent
-```
-
 Durable Object SQLite stores coordination, deduplication, and broker-connection state. It is not a second research database. Supabase remains canonical.
 
 ## Cloudflare components
@@ -67,13 +110,15 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | Component | Responsibility | Boundary |
 |---|---|---|
 | `thesisforge-dashboard` | Serves the private dashboard | Cloudflare Access; server-side Supabase reads; no service-role secret in the browser |
-| `thesisforge-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, archives linked pages/PDFs, learns ontology, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO |
+| `thesisforge-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
 | `thesisforge-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
 | `thesisforge-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
 | `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
 | `thesisforge-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
 | `thesisforge-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
-| Workers AI | Typed recommendations | No broker credentials, tools, or placement authority |
+| Workers AI | Typed semantic ontology analysis and research recommendations | No broker credentials, tools, or placement authority |
+
+Shared production credentials use the account-level Cloudflare Secrets Store. The dashboard and knowledge Worker resolve `INTERNAL_SERVICE_TOKEN`; knowledge and research resolve `THESISFORGE_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
 
 ### Durable Objects
 
@@ -211,7 +256,7 @@ Hard gateway ceilings include the 09:45–15:45 New York window, 120-second side
 
 ## How the system learns
 
-Learning means persistent evidence-backed memory, not hidden model retraining or self-modifying execution rules.
+Learning means LLM-reasoned, persistent evidence-backed memory, not hidden model retraining or self-modifying execution rules. Bookmark classification, claim extraction, theme matching, evidence direction, and ontology proposals use structured Workers AI calls. Deterministic code validates exact evidence spans and applies promotion-quality gates; it does not substitute keyword or regex scoring for semantic judgment.
 
 ```text
 observe -> classify -> propose ontology changes -> promote after quality gates
@@ -241,7 +286,7 @@ Either can be paused. Defense-in-depth Worker switches are `TRADING_ENABLED=fals
 | Dashboard serving | Cloudflare |
 | X OAuth and bookmark ingestion | `thesisforge-knowledge-pipeline` + `XCredentialVault` |
 | Article/PDF extraction and archival | Knowledge Queue + private R2 |
-| Ontology classification, learning, promotion, and graph refresh | `thesisforge-knowledge-pipeline` |
+| LLM ontology classification and proposals; deterministic validation, promotion, and graph refresh | `thesisforge-knowledge-pipeline` + Workers AI / AI Gateway |
 | Paid financial-data acquisition and cache | Authenticated knowledge Worker API; never scheduled automatically |
 | Research judgments, cycles, and lessons | Authenticated knowledge Worker API |
 | Scheduled thesis research | Cloudflare Cron, Workflow, Queue, Workers AI |
@@ -281,6 +326,7 @@ bun run research:types
 bun run workflow:typecheck
 bun run workflow:test
 bun run research:dry-run
+bun run knowledge:types
 bun run knowledge:typecheck
 bun run knowledge:test
 bun run knowledge:dry-run
