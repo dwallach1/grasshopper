@@ -18,7 +18,11 @@ type AccountState={observed_at:string;account_label:string;total_value:number;eq
 type RunReport={id:number;run_type:string;started_at:string;completed_at:string|null;status:string;headline:string;summary:string;insights:string[];learnings:string[];actions:string[];metrics:Record<string,string|number>};
 type Automation={id:string;name:string;prompt:string;kind:string;status:string;rrule:string;model:string|null;reasoning_effort:string|null;next_run_at:string|null;last_run_at:string|null;indexed_at:string;run_count:number;passed_count:number;failed_count:number};
 type AutomationRun={thread_id:string;automation_id:string;automation_name:string;status:string;outcome:'running'|'passed'|'failed'|'cancelled'|'unknown';started_at:string;completed_at:string|null;duration_ms:number|null;title:string|null;summary:string|null;final_output:string|null;findings:string[];learnings:string[];explored:string[];actions:string[];timeline:{at:string|null;text:string}[];error_text:string|null;tokens_used:number|null};
-export type Snapshot={generated_at:string;run_reports?:RunReport[];automations?:Automation[];automation_runs?:AutomationRun[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
+type OntologyTheme={id:string;thesis_id:string|null;kind:string;name:string;description:string;status:string;match_threshold:number;auto_promote_sources:number;term_count?:number;symbol_count?:number};
+type OntologyCandidate={id:number;candidate_type:string;candidate_key:string;proposed_theme_id:string|null;proposed_label:string;proposed_description:string;score:number;evidence_count:number;source_count:number;status:string;first_seen_at:string;last_seen_at:string;review_note:string|null};
+type OntologySymbol={symbol:string;status:string;mention_count:number;source_count:number;first_seen_at:string;last_seen_at:string};
+type OntologyAction={id:number;actor_id:string;entity_type:string;entity_key:string;action:string;created_at:string};
+export type Snapshot={generated_at:string;run_reports?:RunReport[];automations?:Automation[];automation_runs?:AutomationRun[];ontology_themes?:OntologyTheme[];ontology_candidates?:OntologyCandidate[];ontology_symbols?:OntologySymbol[];ontology_actions?:OntologyAction[];theses:Thesis[];cycles:Cycle[];tests:Test[];test_scenarios:Scenario[];agent_runs:AgentRun[];lessons:Lesson[];risk_controls:RiskControl[];relations:Relation[];predictions:Prediction[];insights:Insight[];events:EventRecord[];account_state?:AccountState|null;trade_proposals?:TradeProposal[];financial_data?:{network_requests:number;cache_hits:number;records:number;tickers:number;datasets:number};counts:{sources:number;symbols:number;open_research:number;tests_killed:number;tests_survived:number;scenario_cells:number}};
 
 const stages=['research','code','backtest','live','postmortem','fine-tune'];
 const positions:Record<string,[number,number]>={ai_power_nuclear:[18,35],neocloud_compute:[45,20],semis_photonics:[73,32],software_ai_apps:[79,70],quantum:[52,80],crypto:[25,72],defense_drones_space:[10,58],biotech_royalty:[48,50]};
@@ -45,7 +49,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const [selectedCycleId,setSelectedCycleId]=useState(initialData.cycles[0]?.id);
   const [selectedTestId,setSelectedTestId]=useState(initialData.tests[0]?.id);
   const [selectedScenarioId,setSelectedScenarioId]=useState(initialData.test_scenarios[0]?.id);
-  const [surface,setSurface]=useState<'home'|'automations'|'runs'|'cycles'|'memory'|'risk'>('home');
+  const [surface,setSurface]=useState<'home'|'automations'|'runs'|'cycles'|'memory'|'ontology'|'risk'>('home');
   useEffect(()=>{const tick=()=>setClock(new Date().toLocaleTimeString('en-US',{hour12:false,timeZone:'America/New_York'}));tick();const id=window.setInterval(tick,1000);return()=>window.clearInterval(id)},[]);
   const activeCycle=initialData.cycles.find(c=>c.id===selectedCycleId)||initialData.cycles[0];
   const activeTest=initialData.tests.find(t=>t.id===selectedTestId)||initialData.tests[0];
@@ -56,7 +60,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   function selectCycle(cycle:Cycle){setSelectedCycleId(cycle.id);const test=initialData.tests.find(t=>t.cycle_id===cycle.id);if(test){setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}}
 
   return <main className="terminal-shell">
-    <header className="command-bar"><div className="desk-id"><b>TF</b><span>THESISFORGE<small>ONTOLOGY / RESEARCH DESK</small></span></div><nav className="desk-tabs" aria-label="Workspace"><button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>HOME</button><button className={surface==='automations'?'active':''} onClick={()=>setSurface('automations')}>AUTOMATIONS</button><button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>RUNS</button><button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>CYCLES</button><button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>MEMORY</button><button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>RISK</button></nav><div className="run-state"><span>JOBS <b>{initialData.automations?.length||0}</b></span><span>KILL RATE <b className="red">{killRate}%</b></span><span>READY <b className="amber">{readyCount}</b></span></div><div className="clock"><b>{clock||'--:--:--'}</b><span>NEW YORK · DATA {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div></header>
+    <header className="command-bar"><div className="desk-id"><b>TF</b><span>THESISFORGE<small>ONTOLOGY / RESEARCH DESK</small></span></div><nav className="desk-tabs" aria-label="Workspace"><button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>HOME</button><button className={surface==='automations'?'active':''} onClick={()=>setSurface('automations')}>AUTOMATIONS</button><button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>RUNS</button><button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>CYCLES</button><button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>MEMORY</button><button className={surface==='ontology'?'active':''} onClick={()=>setSurface('ontology')}>ONTOLOGY</button><button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>RISK</button></nav><div className="run-state"><span>JOBS <b>{initialData.automations?.length||0}</b></span><span>KILL RATE <b className="red">{killRate}%</b></span><span>READY <b className="amber">{readyCount}</b></span></div><div className="clock"><b>{clock||'--:--:--'}</b><span>NEW YORK · DATA {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div></header>
 
     <section className="page-shell">
       {surface==='home'&&<HomeSurface data={initialData} activeThesisId={activeCycle?.thesis_id}/>}
@@ -64,6 +68,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
       {surface==='runs'&&<RunsSurface data={initialData}/>}
       {surface==='cycles'&&<CyclesSurface data={initialData} activeCycle={activeCycle} activeTest={activeTest} selectedScenarioId={selectedScenarioId} onCycle={selectCycle} onTest={(test)=>{setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}} onScenario={setSelectedScenarioId}/>}
       {surface==='memory'&&<MemorySurface data={initialData}/>}
+      {surface==='ontology'&&<OntologyManager data={initialData}/>}
       {surface==='risk'&&<RiskSurface data={initialData}/>}
     </section>
 
@@ -170,6 +175,54 @@ function CyclesSurface({data,activeCycle,activeTest,selectedScenarioId,onCycle,o
 }
 
 function MemorySurface({data}:{data:Snapshot}){return <><div className="panel-title"><b>PERSISTENT WORLD MODEL · WHAT FAILED / WHERE / WHY</b><span>NEGATIVE RESULTS ARE FIRST-CLASS EVIDENCE</span><strong>{data.lessons.filter(l=>!l.incorporated).length} OPEN LOOPS</strong></div><div className="insight-grid">{data.insights.map(i=><article key={i.id}><span>{clean(i.insight_type)} · CONF {i.confidence}</span><h3>{i.title}</h3><p>{i.summary}</p><b>{i.novelty} NOVELTY</b></article>)}</div><div className="memory-table"><div className="table-head"><span>LESSON</span><span>THESIS</span><span>REGIME</span><span>STATE</span></div>{data.lessons.map(l=><div className="table-row" key={l.id}><p><b>{clean(l.lesson_type)}</b>{l.summary}</p><span>{data.theses.find(t=>t.id===l.thesis_id)?.name}</span><span>{l.market_regime}</span><b className={l.incorporated?'green':'amber'}>{l.incorporated?'IN MODEL':'PENDING'}</b></div>)}</div><div className="memory-lower"><section><div className="panel-title"><b>PREREGISTERED PREDICTIONS</b><span>NO MOVING GOALPOSTS</span></div>{data.predictions.map(p=><div className="prediction-row" key={p.id}><b>{p.probability}%</b><p>{p.statement}</p><span>{p.target_date||'TBD'} · {p.status}</span></div>)}</section><section><div className="panel-title"><b>CRITIC OUTPUT</b><span>BEHAVIORAL PATTERNS</span></div>{data.agent_runs.filter(a=>['critic','postmortem'].includes(a.agent_role)).map(a=><div className="critic-row" key={a.id}><b>{a.agent_role}</b><p>{a.summary}</p></div>)}</section></div></>}
+
+function OntologyManager({data}:{data:Snapshot}){
+  const [themes,setThemes]=useState(data.ontology_themes||[]);
+  const [symbols,setSymbols]=useState(data.ontology_symbols||[]);
+  const [actions,setActions]=useState(data.ontology_actions||[]);
+  const [tab,setTab]=useState<'themes'|'symbols'|'evidence'>('themes');
+  const [query,setQuery]=useState('');
+  const [pending,setPending]=useState('');
+  const [notice,setNotice]=useState('');
+  const candidates=data.ontology_candidates||[];
+  const filteredThemes=themes.filter(theme=>`${theme.name} ${theme.id} ${theme.description} ${theme.status}`.toLowerCase().includes(query.toLowerCase()));
+  const filteredSymbols=symbols.filter(symbol=>`${symbol.symbol} ${symbol.status}`.toLowerCase().includes(query.toLowerCase()));
+  const activeCount=themes.filter(theme=>theme.status==='active').length;
+  const blockedCount=themes.filter(theme=>theme.status==='blacklisted').length+symbols.filter(symbol=>symbol.status==='blacklisted').length;
+
+  async function manage(entityType:'theme'|'symbol',entityKey:string,action:string){
+    const operation=`${entityType}:${entityKey}:${action}`;
+    setPending(operation);setNotice('');
+    try{
+      const response=await fetch('/api/ontology/manage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entity_type:entityType,entity_key:entityKey,action})});
+      const result=await response.json() as {error?:string;entity?:OntologyTheme|OntologySymbol};
+      if(!response.ok||!result.entity)throw new Error(result.error||'Ontology action failed');
+      if(entityType==='theme')setThemes(current=>current.map(item=>item.id===entityKey?{...item,...result.entity as OntologyTheme}:item));
+      else setSymbols(current=>current.map(item=>item.symbol===entityKey?{...item,...result.entity as OntologySymbol}:item));
+      setActions(current=>[{id:Date.now(),actor_id:'you',entity_type:entityType,entity_key:entityKey,action,created_at:new Date().toISOString()},...current]);
+      setNotice(`${clean(action)} applied to ${entityKey}.`);
+    }catch(error){setNotice(error instanceof Error?error.message:'Ontology action failed');}
+    finally{setPending('');}
+  }
+  const controls=(type:'theme'|'symbol',key:string,status:string)=>{
+    const items:{action:string;label:string;danger?:boolean}[]=status==='blacklisted'
+      ?[{action:'restore',label:'RESTORE'}]
+      :[
+        ...(status!=='active'&&status!=='verified'?[{action:'promote',label:'PROMOTE'}]:[]),
+        ...(status==='active'||status==='verified'?[{action:'demote',label:'DEMOTE'}]:[]),
+        {action:'blacklist',label:'BLACKLIST',danger:true},
+      ];
+    return <div className="ontology-controls">{items.map(item=><button className={item.danger?'danger':''} disabled={Boolean(pending)} key={item.action} onClick={()=>manage(type,key,item.action)}>{pending===`${type}:${key}:${item.action}`?'WORKING…':item.label}</button>)}</div>;
+  };
+
+  return <section className="ontology-manager">
+    <div className="ontology-hero"><div><span>SELF-GROWING KNOWLEDGE LAYER</span><h1>Autonomous by default. Governable at any time.</h1><p>Independent evidence creates vocabulary, memberships, and entirely new themes. This console changes direction when you want it to—it is never a required approval queue.</p></div><div className="ontology-kpis"><span><b>{activeCount}</b>ACTIVE THEMES</span><span><b>{candidates.filter(candidate=>candidate.status==='pending').length}</b>LEARNING SIGNALS</span><span><b>{blockedCount}</b>HARD STOPS</span></div></div>
+    <div className="ontology-toolbar"><div role="tablist" aria-label="Ontology manager views"><button className={tab==='themes'?'active':''} onClick={()=>setTab('themes')}>THEMES</button><button className={tab==='symbols'?'active':''} onClick={()=>setTab('symbols')}>SYMBOLS</button><button className={tab==='evidence'?'active':''} onClick={()=>setTab('evidence')}>EVIDENCE + HISTORY</button></div>{tab!=='evidence'&&<input aria-label={`Search ${tab}`} placeholder={`SEARCH ${tab.toUpperCase()}`} value={query} onChange={event=>setQuery(event.target.value)}/>}<span className={notice.toLowerCase().includes('failed')||notice.toLowerCase().includes('required')?'error':''} aria-live="polite">{notice}</span></div>
+    {tab==='themes'&&<div className="ontology-theme-grid">{filteredThemes.map(theme=><article className={`ontology-card ${theme.status}`} key={theme.id}><header><div><span>{clean(theme.kind)} · {theme.id}</span><h2>{theme.name}</h2></div><b>{theme.status}</b></header><p>{theme.description||'Emerging source cluster; description will deepen with evidence.'}</p><dl><div><dt>ACTIVATION</dt><dd>{theme.auto_promote_sources} SOURCES</dd></div><div><dt>MATCH FLOOR</dt><dd>{theme.match_threshold}</dd></div><div><dt>VOCABULARY</dt><dd>{theme.term_count??'LIVE'}</dd></div><div><dt>SYMBOLS</dt><dd>{theme.symbol_count??'LIVE'}</dd></div></dl>{controls('theme',theme.id,theme.status)}</article>)}</div>}
+    {tab==='symbols'&&<div className="ontology-symbol-table"><div className="ontology-table-head"><span>SYMBOL</span><span>STATE</span><span>INDEPENDENT SOURCES</span><span>MENTIONS</span><span>LAST SEEN</span><span>OVERRIDE</span></div>{filteredSymbols.map(symbol=><div className={`ontology-symbol-row ${symbol.status}`} key={symbol.symbol}><b>{symbol.symbol}</b><span>{symbol.status}</span><span>{symbol.source_count}</span><span>{symbol.mention_count}</span><span>{symbol.last_seen_at?new Date(symbol.last_seen_at).toLocaleDateString():'—'}</span>{controls('symbol',symbol.symbol,symbol.status)}</div>)}</div>}
+    {tab==='evidence'&&<div className="ontology-evidence-layout"><section><div className="panel-title"><b>LIVE EVIDENCE QUEUE</b><span>OBSERVABLE, NOT BLOCKING</span><strong>{candidates.length} SIGNALS</strong></div>{candidates.slice(0,40).map(candidate=><article className="candidate-row" key={candidate.id}><div><span>{candidate.candidate_type} · {candidate.status}</span><b>{candidate.proposed_label}</b><p>{candidate.proposed_description}</p></div><strong>{candidate.score}<small>SCORE</small></strong><strong>{candidate.source_count}<small>SOURCES</small></strong></article>)}</section><aside><div className="panel-title"><b>MANAGER HISTORY</b><span>EVERY OVERRIDE AUDITED</span></div>{actions.length?actions.slice(0,40).map(action=><div className="ontology-action" key={action.id}><b>{action.action}</b><span>{action.entity_type} · {action.entity_key}</span><small>{new Date(action.created_at).toLocaleString()}</small></div>):<p className="ontology-no-actions">No overrides yet. The learner is operating autonomously.</p>}</aside></div>}
+  </section>;
+}
 
 function RiskSurface({data}:{data:Snapshot}){
   const purpose:Record<string,string>={max_drawdown:'Stop adding risk when portfolio drawdown reaches the configured ceiling.',max_notional:'Prevent one thesis from consuming too much portfolio equity.',minimum_liquidity:'Reject trades whose spread is too wide for controlled execution.',transaction_cost_stress:'Require every backtest survivor to remain viable after costs are doubled.'};

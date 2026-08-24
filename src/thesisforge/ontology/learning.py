@@ -66,6 +66,7 @@ class OntologyCatalog:
         memberships: Iterable[dict[str, Any]],
         lexicon: Iterable[dict[str, Any]],
         symbols: Iterable[str] = (),
+        blacklisted_symbols: Iterable[str] = (),
     ) -> None:
         self.themes = {theme.id: theme for theme in themes}
         self.terms_by_theme: dict[str, dict[str, tuple[int, str]]] = defaultdict(dict)
@@ -79,6 +80,7 @@ class OntologyCatalog:
         for row in memberships:
             self.memberships_by_symbol[str(row["symbol"])][str(row["theme_id"])] = int(row["confidence"])
         self.known_symbols = {str(symbol).upper() for symbol in symbols} | set(self.memberships_by_symbol)
+        self.blacklisted_symbols = {str(symbol).upper() for symbol in blacklisted_symbols}
 
         self.ignored_symbols: set[str] = set()
         self.market_keywords: dict[str, int] = {}
@@ -117,7 +119,11 @@ class OntologyCatalog:
             "SELECT theme_id, normalized_term, term_type, weight FROM ontology_terms WHERE status='active'"
         ).fetchall()
         memberships = conn.execute(
-            "SELECT symbol, theme_id, confidence FROM symbol_theme_memberships WHERE status='active'"
+            """SELECT m.symbol, m.theme_id, m.confidence
+               FROM symbol_theme_memberships m
+               JOIN ontology_themes t ON t.id=m.theme_id
+               JOIN symbols s ON s.symbol=m.symbol
+               WHERE m.status='active' AND t.status='active' AND s.status<>'blacklisted'"""
         ).fetchall()
         lexicon = conn.execute(
             "SELECT token, token_type, weight FROM ontology_lexicon WHERE status='active'"
@@ -128,7 +134,18 @@ class OntologyCatalog:
                 "SELECT symbol FROM symbols WHERE status IN ('known', 'verified', 'active', 'public_comp')"
             )
         ]
-        return cls(themes=themes, terms=terms, memberships=memberships, lexicon=lexicon, symbols=symbols)
+        blacklisted_symbols = [
+            row["symbol"]
+            for row in conn.execute("SELECT symbol FROM symbols WHERE status='blacklisted'")
+        ]
+        return cls(
+            themes=themes,
+            terms=terms,
+            memberships=memberships,
+            lexicon=lexicon,
+            symbols=symbols,
+            blacklisted_symbols=blacklisted_symbols,
+        )
 
     def extract_symbols(self, text: str) -> set[str]:
         cashtags = {match.group(1).replace(".", "-").upper() for match in CASHTAG_RE.finditer(text)}
@@ -140,7 +157,9 @@ class OntologyCatalog:
         return {
             symbol
             for symbol in cashtags | uppercase
-            if symbol not in self.ignored_symbols and not symbol.isdigit()
+            if symbol not in self.ignored_symbols
+            and symbol not in self.blacklisted_symbols
+            and not symbol.isdigit()
         }
 
     def market_score(self, text: str, symbols: set[str], annotations: list[dict[str, Any]]) -> int:
@@ -152,6 +171,7 @@ class OntologyCatalog:
         return min(score, 100)
 
     def classify(self, text: str, symbols: set[str]) -> list[ThemeMatch]:
+        symbols = symbols - self.blacklisted_symbols
         features = text_features(text)
         term_hits: dict[str, list[str]] = defaultdict(list)
         symbol_hits: dict[str, list[str]] = defaultdict(list)
@@ -328,7 +348,7 @@ class OntologyLearner:
             )
 
     def discover_emerging_themes(self, *, minimum_sources: int = 4) -> int:
-        """Create governed theme candidates from repeated unclassified features."""
+        """Create evidence-backed themes that can activate without human review."""
         rows = self.conn.execute(
             """SELECT o.source_type, o.source_key, o.feature_type, o.feature_value, o.observed_at
                FROM ontology_observations o
@@ -384,12 +404,21 @@ class OntologyLearner:
             if candidate_type == "theme" and len(distinct_sources) >= minimum_sources + 1:
                 theme_id = slugify(feature).replace("-", "_")[:80]
                 if theme_id:
+                    timestamp = utc_now_iso()
                     self.conn.execute(
                         """INSERT INTO ontology_themes(
-                             id, kind, name, description, status, created_by, created_at, updated_at
-                           ) VALUES (?, 'theme', ?, ?, 'candidate', 'learning', ?, ?)
+                             id, kind, name, description, status, match_threshold,
+                             auto_promote_sources, created_by, created_at, updated_at
+                           ) VALUES (?, 'theme', ?, ?, 'candidate', 35, 6, 'learning', ?, ?)
                            ON CONFLICT(id) DO NOTHING""",
-                        (theme_id, feature.title(), description, utc_now_iso(), utc_now_iso()),
+                        (theme_id, feature.title(), description, timestamp, timestamp),
+                    )
+                    self.conn.execute(
+                        """UPDATE ontology_candidates
+                           SET proposed_theme_id=?
+                           WHERE candidate_type='theme' AND candidate_key=?
+                             AND status='pending' AND proposed_theme_id IS NULL""",
+                        (theme_id, candidate_key),
                     )
             created += 1
         return created
@@ -400,14 +429,18 @@ class OntologyLearner:
             """SELECT c.*, t.auto_promote_sources
                FROM ontology_candidates c
                LEFT JOIN ontology_themes t ON t.id=c.proposed_theme_id
-               WHERE c.status='pending' AND c.candidate_type IN ('term', 'membership')
+               WHERE c.status='pending' AND c.candidate_type IN ('theme', 'term', 'membership')
                ORDER BY c.score DESC, c.source_count DESC"""
         ).fetchall()
         for row in rows:
             required_sources = int(row["auto_promote_sources"] or 4)
-            if int(row["source_count"]) < required_sources or int(row["score"]) < 65:
+            minimum_score = 75 if row["candidate_type"] == "theme" else 65
+            if int(row["source_count"]) < required_sources or int(row["score"]) < minimum_score:
                 continue
-            if row["candidate_type"] == "membership":
+            if row["candidate_type"] == "theme":
+                if not self._promote_theme(row, learned_by="auto_emergence"):
+                    continue
+            elif row["candidate_type"] == "membership":
                 symbol = row["proposed_label"].upper()
                 symbol_row = self.conn.execute("SELECT status FROM symbols WHERE symbol=?", (symbol,)).fetchone()
                 if not symbol_row or symbol_row["status"] not in {"verified", "active", "public_comp"}:
@@ -441,21 +474,7 @@ class OntologyLearner:
         elif row["candidate_type"] == "term":
             self._promote_term(row, learned_by="manual")
         else:
-            theme_id = slugify(row["proposed_label"]).replace("-", "_")[:80]
-            if not theme_id:
-                raise ValueError("Theme candidate has no usable identifier")
-            timestamp = utc_now_iso()
-            self.conn.execute(
-                """INSERT INTO ontology_themes(
-                     id, kind, name, description, status, created_by, created_at, updated_at
-                   ) VALUES (?, 'theme', ?, ?, 'active', 'manual', ?, ?)
-                   ON CONFLICT(id) DO UPDATE SET status='active', updated_at=excluded.updated_at""",
-                (theme_id, row["proposed_label"], row["proposed_description"], timestamp, timestamp),
-            )
-            self.conn.execute(
-                """UPDATE ontology_candidates SET status='promoted', reviewed_at=?, review_note=? WHERE id=?""",
-                (timestamp, note, candidate_id),
-            )
+            self._promote_theme(row, learned_by="manual", review_note=note)
         self.refresh_catalog()
 
     def reject_candidate(self, candidate_id: int, *, note: str) -> None:
@@ -661,6 +680,76 @@ class OntologyLearner:
             "UPDATE ontology_candidates SET status='promoted', reviewed_at=?, review_note=? WHERE id=?",
             (timestamp, learned_by, row["id"]),
         )
+
+    def _promote_theme(self, row, *, learned_by: str, review_note: str | None = None) -> bool:
+        theme_id = row["proposed_theme_id"] or slugify(row["proposed_label"]).replace("-", "_")[:80]
+        if not theme_id:
+            raise ValueError("Theme candidate has no usable identifier")
+        existing = self.conn.execute(
+            "SELECT status FROM ontology_themes WHERE id=?",
+            (theme_id,),
+        ).fetchone()
+        if existing and existing["status"] in {"blacklisted", "retired", "merged"}:
+            if learned_by == "manual":
+                raise ValueError(f"Theme {theme_id} is {existing['status']}; restore it before promotion")
+            return False
+
+        timestamp = utc_now_iso()
+        thesis_id = theme_id
+        self.conn.execute(
+            """INSERT INTO theses(id, name, summary, status, confidence, time_horizon, created_at, updated_at)
+               VALUES (?, ?, ?, 'forming', 40, 'days_to_weeks', ?, ?)
+               ON CONFLICT(id) DO NOTHING""",
+            (thesis_id, row["proposed_label"], row["proposed_description"], timestamp, timestamp),
+        )
+        self.conn.execute(
+            """INSERT INTO ontology_themes(
+                 id, thesis_id, kind, name, description, status, match_threshold,
+                 auto_promote_sources, created_by, created_at, updated_at
+               ) VALUES (?, ?, 'theme', ?, ?, 'active', 35, 6, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 thesis_id=coalesce(ontology_themes.thesis_id, excluded.thesis_id),
+                 status='active', updated_at=excluded.updated_at""",
+            (
+                theme_id,
+                thesis_id,
+                row["proposed_label"],
+                row["proposed_description"],
+                learned_by,
+                timestamp,
+                timestamp,
+            ),
+        )
+        normalized = normalize_phrase(row["proposed_label"])
+        if normalized:
+            self.conn.execute(
+                """INSERT INTO ontology_terms(
+                     theme_id, term, normalized_term, term_type, weight, status,
+                     evidence_count, source_count, created_by, created_at, updated_at
+                   ) VALUES (?, ?, ?, 'phrase', ?, 'active', ?, ?, ?, ?, ?)
+                   ON CONFLICT(theme_id, normalized_term) DO UPDATE SET
+                     weight=greatest(ontology_terms.weight, excluded.weight), status='active',
+                     evidence_count=excluded.evidence_count, source_count=excluded.source_count,
+                     updated_at=excluded.updated_at""",
+                (
+                    theme_id,
+                    row["proposed_label"],
+                    normalized,
+                    row["score"],
+                    row["evidence_count"],
+                    row["source_count"],
+                    learned_by,
+                    timestamp,
+                    timestamp,
+                ),
+            )
+        self.conn.execute(
+            """UPDATE ontology_candidates
+               SET proposed_theme_id=?, status='promoted', reviewed_at=?, review_note=?
+               WHERE id=?""",
+            (theme_id, timestamp, review_note or learned_by, row["id"]),
+        )
+        return True
 
     def _promote_term(self, row, *, learned_by: str) -> None:
         timestamp = utc_now_iso()

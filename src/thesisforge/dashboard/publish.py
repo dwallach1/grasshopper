@@ -115,6 +115,19 @@ def main() -> None:
               )
             ORDER BY status, source_count DESC, score DESC LIMIT 100
         """),
+        "ontology_symbols": rows(conn, """
+            SELECT symbol, status, mention_count, source_count, first_seen_at, last_seen_at
+            FROM symbols
+            ORDER BY CASE status WHEN 'blacklisted' THEN 0 WHEN 'candidate' THEN 1 ELSE 2 END,
+                     source_count DESC, mention_count DESC, symbol
+            LIMIT 300
+        """),
+        "ontology_actions": rows(conn, """
+            SELECT id, actor_id, entity_type, entity_key, action, created_at
+            FROM ontology_management_actions
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+        """),
         "events": rows(conn, """
             SELECT e.id, e.event_type, e.label, e.event_date, e.status, e.source_url, e.summary,
                    COALESCE(d.decision, 'watch') AS decision, d.rationale, d.participation_trigger

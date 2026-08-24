@@ -26,6 +26,7 @@ class OntologyCatalogTests(unittest.TestCase):
             ],
             memberships=[{"symbol": "FLNC", "theme_id": "grid_storage", "confidence": 90}],
             symbols=["FLNC"],
+            blacklisted_symbols=["ZETA"],
             lexicon=[
                 {"token": "CEO", "token_type": "ignored_symbol", "weight": 0},
                 {"token": "revenue", "token_type": "market_keyword", "weight": 8},
@@ -46,8 +47,11 @@ class OntologyCatalogTests(unittest.TestCase):
 
     def test_new_symbol_is_discovered_but_not_forced_into_theme(self) -> None:
         symbols = self.catalog.extract_symbols("CEO discusses $ZETA and FLNC but not BEFORE")
-        self.assertEqual(symbols, {"ZETA", "FLNC"})
+        self.assertEqual(symbols, {"FLNC"})
         self.assertEqual(self.catalog.classify("New issuer $ZETA", {"ZETA"}), [])
+
+    def test_blacklisted_symbol_is_excluded_even_when_cashtagged(self) -> None:
+        self.assertEqual(self.catalog.extract_symbols("Watching $ZETA and ZETA"), set())
 
     def test_market_scoring_uses_database_lexicon(self) -> None:
         score = self.catalog.market_score(

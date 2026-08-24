@@ -93,7 +93,8 @@ def main() -> None:
                       t.match_threshold, t.auto_promote_sources
                FROM symbol_theme_memberships m
                JOIN ontology_themes t ON t.id=m.theme_id
-               WHERE m.status='active' AND t.status='active'"""
+               JOIN symbols s ON s.symbol=m.symbol
+               WHERE m.status='active' AND t.status='active' AND s.status<>'blacklisted'"""
         ):
             theme = Theme(
                 id=row["theme_id"],
@@ -189,6 +190,7 @@ def main() -> None:
 
         learner.recalculate_candidate_stats()
         discovered = learner.discover_emerging_themes()
+        promoted += learner.promote_ready_candidates()
         conn.commit()
         result = conn.execute(
             """SELECT

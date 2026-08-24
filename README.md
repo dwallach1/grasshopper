@@ -135,15 +135,17 @@ The learner turns repeated co-occurrence into governed candidates:
 
 Every candidate retains its supporting source records, score, source count, and
 sample context. URL fragments, unverified uppercase prose, common stopwords,
-and weak one-off clusters are suppressed from the default review surface.
+and weak one-off clusters are suppressed from the default evidence surface.
 
 ### 4. Promote carefully
 
 Term and membership candidates may auto-promote only after crossing the active
 theme's multi-source threshold and additional quality gates. Symbol membership
 requires a symbol that has already been verified; learned terms must show enough
-precision across all observations. Brand-new themes remain candidates for
-manual review rather than becoming active automatically.
+precision across all observations. Brand-new themes also activate autonomously
+after a stricter six-source evidence threshold. Managers can promote, demote,
+restore, or blacklist themes and symbols without becoming a required step in
+the learning loop.
 
 Operators can inspect and govern the queue explicitly:
 
@@ -180,8 +182,8 @@ ThesisForge separates learned knowledge from execution authority.
 
 - The adaptive ontology can expand vocabulary and verified memberships, but it
   cannot rewrite `config/trade_policy.json`.
-- Brand-new themes require review, and candidate evidence is never discarded
-  merely because a candidate is rejected.
+- Brand-new themes activate autonomously after stricter evidence gates;
+  manager blacklists are hard stops, and candidate evidence is never discarded.
 - Risk and sizing controls are code- and data-enforced rather than prompt-only.
 - A fresh broker account snapshot and positions are required before sizing;
   stale or unavailable account state rejects the sizing attempt.

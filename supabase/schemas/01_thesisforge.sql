@@ -130,7 +130,7 @@ create table public.ontology_themes (
   kind text not null default 'theme' check (kind in ('theme', 'concept')),
   name text not null,
   description text not null default '',
-  status text not null default 'candidate' check (status in ('candidate', 'active', 'merged', 'retired')),
+  status text not null default 'candidate' check (status in ('candidate', 'active', 'merged', 'retired', 'blacklisted')),
   parent_theme_id text references public.ontology_themes(id) on delete set null,
   merged_into_theme_id text references public.ontology_themes(id) on delete set null,
   match_threshold smallint not null default 35 check (match_threshold between 0 and 100),
@@ -247,6 +247,21 @@ create table public.ontology_candidate_evidence (
   primary key (candidate_id, source_type, source_key)
 );
 create index idx_ontology_candidate_evidence_source on public.ontology_candidate_evidence(source_type, source_key);
+
+create table public.ontology_management_actions (
+  id bigint generated always as identity primary key,
+  actor_id text not null,
+  entity_type text not null check (entity_type in ('theme', 'symbol')),
+  entity_key text not null,
+  action text not null check (action in ('promote', 'demote', 'blacklist', 'restore')),
+  previous_state jsonb not null,
+  next_state jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index idx_ontology_management_actions_entity_created
+  on public.ontology_management_actions(entity_type, entity_key, created_at desc);
+create index idx_ontology_management_actions_created
+  on public.ontology_management_actions(created_at desc);
 
 create table public.thesis_symbols (
   thesis_id text not null references public.theses(id) on delete cascade,
@@ -626,7 +641,7 @@ begin
   foreach table_name in array array[
     'runs','codex_automations','codex_automation_runs','bookmarks','bookmark_urls','symbols','bookmark_symbols','claims','theses',
     'ontology_themes','ontology_terms','ontology_lexicon','symbol_theme_memberships',
-    'ontology_observations','ontology_evidence','ontology_candidates','ontology_candidate_evidence',
+    'ontology_observations','ontology_evidence','ontology_candidates','ontology_candidate_evidence','ontology_management_actions',
     'thesis_symbols','thesis_evidence','thesis_scores','catalysts','portfolio_exposure',
     'account_snapshots','trade_proposals','postmortems','articles','graph_nodes','graph_edges',
     'research_events','research_queue','predictions','insights','insight_links','thesis_relations',
