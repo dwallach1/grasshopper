@@ -1,0 +1,16 @@
+{
+  "name": "@thesisforge/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./broker": "./src/broker.ts",
+    "./publication": "./src/publication.ts"
+  },
+  "dependencies": {
+    "@thesisforge/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260823.1"
+  }
+}

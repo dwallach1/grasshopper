@@ -55,11 +55,10 @@ The knowledge Worker sends bounded bookmark batches and the active ontology to W
 Validated model proposals enter the candidate queue. Only LLM-origin candidates with sufficiently strong, multi-source evidence can auto-promote; membership promotion additionally requires a verified symbol, and vocabulary promotion requires source distinctiveness. Prompt/model versions and validated output are stored on each bookmark, so unchanged inputs skip inference while a prompt or model upgrade triggers bounded backfill. Managers can promote, demote, restore, or blacklist themes and symbols through the hosted ontology manager.
 
 ```sh
-cd web
-bun run knowledge:types
-bun run knowledge:typecheck
-bun run knowledge:test
-bun run knowledge:dry-run
+bun run --cwd workers/knowledge types
+bun run --cwd workers/knowledge typecheck
+bun run --cwd workers/knowledge test
+bun run --cwd workers/knowledge dry-run
 ```
 
 The initial vocabulary in `supabase/seed.sql` is only a bootstrap. Once loaded, taxonomy growth and review happen through Supabase records rather than code edits.

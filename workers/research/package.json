@@ -1,0 +1,24 @@
+{
+  "name": "@thesisforge/worker-research",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler types --config wrangler.jsonc --include-runtime false worker-configuration.d.ts",
+    "typecheck": "bun --bun tsc --project tsconfig.json",
+    "test": "bun test src/market-clock.test.ts src/autonomous-decision.test.ts src/position-decision.test.ts",
+    "dry-run": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc --dry-run",
+    "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc",
+    "trigger": "bun --bun wrangler workflows trigger thesisforge-research-cycle --config wrangler.jsonc --params '{\"force\":true,\"requestedBy\":\"manual\"}'",
+    "tail": "bun --bun wrangler tail thesisforge-research-orchestrator --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@thesisforge/contracts": "workspace:*",
+    "@thesisforge/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260823.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.125.0"
+  }
+}

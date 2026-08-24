@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": [
+    "./src/research-orchestrator.ts",
+    "./src/market-clock.ts",
+    "./src/autonomous-decision.ts",
+    "./src/position-decision.ts",
+    "./worker-configuration.d.ts"
+  ]
+}

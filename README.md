@@ -301,13 +301,12 @@ No production capability depends on a laptop, Python environment, Codex automati
 ## Repository map
 
 ```text
-web/app/                         private dashboard
-web/knowledge/                   knowledge-pipeline Worker and domain services
-web/workflows/research-orchestrator.ts
-web/workflows/robinhood-broker-agent.ts
-web/workflows/autonomous-decision.ts
-web/workflows/position-decision.ts
-web/wrangler*.jsonc              four scoped Worker configurations
+apps/dashboard/                  private dashboard Worker
+workers/knowledge/               knowledge-pipeline Worker
+workers/research/                research orchestrator, Workflows, DOs
+workers/broker/                  Robinhood broker gateway Agent
+packages/shared/                 json + secrets helpers
+packages/contracts/              broker + publication contracts
 supabase/schemas/                declarative Postgres state
 supabase/migrations/             migration history
 supabase/functions/              cloud-control and publication functions
@@ -320,33 +319,32 @@ docs/                            architecture and runbooks
 Requirements: Bun 1.4, Node.js 22.13+, Supabase, Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2, and a Robinhood Agentic connection. Python is not required.
 
 ```sh
-cd web && bun install
+bun install
 
-bun run research:types
-bun run workflow:typecheck
-bun run workflow:test
-bun run research:dry-run
-bun run knowledge:types
-bun run knowledge:typecheck
-bun run knowledge:test
-bun run knowledge:dry-run
-bun run broker:types
-bun run broker:typecheck
-bun run broker:test
-bun run broker:dry-run
+bun run --cwd workers/research types
+bun run --cwd workers/research typecheck
+bun run --cwd workers/research test
+bun run --cwd workers/research dry-run
+bun run --cwd workers/knowledge types
+bun run --cwd workers/knowledge typecheck
+bun run --cwd workers/knowledge test
+bun run --cwd workers/knowledge dry-run
+bun run --cwd workers/broker types
+bun run --cwd workers/broker typecheck
+bun run --cwd workers/broker test
+bun run --cwd workers/broker dry-run
 bun run build
 ```
 
 Operational commands:
 
 ```sh
-cd web
-bun run cloud:tail
-bun run broker:oauth-relay
-bun run knowledge:deploy
-bun run research:deploy
-bun run broker:deploy
-bun run dashboard:deploy
+bun run --cwd workers/research tail
+bun run --cwd workers/broker oauth-relay
+bun run --cwd workers/knowledge deploy
+bun run --cwd workers/research deploy
+bun run --cwd workers/broker deploy
+bun run --cwd apps/dashboard deploy
 ```
 
 `bun run cloud:trigger` forces a Workflow. In live mode during the execution window, it can create real orders if every gate passes.

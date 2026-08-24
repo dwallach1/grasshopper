@@ -68,4 +68,6 @@ Thumbs.db
 # Agent-local state
 .agents/
 
-# The nested Sites checkout is also tracked by the managing repository.
+# Framework local caches
+.next/
+.vinext/

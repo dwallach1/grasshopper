@@ -4,10 +4,12 @@
   "private": true,
   "packageManager": "bun@1.4.0",
   "type": "module",
+  "workspaces": ["apps/*", "workers/*", "packages/*"],
   "scripts": {
-    "build": "bun run --cwd web build",
-    "typecheck": "bun run --cwd web workflow:typecheck && bun run --cwd web knowledge:typecheck && bun run --cwd web broker:typecheck",
-    "test": "bun run --cwd web workflow:test && bun run --cwd web knowledge:test && bun run --cwd web broker:test",
-    "dry-run": "bun run --cwd web dashboard:dry-run && bun run --cwd web research:dry-run && bun run --cwd web knowledge:dry-run && bun run --cwd web broker:dry-run"
+    "build": "bun run --cwd apps/dashboard build",
+    "typecheck": "bun run --cwd workers/research typecheck && bun run --cwd workers/knowledge typecheck && bun run --cwd workers/broker typecheck",
+    "test": "bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test",
+    "dry-run": "bun run --cwd apps/dashboard dry-run && bun run --cwd workers/research dry-run && bun run --cwd workers/knowledge dry-run && bun run --cwd workers/broker dry-run",
+    "dev": "bun run --cwd apps/dashboard dev"
   }
 }

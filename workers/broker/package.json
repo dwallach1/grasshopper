@@ -1,0 +1,25 @@
+{
+  "name": "@thesisforge/worker-broker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "types": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler types --config wrangler.jsonc --include-runtime false worker-configuration.d.ts",
+    "typecheck": "bun --bun tsc --project tsconfig.json",
+    "test": "bun test src/robinhood-broker-agent.test.ts src/broker-execution-policy.test.ts",
+    "oauth-relay": "bun scripts/robinhood-oauth-relay.ts",
+    "dry-run": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc --dry-run",
+    "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@thesisforge/contracts": "workspace:*",
+    "@thesisforge/shared": "workspace:*",
+    "agents": "0.20.0",
+    "jose": "6.2.10"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260823.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.125.0"
+  }
+}

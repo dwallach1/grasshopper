@@ -1,0 +1,10 @@
+{
+  "name": "@thesisforge/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./json": "./src/json.ts",
+    "./secrets": "./src/secrets.ts"
+  }
+}
