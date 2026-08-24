@@ -8,8 +8,9 @@ The production research and trading path runs in Cloudflare and Supabase. It doe
 
 ## Production status
 
-- Cloudflare Workers: private dashboard, cloud control plane, Robinhood gateway
-- Supabase: canonical Postgres, Edge Functions, RLS, and private research Storage
+- Cloudflare Workers: private dashboard, knowledge pipeline, research orchestrator, and Robinhood gateway
+- Cloudflare data services: Workflows, Queues, Durable Objects, Workers AI, Hyperdrive, and private R2 originals
+- Supabase: canonical Postgres, narrow Edge Functions, and RLS
 - Autonomous equity actions: open, hold, add, reduce, and exit
 - Per-order human approval: not required
 - Unsupported live products: options, crypto, margin, and shorting
@@ -23,8 +24,12 @@ flowchart TB
     subgraph CF[Cloudflare]
         Access[Cloudflare Access]
         Dashboard[thesisforge-dashboard<br/>private Next.js/vinext UI]
-        Control[thesisforge-dashboard-publication<br/>Cron + Workflows + Queue]
-        Queue[thesisforge-research-tasks<br/>Queue + DLQ]
+        Knowledge[thesisforge-knowledge-pipeline<br/>X + documents + ontology + financial]
+        Control[thesisforge-research-orchestrator<br/>Cron + Workflows + Queue]
+        ResearchQueue[thesisforge-research-tasks<br/>Queue + DLQ]
+        ArticleQueue[thesisforge-knowledge-articles<br/>Queue + DLQ]
+        R2[(private R2<br/>research originals)]
+        Hyperdrive[Hyperdrive<br/>scoped Postgres]
         AI[Workers AI<br/>AI Gateway]
         ThesisDO[ThesisCoordinator<br/>per thesis]
         PositionDO[PositionMonitor<br/>per account + symbol]
@@ -37,20 +42,22 @@ flowchart TB
         CloudControl[cloud-control Edge Function]
         Publication[dashboard-publication Edge Function]
         DB[(Postgres<br/>canonical system of record)]
-        Storage[(private research-originals<br/>Storage bucket)]
     end
 
     RH[Robinhood Agentic Trading MCP]
 
     Access --> Dashboard --> DB
+    Dashboard --> Knowledge
+    Knowledge --> Hyperdrive --> DB
+    Knowledge --> ArticleQueue --> R2
+    Knowledge --> Publication
     Control --> CloudControl --> DB
+    Control --> ResearchQueue --> AI
+    ResearchQueue --> ThesisDO
+    ResearchQueue --> PositionDO
+    ResearchQueue --> AccountDO --> BrokerAgent --> RH
     Control --> Publication --> DB
-    Control --> Queue --> AI
-    Queue --> ThesisDO
-    Queue --> PositionDO
-    Queue --> AccountDO --> BrokerAgent --> RH
     Broker --> BrokerAgent
-    DB --- Storage
 ```
 
 Durable Object SQLite stores coordination, deduplication, and broker-connection state. It is not a second research database. Supabase remains canonical.
@@ -60,11 +67,12 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | Component | Responsibility | Boundary |
 |---|---|---|
 | `thesisforge-dashboard` | Serves the private dashboard | Cloudflare Access; server-side Supabase reads; no service-role secret in the browser |
-| `thesisforge-dashboard-publication` | Cron, Workflows, Queue producer/consumer, Workers AI, deterministic decisions | Route-less control Worker with bounded Supabase control access |
+| `thesisforge-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, archives linked pages/PDFs, learns ontology, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO |
+| `thesisforge-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
 | `thesisforge-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
 | `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
-| `DashboardPublicationWorkflow` | Publishes shadow/current dashboard snapshots | Calls Supabase publication function and can never enable trading |
 | `thesisforge-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
+| `thesisforge-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
 | Workers AI | Typed recommendations | No broker credentials, tools, or placement authority |
 
 ### Durable Objects
@@ -75,6 +83,7 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | `PositionMonitor` | Account key + symbol | Persists observations/action history and enforces add/reduce cooldowns |
 | `BrokerExecutionCoordinator` | Agentic account key | Serializes and idempotently reserves live intents |
 | `RobinhoodBrokerAgent` | Primary Robinhood connection | Restores durable MCP OAuth, reads account/market state, and enforces final order rules |
+| `XCredentialVault` | One authorized X account | Persists rotating OAuth tokens, PKCE state, and a sync lease; tokens never enter Postgres |
 
 ## Schedule and cost posture
 
@@ -106,7 +115,7 @@ Costs stay bounded through three useful wakes, thesis-input hashes that skip unc
 12. The broker Agent recomputes action semantics, buying power or sellable shares, pending orders, quote age, spread, portfolio caps, and session time.
 13. Robinhood `review_equity_order` runs immediately before `place_equity_order`; any `order_checks` entry blocks placement.
 14. Submission, immediate fills, failures, observations, and episode transitions are persisted. Later snapshots reconcile quantities and closures.
-15. The cloud run finalizes after its tasks are terminal.
+15. The cloud run finalizes after its tasks are terminal and immediately refreshes the `current` dashboard projection. Publication is an event-driven read-model update, not an independent Cron job.
 
 ## Where decisions are made
 
@@ -190,7 +199,7 @@ Hard gateway ceilings include the 09:45–15:45 New York window, 120-second side
 
 | Domain | Canonical surfaces |
 |---|---|
-| Sources/documents | bookmarks, URLs, articles, research documents/sources/annotations, private `research-originals` bucket |
+| Sources/documents | bookmarks, URLs, articles, research documents/sources/annotations in Postgres; new immutable originals in private R2; legacy originals remain in Supabase Storage |
 | Research ontology | symbols, theses, evidence, scores, catalysts, themes, terms, observations, candidates/actions, graph nodes/edges |
 | Decision learning | research events/queue/cycles, predictions, insights, strategy tests/scenarios, agent runs, lessons, postmortems |
 | Trading/audit | account snapshots, portfolio exposure, proposals, position episodes/events, intents, attempts, fills, risk controls |
@@ -198,7 +207,7 @@ Hard gateway ceilings include the 09:45–15:45 New York window, 120-second side
 | Publication | `dashboard_snapshots` |
 | Financial vault | request cache, compressed responses, access log, normalized financial records |
 
-`cloud-control` and `dashboard-publication` use custom SHA-256 token authentication. The service role remains inside Supabase Edge Functions. Public tables use RLS, and cloud execution tables are unavailable to `anon` and `authenticated` roles. Original files are immutable and content-addressed in private Storage; metadata and judgment remain queryable in Postgres.
+`cloud-control` and `dashboard-publication` use custom SHA-256 token authentication. The service role remains inside Supabase Edge Functions. The knowledge Worker connects through Hyperdrive using a dedicated least-privilege Postgres role. Public tables use RLS, and cloud execution tables are unavailable to `anon` and `authenticated` roles. Original files are immutable and content-addressed in private R2; metadata and judgment remain queryable in Postgres.
 
 ## How the system learns
 
@@ -212,7 +221,7 @@ research -> preregister -> test -> stress -> decide -> act/abstain
 -> persist lesson -> incorporate in a later research cycle
 ```
 
-The ontology learner keeps source evidence and avoids feeding its own derived symbol guesses back into the active ontology. Cloud runs persist typed research decisions, position observations, proposals, intents, attempts, immediate fills, and reconciled episodes. Formal postmortem generation and lesson incorporation remain explicit repository workflows; models never rewrite `config/trade_policy.json` or Supabase risk thresholds.
+The ontology learner keeps source evidence and avoids feeding its own derived symbol guesses back into the active ontology. Cloud runs persist typed research decisions, position observations, proposals, intents, attempts, immediate fills, and reconciled episodes. Operator-authenticated Worker endpoints capture falsifiable predictions, insights, relations, event decisions, cycles, and lessons. Models never rewrite `config/trade_policy.json` or Supabase risk thresholds.
 
 ## Security and emergency stops
 
@@ -225,57 +234,61 @@ autonomous-position-management
 
 Either can be paused. Defense-in-depth Worker switches are `TRADING_ENABLED=false` and `BROKER_EXECUTION_ENABLED=false`. Disconnecting the Robinhood MCP connection is the broker-boundary emergency stop. Never delete audit rows to stop execution.
 
-## Cloud versus local
+## Runtime ownership
 
 | Capability | Location |
 |---|---|
 | Dashboard serving | Cloudflare |
+| X OAuth and bookmark ingestion | `thesisforge-knowledge-pipeline` + `XCredentialVault` |
+| Article/PDF extraction and archival | Knowledge Queue + private R2 |
+| Ontology classification, learning, promotion, and graph refresh | `thesisforge-knowledge-pipeline` |
+| Paid financial-data acquisition and cache | Authenticated knowledge Worker API; never scheduled automatically |
+| Research judgments, cycles, and lessons | Authenticated knowledge Worker API |
 | Scheduled thesis research | Cloudflare Cron, Workflow, Queue, Workers AI |
 | Account/market refresh | Cloudflare broker Agent |
 | Open/add/reduce/exit execution | Cloudflare control Worker, Durable Objects, Robinhood MCP |
-| Canonical persistence/private objects | Supabase Postgres and Storage |
-| X/bookmark ingestion | Local Bun workflow today |
-| Article/PDF extraction and archival | Local Python workflow today |
-| Ontology refresh/promotion | Local Python workflow today |
-| Paid financial-data acquisition | Local Python workflow today |
-| Formal postmortem/lesson incorporation | Repository workflow today |
-| Dashboard publication | Cloudflare Workflow available; local publisher is fallback |
+| Canonical relational persistence | Supabase Postgres |
+| Immutable new research originals | Cloudflare R2 |
+| Dashboard publication | Event-driven after canonical mutations and run finalization |
 
-The laptop-off promise covers scheduled cloud research, position management, trading, persistence, and serving. Source ingestion and several knowledge-maintenance jobs remain auxiliary local workflows.
+No production capability depends on a laptop, Python environment, Codex automation, or local Cron. The repository has no Python runtime or local X sync path; local commands are build, test, deploy, and operator tooling only.
 
 ## Repository map
 
 ```text
 web/app/                         private dashboard
-web/workflows/cloud-native-control.ts
+web/knowledge/                   knowledge-pipeline Worker and domain services
+web/workflows/research-orchestrator.ts
 web/workflows/robinhood-broker-agent.ts
 web/workflows/autonomous-decision.ts
 web/workflows/position-decision.ts
-web/wrangler*.jsonc              three Worker configurations
+web/wrangler*.jsonc              four scoped Worker configurations
 supabase/schemas/                declarative Postgres state
 supabase/migrations/             migration history
 supabase/functions/              cloud-control and publication functions
-src/thesisforge/                 local research, ontology, storage, reports, CLI
 config/trade_policy.json         human-authored execution contract
 docs/                            architecture and runbooks
 ```
 
 ## Development and operations
 
-Requirements: Bun 1.4, Node.js 22.13+, Python 3.11+, Supabase, Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI, and a Robinhood Agentic connection.
+Requirements: Bun 1.4, Node.js 22.13+, Supabase, Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2, and a Robinhood Agentic connection. Python is not required.
 
 ```sh
-bun run setup:python
 cd web && bun install
 
-bun run workflow:types
+bun run research:types
 bun run workflow:typecheck
 bun run workflow:test
-bun run workflow:dry-run
+bun run research:dry-run
+bun run knowledge:typecheck
+bun run knowledge:test
+bun run knowledge:dry-run
 bun run broker:types
 bun run broker:typecheck
 bun run broker:test
 bun run broker:dry-run
+bun run build
 ```
 
 Operational commands:
@@ -284,22 +297,13 @@ Operational commands:
 cd web
 bun run cloud:tail
 bun run broker:oauth-relay
+bun run knowledge:deploy
+bun run research:deploy
 bun run broker:deploy
+bun run dashboard:deploy
 ```
 
 `bun run cloud:trigger` forces a Workflow. In live mode during the execution window, it can create real orders if every gate passes.
-
-Local knowledge workflows:
-
-```sh
-bun run x:bookmarks
-bun run articles:fetch
-bun run ontology:refresh
-bun run ontology:learn
-bun run ontology:candidates
-bun run dashboard:publish
-bun run research:refresh
-```
 
 Never commit `.env.local`, `.dev.vars`, OAuth tokens, Supabase secret keys, or database connection strings.
 
@@ -308,4 +312,3 @@ Never commit `.env.local`, `.dev.vars`, OAuth tokens, Supabase secret keys, or d
 - [`config/trade_policy.json`](config/trade_policy.json)
 - [`docs/cloudflare-migration.md`](docs/cloudflare-migration.md)
 - [`docs/live-trading-checklist.md`](docs/live-trading-checklist.md)
-- [`docs/scheduled-run-prompt.md`](docs/scheduled-run-prompt.md) — legacy local fallback

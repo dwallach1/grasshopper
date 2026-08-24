@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://thesisforge-ontology.davidwallach2.chatgpt.site'),
+  metadataBase: new URL('https://thesisforge-dashboard.davidwallach2.workers.dev'),
   title: 'ThesisForge — Ontology / Research Desk',
   description: 'A closed-loop research desk for preregistering, breaking, learning from, and deploying investment theses.',
   openGraph: {

@@ -1,6 +1,6 @@
 import tradePolicy from './trade-policy.json' with { type: 'json' };
 
-const EXPECTED_TOKEN_SHA256 = 'a1d1ec8f0148d08edd7373dc60b1f2c13e7e86558751e4007fbae7ebd39b2daa';
+const EXPECTED_TOKEN_SHA256 = 'ad743c9c4b7eb01fb40d8d0d4510ef8e0915f620e080a9fdbba116e2a9a06ac2';
 const MAX_REQUEST_BYTES = 8 * 1024;
 const MAX_RESPONSE_BYTES = 64 * 1024;
 

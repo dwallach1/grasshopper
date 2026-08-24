@@ -10,12 +10,6 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": [
-    "./research-orchestrator.ts",
-    "./market-clock.ts",
-    "./broker-contract.ts",
-    "./autonomous-decision.ts",
-    "./publication-contract.ts",
-    "../worker-research-configuration.d.ts"
-  ]
+  "include": ["./*.ts", "../workflows/publication-contract.ts"],
+  "exclude": ["./*.test.ts", "./validate-live.ts"]
 }

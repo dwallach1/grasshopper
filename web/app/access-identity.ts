@@ -30,15 +30,7 @@ async function cloudflareAccessIdentity(requestHeaders: Headers): Promise<string
 }
 
 export async function authenticatedIdentity(requestHeaders: Headers): Promise<string | null> {
-  // A configured Access application is authoritative on Cloudflare. Do not
-  // accept the Sites identity header there because public request headers are
-  // caller-controlled until the Access JWT has been verified.
-  if (env.CF_ACCESS_AUD || env.CF_ACCESS_TEAM_DOMAIN) {
-    return cloudflareAccessIdentity(requestHeaders);
-  }
-
-  const sitesIdentity = requestHeaders.get('oai-authenticated-user-id');
-  return sitesIdentity ? normalizeIdentity(sitesIdentity) : null;
+  return cloudflareAccessIdentity(requestHeaders);
 }
 
 export function isManagerIdentity(identity: string): boolean {

@@ -118,7 +118,7 @@ enabled = true
 file_size_limit = "50MiB"
 
 # Private immutable source archive. Hosted bucket creation is performed through
-# `thesisforge documents setup`; Storage's internal tables remain read-only.
+# Legacy Supabase originals remain read-only; new Worker captures use private Cloudflare R2.
 [storage.buckets."research-originals"]
 public = false
 file_size_limit = "50MiB"

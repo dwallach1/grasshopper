@@ -6,6 +6,24 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "services": [
+    {
+      "binding": "KNOWLEDGE_PIPELINE",
+      "service": "thesisforge-knowledge-pipeline"
+    }
+  ],
+  "secrets": {
+    "required": [
+      "SUPABASE_URL",
+      "SUPABASE_PUBLISHABLE_KEY",
+      "THESISFORGE_DASHBOARD_TOKEN",
+      "THESISFORGE_MANAGER_TOKEN",
+      "THESISFORGE_MANAGER_USER_IDS",
+      "CF_ACCESS_TEAM_DOMAIN",
+      "CF_ACCESS_AUD",
+      "INTERNAL_SERVICE_TOKEN"
+    ]
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

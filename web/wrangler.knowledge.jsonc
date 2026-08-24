@@ -1,0 +1,57 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "thesisforge-knowledge-pipeline",
+  "main": "knowledge/knowledge-pipeline.ts",
+  "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "secrets": {
+    "required": [
+      "SUPABASE_URL",
+      "THESISFORGE_PUBLICATION_TOKEN",
+      "INTERNAL_SERVICE_TOKEN",
+      "X_CLIENT_ID",
+      "X_ACCESS_TOKEN",
+      "X_REFRESH_TOKEN"
+    ]
+  },
+  "vars": {
+    "X_REDIRECT_URI": "https://thesisforge-dashboard.davidwallach2.workers.dev/api/x/callback"
+  },
+  "hyperdrive": [{
+    "binding": "HYPERDRIVE",
+    "id": "1b735c7095674cd89110c6574bbc834b",
+    "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+  }],
+  "r2_buckets": [{
+    "binding": "RESEARCH_ORIGINALS",
+    "bucket_name": "thesisforge-research-originals"
+  }],
+  "queues": {
+    "producers": [{ "binding": "ARTICLE_QUEUE", "queue": "thesisforge-knowledge-articles" }],
+    "consumers": [{
+      "queue": "thesisforge-knowledge-articles",
+      "max_batch_size": 5,
+      "max_batch_timeout": 10,
+      "max_retries": 4,
+      "dead_letter_queue": "thesisforge-knowledge-articles-dlq",
+      "max_concurrency": 1,
+      "retry_delay": 60
+    }]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "X_CREDENTIAL_VAULT", "class_name": "XCredentialVault" }]
+  },
+  "exports": {
+    "XCredentialVault": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "triggers": {
+    "crons": ["*/30 * * * *", "15 12 * * SUN"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

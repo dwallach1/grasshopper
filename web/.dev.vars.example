@@ -4,8 +4,9 @@ SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
 THESISFORGE_DASHBOARD_TOKEN=
 THESISFORGE_MANAGER_TOKEN=
+INTERNAL_SERVICE_TOKEN=
 
-# Comma-separated Sites user IDs and/or Cloudflare Access email identities.
+# Comma-separated Cloudflare Access email identities permitted to operate the system.
 THESISFORGE_MANAGER_USER_IDS=
 
 # Route Workers AI requests through AI Gateway. "default" is created on first use.
