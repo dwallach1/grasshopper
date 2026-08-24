@@ -15,7 +15,8 @@
     "@thesisforge/contracts": "workspace:*",
     "@thesisforge/shared": "workspace:*",
     "agents": "0.20.0",
-    "jose": "6.2.10"
+    "jose": "6.2.10",
+    "zod": "^4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260823.1",

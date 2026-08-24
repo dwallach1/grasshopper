@@ -1,4 +1,4 @@
-import { boundedJson, isPublicationResult, type PublicationResult } from '@thesisforge/contracts/publication';
+import { boundedJson, parsePublicationResult, type PublicationResult } from '@thesisforge/contracts/publication';
 import { readSecret, type SecretBinding } from '@thesisforge/shared/secrets';
 
 export type PublicationEnvironment = {
@@ -18,8 +18,9 @@ export async function publishDashboard(env: PublicationEnvironment): Promise<Pub
   });
   const value = await boundedJson(response);
   if (!response.ok) throw new Error(`Dashboard projection failed with status ${response.status}`);
-  if (!isPublicationResult(value) || value.target_id !== 'current' || value.trading_enabled !== false) {
+  const result = parsePublicationResult(value);
+  if (result.target_id !== 'current') {
     throw new Error('Dashboard projection returned an invalid safety contract');
   }
-  return value;
+  return result;
 }

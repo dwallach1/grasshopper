@@ -8,7 +8,7 @@
     "./publication": "./src/publication.ts"
   },
   "dependencies": {
-    "@thesisforge/shared": "workspace:*"
+    "zod": "^4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260823.1"

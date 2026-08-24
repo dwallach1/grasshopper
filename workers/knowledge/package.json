@@ -14,7 +14,8 @@
     "@thesisforge/contracts": "workspace:*",
     "@thesisforge/shared": "workspace:*",
     "pg": "8.23.0",
-    "unpdf": "1.8.1"
+    "unpdf": "1.8.1",
+    "zod": "^4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260823.1",

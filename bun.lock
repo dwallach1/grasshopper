@@ -40,7 +40,7 @@
       "name": "@thesisforge/contracts",
       "version": "0.0.0",
       "dependencies": {
-        "@thesisforge/shared": "workspace:*",
+        "zod": "^4",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
@@ -58,6 +58,7 @@
         "@thesisforge/shared": "workspace:*",
         "agents": "0.20.0",
         "jose": "6.2.10",
+        "zod": "^4",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
@@ -73,6 +74,7 @@
         "@thesisforge/shared": "workspace:*",
         "pg": "8.23.0",
         "unpdf": "1.8.1",
+        "zod": "^4",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
@@ -87,6 +89,7 @@
       "dependencies": {
         "@thesisforge/contracts": "workspace:*",
         "@thesisforge/shared": "workspace:*",
+        "zod": "^4",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
