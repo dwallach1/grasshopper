@@ -5,11 +5,13 @@ import { defineConfig } from 'vite';
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
-/** Secrets Store is unavailable in fully-local Miniflare; use `.dev.vars` strings. */
-function withoutSecretsStore<Config extends { secrets_store_secrets?: unknown }>(
-  userConfig: Config,
-): void {
+/** Secrets Store, Workers AI, and Hyperdrive need Cloudflare login; local Miniflare uses `.dev.vars`. */
+function withoutRemoteOnlyBindings<
+  Config extends { secrets_store_secrets?: unknown; ai?: unknown; hyperdrive?: unknown },
+>(userConfig: Config): void {
   delete userConfig.secrets_store_secrets;
+  delete userConfig.ai;
+  delete userConfig.hyperdrive;
 }
 
 export default defineConfig(async () => {
@@ -24,19 +26,23 @@ export default defineConfig(async () => {
 
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      ...(isCodexSeatbeltSandbox
+        ? { watch: { useFsEvents: false, usePolling: true } }
+        : {}),
+    },
     plugins: [
       vinext(),
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         configPath: './wrangler.jsonc',
-        config: withoutSecretsStore,
+        config: withoutRemoteOnlyBindings,
         auxiliaryWorkers: [
           {
             configPath: '../../workers/knowledge/wrangler.jsonc',
-            config: withoutSecretsStore,
+            config: withoutRemoteOnlyBindings,
           },
         ],
       }),
