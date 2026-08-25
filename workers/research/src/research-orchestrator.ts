@@ -332,7 +332,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       retries: { limit: 3, delay: '10 seconds', backoff: 'exponential' },
       timeout: '2 minutes',
     }, async () => JSON.stringify(await cloudControl(this.env, 'context')));
-    const context = JSON.parse(contextJson) as unknown;
+    const context = parseJsonObject(contextJson);
     const theses = parseTheses(context);
     const snapshotVersion = contextVersion(context);
     const previousHashes = latestThesisHashes(context);

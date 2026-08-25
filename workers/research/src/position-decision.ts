@@ -1,9 +1,16 @@
 import type { BrokerAccountSnapshot } from '@thesisforge/contracts/broker';
+
 import {
   actionableBrokerEvidence,
+  earningsResultRows,
+  fundamentalsRow,
+  marketRow,
   type DecisionJsonObject,
-  type DecisionJsonValue,
 } from './autonomous-decision';
+import {
+  asBrokerResearchContext,
+  PositionAiOutputSchema,
+} from './schemas';
 
 export type ManagedPosition = BrokerAccountSnapshot['positions'][number];
 
@@ -33,28 +40,17 @@ export type PositionAction = {
   evidence: DecisionJsonObject;
 };
 
-function isObject(value: DecisionJsonValue | undefined): value is DecisionJsonObject {
-  return value !== null && Object(value) === value && !Array.isArray(value);
-}
-
-function marketRow(context: DecisionJsonObject, symbol: string): DecisionJsonObject | null {
-  if (!isObject(context.market) || !Array.isArray(context.market.symbols)) return null;
-  const row = context.market.symbols.find((item) => isObject(item) && item.symbol === symbol);
-  return isObject(row) ? row : null;
-}
-
 function boundedSellQuantity(position: ManagedPosition, fraction: number): number {
   const available = Math.min(position.quantity, position.sharesAvailableForSells);
   return Math.floor(available * fraction * 1_000_000) / 1_000_000;
 }
 
-function deterministicAdverseEvidence(context: DecisionJsonObject, symbol: string): string[] {
+function deterministicAdverseEvidence(context: unknown, symbol: string): string[] {
+  const researched = asBrokerResearchContext(context);
   const reasons: string[] = [];
-  const market = marketRow(context, symbol);
-  const fundamentals = isObject(context.fundamentals) && Array.isArray(context.fundamentals.results)
-    ? context.fundamentals.results.find((row) => isObject(row) && row.symbol === symbol)
-    : null;
-  if (market && isObject(fundamentals)) {
+  const market = marketRow(researched, symbol);
+  const fundamentals = fundamentalsRow(researched, symbol);
+  if (market && fundamentals) {
     const last = Number(market.last);
     const previousClose = Number(market.previousClose);
     const open = Number(fundamentals.open);
@@ -68,13 +64,8 @@ function deterministicAdverseEvidence(context: DecisionJsonObject, symbol: strin
       && volume >= averageVolume * 1.5
     ) reasons.push('negative_price_volume_dislocation');
   }
-  const earnings = Array.isArray(context.earnings) ? context.earnings : [];
-  const earningsRow = earnings.find((row) => isObject(row) && row.symbol === symbol);
-  const results = isObject(earningsRow) && isObject(earningsRow.data) && Array.isArray(earningsRow.data.results)
-    ? earningsRow.data.results.filter(isObject)
-    : [];
-  for (const row of results) {
-    if (!isObject(row.eps) || row.eps.actual == null || row.eps.estimate == null || !isObject(row.report)) continue;
+  for (const row of earningsResultRows(researched, symbol)) {
+    if (!row.eps || row.eps.actual == null || row.eps.estimate == null || !row.report) continue;
     const actual = Number(row.eps.actual);
     const estimate = Number(row.eps.estimate);
     const reportAt = Date.parse(`${String(row.report.date || '')}T12:00:00-04:00`);
@@ -91,12 +82,13 @@ export function decidePositionAction(
   position: ManagedPosition,
   snapshot: BrokerAccountSnapshot,
   theses: PositionThesis[],
-  output: DecisionJsonObject,
-  brokerContext: DecisionJsonObject,
+  output: unknown,
+  brokerContext: unknown,
   history: PositionHistory = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null },
 ): PositionAction {
   const symbol = position.symbol;
-  const market = marketRow(brokerContext, symbol);
+  const researched = asBrokerResearchContext(brokerContext);
+  const market = marketRow(researched, symbol);
   const quoteAt = market ? Date.parse(String(market.quoteAt || '')) : NaN;
   const last = market ? Number(market.last) : NaN;
   const spreadBps = market ? Number(market.spreadBps) : NaN;
@@ -131,14 +123,21 @@ export function decidePositionAction(
     };
   }
 
+  const parsedOutput = PositionAiOutputSchema.safeParse(output);
+  const decision = parsedOutput.success ? parsedOutput.data : {
+    position_action: 'hold' as const,
+    decision_confidence: 0,
+    thesis_state: 'intact' as const,
+  };
+
   const averageCost = Number(position.averageBuyPrice);
   const returnPercent = Number.isFinite(averageCost) && averageCost > 0
     ? ((last - averageCost) / averageCost) * 100
     : null;
-  const confidence = Number(output.decision_confidence);
-  const recommendation = String(output.position_action || 'hold');
-  const thesisState = String(output.thesis_state || 'intact');
-  const riskPass = output.portfolio_risk_pass === true;
+  const confidence = Number(decision.decision_confidence);
+  const recommendation = decision.position_action;
+  const thesisState = decision.thesis_state;
+  const riskPass = decision.portfolio_risk_pass === true;
   const commonEvidence: DecisionJsonObject = {
     quote_fresh: true,
     last,
@@ -148,11 +147,10 @@ export function decidePositionAction(
     thesis_state: thesisState,
     model_recommendation: recommendation,
   };
-  const adverseReasons = deterministicAdverseEvidence(brokerContext, symbol);
+  const adverseReasons = deterministicAdverseEvidence(researched, symbol);
   const hasStructuredFalsifier = theses.some((thesis) =>
     thesis.symbols.includes(symbol) && (thesis.falsifier?.trim().length ?? 0) >= 20);
 
-  // A deterministic loss limit does not depend on model permission.
   if (returnPercent !== null && returnPercent <= -8) {
     const quantity = boundedSellQuantity(position, 1);
     if (quantity > 0) return {
@@ -172,7 +170,7 @@ export function decidePositionAction(
     const quantity = boundedSellQuantity(position, 1);
     if (quantity > 0) return {
       action: 'exit', symbol, quantity,
-      rationale: `Validated thesis invalidation: ${String(output.summary || '').slice(0, 1200)}`,
+      rationale: `Validated thesis invalidation: ${String(decision.summary || '').slice(0, 1200)}`,
       evidence: { ...commonEvidence, trigger: 'validated_thesis_invalidation', adverse_reasons: adverseReasons },
     };
   }
@@ -184,12 +182,12 @@ export function decidePositionAction(
     && adverseReasons.length > 0
     && history.reductionsToday === 0
   ) {
-    const requestedPercent = Number(output.reduce_percent);
+    const requestedPercent = Number(decision.reduce_percent);
     const reducePercent = Math.min(50, Math.max(25, Number.isFinite(requestedPercent) ? requestedPercent : 25));
     const quantity = boundedSellQuantity(position, reducePercent / 100);
     if (quantity > 0) return {
       action: 'reduce', symbol, quantity,
-      rationale: `Evidence-backed ${reducePercent}% risk reduction: ${String(output.summary || '').slice(0, 1200)}`,
+      rationale: `Evidence-backed ${reducePercent}% risk reduction: ${String(decision.summary || '').slice(0, 1200)}`,
       evidence: { ...commonEvidence, trigger: 'adverse_evidence', adverse_reasons: adverseReasons, reduce_percent: reducePercent },
     };
   }
@@ -203,8 +201,8 @@ export function decidePositionAction(
     && confidence >= 90
     && thesisState === 'intact'
     && riskPass
-    && output.bull_case_pass === true
-    && output.bear_case_answered === true
+    && decision.bull_case_pass === true
+    && decision.bear_case_answered === true
     && supportingThesis
     && last >= averageCost
     && history.addsToday === 0
@@ -212,8 +210,8 @@ export function decidePositionAction(
     && lastAddAge >= 24 * 60 * 60 * 1_000
     && history.reductionsToday === 0
   ) {
-    const evidence = actionableBrokerEvidence(brokerContext, symbol);
-    const requestedPercent = Number(output.add_percent);
+    const evidence = actionableBrokerEvidence(researched, symbol);
+    const requestedPercent = Number(decision.add_percent);
     const currentNotional = position.quantity * last;
     const remainingCapacity = Math.max(0, snapshot.totalValue * 0.05 - currentNotional);
     const dollarAmount = Math.floor(Math.min(
@@ -223,7 +221,7 @@ export function decidePositionAction(
     ) * 100) / 100;
     if (evidence.pass && dollarAmount >= 25) return {
       action: 'add', symbol, dollarAmount,
-      rationale: `Evidence-backed add to ${supportingThesis.name}: ${String(output.summary || '').slice(0, 1200)}`,
+      rationale: `Evidence-backed add to ${supportingThesis.name}: ${String(decision.summary || '').slice(0, 1200)}`,
       evidence: {
         ...commonEvidence,
         trigger: 'hardening_thesis_add',
@@ -235,7 +233,7 @@ export function decidePositionAction(
   }
 
   return {
-    action: 'hold', symbol, rationale: String(output.summary || 'No position action passed deterministic gates.').slice(0, 1200),
+    action: 'hold', symbol, rationale: String(decision.summary || 'No position action passed deterministic gates.').slice(0, 1200),
     evidence: commonEvidence,
   };
 }

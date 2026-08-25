@@ -237,10 +237,18 @@ function OntologyManager({data}:{data:Snapshot}){
     setPending(operation);setNotice('');
     try{
       const response=await fetch('/api/ontology/manage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entity_type:entityType,entity_key:entityKey,action})});
-      const result=await response.json<{error?:string;entity?:OntologyTheme|OntologySymbol}>();
-      if(!response.ok||!result.entity)throw new Error(result.error||'Ontology action failed');
-      if(entityType==='theme'&&'id' in result.entity)setThemes(current=>current.map(item=>item.id===entityKey?{...item,...result.entity}:item));
-      else if(entityType==='symbol'&&'symbol' in result.entity)setSymbols(current=>current.map(item=>item.symbol===entityKey?{...item,...result.entity}:item));
+      const ManageResponseSchema=z.object({
+        error:z.string().optional(),
+        entity:z.union([
+          z.object({id:z.string(),status:z.string()}).passthrough(),
+          z.object({symbol:z.string(),status:z.string()}).passthrough(),
+        ]).optional(),
+      }).passthrough();
+      const result=ManageResponseSchema.safeParse(await response.json());
+      if(!response.ok||!result.success||!result.data.entity)throw new Error(result.success?result.data.error||'Ontology action failed':'Ontology action failed');
+      const entity=result.data.entity;
+      if(entityType==='theme'&&'id' in entity)setThemes(current=>current.map(item=>item.id===entityKey?{...item,...entity}:item));
+      else if(entityType==='symbol'&&'symbol' in entity)setSymbols(current=>current.map(item=>item.symbol===entityKey?{...item,...entity}:item));
       else throw new Error('Ontology action returned the wrong entity type');
       setActions(current=>[{id:Date.now(),actor_id:'you',entity_type:entityType,entity_key:entityKey,action,created_at:new Date().toISOString()},...current]);
       setNotice(`${clean(action)} applied to ${entityKey}.`);

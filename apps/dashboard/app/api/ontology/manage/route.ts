@@ -14,6 +14,17 @@ const SupabaseErrorSchema = z.object({
   message: z.string().optional(),
 }).passthrough();
 
+const OntologyManageEntitySchema = z.union([
+  z.object({
+    id: z.string().min(1),
+    status: z.string().min(1),
+  }).passthrough(),
+  z.object({
+    symbol: z.string().min(1),
+    status: z.string().min(1),
+  }).passthrough(),
+]);
+
 export async function POST(request: NextRequest) {
   const managerId = await authenticatedIdentity(request.headers);
   if (!managerId || !isManagerIdentity(managerId)) {
@@ -63,5 +74,9 @@ export async function POST(request: NextRequest) {
     const message = SupabaseErrorSchema.safeParse(result).data?.message || 'Ontology action failed';
     return NextResponse.json({ error: message }, { status: response.status });
   }
-  return NextResponse.json(result);
+  const wrapped = z.object({ entity: OntologyManageEntitySchema }).safeParse(result);
+  if (wrapped.success) return NextResponse.json({ entity: wrapped.data.entity });
+  const direct = OntologyManageEntitySchema.safeParse(result);
+  if (direct.success) return NextResponse.json({ entity: direct.data });
+  return NextResponse.json({ error: 'Ontology action returned an invalid entity' }, { status: 502 });
 }

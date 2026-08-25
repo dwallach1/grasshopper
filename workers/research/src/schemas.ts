@@ -313,20 +313,63 @@ export function parseAiJsonObject(result: unknown): Record<string, unknown> {
   return parseThesisAiOutput(result);
 }
 
-export const BrokerResearchContextSchema = z.object({
-  market: z.object({
-    symbols: z.array(z.record(z.string(), z.unknown())).optional(),
+export const MarketSymbolRowSchema = z.object({
+  symbol: z.string().min(1),
+  tradable: z.boolean().optional(),
+  state: z.string().optional(),
+  last: z.coerce.number().optional(),
+  previousClose: z.coerce.number().optional(),
+  quoteAt: z.string().optional(),
+  spreadBps: z.coerce.number().optional(),
+}).passthrough();
+
+export const FundamentalsRowSchema = z.object({
+  symbol: z.string().min(1),
+  volume: z.unknown().optional(),
+  average_volume_2_weeks: z.unknown().optional(),
+  average_volume: z.unknown().optional(),
+  open: z.unknown().optional(),
+}).passthrough();
+
+export const EarningsResultRowSchema = z.object({
+  report: z.object({
+    date: z.unknown().optional(),
   }).passthrough().optional(),
-  fundamentals: z.object({
+  eps: z.object({
+    actual: z.unknown().optional().nullable(),
+    estimate: z.unknown().optional().nullable(),
+  }).passthrough().optional(),
+}).passthrough();
+
+export const EarningsSymbolRowSchema = z.object({
+  symbol: z.string().min(1),
+  data: z.object({
     results: z.array(z.unknown()).optional(),
   }).passthrough().optional(),
-  earnings: z.array(z.unknown()).optional(),
+}).passthrough();
+
+export const BrokerResearchContextSchema = z.object({
+  market: z.object({
+    symbols: z.array(MarketSymbolRowSchema).optional(),
+    observedAt: z.string().optional(),
+  }).passthrough().optional(),
+  fundamentals: z.object({
+    results: z.array(FundamentalsRowSchema).optional(),
+  }).passthrough().optional(),
+  earnings: z.array(EarningsSymbolRowSchema).optional(),
 }).passthrough();
 
 export type BrokerResearchContext = z.infer<typeof BrokerResearchContextSchema>;
+export type MarketSymbolRow = z.infer<typeof MarketSymbolRowSchema>;
+export type FundamentalsRow = z.infer<typeof FundamentalsRowSchema>;
 
 export function parseBrokerResearchContext(text: string): BrokerResearchContext {
   const parsed = BrokerResearchContextSchema.safeParse(parseJsonObject(text));
+  return parsed.success ? parsed.data : {};
+}
+
+export function asBrokerResearchContext(value: unknown): BrokerResearchContext {
+  const parsed = BrokerResearchContextSchema.safeParse(value);
   return parsed.success ? parsed.data : {};
 }
 

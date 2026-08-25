@@ -53,6 +53,15 @@ export type XContextAnnotation = z.infer<typeof XContextAnnotationSchema>;
 export type XBookmark = z.infer<typeof XBookmarkSchema>;
 export type XBookmarkPayload = z.infer<typeof XBookmarkPayloadSchema>;
 
+export function bookmarkRawJson(bookmark: XBookmark): unknown {
+  if (!bookmark.raw_json) return bookmark;
+  try {
+    return JSON.parse(bookmark.raw_json) as unknown;
+  } catch {
+    return bookmark;
+  }
+}
+
 export function bookmarkFromUnknown(value: unknown): XBookmark | null {
   const parsed = XApiTweetSchema.safeParse(value);
   if (!parsed.success) return null;
@@ -166,7 +175,7 @@ async function persistCoreRows(
     created_at: item.createdAt,
     fetched_at: payload.fetchedAt,
     text: item.text,
-    raw_json: item.bookmark.raw_json ? JSON.parse(item.bookmark.raw_json) : item.bookmark,
+    raw_json: bookmarkRawJson(item.bookmark),
     market_score: item.marketScore,
     is_market_related: item.marketScore >= 35,
     classification_model: ONTOLOGY_AI_MODEL,
