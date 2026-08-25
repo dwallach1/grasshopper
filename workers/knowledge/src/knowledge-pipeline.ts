@@ -17,6 +17,13 @@ import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/share
 import { investigateClaimsWithAi, MAX_INVESTIGATIONS_PER_SYNC } from './claim-investigation';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
+import {
+  createResearchSessions,
+  markResearchSessionError,
+  restartResearchSession,
+  runResearchStep,
+  type XResearchTask,
+} from './x-research';
 import { z, ZodError } from 'zod';
 
 export { XCredentialVault } from './x-credential-vault';
@@ -31,12 +38,17 @@ const XCallbackBodySchema = z.object({
   redirectUri: z.string().url(),
 });
 
-type KnowledgeTask = ArticleTask;
+const XResearchBodySchema = z.object({
+  bookmarkId: z.string().min(1),
+});
+
+type KnowledgeTask = ArticleTask | XResearchTask;
 
 type KnowledgeEnvironment = {
   HYPERDRIVE: Hyperdrive;
   RESEARCH_ORIGINALS: R2Bucket;
   ARTICLE_QUEUE: Queue<KnowledgeTask>;
+  X_RESEARCH_QUEUE: Queue<XResearchTask>;
   X_CREDENTIAL_VAULT: DurableObjectNamespace<XCredentialVault>;
   AI: Ai;
   AI_GATEWAY_ID: string;
@@ -96,6 +108,11 @@ async function syncBookmarks(env: KnowledgeEnvironment) {
   if (result.articleTasks.length) {
     await env.ARTICLE_QUEUE.sendBatch(result.articleTasks.map((task) => ({ body: { kind: 'article' as const, ...task } })));
   }
+  const researchTasks = await withDatabase(env.HYPERDRIVE.connectionString, (database) =>
+    createResearchSessions(database));
+  if (researchTasks.length) {
+    await env.X_RESEARCH_QUEUE.sendBatch(researchTasks.map((task) => ({ body: task })));
+  }
   const graph = await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
   const publication = await publishDashboard(env);
   const investigations = result.investigations + backlogPersisted;
@@ -104,10 +121,18 @@ async function syncBookmarks(env: KnowledgeEnvironment) {
     ...result,
     articleTasks: result.articleTasks.length,
     investigations,
+    researchSessions: researchTasks.length,
     graph,
     publication: publication.normalized_sha256,
   }));
-  return { ...result, articleTasks: result.articleTasks.length, investigations, graph, publication };
+  return {
+    ...result,
+    articleTasks: result.articleTasks.length,
+    investigations,
+    researchSessions: researchTasks.length,
+    graph,
+    publication,
+  };
 }
 
 async function route(request: Request, env: KnowledgeEnvironment): Promise<Response> {
@@ -136,6 +161,15 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   if (url.pathname === '/x/sync' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     return json(await syncBookmarks(env));
+  }
+  if (url.pathname === '/x/research' && request.method === 'POST') {
+    if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
+    const body = XResearchBodySchema.parse(await request.json());
+    const task = await withDatabase(env.HYPERDRIVE.connectionString, (database) =>
+      restartResearchSession(database, body.bookmarkId));
+    if (!task) return json({ error: 'bookmark_not_found' }, { status: 404 });
+    await env.X_RESEARCH_QUEUE.send(task);
+    return json({ enqueued: true, sessionId: task.sessionId });
   }
   if (url.pathname === '/financial' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
@@ -190,8 +224,46 @@ const worker = {
     }));
   },
   async queue(batch: MessageBatch<KnowledgeTask>, env: KnowledgeEnvironment): Promise<void> {
+    if (batch.queue === 'thesisforge-knowledge-x-research') {
+      for (const message of batch.messages) {
+        if (message.body.kind !== 'x_research') {
+          message.ack();
+          continue;
+        }
+        const task = message.body;
+        try {
+          const result = await runResearchStep(env, task);
+          if (result.finalized) {
+            await withDatabaseRetry(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
+            await publishDashboard(env);
+          }
+          message.ack();
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'unknown';
+          console.error(JSON.stringify({
+            event: 'x_research_step_failed',
+            session: task.sessionId,
+            attempt: message.attempts,
+            error: reason,
+          }));
+          const exhaustedRetries = message.attempts >= 3;
+          try {
+            await withDatabaseRetry(env.HYPERDRIVE.connectionString, (database) =>
+              markResearchSessionError(database, task.sessionId, reason, exhaustedRetries));
+          } catch {
+            // Session bookkeeping is best-effort; the queue retry is authoritative.
+          }
+          message.retry({ delaySeconds: Math.min(900, 60 * (2 ** Math.min(message.attempts, 4))) });
+        }
+      }
+      return;
+    }
     const completed: Array<(typeof batch.messages)[number]> = [];
     for (const message of batch.messages) {
+      if (message.body.kind !== 'article') {
+        message.ack();
+        continue;
+      }
       try {
         const prepared = await prepareArticleTask(env.RESEARCH_ORIGINALS, message.body);
         await withDatabaseRetry(env.HYPERDRIVE.connectionString, (database) => persistPreparedArticle(database, prepared));
