@@ -11,6 +11,8 @@
     "test": "bun run --cwd packages/shared test && bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "dry-run": "bun run --cwd apps/dashboard dry-run && bun run --cwd workers/research dry-run && bun run --cwd workers/knowledge dry-run && bun run --cwd workers/broker dry-run",
+    "cloud:sync": "bun run --cwd workers/knowledge sync",
+    "cloud:trigger": "bun run --cwd workers/research trigger",
     "local:setup": "bash scripts/local-dev-setup.sh",
     "local:web": "bun run --cwd apps/dashboard dev",
     "dev": "bun run local:web"

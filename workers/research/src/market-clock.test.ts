@@ -21,6 +21,18 @@ describe('New York research schedule gate', () => {
     });
   });
 
+  test('accepts the summer pre-close window at 15:05 EDT', () => {
+    expect(marketGate(Date.parse('2026-08-24T19:05:00Z'))).toMatchObject({
+      time: '15:05', slot: 'pre_close', actionable: true,
+    });
+  });
+
+  test('does not admit the retired midday window', () => {
+    expect(marketGate(Date.parse('2026-08-24T17:05:00Z'))).toMatchObject({
+      time: '13:05', slot: null, actionable: false,
+    });
+  });
+
   test('rejects weekends even when a slot is forced', () => {
     expect(marketGate(Date.parse('2026-08-22T14:05:00Z'), 'manual')).toMatchObject({
       weekday: 'Sat', actionable: false, reason: 'weekend',

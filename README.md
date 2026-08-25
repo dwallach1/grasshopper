@@ -133,17 +133,18 @@ Shared production credentials use the account-level Cloudflare Secrets Store. Th
 
 ## Schedule and cost posture
 
-Paired UTC Cron candidates preserve the New York schedule through daylight-saving changes:
+Paired UTC Cron candidates preserve the two New York decision windows through daylight-saving changes:
 
 ```text
-5 14,15 * * 1-5    -> 10:05 America/New_York
-5 17,18 * * 1-5    -> 13:05 America/New_York
-25 19,20 * * 1-5   -> 15:25 America/New_York
+knowledge  35 13,14 * * MON-FRI -> 09:35 America/New_York
+research    5 14,15 * * MON-FRI -> 10:05 America/New_York
+knowledge  35 18,19 * * MON-FRI -> 14:35 America/New_York
+research    5 19,20 * * MON-FRI -> 15:05 America/New_York
 ```
 
-`marketGate` admits only the candidate matching the exact New York slot and rejects weekends, yielding three useful weekday runs rather than six. It is not a complete exchange-holiday or early-close calendar; Robinhood market state, tradability, quotes, and review remain authoritative.
+The knowledge and market gates admit only the candidate matching the exact New York slot and reject weekends. Each knowledge refresh gets 30 minutes to ingest bookmarks and advance queued X/article research before the morning or pre-close portfolio workflow. The schedule is not a complete exchange-holiday or early-close calendar; Robinhood market state, tradability, quotes, and review remain authoritative.
 
-Costs stay bounded through three useful wakes, thesis-input hashes that skip unchanged LLM work, at most 12 theses per run, a small structured-output Workers AI model, Queue concurrency of two, and hibernating Durable Objects. Position management does not poll every minute.
+Costs stay bounded through two useful knowledge refreshes and two portfolio workflows per market weekday, thesis-input hashes that skip unchanged LLM work, at most 12 theses per run, a small structured-output Workers AI model, Queue concurrency of two, and hibernating Durable Objects. Position management does not poll every minute.
 
 ## One run, end to end
 

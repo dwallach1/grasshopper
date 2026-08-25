@@ -17,6 +17,7 @@ import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/share
 import { investigateClaimsWithAi, MAX_INVESTIGATIONS_PER_SYNC } from './claim-investigation';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
+import { knowledgeScheduleGate } from './knowledge-schedule';
 import {
   createResearchSessions,
   markResearchSessionError,
@@ -211,14 +212,24 @@ const worker = {
     }
   },
   async scheduled(controller: ScheduledController, env: KnowledgeEnvironment, ctx: ExecutionContext): Promise<void> {
-    const operation = controller.cron === '15 12 * * SUN'
-      ? withDatabase(env.HYPERDRIVE.connectionString, refreshWeeklyEventMap).then(async (result) => {
+    if (controller.cron === '15 12 * * SUN') {
+      const weeklyRefresh = withDatabase(env.HYPERDRIVE.connectionString, refreshWeeklyEventMap).then(async (result) => {
           await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
           await publishDashboard(env);
           return result;
-        })
-      : syncBookmarks(env);
-    ctx.waitUntil(operation.catch((error) => {
+        });
+      ctx.waitUntil(weeklyRefresh.catch((error) => {
+        console.error(JSON.stringify({ event: 'knowledge_schedule_failed', cron: controller.cron, error: error instanceof Error ? error.message : 'unknown' }));
+        throw error;
+      }));
+      return;
+    }
+    const gate = knowledgeScheduleGate(controller.scheduledTime);
+    if (!gate.actionable) {
+      console.log(JSON.stringify({ event: 'knowledge_schedule_skipped', cron: controller.cron, gate }));
+      return;
+    }
+    ctx.waitUntil(syncBookmarks(env).catch((error) => {
       console.error(JSON.stringify({ event: 'knowledge_schedule_failed', cron: controller.cron, error: error instanceof Error ? error.message : 'unknown' }));
       throw error;
     }));

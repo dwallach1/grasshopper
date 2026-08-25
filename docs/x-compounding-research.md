@@ -11,7 +11,7 @@ fetches — until evidence saturates or the budget runs out.
 ## Flow
 
 ```text
-bookmark sync (cron */30 or POST /x/sync)
+bookmark sync (09:35 + 14:35 America/New_York, or POST /x/sync)
         │  ingest + classify (existing pipeline)
         ▼
 createResearchSessions()  — up to 3 new sessions per sync,
@@ -78,8 +78,8 @@ the only path to trades.
 
 ## Operations
 
-- Automatic: every bookmark sync starts sessions for new market-related
-  bookmarks.
+- Automatic: the morning and pre-close bookmark syncs start sessions for new
+  market-related bookmarks, 30 minutes before each portfolio decision window.
 - Manual: `POST /api/knowledge/x/research` (dashboard proxy, manager only)
   with `{"bookmarkId": "..."}` creates or restarts a session.
 - Queues must exist before first deploy:

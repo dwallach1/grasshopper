@@ -6,6 +6,28 @@ begin
   end if;
 end $$;
 
+-- Bookmark reclassification replaces only Worker-owned derived evidence. Keep
+-- DELETE limited to the exact tables used by that transaction.
+do $$
+declare
+  target_table text;
+begin
+  foreach target_table in array array[
+    'bookmark_symbols','claims','ontology_evidence','ontology_observations',
+    'ontology_candidate_evidence','thesis_evidence'
+  ]
+  loop
+    execute format(
+      'grant delete on table public.%I to thesisforge_worker',
+      target_table
+    );
+    execute format(
+      'create policy thesisforge_worker_delete on public.%I for delete to thesisforge_worker using (true)',
+      target_table
+    );
+  end loop;
+end $$;
+
 -- Cloudflare Workflows publish a complete dashboard snapshot through one
 -- narrowly authorized RPC. The Worker never receives a database password or
 -- service-role key, and all source reads plus the final upsert happen inside a
@@ -903,7 +925,7 @@ begin
         'id','research-orchestrator','name','Research orchestrator',
         'prompt','Scheduled thesis research, position review, and trade-intent coordination.',
         'kind','cloudflare_worker','status','ACTIVE',
-        'rrule','RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=10,13,15;BYMINUTE=05',
+        'rrule','RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=10,15;BYMINUTE=05',
         'model','Workers AI','reasoning_effort',null,'next_run_at',null,
         'last_run_at',(select max(started_at) from public.cloud_runs),
         'indexed_at',clock_timestamp(),
@@ -915,7 +937,7 @@ begin
         'id','knowledge-pipeline','name','Knowledge pipeline',
         'prompt','X bookmark sync, document archive, ontology learning, and dashboard projection.',
         'kind','cloudflare_worker','status','ACTIVE',
-        'rrule','RRULE:FREQ=MINUTELY;INTERVAL=30',
+        'rrule','RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYHOUR=9,14;BYMINUTE=35',
         'model',null,'reasoning_effort',null,'next_run_at',null,
         'last_run_at',(select max(started_at) from public.runs where run_type='bookmark_ingest'),
         'indexed_at',clock_timestamp(),

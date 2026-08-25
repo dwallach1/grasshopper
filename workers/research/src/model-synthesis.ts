@@ -1,7 +1,7 @@
 import {
   AI_MODELS,
-  jsonSchemaResponseFormat,
   modelForRole,
+  parseAiJsonObject,
   runAiRole,
   type AiRole,
 } from '@thesisforge/shared/ai';
@@ -98,6 +98,54 @@ function thesisInvestigations(thesis: ResearchTask['thesis']): unknown[] {
   return Array.isArray(thesis.recent_investigations) ? thesis.recent_investigations.slice(0, 6) : [];
 }
 
+function compactInvestigation(item: unknown): unknown {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const row = item as Record<string, unknown>;
+  return {
+    bookmark_id: row.bookmark_id,
+    claim_status: row.claim_status,
+    investigation_summary: typeof row.investigation_summary === 'string'
+      ? row.investigation_summary.slice(0, 800)
+      : row.investigation_summary,
+    symbols: Array.isArray(row.symbols) ? row.symbols.slice(0, 8) : row.symbols,
+    corroborating_source_ids: Array.isArray(row.corroborating_source_ids)
+      ? row.corroborating_source_ids.slice(0, 8)
+      : row.corroborating_source_ids,
+    contradicting_source_ids: Array.isArray(row.contradicting_source_ids)
+      ? row.contradicting_source_ids.slice(0, 8)
+      : row.contradicting_source_ids,
+    open_questions: Array.isArray(row.open_questions) ? row.open_questions.slice(0, 4) : row.open_questions,
+  };
+}
+
+function compactThesisForSynthesis(thesis: ResearchTask['thesis']): Record<string, unknown> {
+  return {
+    id: thesis.id,
+    name: thesis.name,
+    summary: thesis.summary.slice(0, 2_000),
+    status: thesis.status,
+    confidence: thesis.confidence,
+    stance: thesis.stance,
+    time_horizon: thesis.time_horizon,
+    variant_perception: thesis.variant_perception?.slice(0, 500) ?? null,
+    falsifier: thesis.falsifier?.slice(0, 500) ?? null,
+    symbols: thesis.symbols.slice(0, 8),
+    recent_investigations: thesisInvestigations(thesis).map(compactInvestigation),
+  };
+}
+
+function compactDecisionContext(decisionContext: JsonObject): JsonObject {
+  const broker = decisionContext.broker;
+  if (!broker || typeof broker !== 'object' || Array.isArray(broker)) return decisionContext;
+  const record = broker as Record<string, unknown>;
+  const quotes = Array.isArray(record.quotes) ? record.quotes.slice(0, 8) : record.quotes;
+  const research = Array.isArray(record.research) ? record.research.slice(0, 8) : record.research;
+  return {
+    ...decisionContext,
+    broker: { ...record, quotes, research },
+  };
+}
+
 function investigationConflict(investigations: unknown[]): boolean {
   let supporting = false;
   let contradicting = false;
@@ -125,6 +173,11 @@ function shouldEscalatePosition(firstPass: PositionAiOutput): boolean {
   return false;
 }
 
+function aiErrorRetryable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /4006:|2021:|7003:|neurons|Invalid User Credentials|User Input Error/i.test(message);
+}
+
 async function runSynthesis(
   env: AiEnv,
   role: Extract<AiRole, 'synthesis' | 'synthesis_escalate'>,
@@ -134,26 +187,65 @@ async function runSynthesis(
   schema: Record<string, unknown>,
   metadata: Record<string, string>,
 ): Promise<unknown> {
-  return runAiRole(
-    env.AI,
-    role,
-    {
-      system,
-      messages: [{ role: 'user', content: user }],
-      max_tokens: 1_200,
-      temperature: 0.1,
-      response_format: jsonSchemaResponseFormat(schemaName, schema),
+  const gatewayOptions = {
+    gatewayId: env.AI_GATEWAY_ID,
+    metadata: {
+      prompt_version: SYNTHESIS_PROMPT_VERSION,
+      ai_model: modelForRole(role),
+      ...metadata,
     },
-    {
-      gatewayId: env.AI_GATEWAY_ID,
-      metadata: {
-        prompt_version: SYNTHESIS_PROMPT_VERSION,
-        ai_model: modelForRole(role),
-        ...metadata,
+    tags: ['thesisforge', role],
+  };
+  const schemaHint = JSON.stringify((schema as { properties?: Record<string, unknown> }).properties ?? schema);
+  const grokFirst = async (): Promise<unknown> => {
+    const result = await runAiRole(
+      env.AI,
+      role,
+      {
+        system: [
+          system,
+          'Return strict JSON only. Do not wrap the payload in markdown.',
+          `Required JSON properties: ${schemaHint}`,
+        ].join(' '),
+        messages: [{ role: 'user', content: user }],
+        max_tokens: 1_200,
+        temperature: 0.1,
       },
-      tags: ['thesisforge', role],
-    },
-  );
+      gatewayOptions,
+    );
+    return parseAiJsonObject(result);
+  };
+  try {
+    return await grokFirst();
+  } catch (error) {
+    if (!aiErrorRetryable(error)) throw error;
+    console.warn(JSON.stringify({
+      event: 'synthesis_grok_failed',
+      role,
+      error: error instanceof Error ? error.message : 'unknown',
+      fallback: AI_MODELS.triage,
+    }));
+    return runAiRole(
+      env.AI,
+      'triage',
+      {
+        system,
+        messages: [{ role: 'user', content: user }],
+        max_tokens: 1_200,
+        temperature: 0.1,
+        guided_json: schema,
+      },
+      {
+        ...gatewayOptions,
+        metadata: {
+          ...gatewayOptions.metadata,
+          ai_model: AI_MODELS.triage,
+          synthesis_fallback: 'llama_guided',
+        },
+        tags: ['thesisforge', role, 'synthesis_fallback'],
+      },
+    );
+  }
 }
 
 export async function synthesizeThesisDecision(
@@ -175,13 +267,14 @@ export async function synthesizeThesisDecision(
       ? 'A buy is permitted only for an explicitly evidenced, fresh catalyst or price/volume dislocation; otherwise return no_trade.'
       : 'This is a shadow run. Always return no_trade.',
   ].join(' ');
+  const boundedContext = compactDecisionContext(decisionContext);
   const user = [
     'Return strict JSON matching the schema.',
     `Market slot: ${task.marketSlot}`,
     `Canonical context version: ${task.contextVersion}`,
-    `Thesis: ${JSON.stringify(task.thesis)}`,
-    `Claim investigations: ${JSON.stringify(investigations)}`,
-    `Broker and portfolio context: ${JSON.stringify(decisionContext)}`,
+    `Thesis: ${JSON.stringify(compactThesisForSynthesis(task.thesis))}`,
+    `Claim investigations: ${JSON.stringify(investigations.map(compactInvestigation))}`,
+    `Broker and portfolio context: ${JSON.stringify(boundedContext)}`,
   ].join('\n');
 
   const first = parseThesisAiOutput(await runSynthesis(
@@ -200,7 +293,7 @@ export async function synthesizeThesisDecision(
     env,
     'synthesis_escalate',
     system,
-    `${user}\nPrior Sonnet pass: ${JSON.stringify(first)}\nEscalate carefully. Prefer no_trade when evidence remains contested.`,
+    `${user}\nPrior synthesis pass: ${JSON.stringify(first)}\nEscalate carefully. Prefer no_trade when evidence remains contested.`,
     'thesis_synthesis',
     ThesisSynthesisJsonSchema,
     { run_id: task.runId, thesis_id: task.thesis.id, escalated: 'true' },

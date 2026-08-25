@@ -33,8 +33,7 @@ export function marketGate(timestamp: number, forcedSlot?: string): MarketGate {
   const local = nyParts(timestamp);
   const slots = new Map([
     ['10:05', 'morning'],
-    ['13:05', 'midday'],
-    ['15:25', 'pre_close'],
+    ['15:05', 'pre_close'],
   ]);
   const weekday = !['Sat', 'Sun'].includes(local.weekday);
   const slot = forcedSlot || slots.get(local.time) || null;

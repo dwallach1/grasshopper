@@ -75,7 +75,10 @@
     "XCredentialVault": { "type": "durable-object", "storage": "sqlite" }
   },
   "triggers": {
-    "crons": ["*/30 * * * *", "15 12 * * SUN"]
+    "crons": [
+      "35 13,14,18,19 * * MON-FRI",
+      "15 12 * * SUN"
+    ]
   },
   "observability": {
     "enabled": true,

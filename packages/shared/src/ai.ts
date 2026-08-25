@@ -13,8 +13,8 @@ export const AI_MODELS = {
   triage: '@cf/meta/llama-3.1-8b-instruct-fast',
   investigation: 'xai/grok-4.6',
   research: 'xai/grok-4.6',
-  synthesis: 'anthropic/claude-sonnet-4.6',
-  synthesis_escalate: 'anthropic/claude-opus-4.6',
+  synthesis: 'xai/grok-4.6',
+  synthesis_escalate: 'xai/grok-4.6',
 } as const satisfies Record<AiRole, string>;
 
 export type AiModelId = (typeof AI_MODELS)[AiRole];
@@ -173,7 +173,7 @@ export async function runAiRole(
     payload.response_format = inputs.response_format;
   }
   if (inputs.tools?.length && !isWorkersAiModel(model)) payload.tools = inputs.tools;
-  if (inputs.reasoning && (role === 'investigation' || role === 'research')) {
+  if (inputs.reasoning && (role === 'investigation' || role === 'research' || role === 'synthesis_escalate')) {
     payload.reasoning = inputs.reasoning;
   }
 
