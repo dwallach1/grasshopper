@@ -18,7 +18,6 @@ export default defineConfig({
     ".wrangler/**",
     "dist/**",
     "node_modules/**",
-    "../../tools/oxlint/anti-slop/**",
   ],
   jsPlugins: [
     {

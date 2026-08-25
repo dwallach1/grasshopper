@@ -14,5 +14,8 @@
     "local:setup": "bash scripts/local-dev-setup.sh",
     "local:web": "bun run --cwd apps/dashboard dev",
     "dev": "bun run local:web"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "^1.80.0"
   }
 }

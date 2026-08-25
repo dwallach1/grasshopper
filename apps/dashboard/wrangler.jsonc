@@ -17,6 +17,11 @@
     "store_id": "9161ea4b738144c0accc37e724812d93",
     "secret_name": "INTERNAL_SERVICE_TOKEN"
   }],
+  // Empty so Miniflare exposes the binding; `.dev.vars` supplies the local identity.
+  // Production must keep this empty so Access remains the only identity path.
+  "vars": {
+    "LOCAL_DEV_IDENTITY": ""
+  },
   "secrets": {
     "required": [
       "SUPABASE_URL",
