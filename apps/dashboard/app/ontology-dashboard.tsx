@@ -17,7 +17,7 @@ type Insight={id:number|string;title:string;summary:string;insight_type:string;n
 type EventRecord={id:number;label:string;event_date:string|null;decision:string;rationale:string|null;participation_trigger:string|null};
 type TradeProposal={id:number;thesis_id:string|null;symbol:string;side:string;notional:number;order_type:string;status:string;rationale:string;created_at:string;reviewed_at:string|null;broker_alerts:string|null};
 type AccountState={observed_at:string;account_label:string;total_value:number;equity_value:number;cash:number;buying_power:number;source:string};
-type TradePolicy={sizing:{max_single_trade_percent_of_portfolio_value:number;standing_cash_target_percent:number;tactical_swing_sleeve:{target_percent_of_portfolio_value:number;target_positions:number;max_percent_per_position:number}}};
+type TradePolicy={sizing?:{max_single_trade_percent_of_portfolio_value?:number;standing_cash_target_percent?:number;tactical_swing_sleeve?:{target_percent_of_portfolio_value?:number;target_positions?:number;max_percent_per_position?:number}}};
 type RunReport={id:number;run_type:string;started_at:string;completed_at:string|null;status:string;headline:string;summary:string;insights:string[];learnings:string[];actions:string[];metrics:Record<string,string|number>};
 type Automation={id:string;name:string;prompt:string;kind:string;status:string;rrule:string;model:string|null;reasoning_effort:string|null;next_run_at:string|null;last_run_at:string|null;indexed_at:string;run_count:number;passed_count:number;failed_count:number};
 type AutomationRun={thread_id:string;automation_id:string;automation_name:string;status:string;outcome:'running'|'passed'|'failed'|'cancelled'|'unknown';started_at:string;completed_at:string|null;duration_ms:number|null;title:string|null;summary:string|null;final_output:string|null;findings:string[];learnings:string[];explored:string[];actions:string[];timeline:{at:string|null;text:string}[];error_text:string|null;tokens_used:number|null};
@@ -139,9 +139,9 @@ function HomeSurface({data,activeThesisId}:{data:Snapshot;activeThesisId?:string
   const planned=ready.reduce((sum,p)=>sum+p.notional,0);
   const portfolioValue=data.account_state?.total_value||0;
   const buyingPower=data.account_state?.buying_power||0;
-  const maxSinglePercent=data.trade_policy?.sizing.max_single_trade_percent_of_portfolio_value||0;
-  const tacticalPercent=data.trade_policy?.sizing.tactical_swing_sleeve.target_percent_of_portfolio_value||0;
-  const tacticalPositions=data.trade_policy?.sizing.tactical_swing_sleeve.target_positions||0;
+  const maxSinglePercent=data.trade_policy?.sizing?.max_single_trade_percent_of_portfolio_value||0;
+  const tacticalPercent=data.trade_policy?.sizing?.tactical_swing_sleeve?.target_percent_of_portfolio_value||0;
+  const tacticalPositions=data.trade_policy?.sizing?.tactical_swing_sleeve?.target_positions||0;
   const tacticalTarget=portfolioValue*tacticalPercent/100;
   const BrokerAlertsSchema=z.object({gates:z.array(z.string()).optional()}).passthrough();
   const alerts=(proposal:TradeProposal)=>{
