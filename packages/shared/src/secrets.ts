@@ -4,10 +4,25 @@ function isSecretsStoreSecret(binding: Exclude<SecretBinding, undefined>): bindi
   return Object(binding) === binding;
 }
 
-export async function readSecret(binding: SecretBinding, name: string): Promise<string> {
-  const value = binding && isSecretsStoreSecret(binding) ? await binding.get() : binding;
-  if (!value) throw new Error(`${name} is unavailable`);
-  return value;
+/**
+ * Resolve a Worker secret. Prefer Secrets Store (or a string binding), then an
+ * optional `.dev.vars` plain-string fallback used for local Miniflare / Vite.
+ */
+export async function readSecret(
+  binding: SecretBinding,
+  name: string,
+  fallback?: string,
+): Promise<string> {
+  if (binding) {
+    try {
+      const value = isSecretsStoreSecret(binding) ? await binding.get() : binding;
+      if (value) return value;
+    } catch {
+      // Secrets Store is often unavailable in fully-local Miniflare.
+    }
+  }
+  if (fallback) return fallback;
+  throw new Error(`${name} is unavailable`);
 }
 
 export async function secretsEqual(left: string, right: string): Promise<boolean> {

@@ -316,7 +316,37 @@ docs/                            architecture and runbooks
 
 ## Development and operations
 
-Requirements: Bun 1.4, Node.js 22.13+, Supabase, Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2, and a Robinhood Agentic connection. Python is not required.
+Requirements: Bun 1.4, Node.js 22.13+, Supabase CLI, Docker (for `supabase start`), Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2, and a Robinhood Agentic connection. Python is not required.
+
+### Local webapp (Supabase + Vite)
+
+Runs the dashboard Worker locally with the knowledge pipeline as an auxiliary Worker, against local Supabase Postgres/API. Cloudflare Access is replaced by a local-only identity (`LOCAL_DEV_IDENTITY`) when `CF_ACCESS_AUD=local-dev`.
+
+```sh
+bun run local:setup          # copies .dev.vars.example files if missing
+bunx supabase start --exclude storage-api,imgproxy
+bunx supabase db reset       # schemas + ontology seed + dashboard_snapshots.current
+bunx supabase functions serve     # optional for e2e; needed for full edge parity
+bun run local:web            # Vite + knowledge auxiliary Worker
+```
+
+Then open the Vite URL (typically `http://127.0.0.1:5173`). Manager identity is `local@thesisforge.dev`. Local tokens in `.dev.vars.example` match hashes accepted only for local development; never deploy them.
+
+### Local end-to-end tests (publication / knowledge)
+
+Requires `supabase start` (and `supabase db reset` after pulling schema changes). Edge-function coverage also needs functions reachable on `http://127.0.0.1:54321/functions/v1`.
+
+```sh
+bun run test:e2e
+```
+
+These tests exercise:
+- publication authorization + `dashboard_snapshots.current` rebuild via PostgREST RPC (and the edge function when served)
+- knowledge `captureResearch` → graph rebuild → `publishDashboard` → readable snapshot
+
+They skip automatically when local Supabase is not running.
+
+Unit tests (no Docker):
 
 ```sh
 bun install

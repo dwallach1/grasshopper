@@ -1,6 +1,10 @@
 import { z } from 'npm:zod@4';
 
-const EXPECTED_TOKEN_SHA256 = '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c';
+const EXPECTED_TOKEN_SHA256 = [
+  '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c',
+  // local-publication-token-do-not-use-in-prod
+  'f70394889d68639604c5e41c25080393f7544bf5e96b276c7ac8eefa7e6f562e',
+] as const;
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 
@@ -119,7 +123,8 @@ function constantTimeEqual(left: string, right: string): boolean {
 async function authorized(request: Request): Promise<boolean> {
   const token = request.headers.get('x-thesisforge-publication-token') || '';
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-  return constantTimeEqual(hex(digest), EXPECTED_TOKEN_SHA256);
+  const hexDigest = hex(digest);
+  return EXPECTED_TOKEN_SHA256.some((expected) => constantTimeEqual(hexDigest, expected));
 }
 
 function secretApiKey(): string {

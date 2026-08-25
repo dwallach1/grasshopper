@@ -522,7 +522,11 @@ begin
     current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-publication-token',
     ''
   );
-  if encode(extensions.digest(supplied_token, 'sha256'), 'hex') <> '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c' then
+  if encode(extensions.digest(supplied_token, 'sha256'), 'hex') not in (
+    '22464bba6b2c336e9650e5d172c62c3904aff03e18d9d025890e905592b7868c',
+    -- local-publication-token-do-not-use-in-prod
+    'f70394889d68639604c5e41c25080393f7544bf5e96b276c7ac8eefa7e6f562e'
+  ) then
     raise insufficient_privilege using message = 'Dashboard publication authorization required';
   end if;
   if p_trade_policy is null or jsonb_typeof(p_trade_policy) <> 'object' then
@@ -592,7 +596,9 @@ as $$
     'hex'
   ) in (
     '28390b6c34a3ce62cadb7b5423d2602398eb4d23cf0c7edeeef876474c08a35a',
-    'f92815d42576ec7de57769076d2c547f8ee4811db0cba6fc1e8a94cfe212eef9'
+    'f92815d42576ec7de57769076d2c547f8ee4811db0cba6fc1e8a94cfe212eef9',
+    -- local-dashboard-token-do-not-use-in-prod
+    '329669fba60b385cfa668bb781897f56cdbecf54101b96b1d642c05473fd311b'
   );
 $$;
 revoke all on function public.is_thesisforge_dashboard_reader() from public, authenticated, service_role;
@@ -627,7 +633,9 @@ as $$
       'hex'
     ) in (
       '28390b6c34a3ce62cadb7b5423d2602398eb4d23cf0c7edeeef876474c08a35a',
-      'f92815d42576ec7de57769076d2c547f8ee4811db0cba6fc1e8a94cfe212eef9'
+      'f92815d42576ec7de57769076d2c547f8ee4811db0cba6fc1e8a94cfe212eef9',
+      -- local-dashboard-token-do-not-use-in-prod
+      '329669fba60b385cfa668bb781897f56cdbecf54101b96b1d642c05473fd311b'
     )
     and encode(
       extensions.digest(
@@ -640,7 +648,9 @@ as $$
       'hex'
     ) in (
       '644fbeec6d5153114d1d24d36d95dbefbbb08c9a37d7386c7664def738078696',
-      '9022c6a63dd1d8d166337c64103cfb27ec879a7e390d4241ca1df3bc5908f92b'
+      '9022c6a63dd1d8d166337c64103cfb27ec879a7e390d4241ca1df3bc5908f92b',
+      -- local-manager-token-do-not-use-in-prod
+      '48e4a4f0f7d26f4c8f0764dffb572280e62ec090f2ae0e483f64f2a1ab9b7a44'
     )
     and (
       coalesce(
@@ -658,7 +668,11 @@ as $$
           'sha256'
         ),
         'hex'
-      ) = '68c1ad308ad4b806b9c0d4b2652c4899f2e44523fa5f6fb5d094559f59950e26'
+      ) in (
+        '68c1ad308ad4b806b9c0d4b2652c4899f2e44523fa5f6fb5d094559f59950e26',
+        -- local@thesisforge.dev
+        'c4cfc998df44884a2061a4ef3cc8b01d6e98c2c45c84273b0a91de79c4c50078'
+      )
     );
 $$;
 revoke all on function public.is_thesisforge_site_manager() from public, authenticated, service_role;

@@ -48,6 +48,7 @@ import type { JsonObject } from '@thesisforge/shared/json';
 
 type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
   ROBINHOOD_BROKER_AGENT: DurableObjectNamespace<RobinhoodBrokerRpc>;
+  THESISFORGE_PUBLICATION_TOKEN?: string;
 };
 
 // Retained only while the legacy Worker hands its Durable Object namespaces to
@@ -81,7 +82,11 @@ type PositionObservation = {
 };
 
 async function cloudControl<Payload>(env: PublicationEnv, action: string, payload?: Payload): Promise<unknown> {
-  const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
+  const publicationToken = await readSecret(
+    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
+    'THESISFORGE_PUBLICATION_TOKEN',
+    env.THESISFORGE_PUBLICATION_TOKEN,
+  );
   const response = await fetch(
     `${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/cloud-control`,
     {
@@ -101,7 +106,11 @@ async function cloudControl<Payload>(env: PublicationEnv, action: string, payloa
 async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
   const result = await cloudControl(env, 'finalize_run', { run_id: runId });
   if (!isFinalizeRunSuccess(result)) return;
-  const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
+  const publicationToken = await readSecret(
+    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
+    'THESISFORGE_PUBLICATION_TOKEN',
+    env.THESISFORGE_PUBLICATION_TOKEN,
+  );
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
     headers: {

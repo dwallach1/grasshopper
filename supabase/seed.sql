@@ -202,3 +202,14 @@ values
   ('LITE','photonics','member',90,1,1,'active','bootstrap',now(),now()),
   ('TAO-USD','crypto_ai','member',90,1,1,'active','bootstrap',now(),now())
 on conflict (symbol, theme_id) do nothing;
+
+-- Bootstrap a readable dashboard projection for local Vite + Supabase.
+insert into public.dashboard_snapshots(id, generated_at, payload)
+select
+  'current',
+  now(),
+  private.build_dashboard_snapshot('{}'::jsonb, now())
+on conflict (id) do update
+set
+  generated_at = excluded.generated_at,
+  payload = excluded.payload;

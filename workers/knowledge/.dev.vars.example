@@ -1,4 +1,12 @@
-SUPABASE_URL=
-X_CLIENT_ID=
-X_ACCESS_TOKEN=
-X_REFRESH_TOKEN=
+# Local Supabase + Miniflare (dashboard auxiliary Worker). Never commit real values.
+# Copy: cp workers/knowledge/.dev.vars.example workers/knowledge/.dev.vars
+
+SUPABASE_URL=http://127.0.0.1:54321
+THESISFORGE_PUBLICATION_TOKEN=local-publication-token-do-not-use-in-prod
+INTERNAL_SERVICE_TOKEN=local-internal-token-do-not-use-in-prod
+FINANCIAL_DATASETS_API_KEY=local-financial-key-unused
+
+# X OAuth is required by wrangler secrets config; placeholders are fine until you sync.
+X_CLIENT_ID=local-x-client-id
+X_ACCESS_TOKEN=local-x-access-token
+X_REFRESH_TOKEN=local-x-refresh-token

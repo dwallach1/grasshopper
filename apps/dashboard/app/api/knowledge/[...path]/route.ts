@@ -12,7 +12,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ pa
   const path = (await context.params).path.join('/');
   if (!allowed.has(path)) return NextResponse.json({ error: 'Unsupported knowledge operation' }, { status: 404 });
   const body = await request.text();
-  const internalToken = await readSecret(env.INTERNAL_SERVICE_TOKEN_SECRET, 'INTERNAL_SERVICE_TOKEN');
+  const internalToken = await readSecret(
+    env.INTERNAL_SERVICE_TOKEN_SECRET,
+    'INTERNAL_SERVICE_TOKEN',
+    env.INTERNAL_SERVICE_TOKEN,
+  );
   const response = await env.KNOWLEDGE_PIPELINE.fetch(`https://knowledge.internal/${path}`, {
     method: 'POST',
     headers: { 'content-type': request.headers.get('content-type') || 'application/json', 'x-thesisforge-internal-token': internalToken },

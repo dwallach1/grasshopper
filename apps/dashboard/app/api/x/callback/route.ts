@@ -17,7 +17,11 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get('state');
   if (!code || !state) return NextResponse.json({ error: 'X callback is missing code or state' }, { status: 400 });
   const redirectUri = `${url.origin}/api/x/callback`;
-  const internalToken = await readSecret(env.INTERNAL_SERVICE_TOKEN_SECRET, 'INTERNAL_SERVICE_TOKEN');
+  const internalToken = await readSecret(
+    env.INTERNAL_SERVICE_TOKEN_SECRET,
+    'INTERNAL_SERVICE_TOKEN',
+    env.INTERNAL_SERVICE_TOKEN,
+  );
   const response = await env.KNOWLEDGE_PIPELINE.fetch('https://knowledge.internal/x/callback', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-thesisforge-internal-token': internalToken },

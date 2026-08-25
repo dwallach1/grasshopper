@@ -42,8 +42,11 @@ type KnowledgeEnvironment = {
   AI_GATEWAY_ID: string;
   SUPABASE_URL: string;
   THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretBinding;
+  THESISFORGE_PUBLICATION_TOKEN?: string;
   INTERNAL_SERVICE_TOKEN_SECRET: SecretBinding;
+  INTERNAL_SERVICE_TOKEN?: string;
   FINANCIAL_DATASETS_API_KEY_SECRET: SecretBinding;
+  FINANCIAL_DATASETS_API_KEY?: string;
 };
 
 function json<Value>(value: Value, init: ResponseInit = {}): Response {
@@ -56,7 +59,11 @@ function json<Value>(value: Value, init: ResponseInit = {}): Response {
 async function authorized(request: Request, env: KnowledgeEnvironment): Promise<boolean> {
   const supplied = request.headers.get('x-thesisforge-internal-token') || '';
   if (!supplied) return false;
-  const current = await readSecret(env.INTERNAL_SERVICE_TOKEN_SECRET, 'INTERNAL_SERVICE_TOKEN');
+  const current = await readSecret(
+    env.INTERNAL_SERVICE_TOKEN_SECRET,
+    'INTERNAL_SERVICE_TOKEN',
+    env.INTERNAL_SERVICE_TOKEN,
+  );
   return secretsEqual(supplied, current);
 }
 
@@ -133,7 +140,11 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   if (url.pathname === '/financial' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
     const spec = FinancialRequestSchema.parse(await request.json());
-    const apiKey = await readSecret(env.FINANCIAL_DATASETS_API_KEY_SECRET, 'FINANCIAL_DATASETS_API_KEY');
+    const apiKey = await readSecret(
+      env.FINANCIAL_DATASETS_API_KEY_SECRET,
+      'FINANCIAL_DATASETS_API_KEY',
+      env.FINANCIAL_DATASETS_API_KEY,
+    );
     const result = await withDatabase(env.HYPERDRIVE.connectionString, (database) => fetchFinancialData(database, apiKey, spec));
     await publishDashboard(env);
     return json(result);

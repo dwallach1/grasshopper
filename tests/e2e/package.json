@@ -1,0 +1,14 @@
+{
+  "name": "@thesisforge/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test ."
+  },
+  "dependencies": {
+    "@thesisforge/contracts": "workspace:*",
+    "@thesisforge/worker-knowledge": "workspace:*",
+    "zod": "^4"
+  }
+}
