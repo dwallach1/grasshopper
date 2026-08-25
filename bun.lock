@@ -50,6 +50,10 @@
     "packages/shared": {
       "name": "@thesisforge/shared",
       "version": "0.0.0",
+      "devDependencies": {
+        "@cloudflare/workers-types": "5.20260823.1",
+        "typescript": "5.9.3",
+      },
     },
     "workers/broker": {
       "name": "@thesisforge/worker-broker",

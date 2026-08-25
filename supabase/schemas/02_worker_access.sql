@@ -218,11 +218,44 @@ as $$
               order by ts.weight_hint desc, ts.symbol
               limit 8
             ) x
+          ), '[]'::jsonb),
+          'recent_investigations', coalesce((
+            select jsonb_agg(inv.packet order by inv.investigated_at desc)
+            from (
+              select b.investigation_output || jsonb_build_object(
+                'bookmark_id', b.id,
+                'investigated_at', b.investigated_at,
+                'investigation_model', b.investigation_model
+              ) as packet,
+              b.investigated_at
+              from public.thesis_evidence te
+              join public.bookmarks b on b.id=te.bookmark_id
+              where te.thesis_id=t.id
+                and te.evidence_type='x_claim_investigation'
+                and b.investigation_output is not null
+              order by b.investigated_at desc nulls last
+              limit 6
+            ) inv
           ), '[]'::jsonb)
         )
         order by t.confidence desc, t.name
       )
       from public.theses t
+    ), '[]'::jsonb),
+    'claim_investigations', coalesce((
+      select jsonb_agg(to_jsonb(i) order by i.investigated_at desc)
+      from (
+        select b.id as bookmark_id, b.investigated_at, b.investigation_model,
+               b.investigation_prompt_version, b.investigation_output,
+               b.market_score, coalesce((
+                 select jsonb_agg(bs.symbol order by bs.symbol)
+                 from public.bookmark_symbols bs where bs.bookmark_id=b.id
+               ), '[]'::jsonb) as symbols
+        from public.bookmarks b
+        where b.investigation_output is not null
+        order by b.investigated_at desc nulls last
+        limit 40
+      ) i
     ), '[]'::jsonb),
     'predictions', coalesce((
       select jsonb_agg(to_jsonb(p) order by p.target_date, p.probability desc)

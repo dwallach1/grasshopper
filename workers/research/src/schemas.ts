@@ -23,6 +23,7 @@ export const ThesisSchema = z.object({
   variant_perception: z.string().nullable().optional(),
   falsifier: z.string().nullable().optional(),
   symbols: z.array(z.string()).max(8).default([]),
+  recent_investigations: z.array(z.unknown()).max(8).optional(),
 });
 
 export type Thesis = z.infer<typeof ThesisSchema>;
@@ -105,6 +106,7 @@ export function parseTheses(context: unknown): Thesis[] {
       symbols: thesis.data.symbols.slice(0, 8),
       variant_perception: thesis.data.variant_perception ?? null,
       falsifier: thesis.data.falsifier ?? null,
+      recent_investigations: thesis.data.recent_investigations?.slice(0, 6),
     });
   }
   return theses.slice(0, MAX_THESES_PER_RUN);
@@ -249,6 +251,15 @@ export const ThesisAiOutputSchema = z.object({
   bull_case_pass: z.boolean().optional(),
   bear_case_answered: z.boolean().optional(),
   portfolio_risk_pass: z.boolean().optional(),
+  claim_status: z.enum([
+    'confirmed',
+    'contradicted',
+    'partially_supported',
+    'unverified',
+    'insufficient',
+  ]).optional(),
+  cited_source_ids: z.array(z.string()).optional(),
+  escalate: z.boolean().optional(),
 }).passthrough();
 
 export type ThesisAiOutput = z.infer<typeof ThesisAiOutputSchema>;
@@ -268,6 +279,15 @@ export const PositionAiOutputSchema = z.object({
   bull_case_pass: z.boolean().optional(),
   bear_case_answered: z.boolean().optional(),
   portfolio_risk_pass: z.boolean().optional(),
+  claim_status: z.enum([
+    'confirmed',
+    'contradicted',
+    'partially_supported',
+    'unverified',
+    'insufficient',
+  ]).optional(),
+  cited_source_ids: z.array(z.string()).optional(),
+  escalate: z.boolean().optional(),
 }).passthrough();
 
 export type PositionAiOutput = z.infer<typeof PositionAiOutputSchema>;

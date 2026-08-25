@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
+import { AI_MODELS, runAiRole } from '@thesisforge/shared/ai';
+
 import type { XBookmark, XContextAnnotation } from './bookmarks';
 import { normalizePhrase, type OntologyCatalog, type ThemeMatch } from './ontology';
 
-export const ONTOLOGY_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
+export const ONTOLOGY_AI_MODEL = AI_MODELS.triage;
 export const ONTOLOGY_PROMPT_VERSION = 'ontology-semantic-v1';
 export const MAX_ONTOLOGY_BOOKMARKS_PER_SYNC = 96;
 
@@ -306,8 +308,9 @@ async function analyzeBatch(
   const claimTypes = ClaimTypeSchema.options;
   const directions = ThemeDirectionSchema.options;
   const candidateTypes = CandidateTypeSchema.options;
-  const result = await ai.run(
-    ONTOLOGY_AI_MODEL,
+  const result = await runAiRole(
+    ai,
+    'triage',
     {
       messages: [{ role: 'user', content: promptFor(inputs, catalog) }],
       max_tokens: 3_500,
@@ -381,15 +384,10 @@ async function analyzeBatch(
       },
     },
     {
-      gateway: {
-        id: gatewayId,
-        skipCache: true,
-        collectLog: true,
-        metadata: {
-          prompt_version: ONTOLOGY_PROMPT_VERSION,
-          bookmark_ids: inputs.map((input) => input.id).join(','),
-        },
-        retries: { maxAttempts: 3, retryDelayMs: 500, backoff: 'exponential' },
+      gatewayId,
+      metadata: {
+        prompt_version: ONTOLOGY_PROMPT_VERSION,
+        bookmark_ids: inputs.map((input) => input.id).join(','),
       },
       tags: ['thesisforge', 'ontology-learning'],
     },

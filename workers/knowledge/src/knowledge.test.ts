@@ -2,9 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { bookmarkFromUnknown } from './bookmarks';
 import { CaptureSchema } from './capture';
+import {
+  parseClaimInvestigation,
+  shouldInvestigateClaim,
+} from './claim-investigation';
 import { cleanHtml, documentTypeFor, extractDocumentText, objectPathFor } from './documents';
 import { FinancialRequestSchema } from './financial';
-import { parseOntologyAiOutput, type AnalysisInput } from './ontology-analysis';
+import { parseOntologyAiOutput, type AnalysisInput, type ClassifiedBookmark } from './ontology-analysis';
 import { normalizePhrase, OntologyCatalog, slugify } from './ontology';
 
 describe('worker knowledge primitives', () => {
@@ -93,6 +97,45 @@ describe('worker knowledge primitives', () => {
       claim_evidence_excerpt: 'announced a large contract',
       symbols: [], themes: [], candidates: [],
     }] }, inputs, catalog)).toThrow('exact source excerpt');
+  });
+
+  test('gates and validates Grok investigation packets without trade advice', () => {
+    const classified = {
+      marketScore: 80,
+      claim: { type: 'company_event', summary: 'Contract signed', confidence: 70, evidenceExcerpt: 'signed' },
+    } as ClassifiedBookmark;
+    expect(shouldInvestigateClaim(classified)).toBe(true);
+    expect(shouldInvestigateClaim({
+      ...classified,
+      claim: { ...classified.claim!, confidence: 20 },
+    })).toBe(false);
+
+    const packet = parseClaimInvestigation({
+      response: JSON.stringify({
+        bookmark_id: 'b1',
+        claim_status: 'partial',
+        investigation_summary: 'IR release partially supports the claim.',
+        symbols: ['VST'],
+        sources: [{
+          source_id: 's1',
+          tier: 'company_or_primary',
+          title: 'IR note',
+          url: 'https://example.com/ir',
+          published_at: '2026-08-20',
+          excerpt: 'signed a power agreement',
+          supports_claim: true,
+        }],
+        corroborating_source_ids: ['s1'],
+        contradicting_source_ids: [],
+        open_questions: ['Contract economics'],
+        falsifiers: ['Agreement cancelled'],
+        trade_recommendation: 'none',
+      }),
+    }, 'b1');
+    expect(packet.claim_status).toBe('partial');
+    expect(() => parseClaimInvestigation({
+      response: JSON.stringify({ ...packet, trade_recommendation: 'buy' }),
+    }, 'b1')).toThrow();
   });
 
   test('extracts bounded HTML text and stable R2 paths', async () => {

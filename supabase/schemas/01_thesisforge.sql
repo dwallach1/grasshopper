@@ -75,10 +75,19 @@ create table public.bookmarks (
   classification_prompt_version text,
   classification_output jsonb,
   classified_at timestamptz,
+  investigation_model text,
+  investigation_prompt_version text,
+  investigation_output jsonb,
+  investigated_at timestamptz,
   constraint bookmarks_classification_complete_check check (
     (classification_model is null and classification_prompt_version is null and classification_output is null and classified_at is null)
     or
     (classification_model is not null and classification_prompt_version is not null and classification_output is not null and classified_at is not null)
+  ),
+  constraint bookmarks_investigation_complete_check check (
+    (investigation_model is null and investigation_prompt_version is null and investigation_output is null and investigated_at is null)
+    or
+    (investigation_model is not null and investigation_prompt_version is not null and investigation_output is not null and investigated_at is not null)
   )
 );
 

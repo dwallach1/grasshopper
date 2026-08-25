@@ -9,6 +9,11 @@ import { marketGate } from './market-clock';
 import { approvedCandidate } from './autonomous-decision';
 import { decidePositionAction, type PositionHistory, type PositionThesis } from './position-decision';
 import {
+  synthesizePositionDecision,
+  synthesizeThesisDecision,
+  SYNTHESIS_PROMPT_VERSION,
+} from './model-synthesis';
+import {
   approvedTradeProposals,
   autonomousExecutionActive,
   autonomousPositionManagementActive,
@@ -23,11 +28,9 @@ import {
   parseCloudTask,
   parseJsonObject,
   parseJsonObjectOrNull,
-  parsePositionAiOutput,
   parsePositionConfiguration,
   parsePositionEpisodeRows,
   parseTheses,
-  parseThesisAiOutput,
   type ApprovedTradeProposal,
   type CloudTask,
   type PositionConfiguration,
@@ -49,8 +52,7 @@ type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
 
 // Retained only while the legacy Worker hands its Durable Object namespaces to
 // thesisforge-research-orchestrator. The final topology has no publication Workflow.
-const AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
-const PROMPT_VERSION = 'thesis-autonomous-v2';
+const PROMPT_VERSION = SYNTHESIS_PROMPT_VERSION;
 const MAX_CONTROL_BYTES = 512 * 1024;
 
 type DeduplicationResult = { duplicate: boolean };
@@ -152,81 +154,13 @@ async function persistBrokerSnapshot(env: PublicationEnv, snapshot: BrokerAccoun
   return Number(row.id);
 }
 
-function parseAiOutput(result: unknown): JsonObject {
-  return parseThesisAiOutput(result) as JsonObject;
-}
-
-function parsePositionOutput(result: unknown): JsonObject {
-  return parsePositionAiOutput(result) as JsonObject;
-}
-
 async function analyzeThesis(
   env: PublicationEnv,
   task: ResearchTask,
   decisionContext: JsonObject,
 ): Promise<JsonObject> {
   const liveMode = String(env.TRADING_ENABLED) === 'true';
-  const prompt = [
-    'You are a cautious investment decision classifier. You cannot call tools or place orders.',
-    'Do not invent current facts, prices, filings, catalysts, earnings, or news.',
-    'Use only the supplied canonical thesis and broker research context. Separate missing evidence from negative evidence.',
-    liveMode
-      ? 'A buy is permitted only for an explicitly evidenced, fresh catalyst or price/volume dislocation; otherwise return no_trade.'
-      : 'This is a shadow run. Always return no_trade.',
-    'Return strict JSON with keys: material_change (boolean), stance (bullish|bearish|neutral),',
-    'confidence_delta (integer -10..10), summary (string), risks (string[]), actions (string[]),',
-    'trade_decision (no_trade|buy), symbol (string), notional_percent (number 0..5),',
-    'decision_confidence (integer 0..100), catalyst (string), invalidation (string),',
-    'bull_case_pass (boolean), bear_case_answered (boolean), portfolio_risk_pass (boolean).',
-    `Market slot: ${task.marketSlot}`,
-    `Canonical context version: ${task.contextVersion}`,
-    `Thesis: ${JSON.stringify(task.thesis)}`,
-    `Broker and portfolio context: ${JSON.stringify(decisionContext)}`,
-  ].join('\n');
-  const result = await env.AI.run(
-    AI_MODEL,
-    {
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 500,
-      temperature: 0.1,
-      guided_json: {
-        type: 'object',
-        properties: {
-          material_change: { type: 'boolean' },
-          stance: { type: 'string', enum: ['bullish', 'bearish', 'neutral'] },
-          confidence_delta: { type: 'integer', minimum: -10, maximum: 10 },
-          summary: { type: 'string' },
-          risks: { type: 'array', items: { type: 'string' } },
-          actions: { type: 'array', items: { type: 'string' } },
-          trade_decision: { type: 'string', enum: ['no_trade', 'buy'] },
-          symbol: { type: 'string' },
-          notional_percent: { type: 'number', minimum: 0, maximum: 5 },
-          decision_confidence: { type: 'integer', minimum: 0, maximum: 100 },
-          catalyst: { type: 'string' },
-          invalidation: { type: 'string' },
-          bull_case_pass: { type: 'boolean' },
-          bear_case_answered: { type: 'boolean' },
-          portfolio_risk_pass: { type: 'boolean' },
-        },
-        required: [
-          'material_change', 'stance', 'confidence_delta', 'summary', 'risks', 'actions',
-          'trade_decision', 'symbol', 'notional_percent', 'decision_confidence', 'catalyst',
-          'invalidation', 'bull_case_pass', 'bear_case_answered', 'portfolio_risk_pass',
-        ],
-      },
-    },
-    {
-      gateway: {
-        id: env.AI_GATEWAY_ID,
-        skipCache: true,
-        collectLog: true,
-        metadata: { run_id: task.runId, thesis_id: task.thesis.id, prompt_version: PROMPT_VERSION },
-        retries: { maxAttempts: 3, retryDelayMs: 500, backoff: 'exponential' },
-      },
-      tags: ['thesisforge', liveMode ? 'autonomous-decision' : 'shadow-research'],
-    },
-  );
-  return parseAiOutput(result);
+  return synthesizeThesisDecision(env, task, decisionContext, liveMode);
 }
 
 async function analyzePosition(
@@ -236,58 +170,16 @@ async function analyzePosition(
   snapshot: BrokerAccountSnapshot,
   brokerContext: JsonObject,
 ): Promise<JsonObject> {
-  const prompt = [
-    'You are a cautious position-management classifier. You cannot call tools or place orders.',
-    'Use only the supplied broker context, position, and linked canonical theses. Do not invent facts.',
-    'Recommend hold by default. Add requires a fresh positive catalyst and an intact hardening thesis.',
-    'Reduce or exit requires specific adverse evidence or a confirmed thesis invalidation.',
-    'Return strict JSON with keys: position_action (hold|add|reduce|exit), decision_confidence (0..100),',
-    'thesis_state (intact|weakening|invalidated), summary (string), risks (string[]), catalyst (string),',
-    'invalidation (string), add_percent (0..2), reduce_percent (0..100), invalidation_confirmed (boolean),',
-    'adverse_evidence (boolean), bull_case_pass (boolean), bear_case_answered (boolean), portfolio_risk_pass (boolean).',
-    `Review reason: ${task.reason}`,
-    `Position: ${JSON.stringify(position)}`,
-    `Portfolio: ${JSON.stringify({ total_value: snapshot.totalValue, buying_power: snapshot.buyingPower })}`,
-    `Linked theses: ${JSON.stringify(task.theses || [])}`,
-    `Broker context: ${JSON.stringify(brokerContext)}`,
-  ].join('\n');
-  const result = await env.AI.run(AI_MODEL, {
-    messages: [{ role: 'user', content: prompt }],
-    max_tokens: 450,
-    temperature: 0.1,
-    guided_json: {
-      type: 'object',
-      properties: {
-        position_action: { type: 'string', enum: ['hold', 'add', 'reduce', 'exit'] },
-        decision_confidence: { type: 'integer', minimum: 0, maximum: 100 },
-        thesis_state: { type: 'string', enum: ['intact', 'weakening', 'invalidated'] },
-        summary: { type: 'string' },
-        risks: { type: 'array', items: { type: 'string' } },
-        catalyst: { type: 'string' },
-        invalidation: { type: 'string' },
-        add_percent: { type: 'number', minimum: 0, maximum: 2 },
-        reduce_percent: { type: 'number', minimum: 0, maximum: 100 },
-        invalidation_confirmed: { type: 'boolean' },
-        adverse_evidence: { type: 'boolean' },
-        bull_case_pass: { type: 'boolean' },
-        bear_case_answered: { type: 'boolean' },
-        portfolio_risk_pass: { type: 'boolean' },
-      },
-      required: [
-        'position_action', 'decision_confidence', 'thesis_state', 'summary', 'risks', 'catalyst',
-        'invalidation', 'add_percent', 'reduce_percent', 'invalidation_confirmed', 'adverse_evidence',
-        'bull_case_pass', 'bear_case_answered', 'portfolio_risk_pass',
-      ],
+  return synthesizePositionDecision(
+    env,
+    task,
+    position as unknown as JsonObject,
+    {
+      total_value: snapshot.totalValue,
+      buying_power: snapshot.buyingPower,
     },
-  }, {
-    gateway: {
-      id: env.AI_GATEWAY_ID, skipCache: true, collectLog: true,
-      metadata: { run_id: task.runId, position_key: task.positionKey, prompt_version: PROMPT_VERSION },
-      retries: { maxAttempts: 3, retryDelayMs: 500, backoff: 'exponential' },
-    },
-    tags: ['thesisforge', 'autonomous-position-management'],
-  });
-  return parsePositionOutput(result);
+    brokerContext,
+  );
 }
 
 export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, ResearchCycleParams> {
@@ -798,7 +690,7 @@ async function processResearchTask(env: PublicationEnv, task: ResearchTask, atte
         created_at: new Date().toISOString(),
         reviewed_at: new Date().toISOString(),
         broker_alerts: {
-          autonomous_source: 'cloudflare_workers_ai',
+          autonomous_source: 'cloudflare_claude_synthesis',
           run_id: task.runId,
           thesis_task: task.idempotencyKey,
           evidence: candidate.evidence,

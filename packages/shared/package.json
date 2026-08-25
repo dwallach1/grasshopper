@@ -3,9 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "test": "bun test src/ai.test.ts",
+    "typecheck": "bun --bun tsc --project tsconfig.json"
+  },
   "exports": {
     "./json": "./src/json.ts",
     "./secrets": "./src/secrets.ts",
-    "./http": "./src/http.ts"
+    "./http": "./src/http.ts",
+    "./ai": "./src/ai.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260823.1",
+    "typescript": "5.9.3"
   }
 }

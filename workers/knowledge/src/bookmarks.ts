@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 import type { Database } from './database';
 import {
+  INVESTIGATION_AI_MODEL,
+  INVESTIGATION_PROMPT_VERSION,
+  type InvestigatedBookmark,
+} from './claim-investigation';
+import {
   MAX_ONTOLOGY_BOOKMARKS_PER_SYNC,
   ONTOLOGY_AI_MODEL,
   ONTOLOGY_PROMPT_VERSION,
@@ -115,6 +120,73 @@ export async function bookmarksNeedingAi(
   });
 }
 
+/** Rebuild classified rows that still need a Grok investigation packet. */
+export async function classifiedNeedingInvestigation(
+  database: Database,
+  limit = 8,
+): Promise<ClassifiedBookmark[]> {
+  const rows = await database.query<{
+    id: string;
+    text: string;
+    created_at: string | null;
+    fetched_at: string;
+    raw_json: unknown;
+    market_score: number;
+    classification_output: unknown;
+  }>(`
+    select b.id, b.text, b.created_at::text, b.fetched_at::text, b.raw_json,
+           b.market_score, b.classification_output
+    from bookmarks b
+    where b.is_market_related
+      and b.classification_output is not null
+      and b.classification_prompt_version = $1
+      and (
+        b.investigation_prompt_version is distinct from $2
+        or b.investigation_model is distinct from $3
+        or b.investigation_output is null
+      )
+      and coalesce((b.classification_output->>'claim_type'), 'none') <> 'none'
+      and coalesce((b.classification_output->>'claim_confidence')::integer, 0) >= 50
+    order by b.classified_at desc nulls last, b.fetched_at desc
+    limit $4
+  `, [ONTOLOGY_PROMPT_VERSION, INVESTIGATION_PROMPT_VERSION, INVESTIGATION_AI_MODEL, limit]);
+
+  return rows.flatMap((row) => {
+    const analysis = row.classification_output;
+    if (!analysis || typeof analysis !== 'object' || Array.isArray(analysis)) return [];
+    const record = analysis as Record<string, unknown>;
+    const claimType = typeof record.claim_type === 'string' ? record.claim_type : 'none';
+    if (claimType === 'none') return [];
+    const claimConfidence = Number(record.claim_confidence);
+    if (!Number.isFinite(claimConfidence) || claimConfidence < 50) return [];
+    const symbols = Array.isArray(record.symbols)
+      ? record.symbols.filter((value): value is string => typeof value === 'string')
+      : [];
+    const bookmark = bookmarkFromUnknown(row.raw_json) ?? {
+      id: row.id,
+      text: row.text,
+    };
+    return [{
+      bookmark,
+      createdAt: row.created_at ?? row.fetched_at,
+      text: row.text,
+      symbols,
+      marketScore: Number(row.market_score),
+      claim: {
+        type: claimType,
+        summary: typeof record.claim_summary === 'string' ? record.claim_summary : '',
+        confidence: claimConfidence,
+        evidenceExcerpt: typeof record.claim_evidence_excerpt === 'string'
+          ? record.claim_evidence_excerpt
+          : '',
+      },
+      matches: [],
+      candidates: [],
+      classificationOutput: analysis as ClassifiedBookmark['classificationOutput'],
+    }];
+  });
+}
+
 async function syncThemeTheses(database: Database): Promise<void> {
   await database.execute(`
     insert into theses(id, name, summary, status, confidence, time_horizon, created_at, updated_at)
@@ -145,7 +217,7 @@ async function clearPriorAiClassification(database: Database, classified: Classi
   `, [bookmarkIds]);
   await database.execute(`
     delete from thesis_evidence
-    where bookmark_id=any($1::text[]) and evidence_type='x_bookmark_llm'
+    where bookmark_id=any($1::text[]) and evidence_type in ('x_bookmark_llm', 'x_claim_investigation')
   `, [bookmarkIds]);
   return oldSymbols.map((row) => row.symbol);
 }
@@ -165,36 +237,48 @@ async function persistCoreRows(
   database: Database,
   payload: XBookmarkPayload,
   classified: ClassifiedBookmark[],
+  investigations: Map<string, InvestigatedBookmark>,
 ): Promise<number> {
   const run = await database.query<{ id: string }>(
     "insert into runs(run_type, started_at, notes) values ('bookmark_ingest', now(), null) returning id",
   );
-  const bookmarkRows = classified.map((item) => ({
-    id: item.bookmark.id,
-    author_id: item.bookmark.author_id ?? null,
-    created_at: item.createdAt,
-    fetched_at: payload.fetchedAt,
-    text: item.text,
-    raw_json: bookmarkRawJson(item.bookmark),
-    market_score: item.marketScore,
-    is_market_related: item.marketScore >= 35,
-    classification_model: ONTOLOGY_AI_MODEL,
-    classification_prompt_version: ONTOLOGY_PROMPT_VERSION,
-    classification_output: item.classificationOutput,
-    classified_at: payload.fetchedAt,
-  }));
+  const bookmarkRows = classified.map((item) => {
+    const investigated = investigations.get(item.bookmark.id);
+    return {
+      id: item.bookmark.id,
+      author_id: item.bookmark.author_id ?? null,
+      created_at: item.createdAt,
+      fetched_at: payload.fetchedAt,
+      text: item.text,
+      raw_json: bookmarkRawJson(item.bookmark),
+      market_score: item.marketScore,
+      is_market_related: item.marketScore >= 35,
+      classification_model: ONTOLOGY_AI_MODEL,
+      classification_prompt_version: ONTOLOGY_PROMPT_VERSION,
+      classification_output: item.classificationOutput,
+      classified_at: payload.fetchedAt,
+      investigation_model: investigated?.model ?? null,
+      investigation_prompt_version: investigated?.promptVersion ?? null,
+      investigation_output: investigated?.investigation ?? null,
+      investigated_at: investigated ? payload.fetchedAt : null,
+    };
+  });
   await database.execute(`
     insert into bookmarks(
       id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related,
-      classification_model, classification_prompt_version, classification_output, classified_at
+      classification_model, classification_prompt_version, classification_output, classified_at,
+      investigation_model, investigation_prompt_version, investigation_output, investigated_at
     )
     select id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related,
-           classification_model, classification_prompt_version, classification_output, classified_at
+           classification_model, classification_prompt_version, classification_output, classified_at,
+           investigation_model, investigation_prompt_version, investigation_output, investigated_at
     from jsonb_to_recordset($1::jsonb) as x(
       id text, author_id text, created_at timestamptz, fetched_at timestamptz,
       text text, raw_json jsonb, market_score smallint, is_market_related boolean,
       classification_model text, classification_prompt_version text,
-      classification_output jsonb, classified_at timestamptz
+      classification_output jsonb, classified_at timestamptz,
+      investigation_model text, investigation_prompt_version text,
+      investigation_output jsonb, investigated_at timestamptz
     )
     on conflict(id) do update set
       fetched_at=excluded.fetched_at, text=excluded.text, raw_json=excluded.raw_json,
@@ -202,7 +286,11 @@ async function persistCoreRows(
       classification_model=excluded.classification_model,
       classification_prompt_version=excluded.classification_prompt_version,
       classification_output=excluded.classification_output,
-      classified_at=excluded.classified_at
+      classified_at=excluded.classified_at,
+      investigation_model=excluded.investigation_model,
+      investigation_prompt_version=excluded.investigation_prompt_version,
+      investigation_output=excluded.investigation_output,
+      investigated_at=excluded.investigated_at
   `, [JSON.stringify(bookmarkRows)]);
 
   const urlMap = new Map<string, { bookmark_id: string; url: string; expanded_url: string | null; display_url: string | null }>();
@@ -476,6 +564,82 @@ async function updateThesisEvidence(
   }
 }
 
+async function persistInvestigationEvidence(
+  database: Database,
+  investigations: InvestigatedBookmark[],
+): Promise<void> {
+  for (const item of investigations) {
+    const direction = item.investigation.claim_status === 'contradicted'
+      ? 'contradicting'
+      : item.investigation.claim_status === 'corroborated'
+        ? 'supporting'
+        : 'neutral';
+    const confidence = item.investigation.claim_status === 'corroborated'
+      ? 75
+      : item.investigation.claim_status === 'contradicted'
+        ? 70
+        : item.investigation.claim_status === 'partial'
+          ? 55
+          : 35;
+    await database.execute(`
+      insert into thesis_evidence(
+        thesis_id, bookmark_id, evidence_type, direction, summary, source_url, confidence, created_at
+      )
+      select distinct coalesce(ot.thesis_id, ot.id), b.id, 'x_claim_investigation', $2, $3, $4, $5, now()
+      from bookmarks b
+      join bookmark_symbols bs on bs.bookmark_id=b.id
+      join symbol_theme_memberships m on m.symbol=bs.symbol and m.status='active'
+      join ontology_themes ot on ot.id=m.theme_id and ot.status='active' and ot.kind='theme'
+      where b.id=$1
+        and not exists (
+          select 1 from thesis_evidence e
+          where e.thesis_id=coalesce(ot.thesis_id, ot.id)
+            and e.bookmark_id=b.id
+            and e.evidence_type='x_claim_investigation'
+        )
+    `, [
+      item.bookmarkId,
+      direction,
+      item.investigation.investigation_summary.slice(0, 1_000),
+      item.investigation.sources.find((source) => source.url)?.url ?? null,
+      confidence,
+    ]);
+  }
+}
+
+export async function persistClaimInvestigations(
+  database: Database,
+  investigations: InvestigatedBookmark[],
+  investigatedAt: string,
+): Promise<number> {
+  if (!investigations.length) return 0;
+  const rows = investigations.map((item) => ({
+    id: item.bookmarkId,
+    investigation_model: item.model,
+    investigation_prompt_version: item.promptVersion,
+    investigation_output: item.investigation,
+    investigated_at: investigatedAt,
+  }));
+  await database.execute(`
+    update bookmarks b set
+      investigation_model=x.investigation_model,
+      investigation_prompt_version=x.investigation_prompt_version,
+      investigation_output=x.investigation_output,
+      investigated_at=x.investigated_at
+    from jsonb_to_recordset($1::jsonb) as x(
+      id text, investigation_model text, investigation_prompt_version text,
+      investigation_output jsonb, investigated_at timestamptz
+    )
+    where b.id=x.id
+  `, [JSON.stringify(rows)]);
+  await database.execute(`
+    delete from thesis_evidence
+    where bookmark_id=any($1::text[]) and evidence_type='x_claim_investigation'
+  `, [investigations.map((item) => item.bookmarkId)]);
+  await persistInvestigationEvidence(database, investigations);
+  return investigations.length;
+}
+
 async function promoteReadyCandidates(database: Database): Promise<number> {
   const rows = await database.query<{
     id: number; candidate_type: string; proposed_theme_id: string | null; proposed_label: string;
@@ -553,21 +717,25 @@ export async function ingestXBookmarks(
   payload: XBookmarkPayload,
   catalog: OntologyCatalog,
   classified: ClassifiedBookmark[],
+  investigations: InvestigatedBookmark[] = [],
 ): Promise<{
   bookmarks: number;
   marketRelated: number;
   remainingAi: number;
+  investigations: number;
   autoPromoted: number;
   pendingCandidates: number;
   articleTasks: Array<{ bookmarkId: string; url: string }>;
 }> {
+  const investigationMap = new Map(investigations.map((item) => [item.bookmarkId, item]));
   await database.execute("select pg_advisory_xact_lock(hashtextextended('thesisforge-x-bookmark-ingest',0))");
   await syncThemeTheses(database);
   const oldSymbols = await clearPriorAiClassification(database, classified);
-  const runId = await persistCoreRows(database, payload, classified);
+  const runId = await persistCoreRows(database, payload, classified, investigationMap);
   await recountSymbols(database, [...oldSymbols, ...classified.flatMap((item) => item.symbols)]);
   await persistOntologyEvidence(database, classified, catalog);
   await updateThesisEvidence(database, classified, catalog);
+  await persistInvestigationEvidence(database, investigations);
   const autoPromoted = await promoteReadyCandidates(database);
   const pending = await database.query<{ count: number }>("select count(*)::integer as count from ontology_candidates where status='pending'");
   await database.execute(
@@ -576,6 +744,9 @@ export async function ingestXBookmarks(
       bookmarks_analyzed: classified.length,
       classification_model: ONTOLOGY_AI_MODEL,
       prompt_version: ONTOLOGY_PROMPT_VERSION,
+      investigation_model: INVESTIGATION_AI_MODEL,
+      investigation_prompt_version: INVESTIGATION_PROMPT_VERSION,
+      investigations: investigations.length,
       auto_promoted: autoPromoted,
       pending_candidates: Number(pending[0]?.count || 0),
       runtime: 'cloudflare',
@@ -603,6 +774,7 @@ export async function ingestXBookmarks(
     bookmarks: classified.length,
     marketRelated: Number(summary[0]?.market_related || 0),
     remainingAi: Number(summary[0]?.remaining_ai || 0),
+    investigations: investigations.length,
     autoPromoted,
     pendingCandidates: Number(pending[0]?.count || 0),
     articleTasks: articleTasks.map((row) => ({ bookmarkId: row.bookmark_id, url: row.target })),

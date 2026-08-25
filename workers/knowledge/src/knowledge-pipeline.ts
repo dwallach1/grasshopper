@@ -1,5 +1,11 @@
 import type { ArticleTask } from './documents';
-import { bookmarksNeedingAi, ingestXBookmarks, type XBookmarkPayload } from './bookmarks';
+import {
+  bookmarksNeedingAi,
+  classifiedNeedingInvestigation,
+  ingestXBookmarks,
+  persistClaimInvestigations,
+  type XBookmarkPayload,
+} from './bookmarks';
 import { CaptureSchema, captureResearch } from './capture';
 import { withDatabase, withDatabaseRetry, withReadOnlyDatabase } from './database';
 import { persistPreparedArticle, prepareArticleTask } from './documents';
@@ -8,6 +14,7 @@ import { rebuildKnowledgeGraph, refreshWeeklyEventMap } from './graph';
 import { publishDashboard } from './publication';
 import { XCredentialVault } from './x-credential-vault';
 import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
+import { investigateClaimsWithAi, MAX_INVESTIGATIONS_PER_SYNC } from './claim-investigation';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
 import { z, ZodError } from 'zod';
@@ -60,17 +67,40 @@ async function syncBookmarks(env: KnowledgeEnvironment) {
     pending: await bookmarksNeedingAi(database, payload),
   }));
   const classified = await classifyBookmarksWithAi(env.AI, env.AI_GATEWAY_ID, pending, payload.fetchedAt, catalog);
+  const freshInvestigations = await investigateClaimsWithAi(env.AI, env.AI_GATEWAY_ID, classified);
   const result = await withDatabase(
     env.HYPERDRIVE.connectionString,
-    (database) => ingestXBookmarks(database, payload, catalog, classified),
+    (database) => ingestXBookmarks(database, payload, catalog, classified, freshInvestigations),
   );
+
+  const backlog = await withReadOnlyDatabase(env.HYPERDRIVE.connectionString, (database) =>
+    classifiedNeedingInvestigation(
+      database,
+      Math.max(0, MAX_INVESTIGATIONS_PER_SYNC - freshInvestigations.length),
+    ));
+  const backlogInvestigations = backlog.length
+    ? await investigateClaimsWithAi(env.AI, env.AI_GATEWAY_ID, backlog)
+    : [];
+  const backlogPersisted = backlogInvestigations.length
+    ? await withDatabase(env.HYPERDRIVE.connectionString, (database) =>
+      persistClaimInvestigations(database, backlogInvestigations, payload.fetchedAt))
+    : 0;
+
   if (result.articleTasks.length) {
     await env.ARTICLE_QUEUE.sendBatch(result.articleTasks.map((task) => ({ body: { kind: 'article' as const, ...task } })));
   }
   const graph = await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
   const publication = await publishDashboard(env);
-  console.log(JSON.stringify({ event: 'knowledge_sync_complete', ...result, articleTasks: result.articleTasks.length, graph, publication: publication.normalized_sha256 }));
-  return { ...result, articleTasks: result.articleTasks.length, graph, publication };
+  const investigations = result.investigations + backlogPersisted;
+  console.log(JSON.stringify({
+    event: 'knowledge_sync_complete',
+    ...result,
+    articleTasks: result.articleTasks.length,
+    investigations,
+    graph,
+    publication: publication.normalized_sha256,
+  }));
+  return { ...result, articleTasks: result.articleTasks.length, investigations, graph, publication };
 }
 
 async function route(request: Request, env: KnowledgeEnvironment): Promise<Response> {
