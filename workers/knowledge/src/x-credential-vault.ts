@@ -25,6 +25,28 @@ const XBookmarksPageSchema = z.object({
   }).passthrough().optional(),
 }).passthrough();
 
+const XReadResponseSchema = z.object({
+  data: z.array(z.unknown()).optional(),
+  includes: z.object({
+    tweets: z.array(z.unknown()).optional(),
+    users: z.array(z.object({
+      id: z.string(),
+      username: z.string().optional(),
+      name: z.string().optional(),
+    }).passthrough()).optional(),
+  }).passthrough().optional(),
+}).passthrough();
+
+export type XReadUser = { id: string; username: string | null; name: string | null };
+
+/** Tweets pulled from X reads beyond the bookmark timeline (replies, quotes, searches). */
+export type XReadPayload = {
+  fetchedAt: string;
+  tweets: XBookmark[];
+  includedTweets: XBookmark[];
+  users: XReadUser[];
+};
+
 type StoredToken = {
   access_token: string;
   refresh_token: string | null;
@@ -36,6 +58,23 @@ const MAX_BOOKMARKS = 1000;
 const MAX_PAGES = 10;
 const SYNC_LEASE_MS = 5 * 60_000;
 const SCOPES = ['tweet.read', 'users.read', 'bookmark.read', 'offline.access'];
+
+/** Tweet fields shared by bookmark sync and compounding research reads. */
+const TWEET_FIELDS = 'created_at,author_id,conversation_id,public_metrics,entities,context_annotations,lang,referenced_tweets';
+
+/** Conservative self-imposed budgets so research crawling never exhausts the X API tier. */
+const READ_BUDGET_WINDOW_MS = 15 * 60_000;
+export const X_READ_BUDGETS = {
+  search: 10,
+  lookup: 30,
+} as const;
+
+export class XReadBudgetError extends Error {
+  constructor(endpoint: string) {
+    super(`x_read_budget_exhausted: ${endpoint} budget is exhausted for the current window`);
+    this.name = 'XReadBudgetError';
+  }
+}
 
 function base64Url(bytes: Uint8Array): string {
   let binary = '';
@@ -76,6 +115,12 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
         create table if not exists sync_lease (
           singleton integer primary key check(singleton=1),
           expires_at integer not null
+        );
+        create table if not exists read_budget (
+          endpoint text not null,
+          window_start integer not null,
+          used integer not null,
+          primary key (endpoint, window_start)
         );
       `);
     });
@@ -225,7 +270,7 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
       for (let pageNumber = 0; pageNumber < MAX_PAGES && bookmarks.length < MAX_BOOKMARKS; pageNumber += 1) {
         const params = new URLSearchParams({
           max_results: '100',
-          'tweet.fields': 'created_at,author_id,public_metrics,entities,context_annotations,lang,referenced_tweets',
+          'tweet.fields': TWEET_FIELDS,
           expansions: 'author_id,referenced_tweets.id',
           'user.fields': 'username,name,verified,description,public_metrics',
         });
@@ -250,6 +295,77 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     } finally {
       this.ctx.storage.sql.exec('delete from sync_lease where singleton=1');
     }
+  }
+
+  private consumeReadBudget(endpoint: keyof typeof X_READ_BUDGETS): void {
+    const windowStart = Math.floor(Date.now() / READ_BUDGET_WINDOW_MS) * READ_BUDGET_WINDOW_MS;
+    this.ctx.storage.sql.exec('delete from read_budget where window_start < ?', windowStart);
+    const used = this.ctx.storage.sql.exec<{ used: number }>(
+      'select used from read_budget where endpoint=? and window_start=?',
+      endpoint,
+      windowStart,
+    ).toArray()[0]?.used ?? 0;
+    if (used >= X_READ_BUDGETS[endpoint]) throw new XReadBudgetError(endpoint);
+    this.ctx.storage.sql.exec(
+      `insert into read_budget(endpoint,window_start,used) values (?,?,1)
+       on conflict(endpoint,window_start) do update set used=read_budget.used+1`,
+      endpoint,
+      windowStart,
+    );
+  }
+
+  private parseReadPayload(payload: unknown): XReadPayload {
+    const parsed = XReadResponseSchema.parse(payload);
+    const toBookmarks = (items: unknown[] | undefined): XBookmark[] =>
+      (items ?? []).flatMap((candidate) => {
+        const tweet = bookmarkFromUnknown(candidate);
+        return tweet ? [tweet] : [];
+      });
+    return {
+      fetchedAt: new Date().toISOString(),
+      tweets: toBookmarks(parsed.data),
+      includedTweets: toBookmarks(parsed.includes?.tweets),
+      users: (parsed.includes?.users ?? []).map((user) => ({
+        id: user.id,
+        username: user.username ?? null,
+        name: user.name ?? null,
+      })),
+    };
+  }
+
+  /** Recent-search read used for LLM-directed research hops. */
+  async searchRecent(query: string, maxResults = 25): Promise<XReadPayload> {
+    const trimmed = query.trim().slice(0, 256);
+    if (!trimmed) throw new Error('X search query must not be empty');
+    this.consumeReadBudget('search');
+    const params = new URLSearchParams({
+      query: trimmed,
+      max_results: String(Math.max(10, Math.min(100, maxResults))),
+      'tweet.fields': TWEET_FIELDS,
+      expansions: 'author_id,referenced_tweets.id',
+      'user.fields': 'username,name,verified,public_metrics',
+    });
+    return this.parseReadPayload(await this.xFetch(`/2/tweets/search/recent?${params.toString()}`));
+  }
+
+  /** Read the reply thread ("comments") under a bookmarked tweet. */
+  async readConversation(conversationId: string, maxResults = 50): Promise<XReadPayload> {
+    if (!/^\d{1,25}$/.test(conversationId)) throw new Error('X conversation id must be numeric');
+    return this.searchRecent(`conversation_id:${conversationId}`, maxResults);
+  }
+
+  /** Hydrate quoted / referenced / LLM-requested tweets by id. */
+  async lookupTweets(ids: string[]): Promise<XReadPayload> {
+    const unique = [...new Set(ids.filter((id) => /^\d{1,25}$/.test(id)))].slice(0, 100);
+    if (!unique.length) throw new Error('X tweet lookup requires at least one numeric id');
+    this.consumeReadBudget('lookup');
+    const params = new URLSearchParams({
+      ids: unique.join(','),
+      'tweet.fields': TWEET_FIELDS,
+      expansions: 'author_id,referenced_tweets.id',
+      'user.fields': 'username,name,verified,public_metrics',
+    });
+    return this.parseReadPayload(await this.xFetch(`/2/tweets?${params.toString()}`));
   }
 
   async status(): Promise<{ configured: boolean; refreshable: boolean; updatedAt: number | null }> {

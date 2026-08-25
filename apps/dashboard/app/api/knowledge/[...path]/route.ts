@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
 import { readSecret } from '@thesisforge/shared/secrets';
 
-const allowed = new Set(['x/sync', 'financial', 'publication/refresh', 'research/capture']);
+const allowed = new Set(['x/sync', 'x/research', 'financial', 'publication/refresh', 'research/capture']);
 
 export async function POST(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const managerId = await authenticatedIdentity(request.headers);

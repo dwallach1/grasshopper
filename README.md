@@ -116,6 +116,7 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
 | `thesisforge-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
 | `thesisforge-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
+| `thesisforge-knowledge-x-research` | Compounding research from bookmark events: reply threads, quoted tweets, LLM-chosen X searches and article hops | Batch 1, concurrency 1, three retries, DLQ; per-session step/read/fetch budgets plus vault-level X API budgets |
 | Workers AI / AI Gateway | Llama triage, Grok investigation, Claude synthesis | No broker credentials, tools, or placement authority |
 
 Shared production credentials use the account-level Cloudflare Secrets Store. The dashboard and knowledge Worker resolve `INTERNAL_SERVICE_TOKEN`; knowledge and research resolve `THESISFORGE_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
@@ -173,7 +174,7 @@ Costs stay bounded through three useful wakes, thesis-input hashes that skip unc
 | `RobinhoodBrokerAgent` | No | Revalidates every broker invariant | Yes |
 | Robinhood | No | Authoritative broker checks | Accepts/rejects |
 
-Workers AI uses `@cf/meta/llama-3.1-8b-instruct-fast` for bookmark triage through AI Gateway. Claim investigation uses `xai/grok-4.6` (X/web tools). Thesis and position synthesis use `anthropic/claude-sonnet-4.6`, with `anthropic/claude-opus-4.6` escalation for conflicting or high-impact cases. Models see bounded thesis, investigation packets, portfolio, and broker research context. They never receive OAuth tokens, raw account numbers, or the broker tool catalog. Deterministic code remains the only path to trade intents.
+Workers AI uses `@cf/meta/llama-3.1-8b-instruct-fast` for bookmark triage through AI Gateway. Claim investigation and compounding bookmark research use `xai/grok-4.6` (X/web tools for investigation; Worker-executed X reads and article fetches for research, see `docs/x-compounding-research.md`). Thesis and position synthesis use `anthropic/claude-sonnet-4.6`, with `anthropic/claude-opus-4.6` escalation for conflicting or high-impact cases. Models see bounded thesis, investigation packets, portfolio, and broker research context. They never receive OAuth tokens, raw account numbers, or the broker tool catalog. Deterministic code remains the only path to trade intents.
 
 ## Autonomous entry policy
 

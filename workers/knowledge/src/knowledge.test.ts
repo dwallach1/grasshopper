@@ -10,6 +10,7 @@ import { cleanHtml, documentTypeFor, extractDocumentText, objectPathFor } from '
 import { FinancialRequestSchema } from './financial';
 import { parseOntologyAiOutput, type AnalysisInput, type ClassifiedBookmark } from './ontology-analysis';
 import { normalizePhrase, OntologyCatalog, slugify } from './ontology';
+import { parseResearchDecision, ResearchActionSchema, seedActions } from './x-research';
 
 describe('worker knowledge primitives', () => {
   test('normalizes ontology identifiers deterministically', () => {
@@ -136,6 +137,70 @@ describe('worker knowledge primitives', () => {
     expect(() => parseClaimInvestigation({
       response: JSON.stringify({ ...packet, trade_recommendation: 'buy' }),
     }, 'b1')).toThrow();
+  });
+
+  test('seeds compounding research from the conversation and referenced tweets', () => {
+    const actions = seedActions({
+      bookmark_id: '111',
+      raw_json: {
+        conversation_id: '222',
+        referenced_tweets: [{ type: 'quoted', id: '333' }, { type: 'replied_to', id: 'bad-id' }],
+      },
+    });
+    expect(actions).toMatchObject([
+      { action: 'read_conversation', tweet_id: '222' },
+      { action: 'lookup_tweets', tweet_ids: ['333'] },
+    ]);
+    expect(seedActions({ bookmark_id: '111', raw_json: null })).toMatchObject([
+      { action: 'read_conversation', tweet_id: '111' },
+    ]);
+  });
+
+  test('validates research actions fail closed on missing arguments', () => {
+    expect(ResearchActionSchema.parse({
+      action: 'search_x', tweet_id: null, tweet_ids: [], query: '$VST power contract', url: null,
+      reason: 'Corroborate the claim.',
+    }).action).toBe('search_x');
+    expect(() => ResearchActionSchema.parse({
+      action: 'open_url', tweet_id: null, tweet_ids: [], query: null, url: null,
+      reason: 'Missing URL.',
+    })).toThrow();
+    expect(() => ResearchActionSchema.parse({
+      action: 'lookup_tweets', tweet_id: null, tweet_ids: [], query: null, url: null,
+      reason: 'Missing ids.',
+    })).toThrow();
+  });
+
+  test('parses research decisions and rejects uncited or off-session output', () => {
+    const decision = {
+      bookmark_id: 'b1',
+      findings: [{
+        summary: 'Replies cite the signed interconnection agreement.',
+        direction: 'supporting',
+        confidence: 70,
+        source_refs: ['tweet:900', 'article:https://example.com/ir'],
+      }],
+      new_symbols: ['VST'],
+      next_actions: [{
+        action: 'search_x', tweet_id: null, tweet_ids: [], query: 'interconnection agreement',
+        url: null, reason: 'Look for counter-evidence.',
+      }],
+      should_continue: true,
+      rationale: 'Replies point to a primary source worth corroborating.',
+      trade_recommendation: 'none',
+    };
+    const knownRefs = new Set(['tweet:b1', 'tweet:900', 'article:https://example.com/ir']);
+    const parsed = parseResearchDecision({ response: JSON.stringify(decision) }, 'b1', knownRefs);
+    expect(parsed.findings[0].confidence).toBe(70);
+    expect(parsed.next_actions).toHaveLength(1);
+    expect(() => parseResearchDecision({ response: JSON.stringify(decision) }, 'other', knownRefs))
+      .toThrow('does not match');
+    expect(() => parseResearchDecision(
+      { response: JSON.stringify(decision) }, 'b1', new Set(['tweet:b1']),
+    )).toThrow('unknown source ref');
+    expect(() => parseResearchDecision({
+      response: JSON.stringify({ ...decision, trade_recommendation: 'buy' }),
+    }, 'b1', knownRefs)).toThrow();
   });
 
   test('extracts bounded HTML text and stable R2 paths', async () => {

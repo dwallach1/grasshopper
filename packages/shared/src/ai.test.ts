@@ -11,6 +11,7 @@ describe('shared AI router helpers', () => {
   test('maps pipeline roles to AI Gateway model ids', () => {
     expect(modelForRole('triage')).toBe(AI_MODELS.triage);
     expect(modelForRole('investigation')).toBe('xai/grok-4.6');
+    expect(modelForRole('research')).toBe('xai/grok-4.6');
     expect(modelForRole('synthesis')).toBe('anthropic/claude-sonnet-4.6');
     expect(modelForRole('synthesis_escalate')).toBe('anthropic/claude-opus-4.6');
   });
