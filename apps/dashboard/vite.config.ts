@@ -57,6 +57,10 @@ export default defineConfig(async () => {
             configPath: '../../workers/knowledge/wrangler.jsonc',
             config: withoutRemoteOnlyBindings,
           },
+          {
+            configPath: '../../workers/research/wrangler.jsonc',
+            config: withoutRemoteOnlyBindings,
+          },
         ],
       }),
     ],

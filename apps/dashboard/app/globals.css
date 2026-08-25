@@ -32,6 +32,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .freshness-bar b.stale i{background:var(--red);box-shadow:0 0 0 2px rgba(210,76,60,.16)}
 .freshness-bar small{color:#69716b;font-size:6px}
 .freshness-bar p{margin:0 12px 0 auto;color:#69716b;font-size:6px;text-align:right}
+.freshness-refresh{margin-left:2px;padding:3px 7px;border:1px solid var(--ink);background:transparent;color:var(--ink);font:800 6px var(--mono);text-transform:uppercase;cursor:pointer}
+.freshness-refresh:disabled{opacity:.55;cursor:wait}
 .stage-rail{height:31px;display:flex;align-items:center;border:1px solid var(--ink);border-top:0;background:var(--panel)}
 .stage-rail>span{margin-left:auto;padding:0 12px;font-size:8px}
 .stage-rail button{height:100%;padding:0 15px;border:0;border-right:1px solid var(--grid);background:transparent;font:800 8px var(--mono);text-transform:uppercase;cursor:pointer}
@@ -691,6 +693,18 @@ button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{
 .freshness-bar b.stale i{background:var(--red);box-shadow:0 0 0 3px rgba(180,35,24,.15)}
 .freshness-bar small{font-size:11px;color:var(--muted)}
 .freshness-bar p{margin:0 4px 0 auto;color:var(--muted);font-size:12px;text-align:right}
+.freshness-refresh{
+  margin-left:2px;
+  padding:4px 9px;
+  border:1px solid var(--grid);
+  border-radius:999px;
+  background:#f8fafc;
+  color:var(--ink);
+  font:700 11px var(--mono);
+  cursor:pointer;
+}
+.freshness-refresh:disabled{opacity:.55;cursor:wait}
+.freshness-refresh:not(:disabled):hover{background:#eef2f7}
 .page-shell{
   flex:1;
   width:100%;

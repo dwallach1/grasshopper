@@ -12,6 +12,7 @@ interface __BaseEnv_Env {
 	CF_ACCESS_TEAM_DOMAIN: string;
 	CF_ACCESS_AUD: string;
 	KNOWLEDGE_PIPELINE: Fetcher /* thesisforge-knowledge-pipeline */;
+	RESEARCH_ORCHESTRATOR: Fetcher /* thesisforge-research-orchestrator */;
 }
 declare namespace Cloudflare {
 	interface Env extends __BaseEnv_Env {}

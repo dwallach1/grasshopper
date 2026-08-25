@@ -95,9 +95,9 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
         <button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>Risk</button>
       </nav>
       <div className="run-state" aria-label="Workspace summary"><span>Automations <b>{initialData.automations?.length||0}</b></span><span>Kill rate <b className="red">{killRate}%</b></span><span>Ready <b className="amber">{readyCount}</b></span></div>
-      <div className="clock"><b>{clock||'--:--:--'}</b><span>New York · Snapshot {new Date(initialData.generated_at).toISOString().slice(11,16)}Z</span></div>
+      <div className="clock"><b>{clock||'--:--:--'}</b><span>New York · live from Supabase</span></div>
     </header>
-    <FreshnessBar snapshotAt={initialData.generated_at} robinhoodAt={initialData.account_state?.observed_at} now={now}/>
+    <FreshnessBar publishedAt={initialData.generated_at} robinhoodAt={initialData.account_state?.observed_at} now={now} onRefresh={()=>router.refresh()}/>
 
     <section className="page-shell">
       {surface==='home'&&<HomeSurface data={initialData} activeThesisId={activeCycle?.thesis_id}/>}
@@ -122,15 +122,40 @@ function formatAge(timestamp:string|undefined,now:number|null){
   return `${Math.floor(elapsed/86_400_000)}d ago`;
 }
 
-function FreshnessBar({snapshotAt,robinhoodAt,now}:{snapshotAt:string;robinhoodAt?:string;now:number|null}){
-  const snapshotAge=now===null?null:Math.max(0,now-new Date(snapshotAt).getTime());
+function FreshnessBar({publishedAt,robinhoodAt,now,onRefresh}:{publishedAt:string;robinhoodAt?:string;now:number|null;onRefresh:()=>void}){
+  const [refreshing,setRefreshing]=useState(false);
+  const [refreshError,setRefreshError]=useState<string|null>(null);
   const robinhoodAge=!robinhoodAt||now===null?null:Math.max(0,now-new Date(robinhoodAt).getTime());
-  const snapshotTone=snapshotAge===null?'unknown':snapshotAge<=SNAPSHOT_POLL_MS*2?'fresh':snapshotAge<=900_000?'aging':'stale';
-  const robinhoodTone=robinhoodAge===null?'unknown':robinhoodAge<=ROBINHOOD_MAX_AGE_MS?'fresh':'stale';
+  const robinhoodTone=robinhoodAge===null?'unknown':robinhoodAge<=ROBINHOOD_MAX_AGE_MS?'fresh':robinhoodAge<=3_600_000?'aging':'stale';
+
+  async function refreshRobinhood(){
+    if(refreshing)return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try{
+      const response=await fetch('/api/broker/refresh',{method:'POST'});
+      const RefreshErrorSchema=z.object({error:z.string().optional()}).passthrough();
+      const parsed=RefreshErrorSchema.safeParse(await response.json().catch(()=>({})));
+      if(!response.ok)throw new Error(parsed.success&&parsed.data.error?parsed.data.error:`Refresh failed (${response.status})`);
+      onRefresh();
+    }catch(error){
+      setRefreshError(error instanceof Error?error.message:'Refresh failed');
+    }finally{
+      setRefreshing(false);
+    }
+  }
+
   return <section className="freshness-bar" aria-label="Data freshness">
-    <div><b className={snapshotTone}><i/>Supabase</b><span>Snapshot {formatAge(snapshotAt,now)}</span><small>Checks every 60s</small></div>
-    <div><b className={robinhoodTone}><i/>Robinhood</b><span>Account {formatAge(robinhoodAt,now)}</span><small>{robinhoodAt?'Workflow refresh · 5m trade limit':'No account snapshot'}</small></div>
-    <p>Snapshot polling checks for new published data. Broker refreshes stay separate.</p>
+    <div><b className="fresh"><i/>Supabase</b><span>Live</span><small>Last publish {formatAge(publishedAt,now)}</small></div>
+    <div>
+      <b className={robinhoodTone}><i/>Robinhood</b>
+      <span>Account {formatAge(robinhoodAt,now)}</span>
+      <small>{robinhoodAt?'Workflows update on run · 5m trade limit':'No account snapshot'}</small>
+      <button type="button" className="freshness-refresh" disabled={refreshing} onClick={()=>void refreshRobinhood()}>
+        {refreshing?'Refreshing…':'Refresh'}
+      </button>
+    </div>
+    <p>{refreshError?refreshError:'UI polls every 60s. Broker account only updates on workflow runs or manual refresh.'}</p>
   </section>
 }
 

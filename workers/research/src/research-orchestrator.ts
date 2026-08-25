@@ -43,12 +43,14 @@ import type {
   RobinhoodBrokerRpc,
 } from '@thesisforge/contracts/broker';
 import { readBoundedJson } from '@thesisforge/shared/http';
-import { readSecret } from '@thesisforge/shared/secrets';
+import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
 import type { JsonObject } from '@thesisforge/shared/json';
 
 type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
   ROBINHOOD_BROKER_AGENT: DurableObjectNamespace<RobinhoodBrokerRpc>;
   THESISFORGE_PUBLICATION_TOKEN?: string;
+  INTERNAL_SERVICE_TOKEN_SECRET?: SecretBinding;
+  INTERNAL_SERVICE_TOKEN?: string;
 };
 
 // Retained only while the legacy Worker hands its Durable Object namespaces to
@@ -103,9 +105,7 @@ async function cloudControl<Payload>(env: PublicationEnv, action: string, payloa
   return body;
 }
 
-async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
-  const result = await cloudControl(env, 'finalize_run', { run_id: runId });
-  if (!isFinalizeRunSuccess(result)) return;
+async function publishCurrentDashboard(env: PublicationEnv): Promise<void> {
   const publicationToken = await readSecret(
     env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
     'THESISFORGE_PUBLICATION_TOKEN',
@@ -121,6 +121,40 @@ async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promis
   });
   await readBoundedJson(response, MAX_CONTROL_BYTES);
   if (!response.ok) throw new Error(`Dashboard projection failed with status ${response.status}`);
+}
+
+async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
+  const result = await cloudControl(env, 'finalize_run', { run_id: runId });
+  if (!isFinalizeRunSuccess(result)) return;
+  await publishCurrentDashboard(env);
+}
+
+async function authorizedInternal(request: Request, env: PublicationEnv): Promise<boolean> {
+  const supplied = request.headers.get('x-thesisforge-internal-token') || '';
+  if (!supplied) return false;
+  const current = await readSecret(
+    env.INTERNAL_SERVICE_TOKEN_SECRET,
+    'INTERNAL_SERVICE_TOKEN',
+    env.INTERNAL_SERVICE_TOKEN,
+  );
+  return secretsEqual(supplied, current);
+}
+
+async function refreshAccountFromBroker(env: PublicationEnv): Promise<{
+  observed_at: string;
+  account_snapshot_id: number;
+}> {
+  if (String(env.BROKER_GATEWAY_MODE) !== 'robinhood_mcp') {
+    throw new Error('Broker gateway is not configured for Robinhood');
+  }
+  const broker = env.ROBINHOOD_BROKER_AGENT.getByName('primary');
+  const snapshot = await broker.readAccountSnapshot();
+  const accountSnapshotId = await persistBrokerSnapshot(env, snapshot);
+  await publishCurrentDashboard(env);
+  return {
+    observed_at: snapshot.observedAt,
+    account_snapshot_id: accountSnapshotId,
+  };
 }
 
 async function sha256<Value>(value: Value): Promise<string> {
@@ -1104,7 +1138,34 @@ async function processTradeExecutionTask(
 }
 
 const worker = {
-  fetch(): Response {
+  async fetch(request: Request, env: PublicationEnv): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === '/account/refresh' && request.method === 'POST') {
+      if (!(await authorizedInternal(request, env))) {
+        return Response.json({ error: 'unauthorized' }, {
+          status: 401,
+          headers: { 'cache-control': 'no-store' },
+        });
+      }
+      try {
+        const result = await refreshAccountFromBroker(env);
+        console.log(JSON.stringify({
+          event: 'account_refresh_complete',
+          observed_at: result.observed_at,
+          account_snapshot_id: result.account_snapshot_id,
+        }));
+        return Response.json(result, { headers: { 'cache-control': 'no-store' } });
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: 'account_refresh_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        }));
+        return Response.json(
+          { error: error instanceof Error ? error.message : 'Account refresh failed' },
+          { status: 502, headers: { 'cache-control': 'no-store' } },
+        );
+      }
+    }
     return new Response('Not found', { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: PublicationEnv): Promise<void> {

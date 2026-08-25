@@ -10,6 +10,10 @@
     "binding": "THESISFORGE_PUBLICATION_TOKEN_SECRET",
     "store_id": "9161ea4b738144c0accc37e724812d93",
     "secret_name": "THESISFORGE_PUBLICATION_TOKEN"
+  }, {
+    "binding": "INTERNAL_SERVICE_TOKEN_SECRET",
+    "store_id": "9161ea4b738144c0accc37e724812d93",
+    "secret_name": "INTERNAL_SERVICE_TOKEN"
   }],
   "secrets": { "required": ["SUPABASE_URL"] },
   "workflows": [{

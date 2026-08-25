@@ -10,6 +10,10 @@
     {
       "binding": "KNOWLEDGE_PIPELINE",
       "service": "thesisforge-knowledge-pipeline"
+    },
+    {
+      "binding": "RESEARCH_ORCHESTRATOR",
+      "service": "thesisforge-research-orchestrator"
     }
   ],
   "secrets_store_secrets": [{

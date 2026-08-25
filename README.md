@@ -83,12 +83,12 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
  +-----------------------------------------------------------------------------------------------------+
 
  Cloudflare Secrets Store supplies only the Workers that need each shared credential:
-   dashboard + knowledge: INTERNAL_SERVICE_TOKEN
+   dashboard + knowledge + research: INTERNAL_SERVICE_TOKEN
    knowledge + research:  THESISFORGE_PUBLICATION_TOKEN
    knowledge only:        FINANCIAL_DATASETS_API_KEY
 ```
 
-The webapp never runs ingestion, research, publication, or trading jobs. It reads the bounded `dashboard_snapshots.current` projection produced from canonical Postgres rows, then exposes manager-only commands through the private knowledge service binding. Knowledge mutations and terminal research runs refresh that projection immediately, so the UI consumes the system's data exhaust without becoming part of the decision loop.
+The webapp never runs ingestion, research, publication, or trading jobs. It reads the bounded `dashboard_snapshots.current` projection produced from canonical Postgres rows on every request, then exposes manager-only commands through private service bindings. Knowledge mutations and terminal research runs refresh that projection immediately, so the UI consumes the system's data exhaust without becoming part of the decision loop. Robinhood account state only updates when a research workflow pulls it, or when a manager triggers a manual refresh.
 
 ## Production status
 
