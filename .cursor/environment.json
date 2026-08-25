@@ -1,0 +1,13 @@
+{
+  "name": "ThesisForge",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "dashboard",
+      "command": "export BUN_INSTALL=\"$HOME/.bun\"; export PATH=\"$BUN_INSTALL/bin:$PATH\"; CLOUDFLARE_VITE_FORCE_LOCAL=true bun run local:web"
+    }
+  ],
+  "ports": [3000, 54321, 54323]
+}
