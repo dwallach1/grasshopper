@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AI_MODELS, runAiRole } from '@thesisforge/shared/ai';
+import { AI_MODELS, parseAiJsonObject, runAiRole } from '@thesisforge/shared/ai';
 
 import type { XBookmark, XContextAnnotation } from './bookmarks';
 import { normalizePhrase, type OntologyCatalog, type ThemeMatch } from './ontology';
@@ -9,7 +9,7 @@ export const ONTOLOGY_AI_MODEL = AI_MODELS.triage;
 export const ONTOLOGY_PROMPT_VERSION = 'ontology-semantic-v1';
 export const MAX_ONTOLOGY_BOOKMARKS_PER_SYNC = 96;
 
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 4;
 const BATCH_CONCURRENCY = 2;
 
 const ClaimTypeSchema = z.enum([
@@ -105,30 +105,23 @@ function requireExactExcerpt(excerpt: string, text: string, field: string): stri
   return excerpt;
 }
 
-/** Workers AI may return an object, a JSON string, or `{ response: string }`. */
+/**
+ * Workers AI may return the schema object directly, a JSON string,
+ * `{ response: string }`, or `{ response: object }` (already-parsed JSON mode).
+ */
 export function unwrapOntologyAiPayload(result: unknown): unknown {
-  const AiEnvelopeSchema = z.object({
-    analyses: z.unknown().optional(),
-    response: z.string().optional(),
-  }).passthrough();
-
-  let text: string | undefined;
-  if (typeof result === 'string') {
-    text = result;
-  } else {
-    const envelope = AiEnvelopeSchema.safeParse(result);
-    if (envelope.success) {
-      if ('analyses' in envelope.data) return result;
-      if (envelope.data.response !== undefined) text = envelope.data.response;
-    }
-  }
-  if (text === undefined) text = JSON.stringify(result);
-
-  const fenced = text.trim().match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   try {
-    return JSON.parse(fenced || text) as unknown;
-  } catch {
-    throw new Error('Ontology AI returned invalid structured output');
+    return parseAiJsonObject(result);
+  } catch (error) {
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      const record = result as Record<string, unknown>;
+      if (Array.isArray(record.analyses)) return record;
+    }
+    throw new Error(
+      error instanceof Error && error.message
+        ? `Ontology AI returned invalid structured output: ${error.message}`
+        : 'Ontology AI returned invalid structured output',
+    );
   }
 }
 
@@ -251,11 +244,15 @@ export function parseOntologyAiOutput(
   inputs: AnalysisInput[],
   catalog: OntologyCatalog,
 ): ClassifiedBookmark[] {
-  const parsed = OntologyAiOutputSchema.parse(unwrapOntologyAiPayload(result));
+  const payload = unwrapOntologyAiPayload(result);
+  const parsed = OntologyAiOutputSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new Error('Ontology AI output is missing analyses');
+  }
   const byId = new Map(inputs.map((input) => [input.id, input]));
   const classified = new Map<string, ClassifiedBookmark>();
 
-  for (const analysis of parsed.analyses) {
+  for (const analysis of parsed.data.analyses) {
     const input = byId.get(analysis.bookmark_id);
     if (!input || classified.has(analysis.bookmark_id)) {
       throw new Error('Ontology AI returned an unknown or duplicate bookmark_id');
@@ -313,7 +310,7 @@ async function analyzeBatch(
     'triage',
     {
       messages: [{ role: 'user', content: promptFor(inputs, catalog) }],
-      max_tokens: 3_500,
+      max_tokens: 4_096,
       temperature: 0.1,
       guided_json: {
         type: 'object',
@@ -416,8 +413,23 @@ export async function classifyBookmarksWithAi(
   const output: ClassifiedBookmark[] = [];
   for (let index = 0; index < batches.length; index += BATCH_CONCURRENCY) {
     const group = batches.slice(index, index + BATCH_CONCURRENCY);
-    const results = await Promise.all(group.map((batch) => analyzeBatch(ai, gatewayId, batch, catalog)));
-    for (const result of results) output.push(...result);
+    const settled = await Promise.allSettled(
+      group.map((batch) => analyzeBatch(ai, gatewayId, batch, catalog)),
+    );
+    for (const [offset, result] of settled.entries()) {
+      if (result.status === 'fulfilled') {
+        output.push(...result.value);
+        continue;
+      }
+      console.error(JSON.stringify({
+        event: 'ontology_batch_failed',
+        bookmark_ids: group[offset]?.map((item) => item.id) ?? [],
+        error: result.reason instanceof Error ? result.reason.message : 'unknown',
+      }));
+    }
+  }
+  if (inputs.length > 0 && output.length === 0) {
+    throw new Error('Ontology AI failed to classify any bookmark batches');
   }
   return output;
 }

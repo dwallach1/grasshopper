@@ -64,6 +64,10 @@ export function unwrapAiResponseText(result: unknown): string {
   }
   const record = result as Record<string, unknown>;
   if (typeof record.response === 'string') return record.response;
+  // Workers AI JSON mode / guided_json sometimes returns an already-parsed object.
+  if (record.response && typeof record.response === 'object') {
+    return JSON.stringify(record.response);
+  }
   if (typeof record.output_text === 'string') return record.output_text;
   if (typeof record.content === 'string') return record.content;
   if (Array.isArray(record.content)) {
@@ -97,6 +101,13 @@ export function unwrapAiResponseText(result: unknown): string {
 }
 
 export function parseAiJsonObject(result: unknown): Record<string, unknown> {
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const record = result as Record<string, unknown>;
+    if (record.response && typeof record.response === 'object' && !Array.isArray(record.response)) {
+      return parseAiJsonObject(record.response);
+    }
+  }
+
   const text = unwrapAiResponseText(result).trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
   const candidate = fenced || text;
@@ -109,7 +120,15 @@ export function parseAiJsonObject(result: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('AI returned non-object JSON');
   }
-  return value as Record<string, unknown>;
+  const record = value as Record<string, unknown>;
+  // Nested envelope after JSON parse (string response that itself wraps payload).
+  if (record.response && typeof record.response === 'object' && !Array.isArray(record.response)) {
+    return parseAiJsonObject(record.response);
+  }
+  if (typeof record.response === 'string') {
+    return parseAiJsonObject(record.response);
+  }
+  return record;
 }
 
 export function jsonSchemaResponseFormat(

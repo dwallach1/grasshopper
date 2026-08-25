@@ -77,6 +77,35 @@ describe('worker knowledge primitives', () => {
       claim: { type: 'company_event', confidence: 88 },
       matches: [{ theme: { id: 'power' }, score: 91, direction: 'supporting' }],
     });
+
+    const fromObjectEnvelope = parseOntologyAiOutput({
+      response: {
+        analyses: [{
+          bookmark_id: bookmark.id,
+          market_relevance: 70,
+          claim_type: 'none',
+          claim_summary: '',
+          claim_confidence: 0,
+          claim_evidence_excerpt: '',
+          symbols: ['VST'],
+          themes: [],
+          candidates: [],
+        }],
+      },
+    }, inputs, catalog);
+    expect(fromObjectEnvelope[0]?.symbols).toEqual(['VST']);
+  });
+
+  test('fails closed when ontology AI omits analyses', () => {
+    const catalog = new OntologyCatalog({
+      themes: [], terms: [], memberships: [], lexicon: [],
+    });
+    const inputs: AnalysisInput[] = [{
+      id: 'bookmark-1', text: 'hello', contextAnnotations: [], bookmark: { id: 'bookmark-1', text: 'hello' },
+      createdAt: '2026-08-24T12:00:00Z',
+    }];
+    expect(() => parseOntologyAiOutput({ response: { not_analyses: true } }, inputs, catalog))
+      .toThrow('missing analyses');
   });
 
   test('fails closed when model evidence is not present in the source', () => {

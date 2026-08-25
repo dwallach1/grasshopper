@@ -20,7 +20,11 @@ describe('shared AI router helpers', () => {
     expect(unwrapAiResponseText({
       content: [{ type: 'text', text: '{"a":1}' }],
     })).toBe('{"a":1}');
+    expect(unwrapAiResponseText({ response: { analyses: [{ id: 1 }] } }))
+      .toBe('{"analyses":[{"id":1}]}');
     expect(parseAiJsonObject({ response: '```json\n{"material_change":false}\n```' }))
       .toEqual({ material_change: false });
+    expect(parseAiJsonObject({ response: { analyses: [{ bookmark_id: 'b1' }] } }))
+      .toEqual({ analyses: [{ bookmark_id: 'b1' }] });
   });
 });
