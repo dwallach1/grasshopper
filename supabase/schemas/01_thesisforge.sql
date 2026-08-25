@@ -667,6 +667,9 @@ create table public.cloud_runs (
   updated_at timestamptz not null default now()
 );
 create index idx_cloud_runs_status_scheduled on public.cloud_runs(status, scheduled_for desc);
+create index idx_cloud_runs_nonterminal_started
+  on public.cloud_runs (started_at)
+  where status in ('queued', 'running');
 
 create table public.cloud_tasks (
   id uuid primary key default gen_random_uuid(),
@@ -689,6 +692,9 @@ create table public.cloud_tasks (
 );
 create index idx_cloud_tasks_run_status on public.cloud_tasks(run_id, status);
 create index idx_cloud_tasks_entity on public.cloud_tasks(entity_type, entity_key, queued_at desc);
+create index idx_cloud_tasks_nonterminal_started
+  on public.cloud_tasks (coalesce(started_at, queued_at))
+  where status in ('queued', 'running');
 
 create table public.position_episodes (
   id uuid primary key default gen_random_uuid(),

@@ -499,6 +499,78 @@ grant usage on schema private to service_role;
 grant execute on function private.build_dashboard_snapshot(jsonb, timestamptz)
   to service_role;
 
+create or replace function private.reap_stale_automation_runs(
+  p_run_max_age interval default interval '2 hours',
+  p_task_max_age interval default interval '2 hours'
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  reaped_runs integer := 0;
+  reaped_tasks integer := 0;
+  now_ts timestamptz := clock_timestamp();
+begin
+  with updated as (
+    update public.cloud_tasks as t
+    set
+      status = 'failed',
+      error_text = coalesce(nullif(t.error_text, ''), 'stale_task_reaped'),
+      completed_at = coalesce(t.completed_at, now_ts),
+      updated_at = now_ts
+    where t.status in ('queued', 'running')
+      and coalesce(t.started_at, t.queued_at) < now_ts - p_task_max_age
+    returning t.id
+  )
+  select count(*)::integer into reaped_tasks from updated;
+
+  with updated as (
+    update public.cloud_runs as r
+    set
+      status = 'failed',
+      error_text = coalesce(nullif(r.error_text, ''), 'stale_run_reaped'),
+      completed_at = coalesce(r.completed_at, now_ts),
+      updated_at = now_ts,
+      summary = coalesce(r.summary, '{}'::jsonb) || jsonb_build_object(
+        'reaped_at', now_ts,
+        'reap_reason', 'stale_nonterminal_run'
+      )
+    where r.status in ('queued', 'running')
+      and coalesce(r.started_at, r.created_at) < now_ts - p_run_max_age
+    returning r.id
+  )
+  select count(*)::integer into reaped_runs from updated;
+
+  return jsonb_build_object(
+    'reaped_runs', reaped_runs,
+    'reaped_tasks', reaped_tasks,
+    'reaped_at', now_ts
+  );
+end;
+$$;
+revoke all on function private.reap_stale_automation_runs(interval, interval)
+  from public, anon, authenticated;
+grant execute on function private.reap_stale_automation_runs(interval, interval)
+  to service_role;
+
+create or replace function public.reap_stale_automation_runs(
+  p_run_max_age interval default interval '2 hours',
+  p_task_max_age interval default interval '2 hours'
+)
+returns jsonb
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.reap_stale_automation_runs(p_run_max_age, p_task_max_age);
+$$;
+revoke all on function public.reap_stale_automation_runs(interval, interval)
+  from public, anon, authenticated;
+grant execute on function public.reap_stale_automation_runs(interval, interval)
+  to service_role;
+
 create or replace function public.publish_dashboard_snapshot(
   p_trade_policy jsonb,
   p_publish_current boolean default false
@@ -517,6 +589,7 @@ declare
   normalized_digest text;
   current_digest text;
   changed_keys jsonb;
+  reap_result jsonb;
 begin
   supplied_token := coalesce(
     current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-publication-token',
@@ -534,6 +607,7 @@ begin
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended('thesisforge-dashboard-publication', 0));
+  reap_result := private.reap_stale_automation_runs();
   select payload into current_payload
   from public.dashboard_snapshots
   where id='current';
@@ -564,7 +638,8 @@ begin
     'matches_current', normalized_digest = current_digest,
     'changed_keys', changed_keys,
     'thesis_count', jsonb_array_length(next_payload->'theses'),
-    'trading_enabled', false
+    'trading_enabled', false,
+    'reaped_stale_automations', reap_result
   );
 end;
 $$;

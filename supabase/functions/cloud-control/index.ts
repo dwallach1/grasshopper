@@ -18,6 +18,8 @@ const CloudControlRequestSchema = z.object({
     'upsert_run',
     'upsert_task',
     'finalize_run',
+    'fail_run',
+    'reap_stale_runs',
     'record_account_snapshot',
     'upsert_trade_intent',
     'upsert_execution_attempt',
@@ -33,6 +35,12 @@ const CloudControlRequestSchema = z.object({
 
 const FinalizeRunSchema = z.object({
   run_id: z.string().min(1),
+  empty_ok: z.boolean().optional(),
+}).passthrough();
+
+const FailRunSchema = z.object({
+  run_id: z.string().min(1),
+  error_text: z.string().optional(),
 }).passthrough();
 
 const AccountSnapshotPayloadSchema = z.object({
@@ -217,17 +225,69 @@ async function finalizeRun(payload: unknown): Promise<unknown> {
   const tasks = await rest(`cloud_tasks?run_id=eq.${runId}&select=status`);
   const rows = Array.isArray(tasks) ? tasks : [];
   const terminal = new Set(['complete', 'skipped', 'failed', 'dead_letter']);
-  const pending = rows.filter((row) => {
+  const statuses: string[] = [];
+  let pending = 0;
+  for (const row of rows) {
     const parsed = TaskStatusRowSchema.safeParse(row);
-    return parsed.success && !terminal.has(parsed.data.status);
-  }).length;
+    if (!parsed.success) continue;
+    statuses.push(parsed.data.status);
+    if (!terminal.has(parsed.data.status)) pending += 1;
+  }
   if (pending > 0) return { finalized: false, pending };
+  if (statuses.length === 0 && record.empty_ok !== true) {
+    return { finalized: false, pending: 0, reason: 'no_tasks' };
+  }
+  const hasSuccess = statuses.some((status) => status === 'complete' || status === 'skipped');
+  const hasFailure = statuses.some((status) => status === 'failed' || status === 'dead_letter');
+  const status = statuses.length === 0
+    ? 'complete'
+    : (!hasSuccess && hasFailure ? 'failed' : 'complete');
+  const now = new Date().toISOString();
   await rest(`cloud_runs?id=eq.${runId}`, {
     method: 'PATCH',
     headers: { prefer: 'return=minimal' },
-    body: JSON.stringify({ status: 'complete', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ status, completed_at: now, updated_at: now }),
   });
-  return { finalized: true, pending: 0 };
+  return { finalized: true, pending: 0, status };
+}
+
+async function failRun(payload: unknown): Promise<unknown> {
+  const record = FailRunSchema.parse(payload);
+  const runId = encodeURIComponent(record.run_id);
+  const now = new Date().toISOString();
+  const errorText = record.error_text || 'run_failed';
+  await rest(`cloud_tasks?run_id=eq.${runId}&status=in.(queued,running)`, {
+    method: 'PATCH',
+    headers: { prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'failed',
+      error_text: errorText,
+      completed_at: now,
+      updated_at: now,
+    }),
+  });
+  await rest(`cloud_runs?id=eq.${runId}&status=in.(queued,running)`, {
+    method: 'PATCH',
+    headers: { prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'failed',
+      error_text: errorText,
+      completed_at: now,
+      updated_at: now,
+    }),
+  });
+  return { failed: true };
+}
+
+async function reapStaleRuns(payload: unknown): Promise<unknown> {
+  const record = isObject(payload) ? payload : {};
+  const body: JsonObject = {};
+  if (typeof record.p_run_max_age === 'string') body.p_run_max_age = record.p_run_max_age;
+  if (typeof record.p_task_max_age === 'string') body.p_task_max_age = record.p_task_max_age;
+  return rest('rpc/reap_stale_automation_runs', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 async function recordAccountSnapshot(payload: unknown): Promise<unknown> {
@@ -411,6 +471,8 @@ Deno.serve(async (request: Request) => {
     if (action === 'upsert_run') return json(await upsert('cloud_runs', body.payload));
     if (action === 'upsert_task') return json(await upsert('cloud_tasks', body.payload));
     if (action === 'finalize_run') return json(await finalizeRun(body.payload));
+    if (action === 'fail_run') return json(await failRun(body.payload));
+    if (action === 'reap_stale_runs') return json(await reapStaleRuns(body.payload));
     if (action === 'record_account_snapshot') return json(await recordAccountSnapshot(body.payload));
     if (action === 'upsert_trade_intent') return json(await upsertTradeIntent(body.payload));
     if (action === 'upsert_execution_attempt') return json(await upsertExecutionAttempt(body.payload));

@@ -123,9 +123,28 @@ async function publishCurrentDashboard(env: PublicationEnv): Promise<void> {
   if (!response.ok) throw new Error(`Dashboard projection failed with status ${response.status}`);
 }
 
-async function finalizeRunAndPublish(env: PublicationEnv, runId: string): Promise<void> {
-  const result = await cloudControl(env, 'finalize_run', { run_id: runId });
+async function finalizeRunAndPublish(
+  env: PublicationEnv,
+  runId: string,
+  options?: { empty_ok?: boolean },
+): Promise<void> {
+  const result = await cloudControl(env, 'finalize_run', {
+    run_id: runId,
+    empty_ok: options?.empty_ok === true,
+  });
   if (!isFinalizeRunSuccess(result)) return;
+  await publishCurrentDashboard(env);
+}
+
+async function failRunAndPublish(
+  env: PublicationEnv,
+  runId: string,
+  errorText: string,
+): Promise<void> {
+  await cloudControl(env, 'fail_run', {
+    run_id: runId,
+    error_text: errorText.slice(0, 500),
+  });
   await publishCurrentDashboard(env);
 }
 
@@ -227,6 +246,31 @@ async function analyzePosition(
 
 export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, ResearchCycleParams> {
   async run(event: Readonly<WorkflowEvent<ResearchCycleParams>>, step: WorkflowStep): Promise<JsonObject> {
+    let runId: string | null = null;
+    let sealed = false;
+    try {
+      return await this.executeCycle(event, step, (id) => {
+        runId = id;
+      }, () => {
+        sealed = true;
+      });
+    } catch (error) {
+      if (runId && !sealed) {
+        const message = error instanceof Error ? error.message : 'workflow_aborted';
+        await step.do('mark aborted cloud run failed', async () => {
+          await failRunAndPublish(this.env, runId!, message);
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async executeCycle(
+    event: Readonly<WorkflowEvent<ResearchCycleParams>>,
+    step: WorkflowStep,
+    rememberRunId: (id: string) => void,
+    markSealed: () => void,
+  ): Promise<JsonObject> {
     const tradingEnabled = String(this.env.TRADING_ENABLED) === 'true';
     const brokerMode = String(this.env.BROKER_GATEWAY_MODE);
     if (tradingEnabled && brokerMode !== 'robinhood_mcp') throw new Error('Live trading requires the Robinhood MCP gateway');
@@ -258,9 +302,11 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       };
     });
 
-    const runId = runRow.id;
+    const cycleRunId = runRow.id;
+    rememberRunId(cycleRunId);
     if (!gate.actionable && !event.payload.force) {
-      return { run_id: runId, status: 'skipped', gate, trading_enabled: tradingEnabled };
+      markSealed();
+      return { run_id: cycleRunId, status: 'skipped', gate, trading_enabled: tradingEnabled };
     }
 
     const contextJson = await step.do('load bounded canonical research context', {
@@ -325,11 +371,11 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       const messages: MessageSendRequest<CloudTask>[] = [];
       let skipped = 0;
       for (const thesis of theses) {
-        const idempotencyKey = `${runId}:thesis:${thesis.id}:${PROMPT_VERSION}`;
+        const idempotencyKey = `${cycleRunId}:thesis:${thesis.id}:${PROMPT_VERSION}`;
         const inputSha256 = await sha256({ thesis, snapshotVersion });
         const unchanged = !event.payload.force && previousHashes.get(thesis.id) === inputSha256;
         await cloudControl(this.env, 'upsert_task', {
-          run_id: runId,
+          run_id: cycleRunId,
           idempotency_key: idempotencyKey,
           task_type: 'thesis_research',
           entity_type: 'thesis',
@@ -346,7 +392,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           continue;
         }
         messages.push({ body: {
-          kind: 'thesis_research', runId, idempotencyKey, thesis,
+          kind: 'thesis_research', runId: cycleRunId, idempotencyKey, thesis,
           contextVersion: snapshotVersion, marketSlot: gate.slot || 'manual',
         } });
       }
@@ -362,7 +408,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         const position = snapshot.positions.find((item) => item.symbol === row.symbol);
         if (!position || position.quantity <= 0) continue;
         const positionKey = `${snapshot.accountKey}:${position.symbol}`;
-        const idempotencyKey = `${runId}:position:${position.symbol}:${PROMPT_VERSION}`;
+        const idempotencyKey = `${cycleRunId}:position:${position.symbol}:${PROMPT_VERSION}`;
         const relatedTheses: PositionThesis[] = theses
           .filter((thesis) => thesis.symbols.includes(position.symbol))
           .map((thesis) => ({
@@ -375,7 +421,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           accountKey: snapshot.accountKey, nextReviewAt: null,
         });
         await cloudControl(this.env, 'upsert_task', {
-          run_id: runId,
+          run_id: cycleRunId,
           idempotency_key: idempotencyKey,
           task_type: 'position_review',
           entity_type: 'position',
@@ -386,7 +432,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           updated_at: new Date().toISOString(),
         });
         messages.push({ body: {
-          kind: 'position_review', runId, idempotencyKey, positionKey,
+          kind: 'position_review', runId: cycleRunId, idempotencyKey, positionKey,
           episodeId: row.id, symbol: position.symbol, theses: relatedTheses, reason: 'scheduled_position_review',
         } });
       }
@@ -398,9 +444,9 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
       if (!tradingEnabled || !executionActive) return 0;
       const messages: MessageSendRequest<CloudTask>[] = [];
       for (const proposal of proposals) {
-        const idempotencyKey = `${runId}:trade-proposal:${proposal.id}`;
+        const idempotencyKey = `${cycleRunId}:trade-proposal:${proposal.id}`;
         await cloudControl(this.env, 'upsert_task', {
-          run_id: runId,
+          run_id: cycleRunId,
           idempotency_key: idempotencyKey,
           task_type: 'trade_execution',
           entity_type: 'trade_proposal',
@@ -410,7 +456,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           queued_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
-        messages.push({ body: { kind: 'trade_execution', runId, idempotencyKey, proposal } });
+        messages.push({ body: { kind: 'trade_execution', runId: cycleRunId, idempotencyKey, proposal } });
       }
       if (messages.length > 0) await this.env.RESEARCH_TASK_QUEUE.sendBatch(messages);
       return messages.length;
@@ -440,13 +486,14 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         },
         updated_at: new Date().toISOString(),
       });
-      if (queued.queued === 0 && executionQueued === 0) {
-        await finalizeRunAndPublish(this.env, runId);
+      if (queued.queued === 0 && executionQueued === 0 && positionsQueued === 0) {
+        await finalizeRunAndPublish(this.env, cycleRunId, { empty_ok: true });
       }
     });
 
+    markSealed();
     return {
-      run_id: runId,
+      run_id: cycleRunId,
       status: 'complete',
       queued_tasks: queued.queued,
       queued_trade_intents: executionQueued,
@@ -589,15 +636,35 @@ export class PositionMonitor extends DurableObject<PublicationEnv> {
       updated_at: now.toISOString(),
     }));
     if (!run || typeof run.id !== 'string') throw new Error('Position alarm could not create a canonical run');
-    await this.env.RESEARCH_TASK_QUEUE.send({
-      kind: 'position_review',
-      runId: run.id,
-      idempotencyKey: `${configuration.positionKey}:alarm:${Date.now()}`,
-      positionKey: configuration.positionKey,
-      episodeId: configuration.episodeId,
-      symbol: configuration.symbol,
-      reason: 'position_monitor_alarm',
-    } satisfies PositionReviewTask);
+    const idempotencyKey = `${configuration.positionKey}:alarm:${now.getTime()}`;
+    try {
+      await cloudControl(this.env, 'upsert_task', {
+        run_id: run.id,
+        idempotency_key: idempotencyKey,
+        task_type: 'position_review',
+        entity_type: 'position',
+        entity_key: configuration.positionKey,
+        status: 'queued',
+        queued_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      });
+      await this.env.RESEARCH_TASK_QUEUE.send({
+        kind: 'position_review',
+        runId: run.id,
+        idempotencyKey,
+        positionKey: configuration.positionKey,
+        episodeId: configuration.episodeId,
+        symbol: configuration.symbol,
+        reason: 'position_monitor_alarm',
+      } satisfies PositionReviewTask);
+    } catch (error) {
+      await failRunAndPublish(
+        this.env,
+        run.id,
+        error instanceof Error ? error.message : 'position_alarm_enqueue_failed',
+      );
+      throw error;
+    }
   }
 }
 
@@ -1169,6 +1236,19 @@ const worker = {
     return new Response('Not found', { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: PublicationEnv): Promise<void> {
+    try {
+      const reap = await cloudControl(env, 'reap_stale_runs', {});
+      console.log(JSON.stringify({ event: 'stale_automation_reap', reap }));
+      const summary = firstObject(reap);
+      const reapedRuns = Number(summary?.reaped_runs || 0);
+      const reapedTasks = Number(summary?.reaped_tasks || 0);
+      if (reapedRuns > 0 || reapedTasks > 0) await publishCurrentDashboard(env);
+    } catch (error) {
+      console.warn(JSON.stringify({
+        event: 'stale_automation_reap_failed',
+        error: error instanceof Error ? error.message : 'unknown',
+      }));
+    }
     const gate = marketGate(controller.scheduledTime);
     if (!gate.actionable || !gate.slot) {
       console.log(JSON.stringify({ event: 'cloud_schedule_skipped', cron: controller.cron, gate }));
