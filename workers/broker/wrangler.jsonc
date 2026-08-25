@@ -6,18 +6,14 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
-  "secrets": {
-    "required": [
-      "CF_ACCESS_TEAM_DOMAIN",
-      "CF_ACCESS_AUD",
-      "BROKER_OWNER_EMAIL"
-    ]
-  },
   "vars": {
     "BROKER_PUBLIC_ORIGIN": "https://thesisforge-broker-gateway.davidwallach2.workers.dev",
     "ROBINHOOD_OAUTH_CALLBACK_ORIGIN": "http://127.0.0.1:18789",
     "ROBINHOOD_MCP_URL": "https://agent.robinhood.com/mcp/trading",
-    "BROKER_EXECUTION_ENABLED": "true"
+    "BROKER_EXECUTION_ENABLED": "true",
+    "CF_ACCESS_TEAM_DOMAIN": "winter-resonance-439a.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "81395c137ae44f2aa659102842a2b2374560d2ee172070aa2d8ed64c4997c0e5",
+    "BROKER_OWNER_EMAIL": "Davidwallach2@gmail.com"
   },
   "durable_objects": {
     "bindings": [

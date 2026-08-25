@@ -14,6 +14,11 @@ function withoutRemoteOnlyBindings<
   delete userConfig.hyperdrive;
 }
 
+// Only strip remote bindings for `vinext dev`. Production builds must keep
+// secrets_store_secrets so `wrangler deploy` from dist/server retains them.
+const isLocalDev = process.env.npm_lifecycle_event === 'dev'
+  || process.argv.includes('dev');
+
 type DashboardDevServer = {
   host: string;
   port: number;
@@ -46,7 +51,7 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         configPath: './wrangler.jsonc',
-        config: withoutRemoteOnlyBindings,
+        config: isLocalDev ? withoutRemoteOnlyBindings : undefined,
         auxiliaryWorkers: [
           {
             configPath: '../../workers/knowledge/wrangler.jsonc',

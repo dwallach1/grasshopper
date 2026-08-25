@@ -90,10 +90,21 @@ begin
       'create policy thesisforge_worker_delete on public.%I for delete to thesisforge_worker using (true)',
       target_table
     );
-    sequence_name := pg_get_serial_sequence(format('public.%I', target_table), 'id');
-    if sequence_name is not null then
-      execute format('grant usage, select on sequence %s to service_role', sequence_name);
-      execute format('grant usage, select, update on sequence %s to thesisforge_worker', sequence_name);
+    -- Only identity tables have a serial id; x_research_tweets uses a composite PK.
+    if to_regclass(format('public.%I', target_table)) is not null
+       and exists (
+         select 1
+         from information_schema.columns
+         where table_schema = 'public'
+           and table_name = target_table
+           and column_name = 'id'
+       )
+    then
+      sequence_name := pg_get_serial_sequence(format('public.%I', target_table), 'id');
+      if sequence_name is not null then
+        execute format('grant usage, select on sequence %s to service_role', sequence_name);
+        execute format('grant usage, select, update on sequence %s to thesisforge_worker', sequence_name);
+      end if;
     end if;
   end loop;
 end $$;
