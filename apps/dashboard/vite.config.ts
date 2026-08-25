@@ -14,6 +14,12 @@ function withoutRemoteOnlyBindings<
   delete userConfig.hyperdrive;
 }
 
+type DashboardDevServer = {
+  host: string;
+  port: number;
+  watch?: { useFsEvents: boolean; usePolling: boolean };
+};
+
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
@@ -24,15 +30,17 @@ export default defineConfig(async () => {
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
+  const server: DashboardDevServer = {
+    host: '127.0.0.1',
+    port: 5173,
+  };
+  if (isCodexSeatbeltSandbox) {
+    server.watch = { useFsEvents: false, usePolling: true };
+  }
+
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
-    server: {
-      host: '127.0.0.1',
-      port: 5173,
-      ...(isCodexSeatbeltSandbox
-        ? { watch: { useFsEvents: false, usePolling: true } }
-        : {}),
-    },
+    server,
     plugins: [
       vinext(),
       cloudflare({
