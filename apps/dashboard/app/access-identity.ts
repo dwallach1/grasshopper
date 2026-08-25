@@ -31,8 +31,21 @@ async function cloudflareAccessIdentity(requestHeaders: Headers): Promise<string
   }
 }
 
+/**
+ * Local-only identity for `vite` / Miniflare. Production must keep
+ * CF_ACCESS_AUD set to the real Access audience so this never activates,
+ * and must never set LOCAL_DEV_IDENTITY on deployed Workers.
+ */
+function localDevIdentity(): string | null {
+  const identity = env.LOCAL_DEV_IDENTITY?.trim();
+  if (!identity) return null;
+  const audience = env.CF_ACCESS_AUD?.trim();
+  if (audience && audience !== 'local-dev') return null;
+  return normalizeIdentity(identity);
+}
+
 export async function authenticatedIdentity(requestHeaders: Headers): Promise<string | null> {
-  return cloudflareAccessIdentity(requestHeaders);
+  return (await cloudflareAccessIdentity(requestHeaders)) ?? localDevIdentity();
 }
 
 export function isManagerIdentity(identity: string): boolean {

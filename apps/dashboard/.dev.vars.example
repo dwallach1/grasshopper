@@ -1,22 +1,21 @@
-# Supabase is accessed from the Worker over HTTPS. Never expose these values to
-# browser bundles or commit a populated .dev.vars file.
-SUPABASE_URL=
-SUPABASE_PUBLISHABLE_KEY=
-THESISFORGE_DASHBOARD_TOKEN=
-THESISFORGE_MANAGER_TOKEN=
-INTERNAL_SERVICE_TOKEN=
+# Local Supabase + Vite. Never commit a populated .dev.vars file.
+# Copy: cp apps/dashboard/.dev.vars.example apps/dashboard/.dev.vars
 
-# Comma-separated Cloudflare Access email identities permitted to operate the system.
-THESISFORGE_MANAGER_USER_IDS=
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
-# Route Workers AI requests through AI Gateway. "default" is created on first use.
+# Must match hashes accepted by supabase/schemas/02_worker_access.sql (local-only).
+THESISFORGE_DASHBOARD_TOKEN=local-dashboard-token-do-not-use-in-prod
+THESISFORGE_MANAGER_TOKEN=local-manager-token-do-not-use-in-prod
+INTERNAL_SERVICE_TOKEN=local-internal-token-do-not-use-in-prod
+
+# Local Access bypass: CF_ACCESS_AUD must be exactly "local-dev".
+LOCAL_DEV_IDENTITY=local@thesisforge.dev
+THESISFORGE_MANAGER_USER_IDS=local@thesisforge.dev
+CF_ACCESS_TEAM_DOMAIN=
+CF_ACCESS_AUD=local-dev
+
 AI_GATEWAY_ID=default
-
-# Defense in depth: cloud research can be scheduled while broker writes remain off.
 TRADING_ENABLED=false
 BROKER_GATEWAY_MODE=unavailable
-
-# Cloudflare Access verifies every request before the Worker reads Supabase.
-CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
-CF_ACCESS_AUD=
-BROKER_OWNER_EMAIL=
+BROKER_OWNER_EMAIL=local@thesisforge.dev

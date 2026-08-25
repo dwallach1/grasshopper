@@ -4,10 +4,15 @@ import { readSecret, type SecretBinding } from '@thesisforge/shared/secrets';
 export type PublicationEnvironment = {
   SUPABASE_URL: string;
   THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretBinding;
+  THESISFORGE_PUBLICATION_TOKEN?: string;
 };
 
 export async function publishDashboard(env: PublicationEnvironment): Promise<PublicationResult> {
-  const publicationToken = await readSecret(env.THESISFORGE_PUBLICATION_TOKEN_SECRET, 'THESISFORGE_PUBLICATION_TOKEN');
+  const publicationToken = await readSecret(
+    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
+    'THESISFORGE_PUBLICATION_TOKEN',
+    env.THESISFORGE_PUBLICATION_TOKEN,
+  );
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
     headers: {

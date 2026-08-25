@@ -4,9 +4,12 @@ interface __BaseEnv_Env {
 	RESEARCH_ORIGINALS: R2Bucket;
 	HYPERDRIVE: Hyperdrive;
 	ARTICLE_QUEUE: Queue;
-	INTERNAL_SERVICE_TOKEN_SECRET: SecretsStoreSecret;
-	THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretsStoreSecret;
-	FINANCIAL_DATASETS_API_KEY_SECRET: SecretsStoreSecret;
+	INTERNAL_SERVICE_TOKEN_SECRET?: SecretsStoreSecret;
+	INTERNAL_SERVICE_TOKEN?: string;
+	THESISFORGE_PUBLICATION_TOKEN_SECRET?: SecretsStoreSecret;
+	THESISFORGE_PUBLICATION_TOKEN?: string;
+	FINANCIAL_DATASETS_API_KEY_SECRET?: SecretsStoreSecret;
+	FINANCIAL_DATASETS_API_KEY?: string;
 	AI: Ai;
 	AI_GATEWAY_ID: "default";
 	X_REDIRECT_URI: "https://thesisforge-dashboard.davidwallach2.workers.dev/api/x/callback";

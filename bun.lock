@@ -55,6 +55,15 @@
         "typescript": "5.9.3",
       },
     },
+    "tests/e2e": {
+      "name": "@thesisforge/e2e",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thesisforge/contracts": "workspace:*",
+        "@thesisforge/worker-knowledge": "workspace:*",
+        "zod": "^4",
+      },
+    },
     "workers/broker": {
       "name": "@thesisforge/worker-broker",
       "version": "0.0.0",
@@ -501,6 +510,8 @@
     "@thesisforge/contracts": ["@thesisforge/contracts@workspace:packages/contracts"],
 
     "@thesisforge/dashboard": ["@thesisforge/dashboard@workspace:apps/dashboard"],
+
+    "@thesisforge/e2e": ["@thesisforge/e2e@workspace:tests/e2e"],
 
     "@thesisforge/shared": ["@thesisforge/shared@workspace:packages/shared"],
 

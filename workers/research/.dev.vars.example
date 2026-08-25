@@ -1,3 +1,5 @@
 # Populate workers/research/.dev.vars for local development. Never commit real values.
-SUPABASE_URL=
-THESISFORGE_PUBLICATION_TOKEN=
+# Copy: cp workers/research/.dev.vars.example workers/research/.dev.vars
+
+SUPABASE_URL=http://127.0.0.1:54321
+THESISFORGE_PUBLICATION_TOKEN=local-publication-token-do-not-use-in-prod

@@ -5,6 +5,13 @@ import { defineConfig } from 'vite';
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
+/** Secrets Store is unavailable in fully-local Miniflare; use `.dev.vars` strings. */
+function withoutSecretsStore<Config extends { secrets_store_secrets?: unknown }>(
+  userConfig: Config,
+): void {
+  delete userConfig.secrets_store_secrets;
+}
+
 export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
@@ -25,6 +32,13 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         configPath: './wrangler.jsonc',
+        config: withoutSecretsStore,
+        auxiliaryWorkers: [
+          {
+            configPath: '../../workers/knowledge/wrangler.jsonc',
+            config: withoutSecretsStore,
+          },
+        ],
       }),
     ],
   };
