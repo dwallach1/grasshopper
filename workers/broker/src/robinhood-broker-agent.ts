@@ -42,6 +42,106 @@ const ToolTextDataSchema = z.object({
   data: z.record(z.string(), z.unknown()),
 }).passthrough();
 
+const AgenticAccountSchema = z.object({
+  account_number: z.string().min(1),
+  agentic_allowed: z.literal(true),
+  state: z.literal('active'),
+  deactivated: z.unknown().optional(),
+  permanently_deactivated: z.unknown().optional(),
+}).passthrough().refine(
+  (row) => row.deactivated !== true && row.permanently_deactivated !== true,
+  { message: 'account is deactivated' },
+);
+
+const AccountsToolSchema = z.object({
+  accounts: z.array(z.unknown()).optional(),
+}).passthrough();
+
+const BuyingPowerSchema = z.object({
+  buying_power: z.unknown(),
+}).passthrough();
+
+const PortfolioToolSchema = z.object({
+  total_value: z.unknown(),
+  equity_value: z.unknown(),
+  cash: z.unknown(),
+  buying_power: z.unknown().optional(),
+}).passthrough();
+
+const PositionRowSchema = z.object({
+  symbol: z.string().min(1),
+  quantity: z.unknown(),
+  shares_available_for_sells: z.unknown(),
+  average_buy_price: z.unknown().optional().nullable(),
+}).passthrough();
+
+const PositionsToolSchema = z.object({
+  positions: z.array(z.unknown()).optional(),
+}).passthrough();
+
+const DollarBasedAmountSchema = z.object({
+  amount: z.unknown(),
+}).passthrough();
+
+const OrderRowSchema = z.object({
+  side: z.string().optional(),
+  state: z.string().optional(),
+  symbol: z.string().optional(),
+  quantity: z.unknown().optional(),
+  cumulative_quantity: z.unknown().optional(),
+  average_price: z.unknown().optional(),
+  price: z.unknown().optional(),
+  dollar_based_amount: DollarBasedAmountSchema.optional(),
+}).passthrough();
+
+const OrdersToolSchema = z.object({
+  orders: z.array(z.unknown()).optional(),
+}).passthrough();
+
+const TradabilityRowSchema = z.object({
+  symbol: z.string().min(1),
+  tradeable: z.boolean().optional(),
+  state: z.string().optional(),
+  fractional_tradability: z.string().optional(),
+}).passthrough();
+
+const QuoteInnerSchema = z.object({
+  symbol: z.string().min(1),
+  bid_price: z.unknown(),
+  ask_price: z.unknown(),
+  last_trade_price: z.unknown().optional(),
+  adjusted_previous_close: z.unknown().optional(),
+  previous_close: z.unknown().optional(),
+  state: z.string().optional(),
+  has_traded: z.boolean().optional(),
+  venue_ask_time: z.string().optional(),
+  venue_bid_time: z.string().optional(),
+  venue_last_trade_time: z.string().optional(),
+}).passthrough();
+
+const QuoteResultSchema = z.object({
+  quote: QuoteInnerSchema,
+}).passthrough();
+
+const ResultsToolSchema = z.object({
+  results: z.array(z.unknown()).optional(),
+}).passthrough();
+
+const OrderReviewSchema = z.object({
+  order_checks: z.record(z.string(), z.unknown()),
+  quote_data: z.object({
+    venue_ask_time: z.string().optional(),
+    venue_bid_time: z.string().optional(),
+    venue_last_trade_time: z.string().optional(),
+  }).passthrough(),
+}).passthrough();
+
+const PlaceOrderSchema = z.object({
+  order: z.object({
+    id: z.string().min(1),
+  }).passthrough(),
+}).passthrough();
+
 type BrokerConnectionState =
   | 'not_connected'
   | 'authenticating'
@@ -73,18 +173,20 @@ function brokerExecutionEnabled(env: Cloudflare.Env): boolean {
   return String(env.BROKER_EXECUTION_ENABLED) === 'true';
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function recordRows(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter(isRecord) : [];
-}
-
 function finiteNumber(value: unknown, label: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`${label} is unavailable`);
   return parsed;
+}
+
+function parseRows<Row>(value: unknown, schema: z.ZodType<Row>): Row[] {
+  if (!Array.isArray(value)) return [];
+  const rows: Row[] = [];
+  for (const item of value) {
+    const parsed = schema.safeParse(item);
+    if (parsed.success) rows.push(parsed.data);
+  }
+  return rows;
 }
 
 function dataFromToolResult(result: unknown): Record<string, unknown> {
@@ -306,26 +408,17 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
     return dataFromToolResult(await tool.execute(args));
   }
 
-  private async agenticAccount(): Promise<Record<string, unknown>> {
-    const data = await this.callRobinhoodTool('get_accounts', {});
-    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
-    const eligible = accounts.filter((account): account is Record<string, unknown> => {
-      if (!account || typeof account !== 'object' || Array.isArray(account)) return false;
-      const row = account as Record<string, unknown>;
-      return row.agentic_allowed === true
-        && row.state === 'active'
-        && row.deactivated !== true
-        && row.permanently_deactivated !== true
-        && typeof row.account_number === 'string';
-    });
+  private async agenticAccount(): Promise<z.infer<typeof AgenticAccountSchema>> {
+    const data = AccountsToolSchema.parse(await this.callRobinhoodTool('get_accounts', {}));
+    const eligible = parseRows(data.accounts, AgenticAccountSchema);
     if (eligible.length !== 1) throw new Error('Exactly one active Agentic account is required');
     return eligible[0];
   }
 
   async readAccountSnapshot(): Promise<BrokerAccountSnapshot> {
     const account = await this.agenticAccount();
-    const accountNumber = String(account.account_number);
-    const [portfolio, positions, orders] = await Promise.all([
+    const accountNumber = account.account_number;
+    const [portfolioRaw, positionsRaw, ordersRaw] = await Promise.all([
       this.callRobinhoodTool('get_portfolio', { account_number: accountNumber }),
       this.callRobinhoodTool('get_equity_positions', { account_number: accountNumber }),
       this.callRobinhoodTool('get_equity_orders', {
@@ -334,17 +427,16 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         placed_agent: 'agentic',
       }),
     ]);
-    const buyingPowerObject = portfolio.buying_power;
-    const buyingPower = buyingPowerObject && typeof buyingPowerObject === 'object' && !Array.isArray(buyingPowerObject)
-      ? finiteNumber((buyingPowerObject as Record<string, unknown>).buying_power, 'buying power')
+    const portfolio = PortfolioToolSchema.parse(portfolioRaw);
+    const buyingPowerParsed = BuyingPowerSchema.safeParse(portfolio.buying_power);
+    const buyingPower = buyingPowerParsed.success
+      ? finiteNumber(buyingPowerParsed.data.buying_power, 'buying power')
       : NaN;
     if (!Number.isFinite(buyingPower)) throw new Error('buying power is unavailable');
-    const positionRows = Array.isArray(positions.positions) ? positions.positions : [];
+    const positionRows = parseRows(PositionsToolSchema.parse(positionsRaw).positions, PositionRowSchema);
     const normalizedPositions = positionRows
-      .filter((position): position is Record<string, unknown> =>
-        Boolean(position) && typeof position === 'object' && !Array.isArray(position))
       .map((position) => ({
-        symbol: String(position.symbol || '').toUpperCase(),
+        symbol: position.symbol.toUpperCase(),
         quantity: finiteNumber(position.quantity, 'position quantity'),
         sharesAvailableForSells: finiteNumber(position.shares_available_for_sells, 'sellable shares'),
         averageBuyPrice: position.average_buy_price == null
@@ -352,9 +444,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           : finiteNumber(position.average_buy_price, 'average buy price'),
       }))
       .filter((position) => /^[A-Z][A-Z0-9.]{0,9}$/.test(position.symbol));
-    const todayOrders = (Array.isArray(orders.orders) ? orders.orders : [])
-      .filter((order): order is Record<string, unknown> =>
-        Boolean(order) && typeof order === 'object' && !Array.isArray(order));
+    const todayOrders = parseRows(OrdersToolSchema.parse(ordersRaw).orders, OrderRowSchema);
     const todayBuyOrders = todayOrders.filter((order) => order.side === 'buy');
     const pendingStates = new Set(['queued', 'unconfirmed', 'confirmed', 'partially_filled', 'pending']);
     const pendingOrderSymbols = [...new Set(todayOrders
@@ -363,9 +453,8 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       .filter((symbol) => /^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)))];
     let todayNotional = 0;
     for (const order of todayBuyOrders) {
-      const dollarBased = order.dollar_based_amount;
-      if (dollarBased && typeof dollarBased === 'object' && !Array.isArray(dollarBased)) {
-        todayNotional += finiteNumber((dollarBased as Record<string, unknown>).amount, 'daily order notional');
+      if (order.dollar_based_amount) {
+        todayNotional += finiteNumber(order.dollar_based_amount.amount, 'daily order notional');
       } else {
         const quantity = finiteNumber(order.quantity ?? order.cumulative_quantity, 'daily order quantity');
         const price = finiteNumber(order.average_price ?? order.price, 'daily order price');
@@ -394,18 +483,18 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       .slice(0, 10);
     if (symbols.length === 0) return { observedAt: new Date().toISOString(), symbols: [] };
     const account = await this.agenticAccount();
-    const accountNumber = String(account.account_number);
+    const accountNumber = account.account_number;
     const [tradability, quotes] = await Promise.all([
       this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols }),
       this.callRobinhoodTool('get_equity_quotes', { symbols }),
     ]);
-    const tradabilityRows = recordRows(tradability.results);
-    const quoteRows = recordRows(quotes.results);
+    const tradabilityRows = parseRows(ResultsToolSchema.parse(tradability).results, TradabilityRowSchema);
+    const quoteRows = parseRows(ResultsToolSchema.parse(quotes).results, QuoteResultSchema);
     const normalized = [];
     for (const symbol of symbols) {
       const tradable = tradabilityRows.find((row) => row.symbol === symbol);
-      const quoteResult = quoteRows.find((row) => isRecord(row.quote) && row.quote.symbol === symbol);
-      const quote = quoteResult && isRecord(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteResult = quoteRows.find((row) => row.quote.symbol === symbol);
+      const quote = quoteResult?.quote;
       if (!tradable || !quote) continue;
       const bid = finiteNumber(quote.bid_price, 'bid price');
       const ask = finiteNumber(quote.ask_price, 'ask price');
@@ -511,12 +600,11 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
         this.callRobinhoodTool('get_equity_tradability', { account_number: accountNumber, symbols: [symbol] }),
         this.callRobinhoodTool('get_equity_quotes', { symbols: [symbol] }),
       ]);
-      const tradabilityRows = recordRows(tradability.results);
+      const tradabilityRows = parseRows(ResultsToolSchema.parse(tradability).results, TradabilityRowSchema);
       const tradable = tradabilityRows.find((row) => row.symbol === symbol);
       if (!tradable || tradable.tradeable !== true || tradable.state !== 'active') throw new Error('Symbol is not currently tradable');
-      const quoteRows = recordRows(quotes.results);
-      const quoteResult = quoteRows.find((row) => isRecord(row.quote) && row.quote.symbol === symbol);
-      const quote = quoteResult && isRecord(quoteResult.quote) ? quoteResult.quote : null;
+      const quoteRows = parseRows(ResultsToolSchema.parse(quotes).results, QuoteResultSchema);
+      const quote = quoteRows.find((row) => row.quote.symbol === symbol)?.quote;
       if (!quote || quote.has_traded !== true || quote.state !== 'active') throw new Error('A valid live quote is unavailable');
       const ask = finiteNumber(quote.ask_price, 'ask price');
       const bid = finiteNumber(quote.bid_price, 'bid price');
@@ -540,18 +628,18 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
           ? { dollar_amount: requestedNotional.toFixed(2) }
           : { quantity: requestedNotional.toFixed(6).replace(/\.?0+$/, '') }),
       };
-      const review = await this.callRobinhoodTool('review_equity_order', orderArgs);
-      if (!isRecord(review.order_checks) || Object.keys(review.order_checks).length > 0) {
+      const review = OrderReviewSchema.parse(await this.callRobinhoodTool('review_equity_order', orderArgs));
+      if (Object.keys(review.order_checks).length > 0) {
         throw new Error('Robinhood pre-trade review returned an alert');
       }
-      if (!isRecord(review.quote_data)) throw new Error('Robinhood pre-trade review did not return a quote');
       const reviewedAt = Date.parse(String(intent.side === 'buy'
         ? review.quote_data.venue_ask_time || review.quote_data.venue_last_trade_time || ''
         : review.quote_data.venue_bid_time || review.quote_data.venue_last_trade_time || ''));
       if (!Number.isFinite(reviewedAt) || Date.now() - reviewedAt > 120_000) throw new Error('Reviewed quote is stale');
 
-      const placed = await this.callRobinhoodTool('place_equity_order', { ...orderArgs, ref_id: intent.refId });
-      if (!isRecord(placed.order) || typeof placed.order.id !== 'string') throw new Error('Broker did not return an order id');
+      const placed = PlaceOrderSchema.parse(
+        await this.callRobinhoodTool('place_equity_order', { ...orderArgs, ref_id: intent.refId }),
+      );
       const result: AutonomousExecutionResult = {
         refId: intent.refId,
         status: 'submitted',
