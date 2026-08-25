@@ -118,6 +118,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
   const rows = z.array(SnapshotRowSchema).safeParse(await response.json());
   if (!rows.success || !rows.data[0]?.payload) throw new Error('Supabase has no current dashboard snapshot');
 
+  // SAFETY: SnapshotRowSchema only accepts payload objects from the canonical dashboard snapshot row.
   const snapshot = rows.data[0].payload as Snapshot;
   const managerToken = env.THESISFORGE_MANAGER_TOKEN;
   if (!managerToken || !isManagerIdentity(viewerIdentity)) return snapshot;
@@ -136,9 +137,21 @@ export async function loadSnapshot(): Promise<Snapshot> {
     fetchRows(`${apiBase}/ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100`, managerHeaders, OntologyActionRowSchema),
   ]);
   const managerSnapshot: Snapshot = { ...snapshot };
-  if (themes) managerSnapshot.ontology_themes = themes as NonNullable<Snapshot['ontology_themes']>;
-  if (symbols) managerSnapshot.ontology_symbols = symbols as NonNullable<Snapshot['ontology_symbols']>;
-  if (candidates) managerSnapshot.ontology_candidates = candidates as NonNullable<Snapshot['ontology_candidates']>;
-  if (actions) managerSnapshot.ontology_actions = actions as NonNullable<Snapshot['ontology_actions']>;
+  if (themes) {
+    // SAFETY: fetchRows parses every row with OntologyThemeRowSchema before returning the array.
+    managerSnapshot.ontology_themes = themes as NonNullable<Snapshot['ontology_themes']>;
+  }
+  if (symbols) {
+    // SAFETY: fetchRows parses every row with OntologySymbolRowSchema before returning the array.
+    managerSnapshot.ontology_symbols = symbols as NonNullable<Snapshot['ontology_symbols']>;
+  }
+  if (candidates) {
+    // SAFETY: fetchRows parses every row with OntologyCandidateRowSchema before returning the array.
+    managerSnapshot.ontology_candidates = candidates as NonNullable<Snapshot['ontology_candidates']>;
+  }
+  if (actions) {
+    // SAFETY: fetchRows parses every row with OntologyActionRowSchema before returning the array.
+    managerSnapshot.ontology_actions = actions as NonNullable<Snapshot['ontology_actions']>;
+  }
   return managerSnapshot;
 }
