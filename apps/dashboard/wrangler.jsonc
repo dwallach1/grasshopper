@@ -25,7 +25,8 @@
       "THESISFORGE_MANAGER_TOKEN",
       "THESISFORGE_MANAGER_USER_IDS",
       "CF_ACCESS_TEAM_DOMAIN",
-      "CF_ACCESS_AUD"
+      "CF_ACCESS_AUD",
+      "LOCAL_DEV_IDENTITY"
     ]
   },
   "observability": {
