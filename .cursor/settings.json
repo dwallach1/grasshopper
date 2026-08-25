@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "cloudflare": {
+      "enabled": true
+    },
+    "supabase": {
+      "enabled": true
+    }
+  }
+}
