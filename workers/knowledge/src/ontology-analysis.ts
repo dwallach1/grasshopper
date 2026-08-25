@@ -105,13 +105,20 @@ function requireExactExcerpt(excerpt: string, text: string, field: string): stri
 
 /** Workers AI may return an object, a JSON string, or `{ response: string }`. */
 export function unwrapOntologyAiPayload(result: unknown): unknown {
+  const AiEnvelopeSchema = z.object({
+    analyses: z.unknown().optional(),
+    response: z.string().optional(),
+  }).passthrough();
+
   let text: string | undefined;
   if (typeof result === 'string') {
     text = result;
-  } else if (result !== null && typeof result === 'object' && !Array.isArray(result)) {
-    const record = result as Record<string, unknown>;
-    if ('analyses' in record) return result;
-    if (typeof record.response === 'string') text = record.response;
+  } else {
+    const envelope = AiEnvelopeSchema.safeParse(result);
+    if (envelope.success) {
+      if ('analyses' in envelope.data) return result;
+      if (envelope.data.response !== undefined) text = envelope.data.response;
+    }
   }
   if (text === undefined) text = JSON.stringify(result);
 

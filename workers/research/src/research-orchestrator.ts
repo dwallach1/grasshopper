@@ -376,7 +376,15 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         })),
       }));
     });
-    const positionEpisodes: unknown = JSON.parse(positionEpisodesJson);
+    const positionEpisodes = parsePositionEpisodeRows(
+      (() => {
+        try {
+          return JSON.parse(positionEpisodesJson) as unknown;
+        } catch {
+          return [];
+        }
+      })(),
+    );
 
     const queued = await step.do('fan out thesis research tasks', async () => {
       const messages: MessageSendRequest<CloudTask>[] = [];
@@ -412,10 +420,10 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
     });
 
     const positionsQueued = await step.do('fan out position monitoring tasks', async () => {
-      if (!brokerReadiness.ready || !('snapshot' in brokerReadiness) || !brokerReadiness.snapshot || !Array.isArray(positionEpisodes)) return 0;
+      if (!brokerReadiness.ready || !('snapshot' in brokerReadiness) || !brokerReadiness.snapshot || positionEpisodes.length === 0) return 0;
       const snapshot = brokerReadiness.snapshot;
       const messages: MessageSendRequest<CloudTask>[] = [];
-      for (const row of parsePositionEpisodeRows(positionEpisodes)) {
+      for (const row of positionEpisodes) {
         const position = snapshot.positions.find((item) => item.symbol === row.symbol);
         if (!position || position.quantity <= 0) continue;
         const positionKey = `${snapshot.accountKey}:${position.symbol}`;

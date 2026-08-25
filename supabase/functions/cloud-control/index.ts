@@ -160,6 +160,15 @@ function requireObject(value: unknown): JsonObject {
   return JsonObjectSchema.parse(value);
 }
 
+const TaskHashRowSchema = z.object({
+  entity_key: z.string().min(1),
+  input_sha256: z.string().min(1),
+}).passthrough();
+
+const TaskStatusRowSchema = z.object({
+  status: z.string(),
+}).passthrough();
+
 async function context(): Promise<unknown> {
   const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals] = await Promise.all([
     rest('dashboard_snapshots?id=eq.current&select=generated_at,payload'),
@@ -171,8 +180,11 @@ async function context(): Promise<unknown> {
   const rows = Array.isArray(snapshotRows) ? snapshotRows : [];
   const latestInputs: Record<string, string> = {};
   for (const row of Array.isArray(recentTasks) ? recentTasks : []) {
-    if (!isObject(row) || typeof row.entity_key !== 'string' || typeof row.input_sha256 !== 'string') continue;
-    if (!(row.entity_key in latestInputs)) latestInputs[row.entity_key] = row.input_sha256;
+    const parsed = TaskHashRowSchema.safeParse(row);
+    if (!parsed.success) continue;
+    if (!(parsed.data.entity_key in latestInputs)) {
+      latestInputs[parsed.data.entity_key] = parsed.data.input_sha256;
+    }
   }
   return {
     snapshot: rows[0] || null,
@@ -200,7 +212,10 @@ async function finalizeRun(payload: unknown): Promise<unknown> {
   const tasks = await rest(`cloud_tasks?run_id=eq.${runId}&select=status`);
   const rows = Array.isArray(tasks) ? tasks : [];
   const terminal = new Set(['complete', 'skipped', 'failed', 'dead_letter']);
-  const pending = rows.filter((row) => isObject(row) && !terminal.has(String(row.status))).length;
+  const pending = rows.filter((row) => {
+    const parsed = TaskStatusRowSchema.safeParse(row);
+    return parsed.success && !terminal.has(parsed.data.status);
+  }).length;
   if (pending > 0) return { finalized: false, pending };
   await rest(`cloud_runs?id=eq.${runId}`, {
     method: 'PATCH',
