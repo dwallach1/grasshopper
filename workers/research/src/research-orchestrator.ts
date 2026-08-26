@@ -1259,39 +1259,48 @@ const worker = {
     }
     return new Response('Not found', { status: 404 });
   },
-  async scheduled(controller: ScheduledController, env: PublicationEnv): Promise<void> {
-    try {
-      const reap = await cloudControl(env, 'reap_stale_runs', {});
-      console.log(JSON.stringify({ event: 'stale_automation_reap', reap }));
-      const summary = firstObject(reap);
-      const reapedRuns = Number(summary?.reaped_runs || 0);
-      const reapedTasks = Number(summary?.reaped_tasks || 0);
-      if (reapedRuns > 0 || reapedTasks > 0) await publishCurrentDashboard(env);
-    } catch (error) {
-      console.warn(JSON.stringify({
-        event: 'stale_automation_reap_failed',
-        error: error instanceof Error ? error.message : 'unknown',
-      }));
-    }
-    const gate = marketGate(controller.scheduledTime);
-    if (!gate.actionable || !gate.slot) {
-      console.log(JSON.stringify({ event: 'cloud_schedule_skipped', cron: controller.cron, gate }));
-      return;
-    }
-    try {
-      const instance = await env.CLOUD_RESEARCH_CYCLE.create({
-        id: `cloud-${gate.date}-${gate.slot}`,
-        params: { requestedBy: 'cron', slot: gate.slot },
-      });
-      console.log(JSON.stringify({ event: 'cloud_workflow_created', instanceId: instance.id, gate }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'unknown';
-      if (message.toLowerCase().includes('already')) {
-        console.warn(JSON.stringify({ event: 'cloud_workflow_duplicate', gate }));
+  async scheduled(controller: ScheduledController, env: PublicationEnv, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil((async () => {
+      try {
+        const reap = await cloudControl(env, 'reap_stale_runs', {});
+        console.log(JSON.stringify({ event: 'stale_automation_reap', reap }));
+        const summary = firstObject(reap);
+        const reapedRuns = Number(summary?.reaped_runs || 0);
+        const reapedTasks = Number(summary?.reaped_tasks || 0);
+        if (reapedRuns > 0 || reapedTasks > 0) await publishCurrentDashboard(env);
+      } catch (error) {
+        console.warn(JSON.stringify({
+          event: 'stale_automation_reap_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        }));
+      }
+      const gate = marketGate(controller.scheduledTime);
+      if (!gate.actionable || !gate.slot) {
+        console.log(JSON.stringify({ event: 'cloud_schedule_skipped', cron: controller.cron, gate }));
         return;
       }
+      try {
+        const instance = await env.CLOUD_RESEARCH_CYCLE.create({
+          id: `cloud-${gate.date}-${gate.slot}`,
+          params: { requestedBy: 'cron', slot: gate.slot },
+        });
+        console.log(JSON.stringify({ event: 'cloud_workflow_created', instanceId: instance.id, gate }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown';
+        if (message.toLowerCase().includes('already')) {
+          console.warn(JSON.stringify({ event: 'cloud_workflow_duplicate', gate }));
+          return;
+        }
+        throw error;
+      }
+    })().catch((error) => {
+      console.error(JSON.stringify({
+        event: 'cloud_schedule_failed',
+        cron: controller.cron,
+        error: error instanceof Error ? error.message : 'unknown',
+      }));
       throw error;
-    }
+    }));
   },
   async queue(batch: MessageBatch<CloudTask>, env: PublicationEnv): Promise<void> {
     for (const message of batch.messages) {

@@ -280,13 +280,23 @@ function accessIssuer(env: Cloudflare.Env): string {
   return configured.startsWith('https://') ? configured : `https://${configured}`;
 }
 
+const accessJwksCache = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+function accessJwks(issuer: string): ReturnType<typeof createRemoteJWKSet> {
+  let jwks = accessJwksCache.get(issuer);
+  if (!jwks) {
+    jwks = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
+    accessJwksCache.set(issuer, jwks);
+  }
+  return jwks;
+}
+
 async function isOwnerRequest(request: Request, env: Cloudflare.Env): Promise<boolean> {
   const token = request.headers.get('cf-access-jwt-assertion');
   if (!token) return false;
   const issuer = accessIssuer(env);
   try {
-    const jwks = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`));
-    const { payload } = await jwtVerify(token, jwks, {
+    const { payload } = await jwtVerify(token, accessJwks(issuer), {
       audience: env.CF_ACCESS_AUD,
       issuer,
     });

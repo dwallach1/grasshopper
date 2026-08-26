@@ -101,20 +101,24 @@ async function syncBookmarks(env: KnowledgeEnvironment) {
   const backlogInvestigations = backlog.length
     ? await investigateClaimsWithAi(env.AI, env.AI_GATEWAY_ID, backlog)
     : [];
-  const backlogPersisted = backlogInvestigations.length
-    ? await withDatabase(env.HYPERDRIVE.connectionString, (database) =>
-      persistClaimInvestigations(database, backlogInvestigations, payload.fetchedAt))
-    : 0;
+  const { backlogPersisted, researchTasks, graph } = await withDatabase(
+    env.HYPERDRIVE.connectionString,
+    async (database) => {
+      const backlogPersisted = backlogInvestigations.length
+        ? await persistClaimInvestigations(database, backlogInvestigations, payload.fetchedAt)
+        : 0;
+      const researchTasks = await createResearchSessions(database);
+      const graph = await rebuildKnowledgeGraph(database);
+      return { backlogPersisted, researchTasks, graph };
+    },
+  );
 
   if (result.articleTasks.length) {
     await env.ARTICLE_QUEUE.sendBatch(result.articleTasks.map((task) => ({ body: { kind: 'article' as const, ...task } })));
   }
-  const researchTasks = await withDatabase(env.HYPERDRIVE.connectionString, (database) =>
-    createResearchSessions(database));
   if (researchTasks.length) {
     await env.X_RESEARCH_QUEUE.sendBatch(researchTasks.map((task) => ({ body: task })));
   }
-  const graph = await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
   const publication = await publishDashboard(env);
   const investigations = result.investigations + backlogPersisted;
   console.log(JSON.stringify({
@@ -234,11 +238,14 @@ const worker = {
   },
   async scheduled(controller: ScheduledController, env: KnowledgeEnvironment, ctx: ExecutionContext): Promise<void> {
     if (controller.cron === '15 12 * * SUN') {
-      const weeklyRefresh = withDatabase(env.HYPERDRIVE.connectionString, refreshWeeklyEventMap).then(async (result) => {
-          await withDatabase(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
-          await publishDashboard(env);
-          return result;
-        });
+      const weeklyRefresh = withDatabase(env.HYPERDRIVE.connectionString, async (database) => {
+        const result = await refreshWeeklyEventMap(database);
+        await rebuildKnowledgeGraph(database);
+        return result;
+      }).then(async (result) => {
+        await publishDashboard(env);
+        return result;
+      });
       ctx.waitUntil(weeklyRefresh.catch((error) => {
         console.error(JSON.stringify({ event: 'knowledge_schedule_failed', cron: controller.cron, error: error instanceof Error ? error.message : 'unknown' }));
         throw error;
@@ -319,7 +326,7 @@ const worker = {
       }
       return;
     }
-    const completed: Array<(typeof batch.messages)[number]> = [];
+    let persisted = 0;
     for (const message of batch.messages) {
       if (message.body.kind !== 'article') {
         message.ack();
@@ -328,20 +335,19 @@ const worker = {
       try {
         const prepared = await prepareArticleTask(env.RESEARCH_ORIGINALS, message.body);
         await withDatabaseRetry(env.HYPERDRIVE.connectionString, (database) => persistPreparedArticle(database, prepared));
-        completed.push(message);
+        message.ack();
+        persisted += 1;
       } catch (error) {
         console.error(JSON.stringify({ event: 'article_task_failed', id: message.id, attempt: message.attempts, error: error instanceof Error ? error.message : 'unknown' }));
         message.retry({ delaySeconds: Math.min(900, 30 * (2 ** Math.min(message.attempts, 5))) });
       }
     }
-    if (completed.length) {
+    if (persisted > 0) {
       try {
         await withDatabaseRetry(env.HYPERDRIVE.connectionString, rebuildKnowledgeGraph);
         await publishDashboard(env);
-        for (const message of completed) message.ack();
       } catch (error) {
-        console.error(JSON.stringify({ event: 'article_projection_failed', messages: completed.length, error: error instanceof Error ? error.message : 'unknown' }));
-        for (const message of completed) message.retry({ delaySeconds: 60 });
+        console.error(JSON.stringify({ event: 'article_projection_failed', messages: persisted, error: error instanceof Error ? error.message : 'unknown' }));
       }
     }
   },

@@ -59,12 +59,23 @@ async function readJson(response: Response): Promise<WorkerResponseBody> {
   }
 }
 
-async function postWorker(pathname: string, baseUrl: string | undefined): Promise<WorkerStepResult> {
+function missingWorkerEnv(baseUrl: string | undefined, baseVar: string): string {
+  const missing: string[] = [];
+  if (!baseUrl?.trim()) missing.push(baseVar);
+  if (!internalToken()) missing.push('INTERNAL_SERVICE_TOKEN');
+  return missing.join(', ');
+}
+
+async function postWorker(
+  pathname: string,
+  baseUrl: string | undefined,
+  baseVar: string,
+): Promise<WorkerStepResult> {
   const url = workerUrl(baseUrl, pathname);
   const token = internalToken();
   if (!url || !token) {
     throw new Error(
-      'Worker HTTP trigger requires THESISFORGE_KNOWLEDGE_WORKER_URL, THESISFORGE_RESEARCH_WORKER_URL, and INTERNAL_SERVICE_TOKEN in .env.local.',
+      `Worker HTTP trigger requires ${missingWorkerEnv(baseUrl, baseVar)} in the repo root .env.local. Restart the webapp after updating it.`,
     );
   }
   const response = await fetch(url, {
@@ -77,7 +88,7 @@ async function postWorker(pathname: string, baseUrl: string | undefined): Promis
 }
 
 export async function invokeKnowledgeSync(): Promise<WorkerStepResult> {
-  return postWorker('/x/sync', process.env.THESISFORGE_KNOWLEDGE_WORKER_URL);
+  return postWorker('/x/sync', process.env.THESISFORGE_KNOWLEDGE_WORKER_URL, 'THESISFORGE_KNOWLEDGE_WORKER_URL');
 }
 
 export async function invokeResearchRun(): Promise<WorkerStepResult> {
@@ -109,7 +120,7 @@ export async function invokeResearchRun(): Promise<WorkerStepResult> {
 }
 
 export async function invokeAccountRefresh(): Promise<WorkerStepResult> {
-  return postWorker('/account/refresh', process.env.THESISFORGE_RESEARCH_WORKER_URL);
+  return postWorker('/account/refresh', process.env.THESISFORGE_RESEARCH_WORKER_URL, 'THESISFORGE_RESEARCH_WORKER_URL');
 }
 
 export async function invokeFullPipeline(): Promise<{

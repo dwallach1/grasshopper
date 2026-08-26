@@ -637,6 +637,138 @@ a:focus-visible {
   margin-top: 4px;
 }
 
+.home-runs-section {
+  margin-bottom: 40px;
+}
+
+.home-runs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.home-run-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px;
+  border-radius: var(--r-module);
+  background: var(--elevated);
+  border: 1px solid var(--line);
+}
+
+.home-run-card .section-head {
+  margin-bottom: 0;
+}
+
+.home-run-link {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.home-run-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.home-run-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.home-run-summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.home-run-findings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.home-run-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.home-run-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.home-run-next-when {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.home-run-next-when b {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.home-run-next-when span {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.home-run-schedule-list {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.home-run-schedule-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.home-run-schedule-list li > div {
+  display: grid;
+  gap: 2px;
+}
+
+.home-run-schedule-list li span {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.home-run-schedule-list li small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.home-run-schedule-list li b {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
 .quiet-map {
   position: relative;
   min-height: 360px;
@@ -1927,6 +2059,10 @@ a:focus-visible {
   .home-hero {
     grid-template-columns: 1fr;
     min-height: 0;
+  }
+
+  .home-runs-grid {
+    grid-template-columns: 1fr;
   }
 
   .quiet-map {

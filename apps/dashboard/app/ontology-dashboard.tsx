@@ -158,6 +158,101 @@ function formatAge(timestamp:string|undefined,now:number|null){
   return `${Math.floor(elapsed/86_400_000)}d ago`;
 }
 
+const NY_TZ='America/New_York';
+const RRULE_WEEKDAYS=new Map([['MO',1],['TU',2],['WE',3],['TH',4],['FR',5],['SA',6],['SU',0]]);
+const WEEKDAY_SHORT=new Map([['Sun',0],['Mon',1],['Tue',2],['Wed',3],['Thu',4],['Fri',5],['Sat',6]]);
+
+function nyPartsFromTimestamp(timestamp:number){
+  const parts=new Intl.DateTimeFormat('en-US',{
+    timeZone:NY_TZ,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23',
+  }).formatToParts(new Date(timestamp));
+  const get=(type:Intl.DateTimeFormatPartTypes)=>parts.find(part=>part.type===type)?.value||'';
+  return {
+    year:Number(get('year')),
+    month:Number(get('month')),
+    day:Number(get('day')),
+    weekday:get('weekday'),
+    hour:Number(get('hour')),
+    minute:Number(get('minute')),
+  };
+}
+
+function nyLocalToUtc(year:number,month:number,day:number,hour:number,minute:number){
+  let low=Date.UTC(year,month-1,day-1,0,0);
+  let high=Date.UTC(year,month-1,day+1,23,59);
+  const target=year*1e8+month*1e6+day*1e4+hour*100+minute;
+  while(low<=high){
+    const mid=Math.floor((low+high)/2);
+    const parts=nyPartsFromTimestamp(mid);
+    const key=parts.year*1e8+parts.month*1e6+parts.day*1e4+parts.hour*100+parts.minute;
+    if(key===target)return mid;
+    if(key<target)low=mid+60_000;
+    else high=mid-60_000;
+  }
+  return Date.UTC(year,month-1,day,hour,minute);
+}
+
+function parseRruleSlots(rrule:string){
+  const parts=new Map(rrule.replace(/^RRULE:/,'').split(';').map(part=>{const [key,value]=part.split('=');return [key,value] as const}));
+  const weekdays=new Set(
+    (parts.get('BYDAY')||'').split(',').filter(Boolean)
+      .map(day=>RRULE_WEEKDAYS.get(day))
+      .filter((day):day is number=>day!==undefined),
+  );
+  const minute=Number(parts.get('BYMINUTE')||'0');
+  const hours=(parts.get('BYHOUR')||'').split(',').filter(Boolean).map(Number);
+  return {weekdays,hours,minute};
+}
+
+function iterNyDays(fromMs:number,count:number){
+  const days:{year:number;month:number;day:number;weekday:number}[]=[];
+  const seen=new Set<string>();
+  const start=nyPartsFromTimestamp(fromMs);
+  let cursor=nyLocalToUtc(start.year,start.month,start.day,0,0);
+  while(days.length<count){
+    const parts=nyPartsFromTimestamp(cursor);
+    const key=`${parts.year}-${parts.month}-${parts.day}`;
+    if(!seen.has(key)){
+      seen.add(key);
+      const weekday=WEEKDAY_SHORT.get(parts.weekday);
+      if(weekday!==undefined)days.push({year:parts.year,month:parts.month,day:parts.day,weekday});
+    }
+    cursor+=86_400_000;
+  }
+  return days;
+}
+
+function nextRunFromRrule(rrule:string,fromMs:number){
+  const {weekdays,hours,minute}=parseRruleSlots(rrule);
+  if(!weekdays.size||!hours.length)return null;
+  const candidates:number[]=[];
+  for(const day of iterNyDays(fromMs,14)){
+    if(!weekdays.has(day.weekday))continue;
+    for(const hour of hours){
+      const slot=nyLocalToUtc(day.year,day.month,day.day,hour,minute);
+      if(slot>fromMs)candidates.push(slot);
+    }
+  }
+  return candidates.length?Math.min(...candidates):null;
+}
+
+function formatRelativeUntil(targetMs:number,nowMs:number){
+  const delta=targetMs-nowMs;
+  if(delta<=0)return 'Due now';
+  if(delta<3_600_000)return `in ${Math.max(1,Math.ceil(delta/60_000))}m`;
+  if(delta<86_400_000){
+    const hours=Math.floor(delta/3_600_000);
+    const minutes=Math.ceil((delta%3_600_000)/60_000);
+    return minutes?`in ${hours}h ${minutes}m`:`in ${hours}h`;
+  }
+  return formatShortDateTime(new Date(targetMs).toISOString());
+}
+
+function runOutcomeClass(outcome:AutomationRun['outcome']){
+  return outcome==='passed'?'green':outcome==='failed'?'red':'amber';
+}
+
 export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const router=useRouter();
   const [now,setNow]=useState<number|null>(null);
@@ -314,8 +409,10 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
           readyCount={readyCount}
           isStale={isStale}
           refreshing={refreshing}
+          now={now}
           onReview={reviewProposals}
           onRefresh={()=>void refreshRobinhood()}
+          onViewAutomations={()=>setSurface('automations')}
           proposalsRef={proposalsRef}
         />
       )}
@@ -352,8 +449,10 @@ function HomeSurface({
   readyCount,
   isStale,
   refreshing,
+  now,
   onReview,
   onRefresh,
+  onViewAutomations,
   proposalsRef,
 }:{
   data:Snapshot;
@@ -362,8 +461,10 @@ function HomeSurface({
   readyCount:number;
   isStale:boolean;
   refreshing:boolean;
+  now:number|null;
   onReview:()=>void;
   onRefresh:()=>void;
+  onViewAutomations:()=>void;
   proposalsRef:RefObject<HTMLElement|null>;
 }){
   const ready=(data.trade_proposals||[]).filter(p=>p.status==='ready_for_review');
@@ -435,6 +536,8 @@ function HomeSurface({
       </div>
     </div>
 
+    <HomeRunsPanel data={data} now={now} onViewAutomations={onViewAutomations}/>
+
     <section className="proposals-section" ref={proposalsRef}>
       <div className="section-head">
         <h2>Proposals</h2>
@@ -484,6 +587,81 @@ function HomeSurface({
       </section>
     )}
   </>;
+}
+
+function HomeRunsPanel({data,now,onViewAutomations}:{data:Snapshot;now:number|null;onViewAutomations:()=>void}){
+  const latestRun=data.automation_runs?.[0];
+  const automations=data.automations||[];
+  const nowMs=now??Date.now();
+  const scheduleEntries=useMemo(()=>{
+    return automations.map(job=>{
+      const nextAt=job.next_run_at?new Date(job.next_run_at).getTime():nextRunFromRrule(job.rrule,nowMs);
+      return {job,nextAt,schedule:describeSchedule(job.rrule)};
+    }).sort((a,b)=>(a.nextAt??Number.POSITIVE_INFINITY)-(b.nextAt??Number.POSITIVE_INFINITY));
+  },[automations,nowMs]);
+  const nextRun=scheduleEntries.find(entry=>entry.nextAt!=null);
+
+  return (
+    <section className="home-runs-section" aria-label="Worker runs">
+      <div className="home-runs-grid">
+        <article className="home-run-card">
+          <div className="section-head">
+            <h2>Latest run</h2>
+            <button type="button" className="btn btn-ghost home-run-link" onClick={onViewAutomations}>View all</button>
+          </div>
+          {latestRun?(
+            <>
+              <div className="home-run-head">
+                <strong className={`status-pill ${runOutcomeClass(latestRun.outcome)}`}>{toTitle(latestRun.outcome)}</strong>
+                <span>{formatShortDateTime(latestRun.started_at)} · {formatDuration(latestRun.duration_ms)}</span>
+              </div>
+              <b className="home-run-name">{latestRun.automation_name}</b>
+              <p className="home-run-summary">{latestRun.summary||latestRun.title||'No summary recorded.'}</p>
+              {latestRun.findings.length>0&&(
+                <ul className="home-run-findings">
+                  {latestRun.findings.slice(0,3).map((finding,index)=><li key={index}>{finding}</li>)}
+                </ul>
+              )}
+              {latestRun.error_text&&<p className="home-run-error">{latestRun.error_text}</p>}
+            </>
+          ):(
+            <p className="home-run-empty">No worker runs recorded yet.</p>
+          )}
+        </article>
+
+        <article className="home-run-card">
+          <div className="section-head">
+            <h2>Next scheduled</h2>
+          </div>
+          {nextRun?.nextAt?(
+            <>
+              <p className="home-run-next-when">
+                <b>{formatRelativeUntil(nextRun.nextAt,nowMs)}</b>
+                <span>{formatDateTime(new Date(nextRun.nextAt).toISOString())}</span>
+              </p>
+              <b className="home-run-name">{nextRun.job.name}</b>
+              <p className="home-run-summary">{describeSchedule(nextRun.job.rrule)}</p>
+            </>
+          ):(
+            <p className="home-run-empty">No upcoming weekday slots.</p>
+          )}
+          {scheduleEntries.length>0&&(
+            <ul className="home-run-schedule-list">
+              {scheduleEntries.map(({job,nextAt,schedule})=>(
+                <li key={job.id}>
+                  <div>
+                    <span>{job.name}</span>
+                    <small>{schedule}</small>
+                  </div>
+                  <b>{nextAt?formatRelativeUntil(nextAt,nowMs):'—'}</b>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      </div>
+    </section>
+  );
 }
 
 function QuietMap({data,activeThesisId,onFocusThesis}:{data:Snapshot;activeThesisId?:string;onFocusThesis:(id:string)=>void}){
