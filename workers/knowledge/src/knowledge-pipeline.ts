@@ -13,7 +13,7 @@ import { FinancialRequestSchema, fetchFinancialData } from './financial';
 import { rebuildKnowledgeGraph, refreshWeeklyEventMap } from './graph';
 import { publishDashboard } from './publication';
 import { XCredentialVault } from './x-credential-vault';
-import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
+import { readSecret, secretsEqual, type SecretBinding } from '@quantanamo/shared/secrets';
 import { investigateClaimsWithAi, MAX_INVESTIGATIONS_PER_SYNC } from './claim-investigation';
 import { classifyBookmarksWithAi } from './ontology-analysis';
 import { loadOntologyCatalog } from './ontology';
@@ -54,8 +54,8 @@ type KnowledgeEnvironment = {
   AI: Ai;
   AI_GATEWAY_ID: string;
   SUPABASE_URL: string;
-  THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretBinding;
-  THESISFORGE_PUBLICATION_TOKEN?: string;
+  QUANTANAMO_PUBLICATION_TOKEN_SECRET: SecretBinding;
+  QUANTANAMO_PUBLICATION_TOKEN?: string;
   INTERNAL_SERVICE_TOKEN_SECRET: SecretBinding;
   INTERNAL_SERVICE_TOKEN?: string;
   FINANCIAL_DATASETS_API_KEY_SECRET: SecretBinding;
@@ -70,7 +70,7 @@ function json<Value>(value: Value, init: ResponseInit = {}): Response {
 }
 
 async function authorized(request: Request, env: KnowledgeEnvironment): Promise<boolean> {
-  const supplied = request.headers.get('x-thesisforge-internal-token') || '';
+  const supplied = request.headers.get('x-quantanamo-internal-token') || '';
   if (!supplied) return false;
   const current = await readSecret(
     env.INTERNAL_SERVICE_TOKEN_SECRET,
@@ -151,7 +151,7 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
       }),
       env.X_CREDENTIAL_VAULT.getByName('primary').status(),
     ]);
-    return json({ ok: true, worker: 'thesisforge-knowledge-pipeline', database, x });
+    return json({ ok: true, worker: 'quantanamo-knowledge-pipeline', database, x });
   }
   if (url.pathname === '/x/authorize' && request.method === 'POST') {
     if (!(await authorized(request, env))) return json({ error: 'unauthorized' }, { status: 401 });
@@ -292,7 +292,7 @@ const worker = {
     }));
   },
   async queue(batch: MessageBatch<KnowledgeTask>, env: KnowledgeEnvironment): Promise<void> {
-    if (batch.queue === 'thesisforge-knowledge-x-research') {
+    if (batch.queue === 'quantanamo-knowledge-x-research') {
       for (const message of batch.messages) {
         if (message.body.kind !== 'x_research') {
           message.ack();

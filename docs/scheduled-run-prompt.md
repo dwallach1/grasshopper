@@ -1,16 +1,16 @@
-# ThesisForge Scheduled Run Prompt
+# Quantanamo Scheduled Run Prompt
 
 > Legacy local fallback only. Production scheduled research and autonomous
 > equity execution run in Cloudflare Cron, Workflows, Queues, Durable Objects,
 > and Workers AI. Codex and this prompt are not part of the production schedule.
 
-Run this workflow in `/Users/davidwallach/code/robinhood_trader`.
+Run this workflow in `/Users/davidwallach/code/quantanamo`.
 
 Use only X bookmark data, linked article text when fetchable, and the Robinhood MCP. Do not use external market-data providers.
 
 Steps:
 0. As the first shell action, run `bun run automations:defer-sync` to arm post-run reconciliation for this Codex thread, then start a durable scheduled-run recap with `bun run run:report -- start scheduled_research`. The reconciler waits for Codex's authoritative terminal event before updating automation outcome, duration, final output, and the dashboard snapshot, including when this workflow later fails or is cancelled. Read `config/trade_policy.json` and obey its sizing, asset-class, market-hours, and execution rules.
-1. Confirm `THESISFORGE_DATABASE_URL` is configured, then run `bun run x:bookmarks`. The fetch streams directly into normalized Supabase bookmark tables; do not create a local bookmark JSON file.
+1. Confirm `QUANTANAMO_DATABASE_URL` is configured, then run `bun run x:bookmarks`. The fetch streams directly into normalized Supabase bookmark tables; do not create a local bookmark JSON file.
 2. Use Robinhood MCP to refresh the authorized trading account and all readable positions. Persist a new `account_snapshots` row and current `portfolio_exposure` rows in Supabase before calculating any position size. Reject sizing if the live refresh fails or is older than the policy limit.
 3. Fetch readable linked articles with `bun run articles:fetch`. PDFs and other non-HTML originals are archived automatically in the private Supabase research bucket and linked to their Postgres metadata. If network/article fetch or archival fails, continue with available bookmark text and report the archival warning.
 4. Read `bun run thesis:report` and query the canonical Supabase database as needed.

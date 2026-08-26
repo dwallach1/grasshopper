@@ -1,5 +1,5 @@
 {
-  "name": "@thesisforge/e2e",
+  "name": "@quantanamo/e2e",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,8 +7,8 @@
     "test": "bun test ."
   },
   "dependencies": {
-    "@thesisforge/contracts": "workspace:*",
-    "@thesisforge/worker-knowledge": "workspace:*",
+    "@quantanamo/contracts": "workspace:*",
+    "@quantanamo/worker-knowledge": "workspace:*",
     "zod": "^4"
   }
 }

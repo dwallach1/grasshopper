@@ -1,17 +1,17 @@
 # Cloudflare Workers runtime
 
-ThesisForge's production research and trading path runs on Cloudflare Workers. Supabase remains the canonical relational database. The desk UI (`apps/dashboard`) runs only locally and reads Supabase; it is not deployed to Cloudflare.
+Quantanamo's production research and trading path runs on Cloudflare Workers. Supabase remains the canonical relational database. The desk UI (`apps/dashboard`) runs only locally and reads Supabase; it is not deployed to Cloudflare.
 
 ## Ownership model
 
 | Component | Owns | Does not own |
 |---|---|---|
 | `apps/dashboard` (local) | Local desk UI and ontology manager actions against Supabase | Scheduling, ingestion, model decisions, broker state, Cloudflare hosting |
-| `thesisforge-knowledge-pipeline` | X OAuth/token rotation, bookmark sync, Workers AI semantic ontology analysis, article/PDF extraction, R2 archival, ontology promotion/graph refresh, financial-data cache, research capture, projection refresh after knowledge mutations | Trading decisions or broker tools |
-| `thesisforge-research-orchestrator` | Market-slot schedule, durable research Workflow, Workers AI tasks, position decisions, trade-intent coordination, projection refresh when a run becomes terminal | Source ingestion, X credentials, broker OAuth |
-| `thesisforge-broker-gateway` | Robinhood MCP OAuth, read/review/place allowlist, final deterministic broker enforcement | Research or source ingestion |
+| `quantanamo-knowledge-pipeline` | X OAuth/token rotation, bookmark sync, Workers AI semantic ontology analysis, article/PDF extraction, R2 archival, ontology promotion/graph refresh, financial-data cache, research capture, projection refresh after knowledge mutations | Trading decisions or broker tools |
+| `quantanamo-research-orchestrator` | Market-slot schedule, durable research Workflow, Workers AI tasks, position decisions, trade-intent coordination, projection refresh when a run becomes terminal | Source ingestion, X credentials, broker OAuth |
+| `quantanamo-broker-gateway` | Robinhood MCP OAuth, read/review/place allowlist, final deterministic broker enforcement | Research or source ingestion |
 
-The old `thesisforge-dashboard` Worker (vinext + Workers Assets) was removed. Dashboard publication remains a shared event-driven read-model update after canonical mutations and terminal research runs; it has no independent Cron.
+The old `quantanamo-dashboard` Worker (vinext + Workers Assets) was removed. Dashboard publication remains a shared event-driven read-model update after canonical mutations and terminal research runs; it has no independent Cron.
 
 ## Data ownership
 
@@ -38,11 +38,11 @@ Any proposed trade passes through Supabase kill switches, account-scoped seriali
 
 - The local desk is localhost-only; it is not behind Cloudflare Access.
 - The knowledge Worker has no public route; internal callers use a shared internal token (research/knowledge bindings).
-- Account-shared credentials live in Cloudflare Secrets Store: `INTERNAL_SERVICE_TOKEN` and `THESISFORGE_PUBLICATION_TOKEN` for knowledge/research, `FINANCIAL_DATASETS_API_KEY` only for knowledge.
+- Account-shared credentials live in Cloudflare Secrets Store: `INTERNAL_SERVICE_TOKEN` and `QUANTANAMO_PUBLICATION_TOKEN` for knowledge/research, `FINANCIAL_DATASETS_API_KEY` only for knowledge.
 - Supabase Edge Functions retain the service-role key; Workers receive only narrow publication/control tokens.
 - R2 is private and has no public development URL or custom domain.
 - Trading and position-management risk controls are independent emergency stops.
 
 ## Emergency stop
 
-Pause either Supabase risk control (`autonomous-execution` or `autonomous-position-management`) for the fastest canonical stop. For defense in depth, deploy `TRADING_ENABLED=false` on `thesisforge-research-orchestrator` and `BROKER_EXECUTION_ENABLED=false` on `thesisforge-broker-gateway`. Disconnecting Robinhood MCP is the broker-boundary stop. Never delete audit rows.
+Pause either Supabase risk control (`autonomous-execution` or `autonomous-position-management`) for the fastest canonical stop. For defense in depth, deploy `TRADING_ENABLED=false` on `quantanamo-research-orchestrator` and `BROKER_EXECUTION_ENABLED=false` on `quantanamo-broker-gateway`. Disconnecting Robinhood MCP is the broker-boundary stop. Never delete audit rows.

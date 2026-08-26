@@ -129,7 +129,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 }
 
 async function authorized(request: Request): Promise<boolean> {
-  const token = request.headers.get('x-thesisforge-publication-token') || '';
+  const token = request.headers.get('x-quantanamo-publication-token') || '';
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
   const hexDigest = hex(digest);
   return EXPECTED_TOKEN_SHA256.some((expected) => constantTimeEqual(hexDigest, expected));

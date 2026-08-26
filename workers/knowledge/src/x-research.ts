@@ -6,7 +6,7 @@ import {
   parseAiJsonObject,
   runAiRole,
   type AiGatewayRunOptions,
-} from '@thesisforge/shared/ai';
+} from '@quantanamo/shared/ai';
 
 import type { Database } from './database';
 import { withDatabase, withReadOnlyDatabase } from './database';
@@ -650,7 +650,7 @@ export async function runResearchStep(
         session_id: Number(session.id),
         step: stepNumber,
       },
-      tags: ['thesisforge', 'x-compounding-research'],
+      tags: ['quantanamo', 'x-compounding-research'],
     } satisfies AiGatewayRunOptions,
   );
   const decision = parseResearchDecision(result, session.bookmark_id, dossier.knownRefs);

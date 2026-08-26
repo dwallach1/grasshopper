@@ -159,7 +159,7 @@ async function fetchDocument(source: string): Promise<{ data: Uint8Array; mimeTy
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
     const response = await fetch(url, {
       redirect: 'manual',
-      headers: { 'user-agent': 'ThesisForge/1.0 worker-archive', accept: '*/*' },
+      headers: { 'user-agent': 'Quantanamo/1.0 worker-archive', accept: '*/*' },
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');

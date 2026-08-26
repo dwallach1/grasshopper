@@ -3,17 +3,17 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('http://127.0.0.1:5173'),
-  title: 'ThesisForge',
+  title: 'Quantanamo',
   description: 'Private research desk — preregister, break, learn, deploy.',
   openGraph: {
-    title: 'ThesisForge',
+    title: 'Quantanamo',
     description: 'Preregister. Break. Learn. Deploy.',
     type: 'website',
-    images: [{ url: '/og.png', width: 1672, height: 941, alt: 'ThesisForge' }],
+    images: [{ url: '/og.png', width: 1672, height: 941, alt: 'Quantanamo' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ThesisForge',
+    title: 'Quantanamo',
     description: 'Preregister. Break. Learn. Deploy.',
     images: ['/og.png'],
   },

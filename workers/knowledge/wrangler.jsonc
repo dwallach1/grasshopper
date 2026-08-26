@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "thesisforge-knowledge-pipeline",
+  "name": "quantanamo-knowledge-pipeline",
   "main": "src/knowledge-pipeline.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat"],
@@ -14,9 +14,9 @@
       "secret_name": "INTERNAL_SERVICE_TOKEN"
     },
     {
-      "binding": "THESISFORGE_PUBLICATION_TOKEN_SECRET",
+      "binding": "QUANTANAMO_PUBLICATION_TOKEN_SECRET",
       "store_id": "9161ea4b738144c0accc37e724812d93",
-      "secret_name": "THESISFORGE_PUBLICATION_TOKEN"
+      "secret_name": "QUANTANAMO_PUBLICATION_TOKEN"
     },
     {
       "binding": "FINANCIAL_DATASETS_API_KEY_SECRET",
@@ -45,27 +45,29 @@
   }],
   "r2_buckets": [{
     "binding": "RESEARCH_ORIGINALS",
+    // Keep reading/writing the existing objects until a full R2 bucket
+    // migration completes. New bucket quantanamo-research-originals is provisioned.
     "bucket_name": "thesisforge-research-originals"
   }],
   "queues": {
     "producers": [
-      { "binding": "ARTICLE_QUEUE", "queue": "thesisforge-knowledge-articles" },
-      { "binding": "X_RESEARCH_QUEUE", "queue": "thesisforge-knowledge-x-research" }
+      { "binding": "ARTICLE_QUEUE", "queue": "quantanamo-knowledge-articles" },
+      { "binding": "X_RESEARCH_QUEUE", "queue": "quantanamo-knowledge-x-research" }
     ],
     "consumers": [{
-      "queue": "thesisforge-knowledge-articles",
+      "queue": "quantanamo-knowledge-articles",
       "max_batch_size": 5,
       "max_batch_timeout": 10,
       "max_retries": 4,
-      "dead_letter_queue": "thesisforge-knowledge-articles-dlq",
+      "dead_letter_queue": "quantanamo-knowledge-articles-dlq",
       "max_concurrency": 1,
       "retry_delay": 60
     }, {
-      "queue": "thesisforge-knowledge-x-research",
+      "queue": "quantanamo-knowledge-x-research",
       "max_batch_size": 1,
       "max_batch_timeout": 5,
       "max_retries": 3,
-      "dead_letter_queue": "thesisforge-knowledge-x-research-dlq",
+      "dead_letter_queue": "quantanamo-knowledge-x-research-dlq",
       "max_concurrency": 1,
       "retry_delay": 120
     }]

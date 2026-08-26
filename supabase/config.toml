@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "thesisforge"
+project_id = "quantanamo"
 
 [api]
 enabled = true
@@ -61,7 +61,7 @@ max_client_conn = 100
 enabled = true
 # Specifies an ordered list of schema files, directories, or glob patterns that describe your database.
 # Supports paths relative to supabase directory: "./schemas/*.sql", "./database".
-schema_paths = ["./schemas/01_thesisforge.sql", "./schemas/02_worker_access.sql"]
+schema_paths = ["./schemas/01_quantanamo.sql", "./schemas/02_worker_access.sql"]
 
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.

@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { z } from 'zod';
 
 import { bookmarkFromUnknown, type XBookmark, type XBookmarkPayload } from './bookmarks';
-import { readBoundedJson } from '@thesisforge/shared/http';
+import { readBoundedJson } from '@quantanamo/shared/http';
 
 const TokenResponseSchema = z.object({
   access_token: z.string().min(1),

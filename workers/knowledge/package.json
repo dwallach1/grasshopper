@@ -1,5 +1,5 @@
 {
-  "name": "@thesisforge/worker-knowledge",
+  "name": "@quantanamo/worker-knowledge",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "sync": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler dev --remote --test-scheduled --config wrangler.jsonc"
   },
   "dependencies": {
-    "@thesisforge/contracts": "workspace:*",
-    "@thesisforge/shared": "workspace:*",
+    "@quantanamo/contracts": "workspace:*",
+    "@quantanamo/shared": "workspace:*",
     "pg": "8.23.0",
     "unpdf": "1.8.1",
     "zod": "^4"

@@ -2,7 +2,7 @@
 # Copy: cp workers/knowledge/.dev.vars.example workers/knowledge/.dev.vars
 
 SUPABASE_URL=http://127.0.0.1:54321
-THESISFORGE_PUBLICATION_TOKEN=local-publication-token-do-not-use-in-prod
+QUANTANAMO_PUBLICATION_TOKEN=local-publication-token-do-not-use-in-prod
 INTERNAL_SERVICE_TOKEN=local-internal-token-do-not-use-in-prod
 FINANCIAL_DATASETS_API_KEY=local-financial-key-unused
 

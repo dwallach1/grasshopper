@@ -94,7 +94,7 @@ function restAuthHeaders(): HeadersInit {
   const url = process.env.SUPABASE_URL;
   const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
   const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
-  const dashboardToken = process.env.THESISFORGE_DASHBOARD_TOKEN?.trim();
+  const dashboardToken = process.env.QUANTANAMO_DASHBOARD_TOKEN?.trim();
 
   if (!url) throw new Error('SUPABASE_URL is not configured');
 
@@ -108,13 +108,13 @@ function restAuthHeaders(): HeadersInit {
 
   if (!publishableKey || !dashboardToken) {
     throw new Error(
-      'Supabase is not configured. Set THESISFORGE_DATABASE_URL or SUPABASE_SECRET_KEY in .env.local, or SUPABASE_PUBLISHABLE_KEY + THESISFORGE_DASHBOARD_TOKEN.',
+      'Supabase is not configured. Set QUANTANAMO_DATABASE_URL or SUPABASE_SECRET_KEY in .env.local, or SUPABASE_PUBLISHABLE_KEY + QUANTANAMO_DASHBOARD_TOKEN.',
     );
   }
 
   return {
     apikey: publishableKey,
-    'x-thesisforge-dashboard-token': dashboardToken,
+    'x-quantanamo-dashboard-token': dashboardToken,
   };
 }
 
@@ -209,7 +209,7 @@ async function loadSnapshotFromRest(viewerIdentity: string): Promise<Snapshot> {
 
   // SAFETY: SnapshotRowSchema only accepts payload objects from the canonical dashboard snapshot row.
   const snapshot = rows.data[0].payload as Snapshot;
-  const managerToken = process.env.THESISFORGE_MANAGER_TOKEN?.trim();
+  const managerToken = process.env.QUANTANAMO_MANAGER_TOKEN?.trim();
   const usingSecretKey = Boolean(process.env.SUPABASE_SECRET_KEY?.trim());
   const canManage = isManagerIdentity(viewerIdentity) && (usingSecretKey || Boolean(managerToken));
   if (!canManage) return snapshot;
@@ -219,8 +219,8 @@ async function loadSnapshotFromRest(viewerIdentity: string): Promise<Snapshot> {
     ? authHeaders
     : {
         ...authHeaders,
-        'x-thesisforge-manager-user-id': viewerIdentity,
-        'x-thesisforge-manager-token': managerToken!,
+        'x-quantanamo-manager-user-id': viewerIdentity,
+        'x-quantanamo-manager-token': managerToken!,
       };
 
   const [themes, symbols, candidates, actions] = await Promise.all([
@@ -256,7 +256,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
     throw new Error('Dashboard authentication required. Set LOCAL_DEV_IDENTITY in .env.local.');
   }
 
-  const databaseUrl = process.env.THESISFORGE_DATABASE_URL?.trim();
+  const databaseUrl = process.env.QUANTANAMO_DATABASE_URL?.trim();
   if (databaseUrl) {
     return loadSnapshotFromDatabase(databaseUrl, isManagerIdentity(viewerIdentity));
   }

@@ -31,8 +31,8 @@ describe.skipIf(!supabaseReady)('local knowledge capture → publication e2e', (
 
     const publication = await publishDashboard({
       SUPABASE_URL: LOCAL.supabaseUrl,
-      THESISFORGE_PUBLICATION_TOKEN: LOCAL.publicationToken,
-      THESISFORGE_PUBLICATION_TOKEN_SECRET: undefined,
+      QUANTANAMO_PUBLICATION_TOKEN: LOCAL.publicationToken,
+      QUANTANAMO_PUBLICATION_TOKEN_SECRET: undefined,
     });
     expect(publication.target_id).toBe('current');
 
@@ -61,8 +61,8 @@ describe.skipIf(!supabaseReady)('local knowledge capture → publication e2e', (
 
     await publishDashboard({
       SUPABASE_URL: LOCAL.supabaseUrl,
-      THESISFORGE_PUBLICATION_TOKEN: LOCAL.publicationToken,
-      THESISFORGE_PUBLICATION_TOKEN_SECRET: undefined,
+      QUANTANAMO_PUBLICATION_TOKEN: LOCAL.publicationToken,
+      QUANTANAMO_PUBLICATION_TOKEN_SECRET: undefined,
     });
 
     const snapshot = await readCurrentSnapshot();

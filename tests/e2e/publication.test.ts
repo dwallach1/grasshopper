@@ -20,7 +20,7 @@ describe.skipIf(!supabaseReady)('local publication e2e', () => {
         apikey: LOCAL.serviceRoleKey,
         authorization: `Bearer ${LOCAL.serviceRoleKey}`,
         'content-type': 'application/json',
-        'x-thesisforge-publication-token': 'wrong-token',
+        'x-quantanamo-publication-token': 'wrong-token',
       },
       body: JSON.stringify({
         p_trade_policy: {},

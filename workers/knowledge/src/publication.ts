@@ -1,23 +1,23 @@
-import { boundedJson, parsePublicationResult, type PublicationResult } from '@thesisforge/contracts/publication';
-import { readSecret, type SecretBinding } from '@thesisforge/shared/secrets';
+import { boundedJson, parsePublicationResult, type PublicationResult } from '@quantanamo/contracts/publication';
+import { readSecret, type SecretBinding } from '@quantanamo/shared/secrets';
 
 export type PublicationEnvironment = {
   SUPABASE_URL: string;
-  THESISFORGE_PUBLICATION_TOKEN_SECRET: SecretBinding;
-  THESISFORGE_PUBLICATION_TOKEN?: string;
+  QUANTANAMO_PUBLICATION_TOKEN_SECRET: SecretBinding;
+  QUANTANAMO_PUBLICATION_TOKEN?: string;
 };
 
 export async function publishDashboard(env: PublicationEnvironment): Promise<PublicationResult> {
   const publicationToken = await readSecret(
-    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
-    'THESISFORGE_PUBLICATION_TOKEN',
-    env.THESISFORGE_PUBLICATION_TOKEN,
+    env.QUANTANAMO_PUBLICATION_TOKEN_SECRET,
+    'QUANTANAMO_PUBLICATION_TOKEN',
+    env.QUANTANAMO_PUBLICATION_TOKEN,
   );
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-thesisforge-publication-token': publicationToken,
+      'x-quantanamo-publication-token': publicationToken,
     },
     body: JSON.stringify({ publishCurrent: true }),
   });

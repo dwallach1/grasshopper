@@ -6,7 +6,7 @@ import {
   modelForRole,
   parseAiJsonObject,
   unwrapAiResponseText,
-} from '@thesisforge/shared/ai';
+} from '@quantanamo/shared/ai';
 
 describe('shared AI router helpers', () => {
   test('maps pipeline roles to AI Gateway model ids', () => {

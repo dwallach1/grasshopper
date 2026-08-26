@@ -1,4 +1,4 @@
-import type { BrokerAccountSnapshot } from '@thesisforge/contracts/broker';
+import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
 
 import {
   asBrokerResearchContext,

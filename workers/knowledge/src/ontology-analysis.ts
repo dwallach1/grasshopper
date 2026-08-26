@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AI_MODELS, jsonSchemaResponseFormat, parseAiJsonObject, runAiRole } from '@thesisforge/shared/ai';
+import { AI_MODELS, jsonSchemaResponseFormat, parseAiJsonObject, runAiRole } from '@quantanamo/shared/ai';
 
 import type { XBookmark, XContextAnnotation } from './bookmarks';
 import { normalizePhrase, type OntologyCatalog, type ThemeMatch } from './ontology';
@@ -391,7 +391,7 @@ async function analyzeBatch(
         prompt_version: ONTOLOGY_PROMPT_VERSION,
         bookmark_ids: inputs.map((input) => input.id).join(','),
       },
-      tags: ['thesisforge', 'ontology-learning'],
+      tags: ['quantanamo', 'ontology-learning'],
     },
   );
   return parseOntologyAiOutput(result, inputs, catalog);

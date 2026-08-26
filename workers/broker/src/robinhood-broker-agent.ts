@@ -10,7 +10,7 @@ import {
   type AutonomousExecutionResult,
   type BrokerAccountSnapshot,
   type BrokerMarketContext,
-} from '@thesisforge/contracts/broker';
+} from '@quantanamo/contracts/broker';
 import { validateBrokerExecutionPolicy } from './broker-execution-policy';
 
 import {
@@ -23,8 +23,8 @@ const ROBINHOOD_SERVER_ID = 'robinhood';
 const ROBINHOOD_SERVER_NAME = 'Robinhood Trading';
 const ROBINHOOD_MCP_HOST = 'agent.robinhood.com';
 const PRIMARY_AGENT_NAME = 'primary';
-const THESISFORGE_OAUTH_CLIENT_NAME = 'ThesisForge';
-const THESISFORGE_CLIENT_URI = 'https://thesisforge-broker-gateway.davidwallach2.workers.dev/';
+const QUANTANAMO_OAUTH_CLIENT_NAME = 'Quantanamo';
+const QUANTANAMO_CLIENT_URI = 'https://quantanamo-broker-gateway.davidwallach2.workers.dev/';
 
 const ToolResultEnvelopeSchema = z.object({
   structuredContent: z.object({
@@ -314,17 +314,17 @@ function safeState(value: string | undefined): BrokerConnectionState {
   return 'unknown';
 }
 
-class ThesisForgeOAuthClientProvider extends DurableObjectOAuthClientProvider {
+class QuantanamoOAuthClientProvider extends DurableObjectOAuthClientProvider {
   override get clientUri(): string {
-    return THESISFORGE_CLIENT_URI;
+    return QUANTANAMO_CLIENT_URI;
   }
 }
 
 export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
   override createMcpOAuthProvider(callbackUrl: string): DurableObjectOAuthClientProvider {
-    return new ThesisForgeOAuthClientProvider(
+    return new QuantanamoOAuthClientProvider(
       this.ctx.storage,
-      THESISFORGE_OAUTH_CLIENT_NAME,
+      QUANTANAMO_OAUTH_CLIENT_NAME,
       callbackUrl,
     );
   }
@@ -696,7 +696,7 @@ function statusPage(status: BrokerCapabilityStatus, notice: string | null, csrfT
     : `<form method="post" action="/broker/connect"><input type="hidden" name="csrf" value="${csrfToken}"><button type="submit">${pending ? 'Restart Robinhood connection' : 'Connect Robinhood'}</button></form>`;
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ThesisForge Broker Connection</title><style>
+<title>Quantanamo Broker Connection</title><style>
 body{font-family:ui-sans-serif,system-ui,sans-serif;background:#08110d;color:#e8f5ee;margin:0;padding:3rem 1rem}main{max-width:720px;margin:auto;background:#101b16;border:1px solid #294438;border-radius:18px;padding:2rem}h1{margin-top:0}code{color:#8de3b5}.status{padding:1rem;background:#0a1410;border-radius:10px;margin:1.5rem 0}.notice{color:#a9e8c6}button{background:#43d17d;color:#06110a;border:0;border-radius:9px;padding:.8rem 1rem;font-weight:700;cursor:pointer}.secondary{background:#263d33;color:#e8f5ee}li{margin:.4rem 0}a{color:#8de3b5}</style></head>
 <body><main><h1>Robinhood cloud connection</h1>${noticeHtml}
 <p>This OAuth connection is stored by a Cloudflare Durable Object. No Codex session or local computer is involved after authorization.</p>
@@ -705,7 +705,7 @@ ${action}
 <ul><li>OAuth tokens remain in the account Durable Object</li><li>Orders require fresh account, quote, tradability, spread, sizing, and broker-review gates</li><li>Duplicate intent IDs are rejected or returned idempotently</li></ul>
 <p>Run the local desk with <code>bun run web:app</code> to read live Supabase snapshots.</p></main></body></html>`;
   const headers = new Headers(securityHeaders('text/html; charset=utf-8'));
-  headers.set('set-cookie', `__Host-thesisforge_csrf=${csrfToken}; Path=/; Secure; SameSite=Strict; Max-Age=600`);
+  headers.set('set-cookie', `__Host-quantanamo_csrf=${csrfToken}; Path=/; Secure; SameSite=Strict; Max-Age=600`);
   return new Response(html, { headers });
 }
 
@@ -720,7 +720,7 @@ function robinhoodAuthorizationPage(authUrl: string): Response {
 <title>Continue to Robinhood</title><style>
 body{font-family:ui-sans-serif,system-ui,sans-serif;background:#08110d;color:#e8f5ee;margin:0;padding:3rem 1rem}main{max-width:620px;margin:auto;background:#101b16;border:1px solid #294438;border-radius:18px;padding:2rem}a.button{display:inline-block;background:#43d17d;color:#06110a;text-decoration:none;border-radius:9px;padding:.8rem 1rem;font-weight:700}p{line-height:1.5}
 </style></head><body><main><h1>Continue to Robinhood</h1>
-<p>Robinhood will ask you to sign in and approve the connection. Once connected, ThesisForge can operate under its deployed autonomous risk policy.</p>
+<p>Robinhood will ask you to sign in and approve the connection. Once connected, Quantanamo can operate under its deployed autonomous risk policy.</p>
 <p><a class="button" href="${escapedTarget}">Continue to Robinhood</a></p>
 </main></body></html>`;
   return new Response(html, { headers: securityHeaders('text/html; charset=utf-8') });
@@ -736,7 +736,7 @@ function cookieValue(request: Request, name: string): string | null {
 }
 
 async function validCsrf(request: Request): Promise<boolean> {
-  const cookie = cookieValue(request, '__Host-thesisforge_csrf');
+  const cookie = cookieValue(request, '__Host-quantanamo_csrf');
   if (!cookie) return false;
   const form = await request.formData();
   const submitted = form.get('csrf');
@@ -793,7 +793,7 @@ const worker = {
       const notice = url.searchParams.has('connected')
         ? 'Robinhood authorization completed.'
         : url.searchParams.has('disconnected')
-          ? 'Robinhood was disconnected from ThesisForge.'
+          ? 'Robinhood was disconnected from Quantanamo.'
           : url.searchParams.has('connection_error')
             ? 'Robinhood authorization failed. No broker capability was enabled.'
             : null;

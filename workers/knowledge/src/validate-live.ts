@@ -1,7 +1,7 @@
 import { Client } from 'pg';
 
-const connectionString = process.env.THESISFORGE_DATABASE_URL;
-if (!connectionString) throw new Error('THESISFORGE_DATABASE_URL is required');
+const connectionString = process.env.QUANTANAMO_DATABASE_URL;
+if (!connectionString) throw new Error('QUANTANAMO_DATABASE_URL is required');
 
 const url = new URL(connectionString);
 if (['require', 'prefer'].includes(url.searchParams.get('sslmode') || '')) url.searchParams.set('uselibpqcompat', 'true');

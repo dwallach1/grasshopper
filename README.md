@@ -1,10 +1,10 @@
-# ThesisForge
+# Quantanamo
 
-ThesisForge is a cloud-native research and autonomous equity-trading operating system. It turns source material, market data, portfolio state, explicit theses, model judgments, executions, and outcomes into a persistent, auditable decision loop.
+Quantanamo is a cloud-native research and autonomous equity-trading operating system. It turns source material, market data, portfolio state, explicit theses, model judgments, executions, and outcomes into a persistent, auditable decision loop.
 
 The production research and trading path runs in Cloudflare and Supabase. It does not require Codex, a terminal session, or a powered-on laptop; semantic ontology learning and scheduled research reasoning require Cloudflare Workers AI. Robinhood access is held by a Cloudflare Agent Durable Object through Robinhood's remote MCP endpoint.
 
-> ThesisForge is experimental software, not a promise of investment performance. It fails closed: missing evidence, stale data, broker warnings, unavailable controls, conflicting intent, or an invalid execution window blocks an order.
+> Quantanamo is experimental software, not a promise of investment performance. It fails closed: missing evidence, stale data, broker warnings, unavailable controls, conflicting intent, or an invalid execution window blocks an order.
 
 ## System design at a glance
 
@@ -20,7 +20,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
         | read Supabase only
         v
  +---------------------------+                                       +-------------------------------+
- | apps/dashboard (Next)     |                                       | thesisforge-knowledge-pipeline |
+ | apps/dashboard (Next)     |                                       | quantanamo-knowledge-pipeline |
  | local desk UI             |                                       | LLM learning + knowledge graph |
  +-------------+-------------+                                       +----+-----------+----------+---+
                |                                                          |           |          |
@@ -48,7 +48,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
         |                                                                                              |
         v                                                                                              |
  +-----------------------------------+       ==> research Queue + DLQ                                   |
- | thesisforge-research-orchestrator | -------------------------------+                                |
+ | quantanamo-research-orchestrator | -------------------------------+                                |
  | Workflow + deterministic policy   |                                |                                |
  +-----------+-----------------------+                                v                                |
              |                                                Workers AI / AI Gateway                   |
@@ -62,7 +62,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
              |                                                                 |                       |
              |                                                                 v                       |
              |                                   +-----------------------------+------+                |
-             +---------------------------------> | thesisforge-broker-gateway         |                |
+             +---------------------------------> | quantanamo-broker-gateway         |                |
                   broker Agent DO binding         | Robinhood policy + OAuth boundary |                |
                                                  +------------------+-----------------+                |
                                                                     |                                  |
@@ -83,7 +83,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
 
  Cloudflare Secrets Store supplies only the Workers that need each shared credential:
    knowledge + research: INTERNAL_SERVICE_TOKEN
-   knowledge + research: THESISFORGE_PUBLICATION_TOKEN
+   knowledge + research: QUANTANAMO_PUBLICATION_TOKEN
    knowledge only:       FINANCIAL_DATASETS_API_KEY
 ```
 
@@ -110,16 +110,16 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | Component | Responsibility | Boundary |
 |---|---|---|
 | `apps/dashboard` (local) | Private research desk UI | Localhost only; server-side Supabase reads; no Cloudflare hosting |
-| `thesisforge-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
-| `thesisforge-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
-| `thesisforge-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
+| `quantanamo-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
+| `quantanamo-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
+| `quantanamo-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
 | `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
-| `thesisforge-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
-| `thesisforge-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
-| `thesisforge-knowledge-x-research` | Compounding research from bookmark events: reply threads, quoted tweets, LLM-chosen X searches and article hops | Batch 1, concurrency 1, three retries, DLQ; per-session step/read/fetch budgets plus vault-level X API budgets |
+| `quantanamo-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
+| `quantanamo-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
+| `quantanamo-knowledge-x-research` | Compounding research from bookmark events: reply threads, quoted tweets, LLM-chosen X searches and article hops | Batch 1, concurrency 1, three retries, DLQ; per-session step/read/fetch budgets plus vault-level X API budgets |
 | Workers AI / AI Gateway | OpenAI gpt-5.6-sol for triage, investigation, research, and synthesis (AI Gateway BYOK) | No broker credentials, tools, or placement authority |
 
-Shared production credentials use the account-level Cloudflare Secrets Store. Knowledge and research resolve `INTERNAL_SERVICE_TOKEN` and `THESISFORGE_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
+Shared production credentials use the account-level Cloudflare Secrets Store. Knowledge and research resolve `INTERNAL_SERVICE_TOKEN` and `QUANTANAMO_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
 
 ### Durable Objects
 
@@ -286,9 +286,9 @@ Either can be paused. Defense-in-depth Worker switches are `TRADING_ENABLED=fals
 | Capability | Location |
 |---|---|
 | Dashboard serving | Cloudflare |
-| X OAuth and bookmark ingestion | `thesisforge-knowledge-pipeline` + `XCredentialVault` |
+| X OAuth and bookmark ingestion | `quantanamo-knowledge-pipeline` + `XCredentialVault` |
 | Article/PDF extraction and archival | Knowledge Queue + private R2 |
-| LLM ontology classification and proposals; deterministic validation, promotion, and graph refresh | `thesisforge-knowledge-pipeline` + Workers AI / AI Gateway |
+| LLM ontology classification and proposals; deterministic validation, promotion, and graph refresh | `quantanamo-knowledge-pipeline` + Workers AI / AI Gateway |
 | Paid financial-data acquisition and cache | Authenticated knowledge Worker API; never scheduled automatically |
 | Research judgments, cycles, and lessons | Authenticated knowledge Worker API |
 | Scheduled thesis research | Cloudflare Cron, Workflow, Queue, Workers AI |
@@ -318,18 +318,18 @@ docs/                            architecture and runbooks
 
 ## Development and operations
 
-Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `THESISFORGE_DATABASE_URL` (or `SUPABASE_SECRET_KEY`) in root `.env.local`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
+Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `QUANTANAMO_DATABASE_URL` (or `SUPABASE_SECRET_KEY`) in root `.env.local`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
 
 ### Local webapp against production Supabase
 
 No Docker, no Cloudflare Workers. Cloud Workers already publish `dashboard_snapshots.current`; local Next just reads Supabase.
 
 ```sh
-# Uses THESISFORGE_DATABASE_URL from root .env.local
+# Uses QUANTANAMO_DATABASE_URL from root .env.local
 bun run web:app
 ```
 
-Open `http://127.0.0.1:5173`. Manager identity defaults to `local@thesisforge.dev`.
+Open `http://127.0.0.1:5173`. Manager identity defaults to `local@quantanamo.dev`.
 
 Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`).
 

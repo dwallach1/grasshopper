@@ -1,7 +1,7 @@
 import type { Database } from './database';
 
 export async function rebuildKnowledgeGraph(database: Database): Promise<{ nodes: number; edges: number }> {
-  await database.execute("select pg_advisory_xact_lock(hashtextextended('thesisforge-knowledge-graph',0))");
+  await database.execute("select pg_advisory_xact_lock(hashtextextended('quantanamo-knowledge-graph',0))");
   const nodeRows = await database.query<{ count: number }>(`
     with source_nodes as (
       select 'theme:' || id as id, 'theme' as node_type, name as label,
@@ -87,7 +87,7 @@ type WeeklyEventRow = {
 };
 
 export async function refreshWeeklyEventMap(database: Database, now = new Date()): Promise<{ mapped: number; unresolved: number; weekStart: string }> {
-  await database.execute("select pg_advisory_xact_lock(hashtextextended('thesisforge-weekly-event-map',0))");
+  await database.execute("select pg_advisory_xact_lock(hashtextextended('quantanamo-weekly-event-map',0))");
   const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const mondayOffset = (day.getUTCDay() + 6) % 7;
   day.setUTCDate(day.getUTCDate() - mondayOffset);

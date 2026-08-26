@@ -1,5 +1,5 @@
 {
-  "name": "@thesisforge/worker-broker",
+  "name": "@quantanamo/worker-broker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc"
   },
   "dependencies": {
-    "@thesisforge/contracts": "workspace:*",
-    "@thesisforge/shared": "workspace:*",
+    "@quantanamo/contracts": "workspace:*",
+    "@quantanamo/shared": "workspace:*",
     "agents": "0.20.0",
     "jose": "6.2.10",
     "zod": "^4"

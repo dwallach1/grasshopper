@@ -17,7 +17,7 @@ bookmark sync (09:35 + 14:35 America/New_York, or POST /x/sync)
 createResearchSessions()  — up to 3 new sessions per sync,
         │                   one per market-related bookmark
         ▼
-thesisforge-knowledge-x-research queue (1 message = 1 step)
+quantanamo-knowledge-x-research queue (1 message = 1 step)
         │
         ▼
 runResearchStep()
@@ -85,12 +85,12 @@ the only path to trades.
 - Queues must exist before first deploy:
 
 ```bash
-wrangler queues create thesisforge-knowledge-x-research
-wrangler queues create thesisforge-knowledge-x-research-dlq
+wrangler queues create quantanamo-knowledge-x-research
+wrangler queues create quantanamo-knowledge-x-research-dlq
 ```
 
 - The migration `20260825031500_x_compounding_research.sql` creates the
-  session tables with the standard `thesisforge_worker` RLS policies.
+  session tables with the standard `quantanamo_worker` RLS policies.
 - X API note: `read_conversation` and `search_x` use
   `GET /2/tweets/search/recent`, which requires an X API tier with recent
   search access. On tiers without it, those actions surface a 4xx as an

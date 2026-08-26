@@ -1,4 +1,4 @@
--- ThesisForge canonical Postgres schema.
+-- Quantanamo canonical Postgres schema.
 -- Browser roles have no table privileges; trusted jobs and server routes use
 -- the postgres connection or a Supabase secret key stored outside the repo.
 

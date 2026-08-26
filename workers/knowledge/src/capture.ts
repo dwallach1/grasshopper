@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import type { Database } from './database';
 import { normalizePhrase, slugify } from './ontology';
-import type { JsonObject } from '@thesisforge/shared/json';
+import type { JsonObject } from '@quantanamo/shared/json';
 
 const NonEmpty = (max: number) => z.string().trim().min(1).max(max);
 const Score = (minimum = 0, maximum = 100) => z.number().min(minimum).max(maximum);

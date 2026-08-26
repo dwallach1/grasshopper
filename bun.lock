@@ -9,7 +9,7 @@
       },
     },
     "apps/dashboard": {
-      "name": "@thesisforge/dashboard",
+      "name": "@quantanamo/dashboard",
       "version": "0.1.0",
       "dependencies": {
         "next": "16.2.6",
@@ -32,7 +32,7 @@
       },
     },
     "packages/contracts": {
-      "name": "@thesisforge/contracts",
+      "name": "@quantanamo/contracts",
       "version": "0.0.0",
       "dependencies": {
         "zod": "^4",
@@ -42,7 +42,7 @@
       },
     },
     "packages/shared": {
-      "name": "@thesisforge/shared",
+      "name": "@quantanamo/shared",
       "version": "0.0.0",
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
@@ -50,20 +50,20 @@
       },
     },
     "tests/e2e": {
-      "name": "@thesisforge/e2e",
+      "name": "@quantanamo/e2e",
       "version": "0.0.0",
       "dependencies": {
-        "@thesisforge/contracts": "workspace:*",
-        "@thesisforge/worker-knowledge": "workspace:*",
+        "@quantanamo/contracts": "workspace:*",
+        "@quantanamo/worker-knowledge": "workspace:*",
         "zod": "^4",
       },
     },
     "workers/broker": {
-      "name": "@thesisforge/worker-broker",
+      "name": "@quantanamo/worker-broker",
       "version": "0.0.0",
       "dependencies": {
-        "@thesisforge/contracts": "workspace:*",
-        "@thesisforge/shared": "workspace:*",
+        "@quantanamo/contracts": "workspace:*",
+        "@quantanamo/shared": "workspace:*",
         "agents": "0.20.0",
         "jose": "6.2.10",
         "zod": "^4",
@@ -75,11 +75,11 @@
       },
     },
     "workers/knowledge": {
-      "name": "@thesisforge/worker-knowledge",
+      "name": "@quantanamo/worker-knowledge",
       "version": "0.0.0",
       "dependencies": {
-        "@thesisforge/contracts": "workspace:*",
-        "@thesisforge/shared": "workspace:*",
+        "@quantanamo/contracts": "workspace:*",
+        "@quantanamo/shared": "workspace:*",
         "pg": "8.23.0",
         "unpdf": "1.8.1",
         "zod": "^4",
@@ -92,11 +92,11 @@
       },
     },
     "workers/research": {
-      "name": "@thesisforge/worker-research",
+      "name": "@quantanamo/worker-research",
       "version": "0.0.0",
       "dependencies": {
-        "@thesisforge/contracts": "workspace:*",
-        "@thesisforge/shared": "workspace:*",
+        "@quantanamo/contracts": "workspace:*",
+        "@quantanamo/shared": "workspace:*",
         "zod": "^4",
       },
       "devDependencies": {
@@ -421,6 +421,20 @@
 
     "@poppinss/exception": ["@poppinss/exception@1.2.3", "", {}, "sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw=="],
 
+    "@quantanamo/contracts": ["@quantanamo/contracts@workspace:packages/contracts"],
+
+    "@quantanamo/dashboard": ["@quantanamo/dashboard@workspace:apps/dashboard"],
+
+    "@quantanamo/e2e": ["@quantanamo/e2e@workspace:tests/e2e"],
+
+    "@quantanamo/shared": ["@quantanamo/shared@workspace:packages/shared"],
+
+    "@quantanamo/worker-broker": ["@quantanamo/worker-broker@workspace:workers/broker"],
+
+    "@quantanamo/worker-knowledge": ["@quantanamo/worker-knowledge@workspace:workers/knowledge"],
+
+    "@quantanamo/worker-research": ["@quantanamo/worker-research@workspace:workers/research"],
+
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.0.1", "", { "os": "android", "cpu": "arm64" }, "sha512-fJI3I0r3C3Oj/zdBCpaCmBRZYf07xpaq4yCfDDoSFm+beWNzbIl26puW8RraUdugoJw/95zerNOn6jasAhzSmg=="],
 
     "@rolldown/binding-darwin-arm64": ["@rolldown/binding-darwin-arm64@1.0.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-cKnAhWEsV7TPcA/5EAteDp6KcJZBQ2G+BqE7zayMMi7kMvwRsbv7WT9aOnn0WNl4SKEIf43vjS31iUPu80nzXg=="],
@@ -492,20 +506,6 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.2.1", "", { "os": "win32", "cpu": "x64" }, "sha512-rbO34G5sMWWyrN/idLeVxAZgAKWrn5LiR3/I90Q9MkA67s6T1oB0xtTe+0heoBvHSpbU9Mk7i6uwJnpo4u21XQ=="],
 
     "@tailwindcss/postcss": ["@tailwindcss/postcss@4.2.1", "", { "dependencies": { "@alloc/quick-lru": "^5.2.0", "@tailwindcss/node": "4.2.1", "@tailwindcss/oxide": "4.2.1", "postcss": "^8.5.6", "tailwindcss": "4.2.1" } }, "sha512-OEwGIBnXnj7zJeonOh6ZG9woofIjGrd2BORfvE5p9USYKDCZoQmfqLcfNiRWoJlRWLdNPn2IgVZuWAOM4iTYMw=="],
-
-    "@thesisforge/contracts": ["@thesisforge/contracts@workspace:packages/contracts"],
-
-    "@thesisforge/dashboard": ["@thesisforge/dashboard@workspace:apps/dashboard"],
-
-    "@thesisforge/e2e": ["@thesisforge/e2e@workspace:tests/e2e"],
-
-    "@thesisforge/shared": ["@thesisforge/shared@workspace:packages/shared"],
-
-    "@thesisforge/worker-broker": ["@thesisforge/worker-broker@workspace:workers/broker"],
-
-    "@thesisforge/worker-knowledge": ["@thesisforge/worker-knowledge@workspace:workers/knowledge"],
-
-    "@thesisforge/worker-research": ["@thesisforge/worker-research@workspace:workers/research"],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg=="],
 

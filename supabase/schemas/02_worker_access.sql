@@ -1,8 +1,8 @@
--- Least-privilege role used by trusted local and scheduled ThesisForge jobs.
+-- Least-privilege role used by trusted local and scheduled Quantanamo jobs.
 do $$
 begin
-  if not exists (select 1 from pg_roles where rolname = 'thesisforge_worker') then
-    create role thesisforge_worker nologin noinherit;
+  if not exists (select 1 from pg_roles where rolname = 'quantanamo_worker') then
+    create role quantanamo_worker nologin noinherit;
   end if;
 end $$;
 
@@ -18,11 +18,11 @@ begin
   ]
   loop
     execute format(
-      'grant delete on table public.%I to thesisforge_worker',
+      'grant delete on table public.%I to quantanamo_worker',
       target_table
     );
     execute format(
-      'create policy thesisforge_worker_delete on public.%I for delete to thesisforge_worker using (true)',
+      'create policy quantanamo_worker_delete on public.%I for delete to quantanamo_worker using (true)',
       target_table
     );
   end loop;
@@ -614,7 +614,7 @@ declare
   reap_result jsonb;
 begin
   supplied_token := coalesce(
-    current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-publication-token',
+    current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-publication-token',
     ''
   );
   if encode(extensions.digest(supplied_token, 'sha256'), 'hex') not in (
@@ -628,7 +628,7 @@ begin
     raise check_violation using message = 'Trade policy must be a JSON object';
   end if;
 
-  perform pg_advisory_xact_lock(hashtextextended('thesisforge-dashboard-publication', 0));
+  perform pg_advisory_xact_lock(hashtextextended('quantanamo-dashboard-publication', 0));
   reap_result := private.reap_stale_automation_runs();
   select payload into current_payload
   from public.dashboard_snapshots
@@ -670,12 +670,12 @@ revoke all on function public.publish_dashboard_snapshot(jsonb, boolean)
 grant execute on function public.publish_dashboard_snapshot(jsonb, boolean)
   to service_role;
 
--- Owner-only ThesisForge Sites reads use a publishable API key plus a
+-- Owner-only Quantanamo Sites reads use a publishable API key plus a
 -- high-entropy server token. The token is never sent to the browser, and RLS
 -- restricts this role to the single canonical dashboard row.
 grant select on table public.dashboard_snapshots to anon;
 
-create or replace function public.is_thesisforge_dashboard_reader()
+create or replace function public.is_quantanamo_dashboard_reader()
 returns boolean
 language sql
 stable
@@ -685,7 +685,7 @@ as $$
   select encode(
     extensions.digest(
       coalesce(
-        current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-dashboard-token',
+        current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-dashboard-token',
         ''
       ),
       'sha256'
@@ -698,20 +698,20 @@ as $$
     '329669fba60b385cfa668bb781897f56cdbecf54101b96b1d642c05473fd311b'
   );
 $$;
-revoke all on function public.is_thesisforge_dashboard_reader() from public, authenticated, service_role;
-grant execute on function public.is_thesisforge_dashboard_reader() to anon;
+revoke all on function public.is_quantanamo_dashboard_reader() from public, authenticated, service_role;
+grant execute on function public.is_quantanamo_dashboard_reader() to anon;
 
-drop policy if exists thesisforge_site_snapshot_select on public.dashboard_snapshots;
-create policy thesisforge_site_snapshot_select
+drop policy if exists quantanamo_site_snapshot_select on public.dashboard_snapshots;
+create policy quantanamo_site_snapshot_select
 on public.dashboard_snapshots
 for select
 to anon
 using (
   id = 'current'
-  and (select public.is_thesisforge_dashboard_reader())
+  and (select public.is_quantanamo_dashboard_reader())
 );
 
-create or replace function public.is_thesisforge_site_manager()
+create or replace function public.is_quantanamo_site_manager()
 returns boolean
 language sql
 stable
@@ -722,7 +722,7 @@ as $$
     encode(
       extensions.digest(
         coalesce(
-          (select current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-dashboard-token'),
+          (select current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-dashboard-token'),
           ''
         ),
         'sha256'
@@ -737,7 +737,7 @@ as $$
     and encode(
       extensions.digest(
         coalesce(
-          (select current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-manager-token'),
+          (select current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-manager-token'),
           ''
         ),
         'sha256'
@@ -751,14 +751,14 @@ as $$
     )
     and (
       coalesce(
-        (select current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-manager-user-id'),
+        (select current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-manager-user-id'),
         ''
       ) = 'dc4218ec-f17c-4159-9d61-5ed54354ac50'
       or encode(
         extensions.digest(
           lower(
             coalesce(
-              (select current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-manager-user-id'),
+              (select current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-manager-user-id'),
               ''
             )
           ),
@@ -767,13 +767,13 @@ as $$
         'hex'
       ) in (
         '68c1ad308ad4b806b9c0d4b2652c4899f2e44523fa5f6fb5d094559f59950e26',
-        -- local@thesisforge.dev
+        -- local@quantanamo.dev
         'c4cfc998df44884a2061a4ef3cc8b01d6e98c2c45c84273b0a91de79c4c50078'
       )
     );
 $$;
-revoke all on function public.is_thesisforge_site_manager() from public, authenticated, service_role;
-grant execute on function public.is_thesisforge_site_manager() to anon;
+revoke all on function public.is_quantanamo_site_manager() from public, authenticated, service_role;
+grant execute on function public.is_quantanamo_site_manager() to anon;
 
 grant select on table public.ontology_themes to anon;
 grant select on table public.symbols to anon;
@@ -788,18 +788,18 @@ begin
     'ontology_themes','symbols','ontology_candidates','ontology_management_actions'
   ]
   loop
-    execute format('drop policy if exists thesisforge_site_manager_select on public.%I', target_table);
+    execute format('drop policy if exists quantanamo_site_manager_select on public.%I', target_table);
     execute format(
-      'create policy thesisforge_site_manager_select on public.%I for select to anon using ((select public.is_thesisforge_site_manager()))',
+      'create policy quantanamo_site_manager_select on public.%I for select to anon using ((select public.is_quantanamo_site_manager()))',
       target_table
     );
   end loop;
 end $$;
 
-drop policy if exists thesisforge_site_manager_theme_update on public.ontology_themes;
-drop policy if exists thesisforge_site_manager_symbol_update on public.symbols;
-drop policy if exists thesisforge_site_manager_candidate_update on public.ontology_candidates;
-drop policy if exists thesisforge_site_manager_action_insert on public.ontology_management_actions;
+drop policy if exists quantanamo_site_manager_theme_update on public.ontology_themes;
+drop policy if exists quantanamo_site_manager_symbol_update on public.symbols;
+drop policy if exists quantanamo_site_manager_candidate_update on public.ontology_candidates;
+drop policy if exists quantanamo_site_manager_action_insert on public.ontology_management_actions;
 
 create or replace function public.manage_ontology_entity(
   p_entity_type text,
@@ -816,12 +816,12 @@ declare
   previous_state jsonb;
   next_state jsonb;
 begin
-  if not (select public.is_thesisforge_site_manager()) then
+  if not (select public.is_quantanamo_site_manager()) then
     raise insufficient_privilege using message = 'Ontology manager authorization required';
   end if;
 
   actor_id := coalesce(
-    (select current_setting('request.headers', true)::jsonb ->> 'x-thesisforge-manager-user-id'),
+    (select current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-manager-user-id'),
     ''
   );
 
@@ -1071,8 +1071,8 @@ before insert or update of payload on public.dashboard_snapshots
 for each row execute function private.attach_worker_observability();
 
 
-grant connect on database postgres to thesisforge_worker;
-grant usage on schema public to thesisforge_worker;
+grant connect on database postgres to quantanamo_worker;
+grant usage on schema public to quantanamo_worker;
 
 do $$
 declare
@@ -1093,19 +1093,19 @@ begin
   ]
   loop
     execute format(
-      'grant select, insert, update on table public.%I to thesisforge_worker',
+      'grant select, insert, update on table public.%I to quantanamo_worker',
       target_table
     );
     execute format(
-      'create policy thesisforge_worker_select on public.%I for select to thesisforge_worker using (true)',
+      'create policy quantanamo_worker_select on public.%I for select to quantanamo_worker using (true)',
       target_table
     );
     execute format(
-      'create policy thesisforge_worker_insert on public.%I for insert to thesisforge_worker with check (true)',
+      'create policy quantanamo_worker_insert on public.%I for insert to quantanamo_worker with check (true)',
       target_table
     );
     execute format(
-      'create policy thesisforge_worker_update on public.%I for update to thesisforge_worker using (true) with check (true)',
+      'create policy quantanamo_worker_update on public.%I for update to quantanamo_worker using (true) with check (true)',
       target_table
     );
 
@@ -1119,7 +1119,7 @@ begin
       sequence_name := pg_get_serial_sequence(format('public.%I', target_table), 'id');
       if sequence_name is not null then
         execute format(
-          'grant usage, select, update on sequence %s to thesisforge_worker',
+          'grant usage, select, update on sequence %s to quantanamo_worker',
           sequence_name
         );
       end if;

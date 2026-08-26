@@ -1,15 +1,15 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "thesisforge-research-orchestrator",
+  "name": "quantanamo-research-orchestrator",
   "main": "src/research-orchestrator.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
   "secrets_store_secrets": [{
-    "binding": "THESISFORGE_PUBLICATION_TOKEN_SECRET",
+    "binding": "QUANTANAMO_PUBLICATION_TOKEN_SECRET",
     "store_id": "9161ea4b738144c0accc37e724812d93",
-    "secret_name": "THESISFORGE_PUBLICATION_TOKEN"
+    "secret_name": "QUANTANAMO_PUBLICATION_TOKEN"
   }, {
     "binding": "INTERNAL_SERVICE_TOKEN_SECRET",
     "store_id": "9161ea4b738144c0accc37e724812d93",
@@ -18,7 +18,7 @@
   "secrets": { "required": ["SUPABASE_URL"] },
   "workflows": [{
     "binding": "CLOUD_RESEARCH_CYCLE",
-    "name": "thesisforge-research-cycle",
+    "name": "quantanamo-research-cycle",
     "class_name": "CloudResearchWorkflow"
   }],
   "triggers": { "crons": ["5 14,15,19,20 * * MON-FRI"] },
@@ -29,13 +29,13 @@
     "BROKER_GATEWAY_MODE": "robinhood_mcp"
   },
   "queues": {
-    "producers": [{ "binding": "RESEARCH_TASK_QUEUE", "queue": "thesisforge-research-tasks" }],
+    "producers": [{ "binding": "RESEARCH_TASK_QUEUE", "queue": "quantanamo-research-tasks" }],
     "consumers": [{
-      "queue": "thesisforge-research-tasks",
+      "queue": "quantanamo-research-tasks",
       "max_batch_size": 5,
       "max_batch_timeout": 10,
       "max_retries": 4,
-      "dead_letter_queue": "thesisforge-research-tasks-dlq",
+      "dead_letter_queue": "quantanamo-research-tasks-dlq",
       "max_concurrency": 2,
       "retry_delay": 60
     }]
@@ -44,7 +44,7 @@
     { "name": "THESIS_COORDINATOR", "class_name": "ThesisCoordinator" },
     { "name": "POSITION_MONITOR", "class_name": "PositionMonitor" },
     { "name": "BROKER_EXECUTION_COORDINATOR", "class_name": "BrokerExecutionCoordinator" },
-    { "name": "ROBINHOOD_BROKER_AGENT", "class_name": "RobinhoodBrokerAgent", "script_name": "thesisforge-broker-gateway" }
+    { "name": "ROBINHOOD_BROKER_AGENT", "class_name": "RobinhoodBrokerAgent", "script_name": "quantanamo-broker-gateway" }
   ] },
   "exports": {
     "ThesisCoordinator": { "type": "durable-object", "storage": "sqlite" },

@@ -356,7 +356,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   return <main className="app-shell" id="main-content">
     <a className="skip-link" href="#main-content">Skip to dashboard</a>
     <header className="top-bar">
-      <button type="button" className="brand" onClick={()=>setSurface('home')}>ThesisForge</button>
+      <button type="button" className="brand" onClick={()=>setSurface('home')}>Quantanamo</button>
       <nav className="nav-primary" aria-label="Primary">
         {(['home','automations','runs','risk'] as const).map(key=>(
           <button key={key} type="button" className={surface===key?'active':''} onClick={()=>setSurface(key)}>

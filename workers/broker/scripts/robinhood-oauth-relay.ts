@@ -1,7 +1,7 @@
 const HOSTNAME = '127.0.0.1';
 const PORT = 18789;
 const CLOUD_CALLBACK = new URL(
-  'https://thesisforge-broker-gateway.davidwallach2.workers.dev/broker/oauth/callback',
+  'https://quantanamo-broker-gateway.davidwallach2.workers.dev/broker/oauth/callback',
 );
 const OAUTH_STATE = /^[A-Za-z0-9_-]+\.robinhood$/;
 const FORWARDED_PARAMETERS = ['code', 'state', 'error', 'error_description', 'error_uri'] as const;

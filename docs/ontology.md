@@ -1,12 +1,12 @@
-# ThesisForge Ontology
+# Quantanamo Ontology
 
-ThesisForge should build a living graph, not a flat watchlist.
+Quantanamo should build a living graph, not a flat watchlist.
 
 ## Core Idea
 
 Every bookmark, article, filing, earnings event, IPO report, Robinhood quote, trade proposal, critic note, and postmortem becomes a node or edge in the persistent Supabase knowledge graph.
 
-The graph is paired with a judgment ledger. Evidence records what a source says; the ledger records what ThesisForge currently believes, what would falsify it, what it predicts, and why it will participate in or abstain from an event.
+The graph is paired with a judgment ledger. Evidence records what a source says; the ledger records what Quantanamo currently believes, what would falsify it, what it predicts, and why it will participate in or abstain from an event.
 
 ## Judgment Model
 
@@ -129,7 +129,7 @@ A thick link from five low-quality X posts should be weaker than a thinner link 
 
 ## Dormant Research Loop
 
-When markets are closed, ThesisForge should:
+When markets are closed, Quantanamo should:
 
 1. Refresh X bookmarks and linked articles.
 2. Search for upcoming earnings, IPOs, filings, 13Fs, lockups, investor days, and policy events.

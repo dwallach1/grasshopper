@@ -264,6 +264,6 @@ export async function runAiRole(
         backoff: 'exponential',
       },
     },
-    tags: options.tags ?? ['thesisforge', role],
+    tags: options.tags ?? ['quantanamo', role],
   });
 }

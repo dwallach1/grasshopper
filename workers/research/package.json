@@ -1,5 +1,5 @@
 {
-  "name": "@thesisforge/worker-research",
+  "name": "@quantanamo/worker-research",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,12 +9,12 @@
     "test": "bun test src/market-clock.test.ts src/autonomous-decision.test.ts src/position-decision.test.ts src/schemas.test.ts",
     "dry-run": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc --dry-run",
     "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc",
-    "trigger": "bun --bun wrangler workflows trigger thesisforge-research-cycle --config wrangler.jsonc --params '{\"force\":true,\"requestedBy\":\"manual\"}'",
-    "tail": "bun --bun wrangler tail thesisforge-research-orchestrator --config wrangler.jsonc"
+    "trigger": "bun --bun wrangler workflows trigger quantanamo-research-cycle --config wrangler.jsonc --params '{\"force\":true,\"requestedBy\":\"manual\"}'",
+    "tail": "bun --bun wrangler tail quantanamo-research-orchestrator --config wrangler.jsonc"
   },
   "dependencies": {
-    "@thesisforge/contracts": "workspace:*",
-    "@thesisforge/shared": "workspace:*",
+    "@quantanamo/contracts": "workspace:*",
+    "@quantanamo/shared": "workspace:*",
     "zod": "^4"
   },
   "devDependencies": {

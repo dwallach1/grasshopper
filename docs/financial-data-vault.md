@@ -1,6 +1,6 @@
 # Financial data vault
 
-ThesisForge treats Financial Datasets as a paid upstream source, not as its database. Every network response is written to the canonical Supabase Postgres database before normalization. Repeat reads use the persistent cache until the dataset-specific freshness window expires.
+Quantanamo treats Financial Datasets as a paid upstream source, not as its database. Every network response is written to the canonical Supabase Postgres database before normalization. Repeat reads use the persistent cache until the dataset-specific freshness window expires.
 
 ## Safety properties
 

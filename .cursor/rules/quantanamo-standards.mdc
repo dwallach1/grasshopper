@@ -1,9 +1,9 @@
 ---
-description: ThesisForge coding standards for Workers, Supabase, and the local dashboard
+description: Quantanamo coding standards for Workers, Supabase, and the local dashboard
 alwaysApply: true
 ---
 
-# ThesisForge standards
+# Quantanamo standards
 
 ## Architecture
 

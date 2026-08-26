@@ -1,4 +1,4 @@
-import type { AutonomousEquityIntent, BrokerAccountSnapshot } from '@thesisforge/contracts/broker';
+import type { AutonomousEquityIntent, BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
 
 export function validateBrokerExecutionPolicy(
   intent: AutonomousEquityIntent,

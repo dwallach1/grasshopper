@@ -21,7 +21,7 @@ export async function authenticatedIdentity(_requestHeaders: Headers): Promise<s
 
 export function isManagerIdentity(identity: string): boolean {
   const allowed = new Set(
-    (process.env.THESISFORGE_MANAGER_USER_IDS || '')
+    (process.env.QUANTANAMO_MANAGER_USER_IDS || '')
       .split(',')
       .map(normalizeIdentity)
       .filter(Boolean),

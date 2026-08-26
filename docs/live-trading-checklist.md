@@ -1,6 +1,6 @@
 # Live Trading Checklist
 
-Before any real trade, ThesisForge should:
+Before any real trade, Quantanamo should:
 
 1. Refresh the authorized trading account and all readable positions through Robinhood immediately before sizing.
 2. Persist the refreshed account values to `account_snapshots` and positions to `portfolio_exposure` in Supabase; reject sizing when the refresh is missing or stale.

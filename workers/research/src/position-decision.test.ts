@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { BrokerAccountSnapshot } from '@thesisforge/contracts/broker';
+import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
 import { decidePositionAction } from './position-decision';
 
 const now = new Date().toISOString();

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import tradePolicy from '../../config/trade_policy.json' with { type: 'json' };
-import { parsePublicationResult, type PublicationResult } from '@thesisforge/contracts/publication';
+import { parsePublicationResult, type PublicationResult } from '@quantanamo/contracts/publication';
 import { withDatabase } from '../../workers/knowledge/src/database';
 import { LOCAL } from './env';
 
@@ -74,7 +74,7 @@ export async function publishViaRpc(publishCurrent = true): Promise<PublicationR
       apikey: LOCAL.serviceRoleKey,
       authorization: `Bearer ${LOCAL.serviceRoleKey}`,
       'content-type': 'application/json',
-      'x-thesisforge-publication-token': LOCAL.publicationToken,
+      'x-quantanamo-publication-token': LOCAL.publicationToken,
     },
     body: JSON.stringify({
       p_trade_policy: tradePolicy,
@@ -93,7 +93,7 @@ export async function publishViaEdgeFunction(publishCurrent = true): Promise<Pub
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-thesisforge-publication-token': LOCAL.publicationToken,
+      'x-quantanamo-publication-token': LOCAL.publicationToken,
     },
     body: JSON.stringify({ publishCurrent }),
   });
@@ -110,7 +110,7 @@ export async function readCurrentSnapshot(): Promise<SnapshotPayload> {
     {
       headers: {
         apikey: LOCAL.anonKey,
-        'x-thesisforge-dashboard-token': LOCAL.dashboardToken,
+        'x-quantanamo-dashboard-token': LOCAL.dashboardToken,
       },
     },
   );

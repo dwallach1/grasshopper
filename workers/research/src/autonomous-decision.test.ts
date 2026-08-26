@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { BrokerAccountSnapshot } from '@thesisforge/contracts/broker';
+import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
 import { actionableBrokerEvidence, approvedCandidate } from './autonomous-decision';
 
 const thesisTask = {

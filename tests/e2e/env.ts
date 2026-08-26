@@ -3,7 +3,7 @@
 export const LOCAL = {
   supabaseUrl: process.env.SUPABASE_URL?.replace(/\/$/, '') || 'http://127.0.0.1:54321',
   databaseUrl:
-    process.env.THESISFORGE_DATABASE_URL
+    process.env.QUANTANAMO_DATABASE_URL
     || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
   /** Default Supabase local anon JWT. */
   anonKey:
@@ -17,5 +17,5 @@ export const LOCAL = {
   managerToken: 'local-manager-token-do-not-use-in-prod',
   publicationToken: 'local-publication-token-do-not-use-in-prod',
   internalToken: 'local-internal-token-do-not-use-in-prod',
-  managerUserId: 'local@thesisforge.dev',
+  managerUserId: 'local@quantanamo.dev',
 } as const;

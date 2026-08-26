@@ -67,7 +67,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 }
 
 async function authorized(request: Request): Promise<boolean> {
-  const token = request.headers.get('x-thesisforge-publication-token') || '';
+  const token = request.headers.get('x-quantanamo-publication-token') || '';
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(token),
@@ -115,8 +115,8 @@ Deno.serve(async (request: Request) => {
     const headers: Record<string, string> = {
       apikey: apiKey,
       'content-type': 'application/json',
-      'x-thesisforge-publication-token':
-        request.headers.get('x-thesisforge-publication-token') || '',
+      'x-quantanamo-publication-token':
+        request.headers.get('x-quantanamo-publication-token') || '',
     };
     if (!apiKey.startsWith('sb_secret_')) {
       headers.authorization = `Bearer ${apiKey}`;

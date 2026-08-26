@@ -5,8 +5,8 @@ import {
   parseAiJsonObject,
   runAiRole,
   type AiRole,
-} from '@thesisforge/shared/ai';
-import { isJsonObject, type JsonObject } from '@thesisforge/shared/json';
+} from '@quantanamo/shared/ai';
+import { isJsonObject, type JsonObject } from '@quantanamo/shared/json';
 
 import {
   parsePositionAiOutput,
@@ -194,7 +194,7 @@ async function runSynthesis(
       ai_model: modelForRole(role),
       ...metadata,
     },
-    tags: ['thesisforge', role],
+    tags: ['quantanamo', role],
   };
   const primary = async (): Promise<unknown> => {
     const result = await runAiRole(

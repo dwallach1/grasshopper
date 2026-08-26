@@ -6,7 +6,7 @@ import {
   parseAiJsonObject,
   runAiRole,
   type AiGatewayRunOptions,
-} from '@thesisforge/shared/ai';
+} from '@quantanamo/shared/ai';
 
 import type { ClassifiedBookmark } from './ontology-analysis';
 import type { XBookmark } from './bookmarks';
@@ -210,7 +210,7 @@ async function investigateOne(
         prompt_version: INVESTIGATION_PROMPT_VERSION,
         bookmark_id: item.bookmark.id,
       },
-      tags: ['thesisforge', 'claim-investigation'],
+      tags: ['quantanamo', 'claim-investigation'],
     } satisfies AiGatewayRunOptions,
   );
   return {

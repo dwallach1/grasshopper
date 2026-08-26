@@ -41,20 +41,20 @@ import type {
   AutonomousExecutionResult,
   BrokerAccountSnapshot,
   RobinhoodBrokerRpc,
-} from '@thesisforge/contracts/broker';
-import { readBoundedJson } from '@thesisforge/shared/http';
-import { readSecret, secretsEqual, type SecretBinding } from '@thesisforge/shared/secrets';
-import type { JsonObject } from '@thesisforge/shared/json';
+} from '@quantanamo/contracts/broker';
+import { readBoundedJson } from '@quantanamo/shared/http';
+import { readSecret, secretsEqual, type SecretBinding } from '@quantanamo/shared/secrets';
+import type { JsonObject } from '@quantanamo/shared/json';
 
 type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
   ROBINHOOD_BROKER_AGENT: DurableObjectNamespace<RobinhoodBrokerRpc>;
-  THESISFORGE_PUBLICATION_TOKEN?: string;
+  QUANTANAMO_PUBLICATION_TOKEN?: string;
   INTERNAL_SERVICE_TOKEN_SECRET?: SecretBinding;
   INTERNAL_SERVICE_TOKEN?: string;
 };
 
 // Retained only while the legacy Worker hands its Durable Object namespaces to
-// thesisforge-research-orchestrator. The final topology has no publication Workflow.
+// quantanamo-research-orchestrator. The final topology has no publication Workflow.
 const PROMPT_VERSION = SYNTHESIS_PROMPT_VERSION;
 const MAX_CONTROL_BYTES = 512 * 1024;
 
@@ -85,9 +85,9 @@ type PositionObservation = {
 
 async function cloudControl<Payload>(env: PublicationEnv, action: string, payload?: Payload): Promise<unknown> {
   const publicationToken = await readSecret(
-    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
-    'THESISFORGE_PUBLICATION_TOKEN',
-    env.THESISFORGE_PUBLICATION_TOKEN,
+    env.QUANTANAMO_PUBLICATION_TOKEN_SECRET,
+    'QUANTANAMO_PUBLICATION_TOKEN',
+    env.QUANTANAMO_PUBLICATION_TOKEN,
   );
   const response = await fetch(
     `${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/cloud-control`,
@@ -95,7 +95,7 @@ async function cloudControl<Payload>(env: PublicationEnv, action: string, payloa
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-thesisforge-publication-token': publicationToken,
+        'x-quantanamo-publication-token': publicationToken,
       },
       body: JSON.stringify({ action, payload }),
     },
@@ -107,15 +107,15 @@ async function cloudControl<Payload>(env: PublicationEnv, action: string, payloa
 
 async function publishCurrentDashboard(env: PublicationEnv): Promise<void> {
   const publicationToken = await readSecret(
-    env.THESISFORGE_PUBLICATION_TOKEN_SECRET,
-    'THESISFORGE_PUBLICATION_TOKEN',
-    env.THESISFORGE_PUBLICATION_TOKEN,
+    env.QUANTANAMO_PUBLICATION_TOKEN_SECRET,
+    'QUANTANAMO_PUBLICATION_TOKEN',
+    env.QUANTANAMO_PUBLICATION_TOKEN,
   );
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/functions/v1/dashboard-publication`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-thesisforge-publication-token': publicationToken,
+      'x-quantanamo-publication-token': publicationToken,
     },
     body: JSON.stringify({ publishCurrent: true }),
   });
@@ -149,7 +149,7 @@ async function failRunAndPublish(
 }
 
 async function authorizedInternal(request: Request, env: PublicationEnv): Promise<boolean> {
-  const supplied = request.headers.get('x-thesisforge-internal-token') || '';
+  const supplied = request.headers.get('x-quantanamo-internal-token') || '';
   if (!supplied) return false;
   const current = await readSecret(
     env.INTERNAL_SERVICE_TOKEN_SECRET,

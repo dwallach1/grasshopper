@@ -13,7 +13,7 @@ import {
   type ClassifiedBookmark,
 } from './ontology-analysis';
 import { normalizePhrase, slugify, type OntologyCatalog, type ThemeMatch } from './ontology';
-import type { JsonObject } from '@thesisforge/shared/json';
+import type { JsonObject } from '@quantanamo/shared/json';
 
 const XNamedRefSchema = z.object({
   id: z.string().optional(),
@@ -755,7 +755,7 @@ export async function ingestXBookmarks(
   articleTasks: Array<{ bookmarkId: string; url: string }>;
 }> {
   const investigationMap = new Map(investigations.map((item) => [item.bookmarkId, item]));
-  await database.execute("select pg_advisory_xact_lock(hashtextextended('thesisforge-x-bookmark-ingest',0))");
+  await database.execute("select pg_advisory_xact_lock(hashtextextended('quantanamo-x-bookmark-ingest',0))");
   await syncThemeTheses(database);
   const oldSymbols = await clearPriorAiClassification(database, classified);
   const runId = await persistCoreRows(database, payload, classified, investigationMap);

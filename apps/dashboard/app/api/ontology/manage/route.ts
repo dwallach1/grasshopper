@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
   const { entity_type: entityType, entity_key: entityKey, action } = parsed.data;
   const key = entityType === 'symbol' ? entityKey.toUpperCase() : entityKey;
 
-  const databaseUrl = process.env.THESISFORGE_DATABASE_URL?.trim();
-  const dashboardToken = process.env.THESISFORGE_DASHBOARD_TOKEN?.trim();
-  const managerToken = process.env.THESISFORGE_MANAGER_TOKEN?.trim();
+  const databaseUrl = process.env.QUANTANAMO_DATABASE_URL?.trim();
+  const dashboardToken = process.env.QUANTANAMO_DASHBOARD_TOKEN?.trim();
+  const managerToken = process.env.QUANTANAMO_MANAGER_TOKEN?.trim();
 
   if (databaseUrl && dashboardToken && managerToken) {
     const sql = postgres(databaseUrl, {
@@ -64,9 +64,9 @@ export async function POST(request: NextRequest) {
       await sql`select set_config(
         'request.headers',
         ${JSON.stringify({
-          'x-thesisforge-dashboard-token': dashboardToken,
-          'x-thesisforge-manager-token': managerToken,
-          'x-thesisforge-manager-user-id': managerId,
+          'x-quantanamo-dashboard-token': dashboardToken,
+          'x-quantanamo-manager-token': managerToken,
+          'x-quantanamo-manager-user-id': managerId,
         })},
         true
       )`;
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'Ontology manager needs THESISFORGE_DASHBOARD_TOKEN + THESISFORGE_MANAGER_TOKEN (and SUPABASE_URL), or THESISFORGE_DATABASE_URL with those tokens.',
+          'Ontology manager needs QUANTANAMO_DASHBOARD_TOKEN + QUANTANAMO_MANAGER_TOKEN (and SUPABASE_URL), or QUANTANAMO_DATABASE_URL with those tokens.',
       },
       { status: 503 },
     );
@@ -105,9 +105,9 @@ export async function POST(request: NextRequest) {
   const requestHeaders = new Headers({
     apikey: secretKey || publishableKey,
     'content-type': 'application/json',
-    'x-thesisforge-dashboard-token': dashboardToken,
-    'x-thesisforge-manager-user-id': managerId,
-    'x-thesisforge-manager-token': managerToken,
+    'x-quantanamo-dashboard-token': dashboardToken,
+    'x-quantanamo-manager-user-id': managerId,
+    'x-quantanamo-manager-token': managerToken,
   });
   if (secretKey) {
     requestHeaders.set('Authorization', `Bearer ${secretKey}`);

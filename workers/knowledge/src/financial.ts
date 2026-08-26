@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { Database } from './database';
-import { isJsonObject, type JsonObject, type JsonValue } from '@thesisforge/shared/json';
+import { isJsonObject, type JsonObject, type JsonValue } from '@quantanamo/shared/json';
 
 const PROVIDER = 'financialdatasets.ai';
 const BASE_URL = 'https://api.financialdatasets.ai';
@@ -107,7 +107,7 @@ async function providerFetch(url: URL, spec: FinancialRequest, apiKey: string): 
         'x-api-key': apiKey,
         accept: 'application/json',
         'content-type': 'application/json',
-        'user-agent': 'ThesisForge/1.0 knowledge-pipeline',
+        'user-agent': 'Quantanamo/1.0 knowledge-pipeline',
       },
       body: spec.body ? canonicalJson(asJsonValue(spec.body)) : undefined,
     });

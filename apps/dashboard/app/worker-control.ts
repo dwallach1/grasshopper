@@ -80,7 +80,7 @@ async function postWorker(
   }
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'x-thesisforge-internal-token': token },
+    headers: { 'x-quantanamo-internal-token': token },
     cache: 'no-store',
   });
   const body = await readJson(response);
@@ -88,16 +88,16 @@ async function postWorker(
 }
 
 export async function invokeKnowledgeSync(): Promise<WorkerStepResult> {
-  return postWorker('/x/sync', process.env.THESISFORGE_KNOWLEDGE_WORKER_URL, 'THESISFORGE_KNOWLEDGE_WORKER_URL');
+  return postWorker('/x/sync', process.env.QUANTANAMO_KNOWLEDGE_WORKER_URL, 'QUANTANAMO_KNOWLEDGE_WORKER_URL');
 }
 
 export async function invokeResearchRun(): Promise<WorkerStepResult> {
-  const http = workerUrl(process.env.THESISFORGE_RESEARCH_WORKER_URL, '/research/run');
+  const http = workerUrl(process.env.QUANTANAMO_RESEARCH_WORKER_URL, '/research/run');
   const token = internalToken();
   if (http && token) {
     const response = await fetch(http, {
       method: 'POST',
-      headers: { 'x-thesisforge-internal-token': token },
+      headers: { 'x-quantanamo-internal-token': token },
       cache: 'no-store',
     });
     const body = await readJson(response);
@@ -106,7 +106,7 @@ export async function invokeResearchRun(): Promise<WorkerStepResult> {
   const { stdout } = await execFileAsync(
     'bun',
     [
-      '--bun', 'wrangler', 'workflows', 'trigger', 'thesisforge-research-cycle',
+      '--bun', 'wrangler', 'workflows', 'trigger', 'quantanamo-research-cycle',
       '--config', 'wrangler.jsonc',
       '--params', JSON.stringify({ force: true, requestedBy: 'manual' }),
     ],
@@ -120,7 +120,7 @@ export async function invokeResearchRun(): Promise<WorkerStepResult> {
 }
 
 export async function invokeAccountRefresh(): Promise<WorkerStepResult> {
-  return postWorker('/account/refresh', process.env.THESISFORGE_RESEARCH_WORKER_URL, 'THESISFORGE_RESEARCH_WORKER_URL');
+  return postWorker('/account/refresh', process.env.QUANTANAMO_RESEARCH_WORKER_URL, 'QUANTANAMO_RESEARCH_WORKER_URL');
 }
 
 export async function invokeFullPipeline(): Promise<{

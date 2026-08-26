@@ -28,7 +28,7 @@ copy_if_missing \
 echo
 echo "Local webapp (reads Supabase; Workers stay in Cloudflare):"
 echo "  bun run web:app"
-echo "  # uses THESISFORGE_DATABASE_URL from root .env.local"
+echo "  # uses QUANTANAMO_DATABASE_URL from root .env.local"
 echo
 echo "Worker local secrets for deploy/sync tooling:"
 echo "  fill workers/*/.dev.vars as needed"
