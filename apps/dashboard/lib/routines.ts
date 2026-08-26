@@ -22,6 +22,7 @@ function latestRun(runs: RunRow[], types: readonly string[]): RunRow | null {
 /**
  * Live QUANTANAMO (Grok Bot) cadences plus retired Cloudflare / ThesisForge /
  * Codex jobs. Last-run times come from ledger rows. No next-fire clock.
+ * Keep README.md "Routines" in the same PR when this list changes.
  */
 export function assembleRoutines(input: {
   runs: RunRow[];

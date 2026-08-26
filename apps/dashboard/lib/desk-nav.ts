@@ -7,6 +7,7 @@
  * `<Link>` / `router.push` therefore paid a full RSC + ledger waterfall per tab.
  * Chrome now lives in `app/(desk)/layout.tsx`; tab changes paint from in-memory
  * state and `history.pushState` without waiting on the server.
+ * Keep README.md "Local desk" in the same PR when this list changes.
  */
 
 export const DESK_SURFACES = [

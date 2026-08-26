@@ -1,394 +1,203 @@
-# Quantanamo
-
-Quantanamo is a cloud-native research and autonomous equity-trading operating system. It turns source material, market data, portfolio state, explicit theses, model judgments, executions, and outcomes into a persistent, auditable decision loop.
-
-The production research and trading path runs in Cloudflare and Supabase. It does not require Codex, a terminal session, or a powered-on laptop; semantic ontology learning and scheduled research reasoning require Cloudflare Workers AI. Robinhood access is held by a Cloudflare Agent Durable Object through Robinhood's remote MCP endpoint.
-
-> Quantanamo is experimental software, not a promise of investment performance. It fails closed: missing evidence, stale data, broker warnings, unavailable controls, conflicting intent, or an invalid execution window blocks an order.
-
-## System design at a glance
-
-```text
-LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
-         [( )] durable storage                       [DO] Durable Object state
-
- LOCAL OPERATOR                        CLOUDFLARE WORKERS                        DATA + EXTERNAL SYSTEMS
- =============================================================================================================
-
- bun run web:app (localhost)
-        |
-        | live read/write of canonical tables
-        v
- +---------------------------+                                       +-------------------------------+
- | apps/dashboard (Next)     |                                       | quantanamo-knowledge-pipeline |
- | local Bloomberg terminal  |                                       | LLM learning + knowledge graph |
- +-------------+-------------+                                       +----+-----------+----------+---+
-               |                                                          |           |          |
-               |                                                          |           |          +--> Financial
-               |                                                          |           |               Datasets API
-               |                                                          |           |
-               |             Cron: every 30m X sync ---------------------->+           +==> article Queue + DLQ
-               |             Cron: Sunday event map ---------------------->+                       |
-               |                                                          |                       v
-               |             X API <--> [DO: XCredentialVault] <----------+                  [(private R2)]
-               |                                                          |                  original HTML/PDF
-               |                                                          |
-               |                                                          +--> Workers AI / AI Gateway
-               |                                                          +--> Hyperdrive --------+----+
-               |                                                                                       |
-               |                                                                                       v
-               |                                                                              [(Supabase Postgres)]
-               |                                                                              canonical system of record
-               |                                                                                       ^
-               v                                                                                       |
-       live tables (theses, runs, book, tests, queue)                                               |
-                                                                                                       |
- Cloudflare Cron                                                                                       |
-  10:05 / 13:05 / 15:25 ET                                                                            |
-        |                                                                                              |
-        v                                                                                              |
- +-----------------------------------+       ==> research Queue + DLQ                                   |
- | quantanamo-research-orchestrator | -------------------------------+                                |
- | Workflow + deterministic policy   |                                |                                |
- +-----------+-----------------------+                                v                                |
-             |                                                Workers AI / AI Gateway                   |
-             |                                                [DO: ThesisCoordinator]                   |
-             |                                                [DO: PositionMonitor]                     |
-             |                                                        |                                |
-             |                                                        +--> approved trade intent        |
-             |                                                                 |                       |
-             |                                                                 v                       |
-             |                                                [DO: BrokerExecutionCoordinator]          |
-             |                                                                 |                       |
-             |                                                                 v                       |
-             |                                   +-----------------------------+------+                |
-             +---------------------------------> | quantanamo-broker-gateway         |                |
-                  broker Agent DO binding         | Robinhood policy + OAuth boundary |                |
-                                                 +------------------+-----------------+                |
-                                                                    |                                  |
-                                                       [DO: RobinhoodBrokerAgent]                       |
-                                                                    |                                  |
-                                                                    v                                  |
-                                                        Robinhood Agentic Trading MCP                   |
-                                                                                                       |
- +-----------------------------------------------------------------------------------------------------+
- | SUPABASE CONTROL + READ-MODEL LOOP                                                                   |
- |                                                                                                     |
- | research orchestrator --> cloud-control Edge Function --------------------------------------------> |
- | knowledge mutations ---+                                                                            |
- | terminal research run --+--> dashboard-publication Edge Function --> rebuild dashboard_snapshots    |
- |                                                                                                     |
- | Canonical rows are the write model. dashboard_snapshots.current is their bounded UI-ready exhaust.  |
- +-----------------------------------------------------------------------------------------------------+
-
- Cloudflare Secrets Store supplies only the Workers that need each shared credential:
-   knowledge + research: INTERNAL_SERVICE_TOKEN
-   knowledge + research: QUANTANAMO_PUBLICATION_TOKEN
-   knowledge only:       FINANCIAL_DATASETS_API_KEY
+```
+  ___  _   _    _    _   _ _____    _    _   _    _    __  __  ___
+ / _ \| | | |  / \  | \ | |_   _|  / \  | \ | |  / \  |  \/  |/ _ \
+| | | | | | | / _ \ |  \| | | |   / _ \ |  \| | / _ \ | |\/| | | | |
+| |_| | |_| |/ ___ \| |\  | | |  / ___ \| |\  |/ ___ \| |  | | |_| |
+ \__\_\\___//_/   \_\_| \_| |_| /_/   \_\_| \_/_/   \_\_|  |_|\___/
 ```
 
-The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. QUANTANAMO (Grok Bot) writes the live ledger; the local terminal reads canonical tables (theses, runs, Agentic book, tests, queue) and can apply operator mutations. Cloudflare workers are retired from the operator desk.
+**QUANTANAMO** is a Grok Bot. It researches, sizes, and (when every gate passes) trades equities. Independent theses and the Agentic book live in Supabase. A localhost Bloomberg-style desk watches that ledger. X bookmarks are seeds, not the thesis store.
 
-See [`LOCAL.md`](LOCAL.md) for env vars, how to confirm live ledger data, and how desk writes hit Supabase without a deploy.
+> Experimental software, not a promise of performance. It fails closed: missing evidence, stale broker state, a closed session, or a broken gate means **no order**. Never invent P/L on the desk — if the ledger has no mark, say so.
 
-## Production status
+Operator how-to (auth, env, keyboard): [`LOCAL.md`](LOCAL.md).
 
-- Cloudflare Workers: knowledge pipeline, research orchestrator, and Robinhood gateway
-- Local webapp: `apps/dashboard` via `bun run web:app` (live ledger, localhost only)
-- Cloudflare data services: Workflows, Queues, Durable Objects, Workers AI, Hyperdrive, and private R2 originals
-- Supabase: canonical Postgres, narrow Edge Functions, and RLS
-- Autonomous equity actions: open, hold, add, reduce, and exit
-- Per-order human approval: not required
-- Unsupported live products: options, crypto, margin, and shorting
-- Scheduled runs: 10:05, 13:05, and 15:25 America/New_York on weekdays
-- Execution window: 09:45–15:45 America/New_York on weekdays
+## Keep this file current
 
-## Production architecture
+This README is the living map of the **live** loop. When a PR adds or retires a routine, thesis family, desk panel, or trading limit, **edit the tables below in the same PR**. Do not leave Cloudflare / ThesisForge described as the brain.
 
-Durable Object SQLite stores coordination, deduplication, and broker-connection state. It is not a second research database. Supabase remains canonical.
-
-## Cloudflare components
-
-| Component | Responsibility | Boundary |
-|---|---|---|
-| `apps/dashboard` (local) | Bloomberg-style terminal over the live ledger | Localhost only; server-side Supabase reads/writes; no Cloudflare hosting |
-| `quantanamo-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
-| `quantanamo-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
-| `quantanamo-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
-| `CloudResearchWorkflow` | Durable scheduled orchestration | Market gate, context load, broker refresh, position reconciliation, fan-out, audit |
-| `quantanamo-research-tasks` | Thesis research, position reviews, execution intents | Batch 5, concurrency 2, four retries, 60-second base delay, DLQ |
-| `quantanamo-knowledge-articles` | Bounded article/PDF download, extraction, R2 archive, and metadata updates | Batch 5, retry with backoff, DLQ; immutable content-addressed objects |
-| `quantanamo-knowledge-x-research` | Compounding research from bookmark events: reply threads, quoted tweets, LLM-chosen X searches and article hops | Batch 1, concurrency 1, three retries, DLQ; per-session step/read/fetch budgets plus vault-level X API budgets |
-| Workers AI / AI Gateway | OpenAI gpt-5.6-sol for triage, investigation, research, and synthesis (AI Gateway BYOK) | No broker credentials, tools, or placement authority |
-
-Shared production credentials use the account-level Cloudflare Secrets Store. Knowledge and research resolve `INTERNAL_SERVICE_TOKEN` and `QUANTANAMO_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
-
-### Durable Objects
-
-| Durable Object | Coordination atom | Purpose |
-|---|---|---|
-| `ThesisCoordinator` | Thesis ID | Deduplicates analyses and retains the latest typed result |
-| `PositionMonitor` | Account key + symbol | Persists observations/action history and enforces add/reduce cooldowns |
-| `BrokerExecutionCoordinator` | Agentic account key | Serializes and idempotently reserves live intents |
-| `RobinhoodBrokerAgent` | Primary Robinhood connection | Restores durable MCP OAuth, reads account/market state, and enforces final order rules |
-| `XCredentialVault` | One authorized X account | Persists rotating OAuth tokens, PKCE state, and a sync lease; tokens never enter Postgres |
-
-## Schedule and cost posture
-
-Paired UTC Cron candidates preserve the two New York decision windows through daylight-saving changes:
-
-```text
-knowledge  35 13,14 * * MON-FRI -> 09:35 America/New_York
-research    5 14,15 * * MON-FRI -> 10:05 America/New_York
-knowledge  35 18,19 * * MON-FRI -> 14:35 America/New_York
-research    5 19,20 * * MON-FRI -> 15:05 America/New_York
-```
-
-The knowledge and market gates admit only the candidate matching the exact New York slot and reject weekends. Each knowledge refresh gets 30 minutes to ingest bookmarks and advance queued X/article research before the morning or pre-close portfolio workflow. The schedule is not a complete exchange-holiday or early-close calendar; Robinhood market state, tradability, quotes, and review remain authoritative.
-
-Costs stay bounded through two useful knowledge refreshes and two portfolio workflows per market weekday, thesis-input hashes that skip unchanged LLM work, at most 12 theses per run, a small structured-output Workers AI model, Queue concurrency of two, and hibernating Durable Objects. Position management does not poll every minute.
-
-## One run, end to end
-
-1. Cron creates one idempotent `CloudResearchWorkflow` instance for the admitted slot.
-2. The Workflow registers `cloud_runs` and loads bounded canonical context through `cloud-control`.
-3. `RobinhoodBrokerAgent` refreshes the Agentic account, buying power, positions, and agentic orders.
-4. The snapshot is stored in `account_snapshots` and `portfolio_exposure`.
-5. Broker positions reconcile into `position_episodes`; missing positions close their prior episode.
-6. Unchanged thesis hashes skip unnecessary inference.
-7. Queue tasks fan out thesis research and one review per open account+symbol episode.
-8. Workers AI returns guided JSON; the thesis or position Durable Object deduplicates it.
-9. Deterministic policy converts the recommendation into hold, open, add, reduce, exit, or no-trade.
-10. An approved action becomes a `trade_proposals` row and a separate execution task.
-11. Execution re-reads both Supabase kill switches, refreshes the broker, persists `trade_intents` and `broker_execution_attempts`, and enters the account coordinator.
-12. The broker Agent recomputes action semantics, buying power or sellable shares, pending orders, quote age, spread, portfolio caps, and session time.
-13. Robinhood `review_equity_order` runs immediately before `place_equity_order`; any `order_checks` entry blocks placement.
-14. Submission, immediate fills, failures, observations, and episode transitions are persisted. Later snapshots reconcile quantities and closures.
-15. The cloud run finalizes after its tasks are terminal and immediately refreshes the `current` dashboard projection. Publication is an event-driven read-model update, not an independent Cron job.
-
-## Where decisions are made
-
-| Layer | Recommends | Authorizes | Places |
-|---|---:|---:|---:|
-| Workers AI | Yes | No | No |
-| Deterministic TypeScript policy | Yes | Within hard rules | No |
-| Supabase `risk_controls` | No | Global permit/stop | No |
-| `BrokerExecutionCoordinator` | No | Serializes/reserves | No |
-| `RobinhoodBrokerAgent` | No | Revalidates every broker invariant | Yes |
-| Robinhood | No | Authoritative broker checks | Accepts/rejects |
-
-Bookmark triage, claim investigation, compounding bookmark research, and thesis/position synthesis all use `openai/gpt-5.6-sol` through AI Gateway BYOK (OpenAI Responses API). Investigation uses OpenAI `web_search` for primary-source corroboration; compounding research still executes X reads and article fetches in the Worker (see `docs/x-compounding-research.md`). Models see bounded thesis, investigation packets, portfolio, and broker research context. They never receive OAuth tokens, raw account numbers, or the broker tool catalog. Deterministic code remains the only path to trade intents.
-
-## Autonomous entry policy
-
-A new position requires:
-
-- material change and an explicit `buy` recommendation;
-- a hardening bullish thesis with confidence at least 80;
-- model confidence at least 85 and passing bull, bear, and portfolio-risk panels;
-- a substantive catalyst and invalidation;
-- a symbol linked to the thesis, with no existing position or pending same-symbol order;
-- active tradability, quote age at most 120 seconds, and spread at most 80 bps;
-- recent reported earnings or deterministic price/volume dislocation;
-- at least $25 notional, sized 1–5%, then capped by buying power and 5% of portfolio value.
-
-## Autonomous position management
-
-Each reconciled position gets a scheduled typed review and a `PositionMonitor`.
-
-### Add
-
-- linked hardening bullish thesis, confidence at least 80;
-- model confidence at least 90 and all review panels passing;
-- deterministic positive evidence;
-- never average down: market price must be at or above average cost;
-- one add/day, two lifetime adds, and at least 24 hours between adds;
-- add tranche of 1–2%; total post-add position capped at 5%;
-- fresh buying power and no pending same-symbol order.
-
-### Reduce
-
-- model confidence at least 88;
-- weakening or invalidated thesis state;
-- deterministic adverse evidence, such as a negative high-volume dislocation or recent negative earnings surprise;
-- one reduction/day; sell 25–50% of available shares;
-- a reduction cannot silently become a full exit.
-
-### Exit
-
-- sell all available shares after the deterministic -8% hard-loss threshold; or
-- sell all available shares when high-confidence invalidation has deterministic adverse evidence.
-
-Risk-reducing sells bypass exhausted buy-count and buy-notional quotas. They still require the regular execution window, a fresh bid, acceptable spread, no pending same-symbol order, broker review, idempotency, and available shares.
-
-## Broker boundary
-
-Permitted reads:
-
-```text
-get_accounts              get_portfolio
-get_equity_positions      get_equity_orders
-get_equity_quotes         get_equity_tradability
-get_equity_fundamentals   get_equity_historicals
-get_earnings_results      search
-```
-
-Permitted writes:
-
-```text
-review_equity_order
-place_equity_order
-```
-
-Options, crypto, cancellation, watchlist mutation, and unknown future tools remain blocked. Buys are dollar-based; reductions and exits are quantity-based. The gateway requires exactly one active Robinhood Agentic account and persists only a stable hashed account key plus last four digits outside the Agent.
-
-Hard gateway ceilings include the 09:45–15:45 New York window, 120-second side-aware quotes, 80-bps spread, 5% per buy, 20% daily buy notional, three agentic buys/day, no averaging down, no pending same-symbol order, UUIDv4 idempotency, and fail-closed Robinhood review.
-
-## Supabase data plane
-
-| Domain | Canonical surfaces |
+| If you change… | Also update |
 |---|---|
-| Sources/documents | bookmarks, URLs, articles, research documents/sources/annotations in Postgres; new immutable originals in private R2; legacy originals remain in Supabase Storage |
-| Research ontology | symbols, theses, evidence, scores, catalysts, themes, terms, observations, candidates/actions, graph nodes/edges |
-| Decision learning | research events/queue/cycles, predictions, insights, strategy tests/scenarios, agent runs, lessons, postmortems |
-| Trading/audit | account snapshots, portfolio exposure, proposals, position episodes/events, intents, attempts, fills, risk controls |
-| Cloud observability | `cloud_runs`, `cloud_tasks`, input hashes, prompt versions, outputs, AI Gateway log IDs |
-| Publication | `dashboard_snapshots` |
-| Financial vault | request cache, compressed responses, access log, normalized financial records |
+| A Grok Bot cadence | [Routines](#routines) and `apps/dashboard/lib/routines.ts` |
+| A thesis family | [Theses](#theses) (ids from `public.theses`) |
+| A desk tab | [Desk](#local-desk) and `apps/dashboard/lib/desk-nav.ts` |
+| A live trading limit | [Trading](#trading) and `config/trade_policy.json` |
 
-`cloud-control` and `dashboard-publication` use custom SHA-256 token authentication. The service role remains inside Supabase Edge Functions. The knowledge Worker connects through Hyperdrive using a dedicated least-privilege Postgres role. Public tables use RLS, and cloud execution tables are unavailable to `anon` and `authenticated` roles. Original files are immutable and content-addressed in private R2; metadata and judgment remain queryable in Postgres.
+---
 
-## How the system learns
+## System
 
-Learning means LLM-reasoned, persistent evidence-backed memory, not hidden model retraining or self-modifying execution rules. Bookmark classification, claim extraction, theme matching, evidence direction, and ontology proposals use structured Workers AI calls. Deterministic code validates exact evidence spans and applies promotion-quality gates; it does not substitute keyword or regex scoring for semantic judgment.
+```mermaid
+flowchart LR
+  X["X bookmarks<br/>@wallachworld<br/>seeds only"]
+  G["QUANTANAMO<br/>Grok Bot"]
+  L[("Supabase ledger<br/>xqungxapqicdmboniezz")]
+  D["Local desk<br/>bun run web:app"]
+  R["Robinhood MCP<br/>Agentic ····7638"]
 
-```text
-observe -> classify -> propose ontology changes -> promote after quality gates
-
-research -> preregister -> test -> stress -> decide -> act/abstain
--> observe fills and position state -> resolve -> postmortem
--> persist lesson -> incorporate in a later research cycle
+  X -->|X connector| G
+  G -->|theses · runs · snapshots| L
+  L -->|PostgREST as operator| D
+  D -->|status · evidence · lessons| L
+  G -->|review then place| R
+  R -->|NAV · fills · positions| G
 ```
 
-The ontology learner keeps source evidence and avoids feeding its own derived symbol guesses back into the active ontology. Cloud runs persist typed research decisions, position observations, proposals, intents, attempts, immediate fills, and reconciled episodes. Operator-authenticated Worker endpoints capture falsifiable predictions, insights, relations, event decisions, cycles, and lessons. Models never rewrite `config/trade_policy.json` or Supabase risk thresholds.
-
-## Security and emergency stops
-
-Position actions require active code-level Supabase controls:
-
-```text
-autonomous-execution
-autonomous-position-management
-```
-
-Either can be paused. Defense-in-depth Worker switches are `TRADING_ENABLED=false` and `BROKER_EXECUTION_ENABLED=false`. Disconnecting the Robinhood MCP connection is the broker-boundary emergency stop. Never delete audit rows to stop execution.
-
-## Runtime ownership
-
-| Capability | Location |
+| Piece | Role |
 |---|---|
-| Dashboard serving | Cloudflare |
-| X OAuth and bookmark ingestion | `quantanamo-knowledge-pipeline` + `XCredentialVault` |
-| Article/PDF extraction and archival | Knowledge Queue + private R2 |
-| LLM ontology classification and proposals; deterministic validation, promotion, and graph refresh | `quantanamo-knowledge-pipeline` + Workers AI / AI Gateway |
-| Paid financial-data acquisition and cache | Authenticated knowledge Worker API; never scheduled automatically |
-| Research judgments, cycles, and lessons | Authenticated knowledge Worker API |
-| Scheduled thesis research | Cloudflare Cron, Workflow, Queue, Workers AI |
-| Account/market refresh | Cloudflare broker Agent |
-| Open/add/reduce/exit execution | Cloudflare control Worker, Durable Objects, Robinhood MCP |
-| Canonical relational persistence | Supabase Postgres |
-| Immutable new research originals | Cloudflare R2 |
-| Dashboard publication | Event-driven after canonical mutations and run finalization |
+| **QUANTANAMO (Grok Bot)** | Research and trading brain. Writes the ledger. Places equities through Robinhood MCP when gates pass. |
+| **Supabase** `xqungxapqicdmboniezz` | Canonical store: theses, runs, `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, … |
+| **Local desk** | `bun run web:app` / `bash scripts/web-app.sh`. Reads the ledger as the signed-in operator. Does not run the bot. |
+| **X connector** | Bookmark seeds from `@wallachworld`. Not the reconnect-OAuth path on the desk. |
+| **Robinhood Agentic** | Live proof account, nickname **Agentic**, last4 **7638**. Official MCP only. |
 
-No production capability depends on a laptop, Python environment, Codex automation, or local Cron. The repository has no Python runtime or local X sync path; local commands are build, test, deploy, and operator tooling only.
+Cloudflare workers, ThesisForge cron, and the `dashboard-publication` / `cloud-control` edge functions are **retired ingest**. The desk talks to PostgREST as the signed-in operator. Worker folders may still exist in the repo; they are not the live loop.
 
-## Repository map
+---
 
-```text
-apps/dashboard/                  local Next terminal (live Supabase ledger)
-workers/knowledge/               knowledge-pipeline Worker
-workers/research/                research orchestrator, Workflows, DOs
-workers/broker/                  Robinhood broker gateway Agent
-packages/shared/                 json + secrets helpers
-packages/contracts/              broker + publication contracts
-supabase/schemas/                declarative Postgres state
-supabase/migrations/             migration history
-supabase/functions/              cloud-control and publication functions
-config/trade_policy.json         human-authored execution contract
-docs/                            architecture and runbooks
+## Routines
+
+Edit this table when a cadence is added, renamed, or retired. Last-run times on the desk come from `public.runs`, not a fake next-fire clock.
+
+| Routine | Folder / id | When (America/New_York) | Writes |
+|---|---|---|---|
+| Market scan | `quantanamo-market-scan` | Weekdays hourly **10:59–15:59** | `runs` (`market_scan`), snapshots, theses/evidence, intents when gated |
+| Missed-swing autopsy | `quantanamo-missed-swing-autopsy` | Weekdays **16:15** | `runs` (`missed_swing_autopsy`), lessons / earnings-gap notes |
+
+A scan that cannot refresh the Agentic account, or that hits a closed session, fails closed and still records a run.
+
+### Market-scan sequence
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Slot as Hourly slot 10:59-15:59 ET
+  participant Bot as QUANTANAMO
+  participant X as X connector
+  participant RH as Robinhood MCP
+  participant DB as Supabase ledger
+  participant Desk as Local desk
+
+  Slot->>Bot: fire quantanamo-market-scan
+  Bot->>X: read bookmark seeds
+  Bot->>RH: refresh Agentic account and positions
+  RH-->>Bot: NAV, cash, buying power, fills
+  Bot->>DB: account_snapshots, portfolio_exposure
+  Bot->>DB: read theses, episodes, risk_controls
+  Note over Bot: Size from live NAV every order. Equities only. 20% per name, 80% deployed, 3 new buys/day.
+  alt Regular session open and every gate passes
+    Bot->>RH: review_equity_order then place_equity_order
+    RH-->>Bot: fill or reject
+    Bot->>DB: trade_intents, position_episodes
+  else Fail closed
+    Bot->>DB: run with outcome skipped or failed
+  end
+  Bot->>DB: runs, evidence
+  Desk->>DB: GET /api/ledger JWT
+  DB-->>Desk: Home book, Runs, Theses
 ```
 
-## Development and operations
+---
 
-Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in root `.env.local` for operator sign-in. Workers still use `QUANTANAMO_DATABASE_URL` / `SUPABASE_SECRET_KEY` on the server. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
+## Trading
 
-### Local webapp against production Supabase
+Live book: **Agentic** proof account (last4 7638). Starting capital is the first Agentic `account_snapshots` row (~$5,000). Open names from the **2026-08-26** fills: **IREN**, **NBIS**, **CIFR**. The Home panel shows NAV vs that start, cash vs deployed, and day P/L only when a prior NY-session snapshot exists. Per-name mark is shown only if the ledger has it.
 
-No Docker, no Cloudflare Workers required to render. Sign in with OAuth or a passkey; the Next server queries canonical tables as that user. Tabs are Home / Book / Theses / Runs / Tests / Catalysts / Lessons / Ontology / Risk. Details: [`LOCAL.md`](LOCAL.md).
+| Limit | Value | Note |
+|---|---|---|
+| Asset class | Equities only | No options, crypto, margin, or shorting |
+| Per name | 20% of **live** NAV | Recalculate from the fresh Robinhood total every order |
+| Deployed | 80% of live NAV | Remainder cash |
+| New equity buys | 3 / day | Risk-reducing sells are a separate path |
+| Session | US regular hours | No after-hours queue |
+| Review | `review_equity_order` immediately before `place_equity_order` | Any broker check blocks |
 
-```sh
-# Uses NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY from root .env.local
-bun run web:app
-```
+Keep [`config/trade_policy.json`](config/trade_policy.json) aligned with this table when limits change.
 
-Open `http://localhost:5173` and sign in (magic link or passkey). The first confirmed user claims `ledger_operators`. Auth Site URL must be `http://localhost:5173`; redirects must include both `http://localhost:5173/auth/callback` and `http://127.0.0.1:5173/auth/callback`.
+---
 
-Do not put `SUPABASE_SECRET_KEY` in `NEXT_PUBLIC_*`.
+## Theses
 
-### Local end-to-end tests (publication / knowledge)
+Independent of X. Source of truth: `public.theses` on `xqungxapqicdmboniezz`. Refresh this table when a family is added or killed.
 
-Requires `supabase start` (and `supabase db reset` after pulling schema changes). Edge-function coverage also needs functions reachable on `http://127.0.0.1:54321/functions/v1`.
+| Id | Name | Status |
+|---|---|---|
+| `neocloud_compute` | Neocloud and GPU compute burst basket | hardening |
+| `semis_photonics` | AI semiconductor and photonics second derivative | hardening |
+| `ai_power_nuclear` | AI power bottleneck beneficiaries | hardening |
+| `software_ai_apps` | AI software and developer tooling watchlist | hardening |
+| `defense_drones_space` | Defense, drones, and space momentum basket | hardening |
+| `quantum` | Quantum momentum burst basket | hardening |
+| `biotech_royalty` | Biotech royalty asymmetric setup | hardening |
+| `earnings_gap_structure` | Earnings gap structure and missed-swing autopsy | forming |
+| `crypto` | Crypto and decentralized AI optionality | forming |
 
-```sh
-bun run local:setup          # copies workers/*/.dev.vars.example if missing
-bunx supabase start --exclude storage-api,imgproxy
-bunx supabase db reset
-bun run test:e2e
-```
+---
 
-These tests exercise:
-- publication authorization + `dashboard_snapshots.current` rebuild via PostgREST RPC (and the edge function when served)
-- knowledge `captureResearch` → graph rebuild → `publishDashboard` → readable snapshot
-
-They skip automatically when local Supabase is not running.
-
-Unit tests (no Docker):
+## Local desk
 
 ```sh
 bun install
-
-bun run --cwd workers/research types
-bun run --cwd workers/research typecheck
-bun run --cwd workers/research test
-bun run --cwd workers/research dry-run
-bun run --cwd workers/knowledge types
-bun run --cwd workers/knowledge typecheck
-bun run --cwd workers/knowledge test
-bun run --cwd workers/knowledge dry-run
-bun run --cwd workers/broker types
-bun run --cwd workers/broker typecheck
-bun run --cwd workers/broker test
-bun run --cwd workers/broker dry-run
+bun run web:app    # same as: bash scripts/web-app.sh
 ```
 
-Operational commands:
+Open `http://localhost:5173`. Sign in with **email magic link** or a **passkey** (RP ID `localhost`). The publishable / anon key is the only Supabase key in the browser (`NEXT_PUBLIC_*`). `service_role` and `QUANTANAMO_DATABASE_URL` stay server-side. First confirmed user is claimed via `claim_ledger_operator`; later operators need a `public.ledger_operators` row. `anon` is revoked. The desk queries PostgREST as that JWT.
+
+It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410).
+
+| Key | Tab | Shows |
+|---|---|---|
+| 1 | Home | Agentic book performance, then tape / routines |
+| 2 | Book | Episodes, intents, same book numbers |
+| 3 | Theses | Lifecycle + evidence |
+| 4 | Runs | Ledger runs + QUANTANAMO routines (retired jobs marked retired) |
+| 5 | Tests | Strategy tests / scenarios |
+| 6 | Catalysts | Catalysts + research queue |
+| 7 | Lessons | Lessons / postmortems |
+| 8 | Ontology | Themes / candidates |
+| 9 | Risk | Risk controls |
+
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–9`, `g` then letter, `j/k` thesis, `r` refresh, `?` help. No filter box.
+
+Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, `theses`, `runs`. Not `dashboard_snapshots.current`.
+
+---
+
+## Ledger
+
+| Domain | Tables |
+|---|---|
+| Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
+| Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
+| Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
+| Tests | `research_cycles`, `strategy_tests`, `test_scenarios` |
+| Operators | `ledger_operators` + `is_ledger_operator()` (SECURITY DEFINER) |
+
+Operator mutations from the desk: thesis status, evidence, lessons. See [`LOCAL.md`](LOCAL.md).
+
+---
+
+## Repository
+
+```text
+apps/dashboard/          local Next desk (PostgREST as operator)
+config/trade_policy.json human-authored live limits (keep in sync with Trading)
+docs/                    runbooks (some still describe retired Cloudflare ingest)
+supabase/schemas/        declarative Postgres
+supabase/migrations/     history
+packages/                shared helpers
+workers/                 retired Cloudflare ingest — not the live brain
+```
 
 ```sh
-bun run --cwd workers/research tail
-bun run --cwd workers/broker oauth-relay
-bun run --cwd workers/knowledge deploy
-bun run --cwd workers/research deploy
-bun run --cwd workers/broker deploy
-bun run cloud:sync
-bun run cloud:trigger
+bun run --cwd apps/dashboard test
+bun test
 ```
 
-`bun run cloud:trigger` forces a Workflow. In live mode during the execution window, it can create real orders if every gate passes.
-
-Never commit `.env.local`, `.dev.vars`, OAuth tokens, Supabase secret keys, or database connection strings.
+Never commit `.env.local`, `.dev.vars`, OAuth tokens, or `service_role` keys.
 
 ## Further reading
 
-- [`config/trade_policy.json`](config/trade_policy.json)
-- [`docs/cloudflare-migration.md`](docs/cloudflare-migration.md)
-- [`docs/live-trading-checklist.md`](docs/live-trading-checklist.md)
+- [`LOCAL.md`](LOCAL.md) — sign-in, env, how to confirm you are on the live ledger
+- [`config/trade_policy.json`](config/trade_policy.json) — execution contract
+- [`docs/live-trading-checklist.md`](docs/live-trading-checklist.md) — pre-trade gates
