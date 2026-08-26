@@ -199,6 +199,27 @@ async function route(request: Request, env: KnowledgeEnvironment): Promise<Respo
   return json({ error: 'not_found' }, { status: 404 });
 }
 
+async function recordScheduleRun(
+  env: KnowledgeEnvironment,
+  notes: Record<string, unknown>,
+): Promise<void> {
+  await withDatabase(env.HYPERDRIVE.connectionString, async (database) => {
+    await database.execute(
+      `insert into runs(run_type, started_at, completed_at, notes)
+       values ('bookmark_ingest', now(), now(), $1)`,
+      [JSON.stringify(notes)],
+    );
+  });
+  try {
+    await publishDashboard(env);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'knowledge_schedule_publish_failed',
+      error: error instanceof Error ? error.message : 'unknown',
+    }));
+  }
+}
+
 const worker = {
   async fetch(request: Request, env: KnowledgeEnvironment): Promise<Response> {
     try {
@@ -227,10 +248,39 @@ const worker = {
     const gate = knowledgeScheduleGate(controller.scheduledTime);
     if (!gate.actionable) {
       console.log(JSON.stringify({ event: 'knowledge_schedule_skipped', cron: controller.cron, gate }));
+      ctx.waitUntil(recordScheduleRun(env, {
+        outcome: 'skipped',
+        reason: gate.reason,
+        gate,
+        cron: controller.cron,
+        runtime: 'cloudflare',
+      }).catch((error) => {
+        console.error(JSON.stringify({
+          event: 'knowledge_schedule_skip_record_failed',
+          cron: controller.cron,
+          error: error instanceof Error ? error.message : 'unknown',
+        }));
+      }));
       return;
     }
-    ctx.waitUntil(syncBookmarks(env).catch((error) => {
-      console.error(JSON.stringify({ event: 'knowledge_schedule_failed', cron: controller.cron, error: error instanceof Error ? error.message : 'unknown' }));
+    ctx.waitUntil(syncBookmarks(env).catch(async (error) => {
+      const message = error instanceof Error ? error.message : 'unknown';
+      console.error(JSON.stringify({ event: 'knowledge_schedule_failed', cron: controller.cron, error: message }));
+      try {
+        await recordScheduleRun(env, {
+          outcome: 'failed',
+          error: message,
+          gate,
+          cron: controller.cron,
+          runtime: 'cloudflare',
+        });
+      } catch (recordError) {
+        console.error(JSON.stringify({
+          event: 'knowledge_schedule_fail_record_failed',
+          cron: controller.cron,
+          error: recordError instanceof Error ? recordError.message : 'unknown',
+        }));
+      }
       throw error;
     }));
   },

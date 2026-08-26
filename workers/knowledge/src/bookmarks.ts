@@ -233,6 +233,32 @@ async function recountSymbols(database: Database, symbols: string[]): Promise<vo
   `, [unique]);
 }
 
+/** Coerce AI / JS numerics into a Postgres smallint-safe integer (0–100). */
+export function asSmallint(value: unknown, field: string): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 100) {
+    throw new Error(`Invalid smallint ${field}: ${String(value)}`);
+  }
+  return n;
+}
+
+/** Claim rows for jsonb_to_recordset insert — confidence always a finite int. */
+export function claimRowsForPersist(classified: ClassifiedBookmark[]): Array<{
+  bookmark_id: string;
+  claim_text: string;
+  claim_type: string;
+  confidence: number;
+}> {
+  return classified
+    .filter((item) => item.marketScore >= 35 && item.claim)
+    .map((item) => ({
+      bookmark_id: item.bookmark.id,
+      claim_text: item.claim!.summary,
+      claim_type: item.claim!.type,
+      confidence: asSmallint(item.claim!.confidence, 'claim.confidence'),
+    }));
+}
+
 async function persistCoreRows(
   database: Database,
   payload: XBookmarkPayload,
@@ -251,7 +277,7 @@ async function persistCoreRows(
       fetched_at: payload.fetchedAt,
       text: item.text,
       raw_json: bookmarkRawJson(item.bookmark),
-      market_score: item.marketScore,
+      market_score: asSmallint(item.marketScore, 'market_score'),
       is_market_related: item.marketScore >= 35,
       classification_model: ONTOLOGY_AI_MODEL,
       classification_prompt_version: ONTOLOGY_PROMPT_VERSION,
@@ -269,12 +295,12 @@ async function persistCoreRows(
       classification_model, classification_prompt_version, classification_output, classified_at,
       investigation_model, investigation_prompt_version, investigation_output, investigated_at
     )
-    select id, author_id, created_at, fetched_at, text, raw_json, market_score, is_market_related,
+    select id, author_id, created_at, fetched_at, text, raw_json, market_score::smallint, is_market_related,
            classification_model, classification_prompt_version, classification_output, classified_at,
            investigation_model, investigation_prompt_version, investigation_output, investigated_at
     from jsonb_to_recordset($1::jsonb) as x(
       id text, author_id text, created_at timestamptz, fetched_at timestamptz,
-      text text, raw_json jsonb, market_score smallint, is_market_related boolean,
+      text text, raw_json jsonb, market_score text, is_market_related boolean,
       classification_model text, classification_prompt_version text,
       classification_output jsonb, classified_at timestamptz,
       investigation_model text, investigation_prompt_version text,
@@ -339,18 +365,13 @@ async function persistCoreRows(
     `, [JSON.stringify(symbolRows)]);
   }
 
-  const claims = classified.filter((item) => item.marketScore >= 35 && item.claim).map((item) => ({
-    bookmark_id: item.bookmark.id,
-    claim_text: item.claim!.summary,
-    claim_type: item.claim!.type,
-    confidence: item.claim!.confidence,
-  }));
+  const claims = claimRowsForPersist(classified);
   if (claims.length > 0) {
     await database.execute(`
       insert into claims(bookmark_id, claim_text, claim_type, created_at, confidence)
-      select x.bookmark_id, x.claim_text, x.claim_type, now(), x.confidence
+      select x.bookmark_id, x.claim_text, x.claim_type, now(), x.confidence::smallint
       from jsonb_to_recordset($1::jsonb)
-        as x(bookmark_id text, claim_text text, claim_type text, confidence smallint)
+        as x(bookmark_id text, claim_text text, claim_type text, confidence text)
       where not exists (
         select 1 from claims c where c.bookmark_id=x.bookmark_id and c.claim_type=x.claim_type
       )
@@ -398,14 +419,17 @@ async function persistOntologyEvidence(
   if (evidence.length > 0) {
     await database.execute(`
       insert into ontology_evidence(source_type, source_key, theme_id, feature_type, feature_value, match_method, score, observed_at)
-      select source_type, source_key, theme_id, feature_type, feature_value, match_method, score, observed_at
+      select source_type, source_key, theme_id, feature_type, feature_value, match_method, score::smallint, observed_at
       from jsonb_to_recordset($1::jsonb) as x(
         source_type text, source_key text, theme_id text, feature_type text,
-        feature_value text, match_method text, score smallint, observed_at timestamptz
+        feature_value text, match_method text, score text, observed_at timestamptz
       )
       on conflict(source_type, source_key, theme_id, feature_type, feature_value, match_method) do update set
         score=greatest(ontology_evidence.score, excluded.score), observed_at=excluded.observed_at
-    `, [JSON.stringify(evidence)]);
+    `, [JSON.stringify(evidence.map((row) => ({
+      ...row,
+      score: asSmallint(row.score, 'ontology_evidence.score'),
+    })))]);
   }
 
   const candidates: CandidateInput[] = [];
@@ -423,7 +447,7 @@ async function persistOntologyEvidence(
         proposed_theme_id: candidate.themeId,
         proposed_label: candidate.label,
         description: candidate.description,
-        score: candidate.confidence,
+        score: asSmallint(candidate.confidence, 'candidate.confidence'),
         context: {
           evidence_excerpt: candidate.evidenceExcerpt,
           classification_model: ONTOLOGY_AI_MODEL,
@@ -438,9 +462,12 @@ async function persistOntologyEvidence(
   if (candidates.length > 0) {
     await database.execute(`
       with incoming as (
-        select * from jsonb_to_recordset($1::jsonb) as item(
+        select
+          candidate_type, candidate_key, proposed_theme_id, proposed_label,
+          description, score::smallint as score, context, source_type, source_key, observed_at
+        from jsonb_to_recordset($1::jsonb) as item(
           candidate_type text, candidate_key text, proposed_theme_id text,
-          proposed_label text, description text, score smallint, context jsonb,
+          proposed_label text, description text, score text, context jsonb,
           source_type text, source_key text, observed_at timestamptz
         )
       ), deduplicated as (

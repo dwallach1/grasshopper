@@ -4,7 +4,7 @@
   "main": "src/research-orchestrator.ts",
   "compatibility_date": "2026-08-24",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "secrets_store_secrets": [{
     "binding": "THESISFORGE_PUBLICATION_TOKEN_SECRET",

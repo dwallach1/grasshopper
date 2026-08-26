@@ -182,6 +182,49 @@ const TaskStatusRowSchema = z.object({
   status: z.string(),
 }).passthrough();
 
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+/** Compact Automations buckets from completed cloud_tasks outputs. */
+function buildRunObservability(tasks: unknown[]): {
+  findings: string[];
+  learnings: string[];
+  explored: string[];
+  actions: string[];
+} {
+  const findings: string[] = [];
+  const learnings: string[] = [];
+  const explored = new Set<string>();
+  const actions: string[] = [];
+  for (const row of tasks) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const task = row as JsonObject;
+    if (task.status !== 'complete') continue;
+    const output = task.output && typeof task.output === 'object' && !Array.isArray(task.output)
+      ? task.output as JsonObject
+      : {};
+    const entityKey = typeof task.entity_key === 'string' ? task.entity_key : '';
+    const symbol = typeof output.symbol === 'string' ? output.symbol : '';
+    const claimStatus = typeof output.claim_status === 'string' ? output.claim_status : '';
+    const summary = typeof output.summary === 'string' ? output.summary : '';
+    if (summary) {
+      findings.push([entityKey, symbol, claimStatus, summary.slice(0, 240)].filter(Boolean).join(' · '));
+    }
+    for (const risk of stringArray(output.risks).slice(0, 8)) learnings.push(risk);
+    const exploredLabel = symbol || entityKey;
+    if (exploredLabel) explored.add(exploredLabel);
+    for (const action of stringArray(output.actions).slice(0, 8)) actions.push(action);
+  }
+  return {
+    findings: findings.slice(0, 40),
+    learnings: learnings.slice(0, 40),
+    explored: [...explored].slice(0, 40),
+    actions: actions.slice(0, 40),
+  };
+}
+
 async function context(): Promise<unknown> {
   const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals] = await Promise.all([
     rest('dashboard_snapshots?id=eq.current&select=generated_at,payload'),
@@ -222,7 +265,9 @@ async function upsert(table: 'cloud_runs' | 'cloud_tasks', payload: unknown): Pr
 async function finalizeRun(payload: unknown): Promise<unknown> {
   const record = FinalizeRunSchema.parse(payload);
   const runId = encodeURIComponent(record.run_id);
-  const tasks = await rest(`cloud_tasks?run_id=eq.${runId}&select=status`);
+  const tasks = await rest(
+    `cloud_tasks?run_id=eq.${runId}&select=status,entity_key,task_type,output,queued_at,completed_at&order=completed_at.asc.nullslast,queued_at.asc`,
+  );
   const rows = Array.isArray(tasks) ? tasks : [];
   const terminal = new Set(['complete', 'skipped', 'failed', 'dead_letter']);
   const statuses: string[] = [];
@@ -243,10 +288,25 @@ async function finalizeRun(payload: unknown): Promise<unknown> {
     ? 'complete'
     : (!hasSuccess && hasFailure ? 'failed' : 'complete');
   const now = new Date().toISOString();
+  const observability = buildRunObservability(rows);
+  const existingRuns = await rest(`cloud_runs?id=eq.${runId}&select=summary`);
+  const existingRow = Array.isArray(existingRuns) ? existingRuns[0] : null;
+  const existingSummary = isObject(existingRow?.summary) ? existingRow.summary : {};
   await rest(`cloud_runs?id=eq.${runId}`, {
     method: 'PATCH',
     headers: { prefer: 'return=minimal' },
-    body: JSON.stringify({ status, completed_at: now, updated_at: now }),
+    body: JSON.stringify({
+      status,
+      completed_at: now,
+      updated_at: now,
+      summary: {
+        ...existingSummary,
+        findings: observability.findings,
+        learnings: observability.learnings,
+        explored: observability.explored,
+        actions: observability.actions,
+      },
+    }),
   });
   return { finalized: true, pending: 0, status };
 }

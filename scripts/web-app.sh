@@ -20,6 +20,9 @@ publishable="$(read_env_value "$env_local" SUPABASE_PUBLISHABLE_KEY)"
 supabase_url="$(read_env_value "$env_local" SUPABASE_URL)"
 dashboard_token="$(read_env_value "$env_local" THESISFORGE_DASHBOARD_TOKEN)"
 manager_token="$(read_env_value "$env_local" THESISFORGE_MANAGER_TOKEN)"
+internal_token="$(read_env_value "$env_local" INTERNAL_SERVICE_TOKEN)"
+knowledge_worker_url="$(read_env_value "$env_local" THESISFORGE_KNOWLEDGE_WORKER_URL)"
+research_worker_url="$(read_env_value "$env_local" THESISFORGE_RESEARCH_WORKER_URL)"
 
 if [[ -z "$supabase_url" && -n "$db_url" ]]; then
   ref="$(printf '%s' "$db_url" | sed -n 's#.*://[^./]*\.\([a-z0-9]*\):[^@]*@.*#\1#p')"
@@ -43,6 +46,9 @@ export SUPABASE_URL="${supabase_url:-}"
 [[ -n "$publishable" ]] && export SUPABASE_PUBLISHABLE_KEY="$publishable"
 [[ -n "$dashboard_token" ]] && export THESISFORGE_DASHBOARD_TOKEN="$dashboard_token"
 [[ -n "$manager_token" ]] && export THESISFORGE_MANAGER_TOKEN="$manager_token"
+[[ -n "$internal_token" ]] && export INTERNAL_SERVICE_TOKEN="$internal_token"
+[[ -n "$knowledge_worker_url" ]] && export THESISFORGE_KNOWLEDGE_WORKER_URL="$knowledge_worker_url"
+[[ -n "$research_worker_url" ]] && export THESISFORGE_RESEARCH_WORKER_URL="$research_worker_url"
 
 if [[ -n "$db_url" ]]; then
   echo "→ Live Supabase via Postgres"

@@ -1233,6 +1233,30 @@ const worker = {
         );
       }
     }
+    if (url.pathname === '/research/run' && request.method === 'POST') {
+      if (!(await authorizedInternal(request, env))) {
+        return Response.json({ error: 'unauthorized' }, {
+          status: 401,
+          headers: { 'cache-control': 'no-store' },
+        });
+      }
+      const instanceId = `manual-${crypto.randomUUID()}`;
+      try {
+        const instance = await env.CLOUD_RESEARCH_CYCLE.create({
+          id: instanceId,
+          params: { force: true, requestedBy: 'manual' },
+        });
+        console.log(JSON.stringify({ event: 'cloud_workflow_manual_created', instanceId: instance.id }));
+        return Response.json({ workflow_id: instance.id }, { headers: { 'cache-control': 'no-store' } });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'unknown';
+        console.error(JSON.stringify({ event: 'cloud_workflow_manual_failed', error: message }));
+        return Response.json(
+          { error: message },
+          { status: 502, headers: { 'cache-control': 'no-store' } },
+        );
+      }
+    }
     return new Response('Not found', { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: PublicationEnv): Promise<void> {

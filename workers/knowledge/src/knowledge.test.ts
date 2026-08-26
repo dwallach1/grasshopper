@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { bookmarkFromUnknown } from './bookmarks';
+import { bookmarkFromUnknown, asSmallint, claimRowsForPersist } from './bookmarks';
 import { CaptureSchema } from './capture';
 import {
   parseClaimInvestigation,
@@ -13,6 +13,44 @@ import { normalizePhrase, OntologyCatalog, slugify } from './ontology';
 import { parseResearchDecision, ResearchActionSchema, seedActions } from './x-research';
 
 describe('worker knowledge primitives', () => {
+  test('coerces claim confidence for jsonb_to_recordset inserts', () => {
+    expect(asSmallint(88, 'claim.confidence')).toBe(88);
+    expect(asSmallint('72', 'claim.confidence')).toBe(72);
+    expect(() => asSmallint('nope', 'claim.confidence')).toThrow(/Invalid smallint/);
+    expect(() => asSmallint(12.5, 'claim.confidence')).toThrow(/Invalid smallint/);
+
+    const classified = [{
+      bookmark: { id: 'b1' },
+      createdAt: '2026-08-26T12:00:00Z',
+      text: 'claim',
+      symbols: ['VST'],
+      marketScore: 90,
+      claim: { type: 'company_event', summary: 'Contract', confidence: 88, evidenceExcerpt: 'signed' },
+      matches: [],
+      candidates: [],
+      classificationOutput: {} as ClassifiedBookmark['classificationOutput'],
+    }, {
+      bookmark: { id: 'b2' },
+      createdAt: '2026-08-26T12:00:00Z',
+      text: 'noise',
+      symbols: [],
+      marketScore: 10,
+      claim: { type: 'none', summary: '', confidence: 0, evidenceExcerpt: '' },
+      matches: [],
+      candidates: [],
+      classificationOutput: {} as ClassifiedBookmark['classificationOutput'],
+    }] as ClassifiedBookmark[];
+
+    expect(claimRowsForPersist(classified)).toEqual([{
+      bookmark_id: 'b1',
+      claim_text: 'Contract',
+      claim_type: 'company_event',
+      confidence: 88,
+    }]);
+    // JSON.stringify must emit a number so Postgres can cast text→smallint safely.
+    expect(JSON.parse(JSON.stringify(claimRowsForPersist(classified)))[0].confidence).toBe(88);
+  });
+
   test('normalizes ontology identifiers deterministically', () => {
     expect(normalizePhrase('AI_Infrastructure / Power')).toBe('ai infrastructure power');
     expect(slugify('AI Infrastructure & Power')).toBe('ai-infrastructure-power');

@@ -363,6 +363,15 @@ a:focus-visible {
   font-size: 12px;
 }
 
+.freshness-note {
+  margin: 0 24px;
+  padding: 8px 12px;
+  border-radius: var(--r-control);
+  background: rgba(52, 199, 89, 0.1);
+  color: var(--up);
+  font-size: 12px;
+}
+
 /* ——— Shared ——— */
 
 .section-head {

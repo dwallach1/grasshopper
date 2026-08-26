@@ -46,6 +46,13 @@ const SECONDARY_NAV={
 
 type Surface=keyof typeof PRIMARY_NAV|keyof typeof SECONDARY_NAV;
 
+const WorkerErrorSchema=z.object({error:z.string()}).passthrough();
+const WorkerStepSchema=z.object({ok:z.boolean()}).passthrough();
+const PipelineResponseSchema=z.object({
+  knowledge:WorkerStepSchema,
+  research:WorkerStepSchema,
+}).passthrough();
+
 const SEED_LAYOUT=new Map<string,{x:number;y:number}>(Object.entries({
   ai_power_nuclear:{x:170,y:220},
   neocloud_compute:{x:420,y:130},
@@ -161,6 +168,9 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const [focusThesisId,setFocusThesisId]=useState<string|undefined>(initialData.cycles[0]?.thesis_id);
   const [refreshing,setRefreshing]=useState(false);
   const [refreshError,setRefreshError]=useState<string|null>(null);
+  const [runningPipeline,setRunningPipeline]=useState(false);
+  const [pipelineError,setPipelineError]=useState<string|null>(null);
+  const [pipelineMessage,setPipelineMessage]=useState<string|null>(null);
   const proposalsRef=useRef<HTMLElement|null>(null);
 
   useEffect(()=>{
@@ -200,12 +210,47 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
     setRefreshing(true);
     setRefreshError(null);
     try{
-      // Broker refresh runs in Cloudflare Workers, not the local webapp.
-      throw new Error('Use `bun run cloud:trigger` (research orchestrator) to refresh Robinhood account state.');
+      const response=await fetch('/api/system/refresh-account',{method:'POST'});
+      const payload:unknown=await response.json().catch(()=>({}));
+      if(!response.ok){
+        const message=WorkerErrorSchema.safeParse(payload).data?.error||'Account refresh failed';
+        throw new Error(message);
+      }
+      router.refresh();
     }catch(error){
       setRefreshError(error instanceof Error?error.message:'Refresh failed');
     }finally{
       setRefreshing(false);
+    }
+  }
+
+  async function runFullPipeline(){
+    if(runningPipeline)return;
+    setRunningPipeline(true);
+    setPipelineError(null);
+    setPipelineMessage(null);
+    try{
+      const response=await fetch('/api/system/run',{method:'POST'});
+      const payload:unknown=await response.json().catch(()=>({}));
+      if(!response.ok){
+        const message=WorkerErrorSchema.safeParse(payload).data?.error||'Pipeline run failed';
+        throw new Error(message);
+      }
+      const parsed=PipelineResponseSchema.safeParse(payload);
+      if(!parsed.success){
+        throw new Error('Pipeline run returned an invalid response');
+      }
+      const knowledgeOk=parsed.data.knowledge.ok;
+      const researchOk=parsed.data.research.ok;
+      if(!knowledgeOk||!researchOk){
+        throw new Error('One or more pipeline steps failed. Check Automations for details.');
+      }
+      setPipelineMessage('Pipeline started. Bookmark sync finished and research workflow is running.');
+      router.refresh();
+    }catch(error){
+      setPipelineError(error instanceof Error?error.message:'Pipeline run failed');
+    }finally{
+      setRunningPipeline(false);
     }
   }
 
@@ -240,6 +285,15 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
         </div>
         <button
           type="button"
+          className="btn btn-sm btn-primary"
+          disabled={runningPipeline}
+          onClick={()=>void runFullPipeline()}
+          title="Bookmark sync, knowledge learning, and research analysis"
+        >
+          {runningPipeline?'Running…':'Run'}
+        </button>
+        <button
+          type="button"
           className={`btn btn-sm ${isStale?'btn-primary':'btn-ghost'}`}
           disabled={refreshing}
           onClick={()=>void refreshRobinhood()}
@@ -248,7 +302,8 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
         </button>
       </div>
     </header>
-    {refreshError&&<p className="freshness-error" role="alert">{refreshError}</p>}
+    {(refreshError||pipelineError)&&<p className="freshness-error" role="alert">{pipelineError||refreshError}</p>}
+    {pipelineMessage&&!pipelineError&&<p className="freshness-note" role="status">{pipelineMessage}</p>}
 
     <section className="page" aria-live="polite">
       {surface==='home'&&(

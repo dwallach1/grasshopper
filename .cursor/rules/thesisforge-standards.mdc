@@ -1,0 +1,34 @@
+---
+description: ThesisForge coding standards for Workers, Supabase, and the local dashboard
+alwaysApply: true
+---
+
+# ThesisForge standards
+
+## Architecture
+
+- `apps/dashboard` is localhost-only: reads Supabase, never runs ingestion/research/trading inline.
+- Workers own schedules, AI, broker calls, and dashboard publication. Trigger them via authenticated HTTP or Wrangler—not by duplicating pipeline logic in Next.js routes.
+
+## Cloudflare Workers
+
+- Use `ctx.waitUntil()` for post-response work; never store request-scoped data in module globals.
+- Log structured JSON (`event`, ids, error message)—not unstructured strings.
+- Resolve Secrets Store bindings inside handlers, not at module load.
+- Prefer service bindings and internal tokens over public REST for Worker-to-Worker calls.
+
+## Supabase / Postgres
+
+- Declarative schema lives in `supabase/schemas/`; ship changes via timestamped migrations.
+- Trigger functions use `security invoker` and `set search_path = ''`—not `SECURITY DEFINER` in exposed schemas.
+- `jsonb_to_recordset` casts: coerce numerics in TypeScript first (`asSmallint`), declare SQL columns as `text`, cast with `::smallint` in the SELECT.
+- Run outcomes in `runs.notes` JSON must include `outcome: 'passed' | 'failed' | 'skipped'` for dashboard projection.
+
+## Local dashboard
+
+- Worker triggers and broker refresh belong in server routes (`app/api/**`), never in client components.
+- Never expose `INTERNAL_SERVICE_TOKEN`, `SUPABASE_SECRET_KEY`, or service-role keys to the browser (`NEXT_PUBLIC_*`).
+
+## Tests
+
+- Add tests for non-obvious coercion, schedule gates, and schema parsers—not trivial assertions.
