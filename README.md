@@ -331,7 +331,7 @@ No Docker, no Cloudflare Workers. Sign in with OAuth or a passkey; the Next serv
 bun run web:app
 ```
 
-Open `http://127.0.0.1:5173` and sign in. The first confirmed user claims `ledger_operators`.
+Open `http://localhost:5173` and sign in (magic link or passkey). The first confirmed user claims `ledger_operators`. Auth Site URL must be `http://localhost:5173`; redirects must include both `http://localhost:5173/auth/callback` and `http://127.0.0.1:5173/auth/callback`.
 
 Do not put `SUPABASE_SECRET_KEY` in `NEXT_PUBLIC_*`.
 

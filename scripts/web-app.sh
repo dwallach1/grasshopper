@@ -73,9 +73,9 @@ elif [[ -n "$secret_key" ]]; then
   echo "→ Live Supabase via PostgREST service_role (server-only)"
 fi
 [[ -n "$supabase_url" ]] && echo "→ $supabase_url"
-echo "→ http://127.0.0.1:5173  (email / OAuth)"
-echo "→ http://localhost:5173  (passkeys; same listener, RP ID localhost)"
+echo "→ http://localhost:5173   (open this — Site URL + passkeys + PKCE cookies)"
+echo "→ http://127.0.0.1:5173   (email only if you stay on this origin for the whole login)"
 echo
 
 cd "$dashboard"
-exec bun --bun next dev --hostname 127.0.0.1 --port 5173
+exec bun --bun next dev --hostname 0.0.0.0 --port 5173

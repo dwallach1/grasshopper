@@ -38,4 +38,4 @@ echo "  1. bunx supabase start --exclude storage-api,imgproxy"
 echo "  2. bunx supabase db reset"
 echo "  3. bun run test:e2e"
 echo
-echo "Open http://127.0.0.1:5173"
+echo "Open http://localhost:5173 (passkeys + magic link). http://127.0.0.1:5173 works for email on that origin only."

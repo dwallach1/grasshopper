@@ -8,13 +8,13 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "bun --bun next dev --hostname 127.0.0.1 --port 5173",
+    "dev": "bun --bun next dev --hostname 0.0.0.0 --port 5173",
     "build": "bun --bun next build",
-    "start": "bun --bun next start --hostname 127.0.0.1 --port 5173",
+    "start": "bun --bun next start --hostname 0.0.0.0 --port 5173",
     "lint": "bun run lint:eslint && bun run lint:anti-slop",
     "lint:eslint": "bun --bun eslint . --ignore-pattern .next",
     "lint:anti-slop": "bun --bun oxlint .",
-    "test": "bun test lib/ledger.test.ts",
+    "test": "bun test lib",
     "typecheck": "bun --bun tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {

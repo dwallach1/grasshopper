@@ -2,10 +2,15 @@
 
 import { useState } from 'react';
 
+import { DESK_CALLBACK_PATH } from '../../lib/auth-callback';
 import { deskAuthErrorMessage } from '../../lib/auth-search';
 import type { DeskAuthMethods } from '../../lib/auth-methods';
 import type { OAuthProviderId } from '../../lib/auth-public';
 import { createBrowserSupabase } from '../../lib/supabase-browser';
+
+function callbackUrl(): string {
+  return `${window.location.origin}${DESK_CALLBACK_PATH}`;
+}
 
 function providerLabel(id: OAuthProviderId): string {
   if (id === 'github') return 'GitHub';
@@ -36,10 +41,9 @@ export function SignInScreen({
     setBusy(provider);
     setError(null);
     const supabase = createBrowserSupabase();
-    const redirectTo = `${window.location.origin}/auth/callback`;
     const { data, error: signInError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo, skipBrowserRedirect: true },
+      options: { redirectTo: callbackUrl(), skipBrowserRedirect: true },
     });
     if (signInError) {
       setError(signInError.message);
@@ -70,7 +74,7 @@ export function SignInScreen({
     const supabase = createBrowserSupabase();
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: callbackUrl() },
     });
     if (signInError) {
       setError(signInError.message);
@@ -115,6 +119,7 @@ export function SignInScreen({
             <div className="term-gate-split">Email link</div>
             <form
               className="term-gate-email"
+              suppressHydrationWarning
               onSubmit={(event) => {
                 event.preventDefault();
                 void emailLink();
@@ -133,7 +138,12 @@ export function SignInScreen({
                 {busy === 'email' ? 'Sending…' : 'Send magic link'}
               </button>
             </form>
-            {sent && <p className="term-gate-note">Check your inbox, then come back to this origin.</p>}
+            {sent && (
+              <p className="term-gate-note">
+                Check your inbox. Open the link so it returns here — <code>localhost</code> and{' '}
+                <code>127.0.0.1</code> do not share the PKCE cookie.
+              </p>
+            )}
           </>
         )}
         {methods.oauth.length > 0 && (
