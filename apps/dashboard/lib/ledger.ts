@@ -34,14 +34,15 @@ import {
   type JsonObjectRow,
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
-import { hasDatabaseUrl, hasSecretKey, isPostgresPermissionDenied, openSql, restAuthHeaders, supabaseUrl } from './postgres';
+import { publicSupabaseUrl, userRestHeaders } from './auth-env';
+import { isPostgresPermissionDenied, openSql } from './postgres';
 import { upcomingWorkerFires } from './schedule';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
-async function restRows(path: string) {
-  const response = await fetch(`${supabaseUrl()}/rest/v1/${path}`, {
-    headers: restAuthHeaders(),
+async function restRows(path: string, accessToken: string) {
+  const response = await fetch(`${publicSupabaseUrl()}/rest/v1/${path}`, {
+    headers: userRestHeaders(accessToken),
     cache: 'no-store',
   });
   if (!response.ok) {
@@ -62,15 +63,11 @@ async function optionalRows(label: string, query: Promise<JsonObjectRow[]>): Pro
   }
 }
 
-export async function loadDesk(): Promise<DeskPayload> {
-  if (hasDatabaseUrl()) return loadDeskFromPostgres();
-  if (hasSecretKey()) return loadDeskFromRest();
-  throw new Error(
-    'Canonical ledger unavailable. Set QUANTANAMO_DATABASE_URL or SUPABASE_SECRET_KEY in the repo-root .env.local.',
-  );
+export async function loadDesk(accessToken: string): Promise<DeskPayload> {
+  return loadDeskFromRest(accessToken);
 }
 
-async function loadDeskFromPostgres(): Promise<DeskPayload> {
+export async function loadDeskFromPostgres(): Promise<DeskPayload> {
   const sql = openSql();
   try {
     const [
@@ -371,7 +368,7 @@ async function loadDeskFromPostgres(): Promise<DeskPayload> {
   }
 }
 
-async function loadDeskFromRest(): Promise<DeskPayload> {
+async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
   const [
     theses,
     symbols,
@@ -404,36 +401,36 @@ async function loadDeskFromRest(): Promise<DeskPayload> {
     candidates,
     actions,
   ] = await Promise.all([
-    restRows('theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc'),
-    restRows('thesis_symbols?select=thesis_id,symbol&order=weight_hint.desc,symbol.asc'),
-    restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200'),
-    restRows('thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400'),
-    restRows('thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale'),
-    restRows('runs?select=id,run_type,started_at,completed_at,notes&order=started_at.desc,id.desc&limit=80'),
-    restRows('cloud_runs?select=id,trigger_key,trigger_source,market_slot,mode,status,scheduled_for,started_at,completed_at,error_text,summary&order=created_at.desc&limit=40'),
-    restRows('cloud_tasks?select=id,run_id,task_type,entity_type,entity_key,status,attempt_count,error_text,queued_at,started_at,completed_at&order=queued_at.desc&limit=60'),
-    restRows('codex_automations?select=id,name,status,rrule,model,next_run_at,last_run_at&order=status.asc,name.asc'),
-    restRows('catalysts?select=id,thesis_id,symbol,catalyst_type,event_date,summary,source,status,created_at&order=event_date.asc,created_at.desc'),
-    restRows('research_queue?select=id,priority,status,topic,reason,source,created_at,updated_at&order=priority.desc,created_at.desc'),
-    restRows('research_lessons?select=id,cycle_id,test_id,thesis_id,lesson_type,summary,market_regime,incorporated,created_at&order=created_at.desc,id.desc'),
-    restRows('postmortems?select=id,trade_proposal_id,thesis_id,created_at,outcome,lesson&order=created_at.desc,id.desc&limit=40'),
-    restRows('research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&order=updated_at.desc,id.desc'),
-    restRows('strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at&order=tested_at.desc,id.desc'),
-    restRows('test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&order=tested_at.desc,id.desc'),
-    restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc'),
-    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&order=observed_at.desc,id.desc&limit=1'),
-    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc'),
-    restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at&order=observed_at.desc,quantity.desc&limit=80'),
-    restRows('trade_intents?select=id,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40'),
-    restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40'),
-    restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40'),
-    restRows('insights?select=id,title,summary,insight_type,novelty,confidence,status&order=updated_at.desc,id.desc&limit=40'),
-    restRows('predictions?select=id,thesis_id,statement,target_date,probability,status&order=updated_at.desc,id.desc'),
-    restRows('risk_controls?select=id,control_key,scope,control_type,threshold_json,enforcement_level,status&order=control_key.asc'),
-    restRows('ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status.asc,name.asc'),
-    restRows('symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300'),
-    restRows('ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&source_count=gte.2&order=status.asc,source_count.desc,score.desc&limit=100'),
-    restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100'),
+    restRows('theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', accessToken),
+    restRows('thesis_symbols?select=thesis_id,symbol&order=weight_hint.desc,symbol.asc', accessToken),
+    restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200', accessToken),
+    restRows('thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400', accessToken),
+    restRows('thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale', accessToken),
+    restRows('runs?select=id,run_type,started_at,completed_at,notes&order=started_at.desc,id.desc&limit=80', accessToken),
+    restRows('cloud_runs?select=id,trigger_key,trigger_source,market_slot,mode,status,scheduled_for,started_at,completed_at,error_text,summary&order=created_at.desc&limit=40', accessToken),
+    restRows('cloud_tasks?select=id,run_id,task_type,entity_type,entity_key,status,attempt_count,error_text,queued_at,started_at,completed_at&order=queued_at.desc&limit=60', accessToken),
+    restRows('codex_automations?select=id,name,status,rrule,model,next_run_at,last_run_at&order=status.asc,name.asc', accessToken),
+    restRows('catalysts?select=id,thesis_id,symbol,catalyst_type,event_date,summary,source,status,created_at&order=event_date.asc,created_at.desc', accessToken),
+    restRows('research_queue?select=id,priority,status,topic,reason,source,created_at,updated_at&order=priority.desc,created_at.desc', accessToken),
+    restRows('research_lessons?select=id,cycle_id,test_id,thesis_id,lesson_type,summary,market_regime,incorporated,created_at&order=created_at.desc,id.desc', accessToken),
+    restRows('postmortems?select=id,trade_proposal_id,thesis_id,created_at,outcome,lesson&order=created_at.desc,id.desc&limit=40', accessToken),
+    restRows('research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&order=updated_at.desc,id.desc', accessToken),
+    restRows('strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at&order=tested_at.desc,id.desc', accessToken),
+    restRows('test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&order=tested_at.desc,id.desc', accessToken),
+    restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', accessToken),
+    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&order=observed_at.desc,id.desc&limit=1', accessToken),
+    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
+    restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at&order=observed_at.desc,quantity.desc&limit=80', accessToken),
+    restRows('trade_intents?select=id,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
+    restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', accessToken),
+    restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40', accessToken),
+    restRows('insights?select=id,title,summary,insight_type,novelty,confidence,status&order=updated_at.desc,id.desc&limit=40', accessToken),
+    restRows('predictions?select=id,thesis_id,statement,target_date,probability,status&order=updated_at.desc,id.desc', accessToken),
+    restRows('risk_controls?select=id,control_key,scope,control_type,threshold_json,enforcement_level,status&order=control_key.asc', accessToken),
+    restRows('ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status.asc,name.asc', accessToken),
+    restRows('symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300', accessToken),
+    restRows('ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&source_count=gte.2&order=status.asc,source_count.desc,score.desc&limit=100', accessToken),
+    restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', accessToken),
   ]);
 
   const latestExposureAt = mapExposures(exposures)[0]?.observed_at;

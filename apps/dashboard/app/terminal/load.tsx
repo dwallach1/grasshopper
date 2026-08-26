@@ -1,10 +1,19 @@
+import { SignInScreen } from '../auth/sign-in';
 import { TerminalApp } from './app';
 import { loadDesk } from '../../lib/ledger';
+import { readOperatorSession } from '../../lib/operator-session';
 
 export const dynamic = 'force-dynamic';
 
 export async function TerminalPage() {
-  const loaded = await loadDesk()
+  const session = await readOperatorSession();
+  if (session === 'unauthenticated') {
+    return <SignInScreen denied={false} />;
+  }
+  if (session === 'forbidden') {
+    return <SignInScreen denied />;
+  }
+  const loaded = await loadDesk(session.accessToken)
     .then((desk) => ({ ok: true as const, desk }))
     .catch((error) => ({
       ok: false as const,
@@ -17,9 +26,9 @@ export async function TerminalPage() {
           <b>Ledger</b>
           <h1>Canonical data unavailable</h1>
           <p>
-            The local terminal reads live Supabase tables, not a mock. Set{' '}
-            <code>QUANTANAMO_DATABASE_URL</code> or <code>SUPABASE_SECRET_KEY</code> in the repo-root{' '}
-            <code>.env.local</code>. See <code>LOCAL.md</code>.
+            Signed in as <code>{session.email}</code>, but the ledger query failed. Confirm operator
+            RLS is applied and <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> is the anon/publishable
+            key. See <code>LOCAL.md</code>.
           </p>
           <p>
             <code>{loaded.message}</code>
@@ -28,5 +37,5 @@ export async function TerminalPage() {
       </main>
     );
   }
-  return <TerminalApp initial={loaded.desk} />;
+  return <TerminalApp initial={loaded.desk} operatorEmail={session.email} />;
 }

@@ -2505,3 +2505,114 @@ a:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.term-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.term-session span {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-session button {
+  border: 1px solid var(--line);
+  background: var(--elevated);
+  color: var(--text-2);
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.term-session form {
+  display: inline;
+}
+
+.term-session i {
+  color: var(--warn);
+  font-style: normal;
+}
+
+.term-gate {
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--text);
+}
+
+.term-gate .term-top .term-live {
+  margin-left: auto;
+}
+
+.term-gate-card {
+  max-width: 420px;
+  margin: 64px auto 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: var(--elevated);
+}
+
+.term-gate-card b {
+  display: block;
+  letter-spacing: 0.16em;
+  color: var(--amber);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.term-gate-card h1 {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.term-gate-card p {
+  color: var(--text-2);
+  margin: 0 0 16px;
+}
+
+.term-gate-error {
+  color: var(--down) !important;
+}
+
+.term-gate-primary,
+.term-gate-secondary {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.term-gate-primary {
+  background: var(--amber);
+  color: #140e04;
+  border-color: var(--amber);
+  font-weight: 600;
+}
+
+.term-gate-secondary {
+  background: var(--elevated-2);
+  color: var(--text);
+}
+
+.term-gate-split {
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  margin: 16px 0 8px;
+}
+
+.term-gate-note {
+  margin-top: 16px !important;
+  font-size: 12px;
+}
+
+.term-gate-note code {
+  color: var(--text);
+}

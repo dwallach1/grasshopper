@@ -320,20 +320,20 @@ docs/                            architecture and runbooks
 
 ## Development and operations
 
-Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `QUANTANAMO_DATABASE_URL` (or `SUPABASE_SECRET_KEY`) in root `.env.local`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
+Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in root `.env.local` for operator sign-in. Workers still use `QUANTANAMO_DATABASE_URL` / `SUPABASE_SECRET_KEY` on the server. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
 
 ### Local webapp against production Supabase
 
-No Docker, no Cloudflare Workers. The Next server reads and writes canonical tables with `QUANTANAMO_DATABASE_URL` or `SUPABASE_SECRET_KEY`. Details and a verification checklist: [`LOCAL.md`](LOCAL.md).
+No Docker, no Cloudflare Workers. Sign in with OAuth or a passkey; the Next server queries canonical tables as that user. Details: [`LOCAL.md`](LOCAL.md).
 
 ```sh
-# Uses QUANTANAMO_DATABASE_URL from root .env.local
+# Uses NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY from root .env.local
 bun run web:app
 ```
 
-Open `http://127.0.0.1:5173`. Manager identity defaults to `local@quantanamo.dev`.
+Open `http://127.0.0.1:5173` and sign in. The first confirmed user claims `ledger_operators`.
 
-Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`). Do not put that key in `NEXT_PUBLIC_*`.
+Do not put `SUPABASE_SECRET_KEY` in `NEXT_PUBLIC_*`.
 
 ### Local end-to-end tests (publication / knowledge)
 

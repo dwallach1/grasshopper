@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import type { DeskPayload, ThesisRow } from '../../lib/ledger-types';
 import { THESIS_STATUSES } from '../../lib/thesis-status';
+import { SessionControls } from './session-controls';
 import { age, money, moneyPrecise, nyStamp, pct, qty, titleCase, toneForStatus, until } from './format';
 
 const POLL_MS = 15_000;
@@ -42,7 +43,7 @@ function surfaceFromPath(pathname: string): string {
   return pathname.replace(/^\//, '').split('/')[0] || 'monitor';
 }
 
-export function TerminalApp({ initial }: { initial: DeskPayload }) {
+export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; operatorEmail: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const surface = surfaceFromPath(pathname);
@@ -158,6 +159,7 @@ export function TerminalApp({ initial }: { initial: DeskPayload }) {
           <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
           {desk.source} · {age(desk.generated_at, now)}
         </div>
+        <SessionControls email={operatorEmail} />
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
       <main className="term-main">

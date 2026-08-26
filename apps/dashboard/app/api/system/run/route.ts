@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
+import { isOperatorSession, operatorOrError } from '../../../../lib/operator-session';
 import { loadRootEnvLocal } from '../../../../load-root-env';
 import { invokeFullPipeline } from '../../../worker-control';
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   loadRootEnvLocal();
-  const managerId = await authenticatedIdentity(request.headers);
-  if (!managerId || !isManagerIdentity(managerId)) {
-    return NextResponse.json({ error: 'Manager access required' }, { status: 403 });
-  }
+  const session = await operatorOrError();
+  if (!isOperatorSession(session)) return session;
 
   try {
     const result = await invokeFullPipeline();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import postgres from 'postgres';
 import { z } from 'zod';
 
-import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
+import { isOperatorSession, operatorOrError } from '../../../../lib/operator-session';
 
 const OntologyManageSchema = z.object({
   entity_type: z.enum(['theme', 'symbol']),
@@ -30,10 +30,8 @@ const OntologyManageResponseSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const managerId = await authenticatedIdentity(request.headers);
-  if (!managerId || !isManagerIdentity(managerId)) {
-    return NextResponse.json({ error: 'Ontology manager access required' }, { status: 403 });
-  }
+  const session = await operatorOrError();
+  if (!isOperatorSession(session)) return session;
 
   let raw: unknown;
   try {
@@ -66,7 +64,7 @@ export async function POST(request: NextRequest) {
         ${JSON.stringify({
           'x-quantanamo-dashboard-token': dashboardToken,
           'x-quantanamo-manager-token': managerToken,
-          'x-quantanamo-manager-user-id': managerId,
+          'x-quantanamo-manager-user-id': session.email,
         })},
         true
       )`;
@@ -106,7 +104,7 @@ export async function POST(request: NextRequest) {
     apikey: secretKey || publishableKey,
     'content-type': 'application/json',
     'x-quantanamo-dashboard-token': dashboardToken,
-    'x-quantanamo-manager-user-id': managerId,
+    'x-quantanamo-manager-user-id': session.email,
     'x-quantanamo-manager-token': managerToken,
   });
   if (secretKey) {

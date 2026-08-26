@@ -17,7 +17,10 @@ read_env_value() {
 db_url="$(read_env_value "$env_local" QUANTANAMO_DATABASE_URL)"
 secret_key="$(read_env_value "$env_local" SUPABASE_SECRET_KEY)"
 publishable="$(read_env_value "$env_local" SUPABASE_PUBLISHABLE_KEY)"
+next_publishable="$(read_env_value "$env_local" NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+next_anon="$(read_env_value "$env_local" NEXT_PUBLIC_SUPABASE_ANON_KEY)"
 supabase_url="$(read_env_value "$env_local" SUPABASE_URL)"
+next_supabase_url="$(read_env_value "$env_local" NEXT_PUBLIC_SUPABASE_URL)"
 dashboard_token="$(read_env_value "$env_local" QUANTANAMO_DASHBOARD_TOKEN)"
 manager_token="$(read_env_value "$env_local" QUANTANAMO_MANAGER_TOKEN)"
 internal_token="$(read_env_value "$env_local" INTERNAL_SERVICE_TOKEN)"
@@ -31,16 +34,27 @@ if [[ -z "$supabase_url" && -n "$db_url" ]]; then
   fi
 fi
 
-if [[ -z "$db_url" && -z "$secret_key" ]]; then
+if [[ -z "$supabase_url" && -n "$next_supabase_url" ]]; then
+  supabase_url="$next_supabase_url"
+fi
+if [[ -z "$next_supabase_url" && -n "$supabase_url" ]]; then
+  next_supabase_url="$supabase_url"
+fi
+
+if [[ -z "$db_url" && -z "$secret_key" && -z "$publishable" && -z "$next_publishable" && -z "$next_anon" ]]; then
   echo "Need a Supabase credential in root .env.local:"
-  echo "  QUANTANAMO_DATABASE_URL=...   # preferred (already set for most setups)"
-  echo "  or SUPABASE_SECRET_KEY=...     # Supabase → Project Settings → API → service_role"
+  echo "  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...  # required for operator sign-in"
+  echo "  QUANTANAMO_DATABASE_URL=...               # optional, workers / postgres.js"
+  echo "  or SUPABASE_SECRET_KEY=...                # service_role, server-only"
   exit 1
 fi
 
 export LOCAL_DEV_IDENTITY="${LOCAL_DEV_IDENTITY:-local@quantanamo.dev}"
 export QUANTANAMO_MANAGER_USER_IDS="${QUANTANAMO_MANAGER_USER_IDS:-$LOCAL_DEV_IDENTITY}"
 export SUPABASE_URL="${supabase_url:-}"
+[[ -n "$next_supabase_url" ]] && export NEXT_PUBLIC_SUPABASE_URL="$next_supabase_url"
+[[ -n "$next_publishable" ]] && export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$next_publishable"
+[[ -n "$next_anon" ]] && export NEXT_PUBLIC_SUPABASE_ANON_KEY="$next_anon"
 [[ -n "$db_url" ]] && export QUANTANAMO_DATABASE_URL="$db_url"
 [[ -n "$secret_key" ]] && export SUPABASE_SECRET_KEY="$secret_key"
 [[ -n "$publishable" ]] && export SUPABASE_PUBLISHABLE_KEY="$publishable"
@@ -50,10 +64,13 @@ export SUPABASE_URL="${supabase_url:-}"
 [[ -n "$knowledge_worker_url" ]] && export QUANTANAMO_KNOWLEDGE_WORKER_URL="$knowledge_worker_url"
 [[ -n "$research_worker_url" ]] && export QUANTANAMO_RESEARCH_WORKER_URL="$research_worker_url"
 
+if [[ -n "$next_publishable" || -n "$next_anon" ]]; then
+  echo "→ Operator sign-in via Supabase Auth (publishable key)"
+fi
 if [[ -n "$db_url" ]]; then
-  echo "→ Live Supabase via Postgres"
+  echo "→ Live Supabase via Postgres (server-only)"
 elif [[ -n "$secret_key" ]]; then
-  echo "→ Live Supabase via PostgREST service_role"
+  echo "→ Live Supabase via PostgREST service_role (server-only)"
 fi
 [[ -n "$supabase_url" ]] && echo "→ $supabase_url"
 echo "→ http://127.0.0.1:5173"

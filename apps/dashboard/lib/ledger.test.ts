@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { isPublishableKey } from './auth-public';
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
 import { isPostgresPermissionDenied } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
@@ -97,5 +98,14 @@ describe('postgres permission errors', () => {
     expect(isPostgresPermissionDenied('permission denied for table cloud_runs')).toBe(true);
     expect(isPostgresPermissionDenied('permission denied for relation trade_intents')).toBe(true);
     expect(isPostgresPermissionDenied('duplicate key value violates unique constraint')).toBe(false);
+  });
+});
+
+describe('publishable keys', () => {
+  test('accepts modern publishable and anon JWT, rejects secrets', () => {
+    expect(isPublishableKey('sb_publishable_test_key')).toBe(true);
+    expect(isPublishableKey('sb_secret_do_not_use')).toBe(false);
+    expect(isPublishableKey('eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYW5vbiJ9.x')).toBe(true);
+    expect(isPublishableKey('eyJhbGciOiJub25lIn0.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.x')).toBe(false);
   });
 });
