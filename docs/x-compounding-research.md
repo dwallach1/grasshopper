@@ -80,7 +80,7 @@ the only path to trades.
 
 - Automatic: the morning and pre-close bookmark syncs start sessions for new
   market-related bookmarks, 30 minutes before each portfolio decision window.
-- Manual: `POST /api/knowledge/x/research` (dashboard proxy, manager only)
+- Manual: knowledge Worker `POST /x/research` (internal token; not via local webapp)
   with `{"bookmarkId": "..."}` creates or restarts a session.
 - Queues must exist before first deploy:
 

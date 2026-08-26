@@ -12,7 +12,7 @@ interface __BaseEnv_Env {
 	FINANCIAL_DATASETS_API_KEY?: string;
 	AI: Ai;
 	AI_GATEWAY_ID: "default";
-	X_REDIRECT_URI: "https://thesisforge-dashboard.davidwallach2.workers.dev/api/x/callback";
+	X_REDIRECT_URI: "http://127.0.0.1:5173/api/x/callback";
 	SUPABASE_URL: string;
 	X_CLIENT_ID: string;
 	X_ACCESS_TOKEN: string;

@@ -8,18 +8,14 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "bun --bun vinext dev",
-    "build": "bun --bun vinext build",
-    "start": "bun --bun vinext start",
-    "dry-run": "bun run build && WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.json --cwd dist/server --dry-run",
-    "deploy": "bun run build && WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.json --cwd dist/server",
+    "dev": "bun --bun next dev --hostname 127.0.0.1 --port 5173",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start --hostname 127.0.0.1 --port 5173",
     "lint": "bun run lint:eslint && bun run lint:anti-slop",
-    "lint:eslint": "bun --bun eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint:eslint": "bun --bun eslint . --ignore-pattern .next",
     "lint:anti-slop": "bun --bun oxlint ."
   },
   "dependencies": {
-    "@thesisforge/shared": "workspace:*",
-    "jose": "6.2.10",
     "next": "16.2.6",
     "postgres": "^3.4.9",
     "react": "19.2.6",
@@ -27,23 +23,15 @@
     "zod": "^4"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.53.1",
-    "@cloudflare/workers-types": "5.20260823.1",
     "@oxlint/plugins": "1.80.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "oxlint": "1.80.0",
-    "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
-    "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.3",
-    "vite": "8.0.13",
-    "wrangler": "4.125.0"
+    "typescript": "5.9.3"
   }
 }

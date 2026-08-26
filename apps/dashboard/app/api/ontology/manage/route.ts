@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { NextRequest, NextResponse } from 'next/server';
+import postgres from 'postgres';
 import { z } from 'zod';
 
 import { authenticatedIdentity, isManagerIdentity } from '../../../access-identity';
@@ -25,6 +25,10 @@ const OntologyManageEntitySchema = z.union([
   }).passthrough(),
 ]);
 
+const OntologyManageResponseSchema = z.object({
+  entity: OntologyManageEntitySchema,
+});
+
 export async function POST(request: NextRequest) {
   const managerId = await authenticatedIdentity(request.headers);
   if (!managerId || !isManagerIdentity(managerId)) {
@@ -42,39 +46,88 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid ontology management action' }, { status: 400 });
   }
   const { entity_type: entityType, entity_key: entityKey, action } = parsed.data;
+  const key = entityType === 'symbol' ? entityKey.toUpperCase() : entityKey;
 
-  const url = env.SUPABASE_URL;
-  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY;
-  const dashboardToken = env.THESISFORGE_DASHBOARD_TOKEN;
-  const managerToken = env.THESISFORGE_MANAGER_TOKEN;
-  if (!url || !publishableKey || !dashboardToken || !managerToken) {
-    return NextResponse.json({ error: 'Ontology manager is not configured' }, { status: 503 });
+  const databaseUrl = process.env.THESISFORGE_DATABASE_URL?.trim();
+  const dashboardToken = process.env.THESISFORGE_DASHBOARD_TOKEN?.trim();
+  const managerToken = process.env.THESISFORGE_MANAGER_TOKEN?.trim();
+
+  if (databaseUrl && dashboardToken && managerToken) {
+    const sql = postgres(databaseUrl, {
+      max: 1,
+      idle_timeout: 5,
+      connect_timeout: 15,
+      prepare: false,
+      ssl: 'require',
+    });
+    try {
+      await sql`select set_config(
+        'request.headers',
+        ${JSON.stringify({
+          'x-thesisforge-dashboard-token': dashboardToken,
+          'x-thesisforge-manager-token': managerToken,
+          'x-thesisforge-manager-user-id': managerId,
+        })},
+        true
+      )`;
+      const rows = await sql<{ manage_ontology_entity: unknown }>`
+        select public.manage_ontology_entity(${entityType}, ${key}, ${action}) as manage_ontology_entity
+      `;
+      const dbResult = rows[0]?.manage_ontology_entity;
+      const wrapped = OntologyManageResponseSchema.safeParse(dbResult);
+      if (wrapped.success) return NextResponse.json({ entity: wrapped.data.entity });
+      const direct = OntologyManageEntitySchema.safeParse(dbResult);
+      if (direct.success) return NextResponse.json({ entity: direct.data });
+      return NextResponse.json({ error: 'Ontology action returned an invalid entity' }, { status: 502 });
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Ontology action failed' },
+        { status: 500 },
+      );
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
   }
 
-  const response = await fetch(
-    `${url.replace(/\/$/, '')}/rest/v1/rpc/manage_ontology_entity`,
-    {
-      method: 'POST',
-      headers: {
-        apikey: publishableKey,
-        'content-type': 'application/json',
-        'x-thesisforge-dashboard-token': dashboardToken,
-        'x-thesisforge-manager-user-id': managerId,
-        'x-thesisforge-manager-token': managerToken,
+  const url = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (!url || !publishableKey || !dashboardToken || !managerToken) {
+    return NextResponse.json(
+      {
+        error:
+          'Ontology manager needs THESISFORGE_DASHBOARD_TOKEN + THESISFORGE_MANAGER_TOKEN (and SUPABASE_URL), or THESISFORGE_DATABASE_URL with those tokens.',
       },
-      body: JSON.stringify({
-        p_entity_type: entityType,
-        p_entity_key: entityType === 'symbol' ? entityKey.toUpperCase() : entityKey,
-        p_action: action,
-      }),
-    },
-  );
+      { status: 503 },
+    );
+  }
+
+  const requestHeaders = new Headers({
+    apikey: secretKey || publishableKey,
+    'content-type': 'application/json',
+    'x-thesisforge-dashboard-token': dashboardToken,
+    'x-thesisforge-manager-user-id': managerId,
+    'x-thesisforge-manager-token': managerToken,
+  });
+  if (secretKey) {
+    requestHeaders.set('Authorization', `Bearer ${secretKey}`);
+  }
+
+  const response = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/manage_ontology_entity`, {
+    method: 'POST',
+    headers: requestHeaders,
+    body: JSON.stringify({
+      p_entity_type: entityType,
+      p_entity_key: key,
+      p_action: action,
+    }),
+  });
   const result: unknown = await response.json().catch(() => ({ error: 'Supabase returned an invalid response' }));
   if (!response.ok) {
     const message = SupabaseErrorSchema.safeParse(result).data?.message || 'Ontology action failed';
     return NextResponse.json({ error: message }, { status: response.status });
   }
-  const wrapped = z.object({ entity: OntologyManageEntitySchema }).safeParse(result);
+  const wrapped = OntologyManageResponseSchema.safeParse(result);
   if (wrapped.success) return NextResponse.json({ entity: wrapped.data.entity });
   const direct = OntologyManageEntitySchema.safeParse(result);
   if (direct.success) return NextResponse.json({ entity: direct.data });

@@ -34,7 +34,9 @@
   },
   "vars": {
     "AI_GATEWAY_ID": "default",
-    "X_REDIRECT_URI": "https://thesisforge-dashboard.davidwallach2.workers.dev/api/x/callback"
+    // X OAuth re-auth is rare; refresh tokens keep cron sync alive.
+    // Register this URI in the X developer portal when rotating OAuth.
+    "X_REDIRECT_URI": "http://127.0.0.1:5173/api/x/callback"
   },
   "hyperdrive": [{
     "binding": "HYPERDRIVE",

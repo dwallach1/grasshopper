@@ -1,17 +1,17 @@
-# Cloudflare migration
+# Cloudflare Workers runtime
 
-ThesisForge's production runtime is Cloudflare-first. Supabase remains the canonical relational database, but no production path depends on Python, a laptop, local Cron, or a Codex automation.
+ThesisForge's production research and trading path runs on Cloudflare Workers. Supabase remains the canonical relational database. The desk UI (`apps/dashboard`) runs only locally and reads Supabase; it is not deployed to Cloudflare.
 
-## Final ownership model
+## Ownership model
 
-| Worker | Owns | Does not own |
+| Component | Owns | Does not own |
 |---|---|---|
-| `thesisforge-dashboard` | Private UI, Access identity verification, authenticated operator routes, read-only dashboard projection | Scheduling, ingestion, model decisions, broker state |
+| `apps/dashboard` (local) | Local desk UI and ontology manager actions against Supabase | Scheduling, ingestion, model decisions, broker state, Cloudflare hosting |
 | `thesisforge-knowledge-pipeline` | X OAuth/token rotation, bookmark sync, Workers AI semantic ontology analysis, article/PDF extraction, R2 archival, ontology promotion/graph refresh, financial-data cache, research capture, projection refresh after knowledge mutations | Trading decisions or broker tools |
 | `thesisforge-research-orchestrator` | Market-slot schedule, durable research Workflow, Workers AI tasks, position decisions, trade-intent coordination, projection refresh when a run becomes terminal | Source ingestion, X credentials, broker OAuth |
 | `thesisforge-broker-gateway` | Robinhood MCP OAuth, read/review/place allowlist, final deterministic broker enforcement | Research or source ingestion |
 
-The old `thesisforge-dashboard-publication` name was misleading: that Worker had become the research control plane. It is replaced by `thesisforge-research-orchestrator`. Dashboard publication is now a shared event-driven read-model update after canonical mutations and terminal research runs; it has no independent Cron.
+The old `thesisforge-dashboard` Worker (vinext + Workers Assets) was removed. Dashboard publication remains a shared event-driven read-model update after canonical mutations and terminal research runs; it has no independent Cron.
 
 ## Data ownership
 
@@ -24,53 +24,24 @@ The old `thesisforge-dashboard-publication` name was misleading: that Worker had
 
 ## Knowledge pipeline
 
-A 30-minute Cron calls the single `XCredentialVault` Durable Object. The object serializes syncs, refreshes rotating OAuth credentials, and fetches bounded X pages. The Worker loads the active ontology and bookmarks whose model/prompt version is stale, then sends bounded batches to Workers AI through AI Gateway. Invalid, incomplete, or source-ungrounded model output aborts the learning run. A short Postgres transaction then:
+A Cron calls the single `XCredentialVault` Durable Object. The object serializes syncs, refreshes rotating OAuth credentials, and fetches bounded X pages. The Worker loads the active ontology and bookmarks whose model/prompt version is stale, then sends bounded batches to Workers AI through AI Gateway. Invalid, incomplete, or source-ungrounded model output aborts the learning run. A short Postgres transaction then upserts evidence, records ontology observations, and enqueues previously unseen URLs.
 
-1. upserts bookmarks, URLs, verified symbol evidence, and claims;
-2. persists validated semantic claims, symbols, theme matches, evidence direction, model version, and raw typed output;
-3. records ontology observations, evidence, and reviewable candidates;
-4. updates thesis evidence/scores and promotes candidates that meet source-quality gates;
-5. enqueues previously unseen URLs.
-
-The article Queue follows redirects defensively, rejects private-network destinations, caps response bytes, extracts HTML/text/PDF content in the Worker runtime, writes immutable bytes to R2, and commits queryable metadata/extracted text to Postgres. Queue failures retry with exponential delay and end in a DLQ.
-
-Paid financial requests are never scheduled. They are available only through the authenticated internal API, use endpoint-specific TTLs, persist the purchased response before normalization, and serve fresh cached bytes whenever possible.
+Paid financial requests are never scheduled. They are available only through the authenticated internal Worker API (service binding / internal token), use endpoint-specific TTLs, and serve fresh cached bytes whenever possible. Operator tooling uses `bun run cloud:sync` and Worker deploy scripts—not the local webapp.
 
 ## Research and execution pipeline
 
-Paired UTC Cron candidates admit exactly 10:05, 13:05, and 15:25 America/New_York on weekdays. `CloudResearchWorkflow` creates canonical `cloud_runs`/`cloud_tasks`, skips unchanged thesis hashes, fans out through the research Queue, and persists every typed result. Deterministic TypeScript policy—not the model—owns eligibility and sizing.
+Paired UTC Cron candidates admit the New York decision windows on weekdays. `CloudResearchWorkflow` creates canonical `cloud_runs`/`cloud_tasks`, skips unchanged thesis hashes, fans out through the research Queue, and persists every typed result. Deterministic TypeScript policy—not the model—owns eligibility and sizing.
 
-Any proposed trade passes through Supabase kill switches, account-scoped serialization, and `RobinhoodBrokerAgent`. The Agent refreshes account state and enforces the exact equity read/review/place allowlist immediately before submission. Unsupported tools and products fail closed.
-
-When all tasks are terminal, run finalization immediately rebuilds the `current` dashboard snapshot. Knowledge mutations do the same after their transaction succeeds.
+Any proposed trade passes through Supabase kill switches, account-scoped serialization, and `RobinhoodBrokerAgent`. When all tasks are terminal, run finalization rebuilds the `current` dashboard snapshot. Knowledge mutations do the same after their transaction succeeds.
 
 ## Security boundaries
 
-- Dashboard traffic is protected by Cloudflare Access and application-level identity verification.
-- The knowledge Worker has no public route; dashboard calls use a service binding plus a shared internal token.
-- Account-shared credentials live in Cloudflare Secrets Store: `INTERNAL_SERVICE_TOKEN` is bound only to dashboard and knowledge, `THESISFORGE_PUBLICATION_TOKEN` only to knowledge and research, and `FINANCIAL_DATASETS_API_KEY` only to knowledge. Worker-local encrypted secrets remain for single-owner values such as X OAuth and Supabase configuration.
+- The local desk is localhost-only; it is not behind Cloudflare Access.
+- The knowledge Worker has no public route; internal callers use a shared internal token (research/knowledge bindings).
+- Account-shared credentials live in Cloudflare Secrets Store: `INTERNAL_SERVICE_TOKEN` and `THESISFORGE_PUBLICATION_TOKEN` for knowledge/research, `FINANCIAL_DATASETS_API_KEY` only for knowledge.
 - Supabase Edge Functions retain the service-role key; Workers receive only narrow publication/control tokens.
 - R2 is private and has no public development URL or custom domain.
-- Worker HTTP responses are bounded and no secrets are logged.
 - Trading and position-management risk controls are independent emergency stops.
-
-## Validation and cutover
-
-Cutover completed on 2026-08-24. The Cloudflare Worker dashboard is the sole repository deployment target; the former Sites integration, misleading publication Worker/Workflows, root Python package, Python test/configuration files, and local X scripts have been removed.
-
-A release is complete only after:
-
-1. TypeScript typechecks and unit/policy tests pass.
-2. the dashboard production build and all three non-UI Worker Wrangler configurations complete successfully;
-3. the declarative Supabase schema and remote migration history agree;
-4. Hyperdrive can execute a scoped read/write transaction;
-5. a manual X sync advances the bookmark import timestamp;
-6. article Queue messages archive to R2 and clear their canonical backlog;
-7. the dashboard projection advances after both a knowledge mutation and a terminal research run;
-8. duplicate Cron/Queue delivery is harmless;
-9. the old publication Worker and local Python/X runtime are removed only after the live checks pass.
-
-The cutover validation on 2026-08-24 confirmed live X token refresh and bookmark ingestion, Hyperdrive writes, Queue delivery and retry, private R2 archival, event-driven dashboard publication, Durable Object state transfer, and a completed non-actionable smoke instance of `thesisforge-research-cycle`. Secrets Store validation also confirmed dashboard-to-knowledge authentication, new-token-only Supabase publication, and a live Financial Datasets `company/facts` network response normalized into Postgres. The one-minute sync cadence used during validation was restored to 30 minutes.
 
 ## Emergency stop
 

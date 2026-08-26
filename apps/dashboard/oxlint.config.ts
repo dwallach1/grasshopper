@@ -13,10 +13,7 @@ export default defineConfig({
     ".opencode/**",
     ".pi/**",
     ".roo/**",
-    ".vinext/**",
     ".windsurf/**",
-    ".wrangler/**",
-    "dist/**",
     "node_modules/**",
   ],
   jsPlugins: [

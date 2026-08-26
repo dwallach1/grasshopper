@@ -9,11 +9,12 @@ ThesisForge treats Financial Datasets as a paid upstream source, not as its data
 - Raw response bytes are retained in Postgres. Normalized records keep their source request ID, so every fact is traceable to the exact purchased payload.
 - Identical normalized records are deduplicated. Changed records are appended rather than overwritten.
 - Retryable 429/5xx responses receive two bounded retries; the final response is retained for diagnosis.
-- Paid requests are never scheduled and can only be initiated through the Access-authenticated manager route and internal service binding.
+- Paid requests are never scheduled and can only be initiated through the knowledge Worker's authenticated internal API (`/financial`) using the internal service token.
+- Manual operator calls use Worker tooling / `wrangler`, not the local webapp.
 
 ## Operator workflow
 
-The dashboard's manager-only `POST /api/knowledge/financial` route accepts the upstream endpoint, query parameters, optional request body, and `force` flag. It forwards through the private `KNOWLEDGE_PIPELINE` service binding; neither the browser nor dashboard Worker can read the financial API key.
+Call the knowledge Worker's internal `POST /financial` route with the shared internal service token (for example via `wrangler` against a temporary binding, or from another Worker). The API key never leaves the knowledge Worker.
 
 For example, a company-facts request body is:
 
@@ -26,5 +27,3 @@ For example, a company-facts request body is:
 ```
 
 Use `force` only when a new purchased response is intentionally worth another request. Otherwise the persistent endpoint-specific cache is authoritative until its freshness window expires.
-
-Production validation on 2026-08-24 forced the documented TSLA company-facts query through dashboard → service binding → knowledge Worker → Financial Datasets. The provider returned HTTP 200 from the network; request ID 32 was retained and one normalized record was written to Postgres.

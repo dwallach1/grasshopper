@@ -16,7 +16,7 @@ The graph is paired with a judgment ledger. Evidence records what a source says;
 - Thesis relations explain how ideas enable, pull through, substitute for, or compete with one another.
 - Event decisions are separate from events. They record `participate`, `watch`, or `skip`, the reason, and the trigger for reconsideration.
 
-Run `bun run research:capture -- --help` to add structured judgments, then `bun run dashboard:publish` to refresh the canonical dashboard snapshot in Supabase. The hosted dashboard also provides durable quick-capture for insights and predictions.
+Run `bun run research:capture -- --help` to add structured judgments. Workers refresh the canonical dashboard snapshot in Supabase after knowledge mutations and terminal research runs; open the local desk with `bun run web:app` to read it.
 
 ## Closed-Loop Research
 
