@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   mapAccount,
+  mapAccounts,
   mapAgentRuns,
   mapAutomations,
   mapCandidates,
@@ -36,7 +37,8 @@ import {
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import { isPostgresPermissionDenied, openSql } from './postgres';
-import { upcomingWorkerFires } from './schedule';
+import { assembleBookPerformance } from './book-performance';
+import { assembleRoutines } from './routines';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
@@ -88,7 +90,8 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       tests,
       scenarios,
       agentRuns,
-      account,
+      accountLatest,
+      accountFirst,
       positions,
       exposures,
       intents,
@@ -220,7 +223,15 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       sql`
         select observed_at, account_label, total_value, equity_value, cash, buying_power, source
         from public.account_snapshots
+        where account_label ilike '%agentic%'
         order by observed_at desc, id desc
+        limit 40
+      `,
+      sql`
+        select observed_at, account_label, total_value, equity_value, cash, buying_power, source
+        from public.account_snapshots
+        where account_label ilike '%agentic%'
+        order by observed_at asc, id asc
         limit 1
       `,
       optionalRows(
@@ -339,9 +350,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       tests: mapTests(tests),
       scenarios: mapScenarios(scenarios),
       agent_runs: mapAgentRuns(agentRuns),
-      account: mapAccount(account),
-      positions: mapPositions(positions),
-      exposures: mapExposures(exposures),
+      ...bookFields(accountLatest, accountFirst, positions, exposures),
       intents: mapIntents(intents),
       proposals: mapProposals(proposals),
       fills: mapFills(fills),
@@ -387,7 +396,8 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     tests,
     scenarios,
     agentRuns,
-    account,
+    accountLatest,
+    accountFirst,
     positions,
     exposures,
     intents,
@@ -418,7 +428,8 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at&order=tested_at.desc,id.desc', accessToken),
     restRows('test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&order=tested_at.desc,id.desc', accessToken),
     restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', accessToken),
-    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&order=observed_at.desc,id.desc&limit=1', accessToken),
+    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
+    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
     restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
     restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at&order=observed_at.desc,quantity.desc&limit=80', accessToken),
     restRows('trade_intents?select=id,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
@@ -432,11 +443,6 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&source_count=gte.2&order=status.asc,source_count.desc,score.desc&limit=100', accessToken),
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', accessToken),
   ]);
-
-  const latestExposureAt = mapExposures(exposures)[0]?.observed_at;
-  const latestExposures = latestExposureAt
-    ? mapExposures(exposures).filter((row) => row.observed_at === latestExposureAt)
-    : [];
 
   const mappedTests = mapTests(tests);
   return assembleDesk('postgrest', {
@@ -456,9 +462,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     tests: mappedTests,
     scenarios: mapScenarios(scenarios),
     agent_runs: mapAgentRuns(agentRuns),
-    account: mapAccount(account),
-    positions: mapPositions(positions),
-    exposures: latestExposures,
+    ...bookFields(accountLatest, accountFirst, positions, exposures),
     intents: mapIntents(intents),
     proposals: mapProposals(proposals),
     fills: mapFills(fills),
@@ -484,30 +488,47 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
   });
 }
 
+function bookFields(
+  latestRows: JsonObjectRow[],
+  firstRows: JsonObjectRow[],
+  positionRows: JsonObjectRow[],
+  exposureRows: JsonObjectRow[],
+) {
+  const snapshots = mapAccounts(latestRows);
+  const starting = mapAccount(firstRows);
+  const positions = mapPositions(positionRows);
+  const mappedExposures = mapExposures(exposureRows);
+  const latestExposureAt = mappedExposures[0]?.observed_at;
+  const latestExposures = latestExposureAt
+    ? mappedExposures.filter((row) => row.observed_at === latestExposureAt)
+    : [];
+  const openSymbols = new Set(positions.map((row) => row.symbol));
+  const exposures = latestExposures.filter((row) => openSymbols.has(row.symbol));
+  return {
+    account: snapshots[0] ?? starting,
+    snapshots,
+    book: assembleBookPerformance({
+      snapshotsNewestFirst: snapshots,
+      starting,
+      positions,
+    }),
+    positions,
+    exposures,
+  };
+}
+
 function assembleDesk(
   source: DeskPayload['source'],
-  body: Omit<DeskPayload, 'generated_at' | 'source' | 'schedule'>,
+  body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines'>,
 ): DeskPayload {
-  const generatedAt = new Date().toISOString();
-  const now = Date.parse(generatedAt);
-  const cron = upcomingWorkerFires(now, 6);
-  const queuedRuns = body.cloud_runs
-    .filter((run) => run.status === 'queued' || run.status === 'running')
-    .map((run) => ({
-      id: run.id,
-      name: `Cloud ${run.trigger_source}${run.market_slot ? ` ${run.market_slot}` : ''}`,
-      at: run.scheduled_for || run.started_at || generatedAt,
-      source: 'cloud_run' as const,
-    }));
-  const automationFires = body.automations.flatMap((job) => {
-    if (!job.next_run_at) return [];
-    return [{ id: job.id, name: job.name, at: job.next_run_at, source: 'automation' as const }];
-  });
-  const schedule = [...queuedRuns, ...automationFires, ...cron].sort((a, b) => a.at.localeCompare(b.at));
   return {
-    generated_at: generatedAt,
-    source,
-    schedule,
     ...body,
+    generated_at: new Date().toISOString(),
+    source,
+    routines: assembleRoutines({
+      runs: body.runs,
+      automations: body.automations,
+      cloudRuns: body.cloud_runs,
+    }),
   };
 }

@@ -393,9 +393,12 @@ const AccountSchema = z
   })
   .passthrough();
 
+export function mapAccounts(rows: JsonObjectRow[]): AccountRow[] {
+  return z.array(AccountSchema).parse(rows);
+}
+
 export function mapAccount(rows: JsonObjectRow[]): AccountRow | null {
-  const parsed = z.array(AccountSchema).parse(rows);
-  return parsed[0] ?? null;
+  return mapAccounts(rows)[0] ?? null;
 }
 
 const PositionSchema = z

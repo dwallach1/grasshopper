@@ -18,7 +18,10 @@ export type WorkerSlot = {
   sundayOnly?: boolean;
 };
 
-/** Production Cron, expressed in America/New_York after the DST dual-UTC gate. */
+/**
+ * Retired Cloudflare Cron slots (DST dual-UTC gate). Do not feed these into
+ * the operator desk as due jobs — QUANTANAMO (Grok Bot) owns live cadences.
+ */
 export const WORKER_SLOTS: WorkerSlot[] = [
   { id: 'knowledge-am', name: 'Knowledge ingest', weekdayOnly: true, hour: 9, minute: 35 },
   { id: 'research-am', name: 'Research workflow', weekdayOnly: true, hour: 10, minute: 5 },

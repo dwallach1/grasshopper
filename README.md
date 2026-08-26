@@ -87,7 +87,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
    knowledge only:       FINANCIAL_DATASETS_API_KEY
 ```
 
-The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. Cloudflare Workers hydrate Supabase on schedules and triggers; the local terminal reads the canonical tables (theses, runs, positions, tests, queue) and can apply operator mutations. Robinhood account state updates when a research workflow pulls it, or when you run `bun run cloud:trigger`.
+The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. QUANTANAMO (Grok Bot) writes the live ledger; the local terminal reads canonical tables (theses, runs, Agentic book, tests, queue) and can apply operator mutations. Cloudflare workers are retired from the operator desk.
 
 See [`LOCAL.md`](LOCAL.md) for env vars, how to confirm live ledger data, and how desk writes hit Supabase without a deploy.
 
@@ -324,7 +324,7 @@ Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local de
 
 ### Local webapp against production Supabase
 
-No Docker, no Cloudflare Workers. Sign in with OAuth or a passkey; the Next server queries canonical tables as that user. Details: [`LOCAL.md`](LOCAL.md).
+No Docker, no Cloudflare Workers required to render. Sign in with OAuth or a passkey; the Next server queries canonical tables as that user. Tabs are Home / Book / Theses / Runs / Tests / Catalysts / Lessons / Ontology / Risk. Details: [`LOCAL.md`](LOCAL.md).
 
 ```sh
 # Uses NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY from root .env.local
