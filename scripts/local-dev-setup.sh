@@ -26,12 +26,15 @@ copy_if_missing \
   "$root/workers/research/.dev.vars"
 
 echo
-echo "Next:"
-echo "  1. bunx supabase start --exclude storage-api,imgproxy"
-echo "     # drop --exclude if you need Storage; first pulls can be slow"
-echo "  2. bunx supabase db reset   # schemas + seed snapshot"
-echo "  3. bunx supabase functions serve   # optional; RPC path is enough for most e2e"
-echo "  4. bun run local:web    # dashboard + knowledge Worker"
-echo "  5. bun run test:e2e     # publication / knowledge slice"
+echo "Live production data (Bun + Next, no Docker / Workers):"
+echo "  bun run web:app"
+echo "  # uses THESISFORGE_DATABASE_URL from root .env.local"
 echo
-echo "Open http://127.0.0.1:5173 (or the Vite URL printed by vinext)."
+echo "Local Supabase + Miniflare (Docker; for Worker binding tests):"
+echo "  1. bunx supabase start --exclude storage-api,imgproxy"
+echo "  2. bunx supabase db reset"
+echo "  3. bunx supabase functions serve   # optional"
+echo "  4. bun run local:web"
+echo "  5. bun run test:e2e"
+echo
+echo "Open http://127.0.0.1:5173"

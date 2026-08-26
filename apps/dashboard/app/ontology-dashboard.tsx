@@ -30,8 +30,75 @@ export type Snapshot={generated_at:string;trade_policy?:TradePolicy;run_reports?
 const SNAPSHOT_POLL_MS=60_000;
 const ROBINHOOD_MAX_AGE_MS=300_000;
 const stages=['research','code','backtest','live','postmortem','fine-tune'];
-const positions=new Map<string,[number,number]>(Object.entries({ai_power_nuclear:[18,35],neocloud_compute:[45,20],semis_photonics:[73,32],software_ai_apps:[79,70],quantum:[52,80],crypto:[25,72],defense_drones_space:[10,58],biotech_royalty:[48,50]}));
+const SURFACE_COPY={
+  home:{label:'Overview',hint:'Capital, gates, live map'},
+  automations:{label:'Automations',hint:'Scheduled worker health'},
+  runs:{label:'Runs',hint:'What changed last'},
+  cycles:{label:'Cycles',hint:'Hypothesis → kill wall'},
+  memory:{label:'Memory',hint:'Lessons that stuck'},
+  ontology:{label:'Ontology',hint:'Themes & symbols'},
+  risk:{label:'Risk',hint:'Hard controls'},
+} as const;
+/** Seed anchors in a 1000×620 canvas; missing theses are force-laid out. */
+const SEED_LAYOUT=new Map<string,{x:number;y:number}>(Object.entries({
+  ai_power_nuclear:{x:170,y:220},
+  neocloud_compute:{x:420,y:130},
+  semis_photonics:{x:720,y:200},
+  software_ai_apps:{x:820,y:430},
+  quantum:{x:520,y:500},
+  crypto:{x:240,y:460},
+  defense_drones_space:{x:110,y:360},
+  biotech_royalty:{x:500,y:320},
+}));
+const CANVAS_W=1000;
+const CANVAS_H=620;
 const clean=(value:string)=>value.replaceAll('_',' ').replaceAll('-',' ');
+function layoutTheses(theses:Thesis[],relations:Relation[]){
+  const nodes=new Map<string,{x:number;y:number}>();
+  theses.forEach((thesis,index)=>{
+    const seed=SEED_LAYOUT.get(thesis.id);
+    if(seed){nodes.set(thesis.id,{x:seed.x,y:seed.y});return;}
+    const angle=(index/Math.max(theses.length,1))*Math.PI*2-Math.PI/2;
+    nodes.set(thesis.id,{x:CANVAS_W/2+Math.cos(angle)*300,y:CANVAS_H/2+Math.sin(angle)*210});
+  });
+  for(let iter=0;iter<90;iter++){
+    const force=new Map<string,{x:number;y:number}>();
+    for(const id of nodes.keys())force.set(id,{x:0,y:0});
+    const ids=[...nodes.keys()];
+    for(let i=0;i<ids.length;i++){
+      for(let j=i+1;j<ids.length;j++){
+        const a=nodes.get(ids[i])!,b=nodes.get(ids[j])!;
+        const dx=a.x-b.x,dy=a.y-b.y,dist=Math.hypot(dx,dy)||1;
+        const push=9000/(dist*dist);
+        const fx=(dx/dist)*push,fy=(dy/dist)*push;
+        const fa=force.get(ids[i])!,fb=force.get(ids[j])!;
+        fa.x+=fx;fa.y+=fy;fb.x-=fx;fb.y-=fy;
+      }
+    }
+    for(const relation of relations){
+      const a=nodes.get(relation.src_thesis_id),b=nodes.get(relation.dst_thesis_id);
+      if(!a||!b)continue;
+      const dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy)||1;
+      const pull=(dist-200)*0.025*(0.45+relation.strength);
+      const fx=(dx/dist)*pull,fy=(dy/dist)*pull;
+      const fa=force.get(relation.src_thesis_id)!,fb=force.get(relation.dst_thesis_id)!;
+      fa.x+=fx;fa.y+=fy;fb.x-=fx;fb.y-=fy;
+    }
+    for(const [id,point] of nodes){
+      const f=force.get(id)!;
+      f.x+=(CANVAS_W/2-point.x)*0.012;
+      f.y+=(CANVAS_H/2-point.y)*0.012;
+      point.x=Math.min(CANVAS_W-90,Math.max(90,point.x+f.x*0.55));
+      point.y=Math.min(CANVAS_H-70,Math.max(70,point.y+f.y*0.55));
+    }
+  }
+  return nodes;
+}
+function edgePath(a:{x:number;y:number},b:{x:number;y:number}){
+  const mx=(a.x+b.x)/2,my=(a.y+b.y)/2,dx=b.x-a.x,dy=b.y-a.y;
+  const cx=mx-dy*0.14,cy=my+dx*0.14;
+  return `M ${a.x.toFixed(1)} ${a.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+}
 const variantDescriptions=new Map(Object.entries({
   'power-breadth-v4':'Waits for strength across several power beneficiaries before entering.',
   'fast-entry-v3':'Uses a shorter confirmation window to enter sooner; more sensitive to false starts.',
@@ -71,6 +138,7 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const [selectedTestId,setSelectedTestId]=useState(initialData.tests[0]?.id);
   const [selectedScenarioId,setSelectedScenarioId]=useState(initialData.test_scenarios[0]?.id);
   const [surface,setSurface]=useState<'home'|'automations'|'runs'|'cycles'|'memory'|'ontology'|'risk'>('home');
+  const [focusThesisId,setFocusThesisId]=useState<string|undefined>(initialData.cycles[0]?.thesis_id);
   useEffect(()=>{const tick=()=>{const current=new Date();setNow(current.getTime());setClock(clockFormatter.format(current))};tick();const id=window.setInterval(tick,1000);return()=>window.clearInterval(id)},[]);
   useEffect(()=>{const id=window.setInterval(()=>router.refresh(),SNAPSHOT_POLL_MS);return()=>window.clearInterval(id)},[router]);
   const activeCycle=initialData.cycles.find(c=>c.id===selectedCycleId)||initialData.cycles[0];
@@ -78,29 +146,32 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
   const scenarioCounts=useMemo(()=>initialData.test_scenarios.reduce<Record<string,number>>((a,s)=>({...a,[s.outcome]:(a[s.outcome]||0)+1}),{}),[initialData.test_scenarios]);
   const killRate=Math.round((scenarioCounts.killed||0)/Math.max(1,initialData.counts.scenario_cells)*100);
   const readyCount=(initialData.trade_proposals||[]).filter(p=>p.status==='ready_for_review').length;
+  const focusedThesisId=focusThesisId||activeCycle?.thesis_id;
 
-  function selectCycle(cycle:Cycle){setSelectedCycleId(cycle.id);const test=initialData.tests.find(t=>t.cycle_id===cycle.id);if(test){setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}}
+  function selectCycle(cycle:Cycle){setSelectedCycleId(cycle.id);setFocusThesisId(cycle.thesis_id);const test=initialData.tests.find(t=>t.cycle_id===cycle.id);if(test){setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}}
 
   return <main className="terminal-shell" id="main-content">
     <a className="skip-link" href="#main-content">Skip to dashboard</a>
     <header className="command-bar">
-      <div className="desk-id"><b>TF</b><span>ThesisForge<small>Research desk</small></span></div>
+      <div className="desk-id"><b>TF</b><span>ThesisForge<small>Live research desk</small></span></div>
       <nav className="desk-tabs" aria-label="Workspace">
-        <button className={surface==='home'?'active':''} onClick={()=>setSurface('home')}>Overview</button>
-        <button className={surface==='automations'?'active':''} onClick={()=>setSurface('automations')}>Automations</button>
-        <button className={surface==='runs'?'active':''} onClick={()=>setSurface('runs')}>Runs</button>
-        <button className={surface==='cycles'?'active':''} onClick={()=>setSurface('cycles')}>Cycles</button>
-        <button className={surface==='memory'?'active':''} onClick={()=>setSurface('memory')}>Memory</button>
-        <button className={surface==='ontology'?'active':''} onClick={()=>setSurface('ontology')}>Ontology</button>
-        <button className={surface==='risk'?'active':''} onClick={()=>setSurface('risk')}>Risk</button>
+        {(Object.keys(SURFACE_COPY) as Array<keyof typeof SURFACE_COPY>).map(key=>(
+          <button key={key} type="button" className={surface===key?'active':''} onClick={()=>setSurface(key)} title={SURFACE_COPY[key].hint}>
+            {SURFACE_COPY[key].label}
+          </button>
+        ))}
       </nav>
-      <div className="run-state" aria-label="Workspace summary"><span>Automations <b>{initialData.automations?.length||0}</b></span><span>Kill rate <b className="red">{killRate}%</b></span><span>Ready <b className="amber">{readyCount}</b></span></div>
+      <div className="run-state" aria-label="Workspace summary">
+        <span>Automations <b>{initialData.automations?.length||0}</b></span>
+        <span>Kill rate <b className="red">{killRate}%</b></span>
+        <span>Ready <b className="amber">{readyCount}</b></span>
+      </div>
       <div className="clock"><b>{clock||'--:--:--'}</b><span>New York · live from Supabase</span></div>
     </header>
     <FreshnessBar publishedAt={initialData.generated_at} robinhoodAt={initialData.account_state?.observed_at} now={now} onRefresh={()=>router.refresh()}/>
 
-    <section className="page-shell">
-      {surface==='home'&&<HomeSurface data={initialData} activeThesisId={activeCycle?.thesis_id}/>}
+    <section className="page-shell" aria-live="polite">
+      {surface==='home'&&<HomeSurface data={initialData} activeThesisId={focusedThesisId} onFocusThesis={setFocusThesisId}/>}
       {surface==='automations'&&<AutomationsSurface data={initialData}/>}
       {surface==='runs'&&<RunsSurface data={initialData}/>}
       {surface==='cycles'&&<CyclesSurface data={initialData} activeCycle={activeCycle} activeTest={activeTest} selectedScenarioId={selectedScenarioId} onCycle={selectCycle} onTest={(test)=>{setSelectedTestId(test.id);const scenario=initialData.test_scenarios.find(s=>s.test_id===test.id);if(scenario)setSelectedScenarioId(scenario.id)}} onScenario={setSelectedScenarioId}/>}
@@ -109,7 +180,11 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
       {surface==='risk'&&<RiskSurface data={initialData}/>}
     </section>
 
-    <footer><span>ThesisForge research desk</span><span>Preregistered tests · retained failures · cached evidence</span><span>{formatNumber(initialData.financial_data?.network_requests||0)} API calls / {formatNumber(initialData.financial_data?.datasets||0)} datasets / {formatNumber(initialData.financial_data?.tickers||0)} enriched</span></footer>
+    <footer>
+      <span>ThesisForge</span>
+      <span>Preregister · break · learn · deploy</span>
+      <span>{formatNumber(initialData.financial_data?.network_requests||0)} API · {formatNumber(initialData.financial_data?.datasets||0)} datasets · {formatNumber(initialData.financial_data?.tickers||0)} enriched</span>
+    </footer>
   </main>
 }
 
@@ -159,7 +234,7 @@ function FreshnessBar({publishedAt,robinhoodAt,now,onRefresh}:{publishedAt:strin
   </section>
 }
 
-function HomeSurface({data,activeThesisId}:{data:Snapshot;activeThesisId?:string}){
+function HomeSurface({data,activeThesisId,onFocusThesis}:{data:Snapshot;activeThesisId?:string;onFocusThesis:(id:string)=>void}){
   const ready=(data.trade_proposals||[]).filter(p=>p.status==='ready_for_review');
   const planned=ready.reduce((sum,p)=>sum+p.notional,0);
   const portfolioValue=data.account_state?.total_value||0;
@@ -179,7 +254,7 @@ function HomeSurface({data,activeThesisId}:{data:Snapshot;activeThesisId?:string
   const isDangerGate=(gates:string[])=>gates.some(gate=>/cancel|fail|invalid|reject|stop|weak/i.test(gate));
   return <>
     <div className="home-command-grid">
-      <section className="home-graph-pane"><SignalGraph data={data} activeThesisId={activeThesisId}/></section>
+      <section className="home-graph-pane"><SignalGraph data={data} activeThesisId={activeThesisId} onFocusThesis={onFocusThesis}/></section>
       <aside className="run-console" aria-label="Next market session">
         <div className="run-console-head"><span>Next regular session</span><b>Dynamic Re-Screen</b><strong>{ready.length} reviews ready</strong></div>
         <div className="capital-readout"><span>Account · {data.account_state?.account_label||'Awaiting live refresh'}</span><b>{formatCurrency(buyingPower)}</b><small>Buying power</small></div>
@@ -248,8 +323,96 @@ function AutomationRunDetail({run}:{run:AutomationRun}){
   return <article className="automation-detail"><header><div><span>Run dossier · {run.thread_id}</span><h2>{run.title||run.automation_name}</h2><p>{run.summary||'No concise summary was recorded.'}</p></div><div><strong className={run.outcome==='passed'?'green':run.outcome==='failed'?'red':'amber'}>{toTitle(run.outcome)}</strong><b>{formatDuration(run.duration_ms)}</b><span>{run.tokens_used?formatNumber(run.tokens_used):'—'} tokens</span></div></header><div className="automation-findings">{sections.map(([label,items])=><section key={label}><b>{label}</b>{items.length?<ul>{items.map((item,index)=><li key={index}>{item}</li>)}</ul>:<p>Nothing separately classified.</p>}</section>)}</div>{run.timeline.length>0&&<details className="automation-timeline"><summary>Investigation trail · {run.timeline.length} checkpoints</summary>{run.timeline.map((event,index)=><div key={index}><span>{event.at?formatEventTime(event.at):`0${index+1}`}</span><p>{event.text}</p></div>)}</details>}{run.final_output&&<details className="automation-output"><summary>Full final report</summary><pre>{run.final_output}</pre></details>}{run.error_text&&<pre className="automation-error">{run.error_text}</pre>}</article>;
 }
 
-function SignalGraph({data,activeThesisId}:{data:Snapshot;activeThesisId?:string}){return <><div className="panel-title"><b>Signal canvas</b><span>Live ontology links, thesis confidence, and shared dependencies</span><strong>Active map</strong></div><div className="signal-graph"><div className="canvas-toolbar"><span>Ontology nodes</span><b>{data.theses.length} nodes · {data.relations.length} edges</b></div>{data.relations.map(r=>{const a=positions.get(r.src_thesis_id),b=positions.get(r.dst_thesis_id);if(!a||!b)return null;const dx=b[0]-a[0],dy=b[1]-a[1],w=Math.sqrt(dx*dx+(dy/1.8)**2),angle=Math.atan2(dy/1.8,dx)*180/Math.PI;return <i className="graph-line" key={r.src_thesis_id+r.dst_thesis_id} title={`${toTitle(r.relation_type)} / ${Math.round(r.strength*100)}`} style={{left:`${a[0]}%`,top:`${a[1]}%`,width:`${w}%`,transform:`rotate(${angle}deg)`,opacity:Math.max(.28,r.strength)}}/>})}{data.theses.map(t=>{const position=positions.get(t.id);return <article key={t.id} className={`signal-node ${t.stance} ${t.id===activeThesisId?'active':''}`} style={{left:`${position?.[0]||50}%`,top:`${position?.[1]||50}%`}} title={t.summary}><span>{t.confidence}</span><b>{t.name.replace(' basket','').replace('AI ','')}</b><small>{t.symbols.slice(0,3).join(' · ')||'No symbols'}</small></article>})}<div className="cluster-label c1">Power / compute</div><div className="cluster-label c2">Risk budget</div><div className="graph-scanline"/></div><div className="graph-log"><b>Recent edges</b>{data.relations.slice(0,3).map((r,i)=><span key={r.rationale}>Edge {i+1} · {toTitle(r.relation_type)} · {r.rationale}</span>)}</div><div className="graph-stats"><span>Nodes <b>{data.theses.length}</b></span><span>Edges <b>{data.relations.length}</b></span><span>Sources <b>{formatNumber(data.counts.sources)}</b></span><span>Symbols <b>{formatNumber(data.counts.symbols)}</b></span><span>Bridges <b>{data.relations.filter(r=>r.strength<.7).length}</b></span></div></>}
-
+function SignalGraph({data,activeThesisId,onFocusThesis}:{data:Snapshot;activeThesisId?:string;onFocusThesis:(id:string)=>void}){
+  const layout=useMemo(()=>layoutTheses(data.theses,data.relations),[data.theses,data.relations]);
+  const focused=data.theses.find(t=>t.id===activeThesisId)||data.theses[0];
+  const linked=useMemo(()=>{
+    if(!focused)return new Set<string>();
+    const ids=new Set<string>([focused.id]);
+    for(const relation of data.relations){
+      if(relation.src_thesis_id===focused.id)ids.add(relation.dst_thesis_id);
+      if(relation.dst_thesis_id===focused.id)ids.add(relation.src_thesis_id);
+    }
+    return ids;
+  },[data.relations,focused]);
+  return <>
+    <div className="panel-title">
+      <div>
+        <b>Signal canvas</b>
+        <span>Click a thesis to light its dependency graph</span>
+      </div>
+      <strong>{data.theses.length} nodes · {data.relations.length} edges</strong>
+    </div>
+    <div className="signal-graph" role="img" aria-label="Ontology signal map">
+      <div className="canvas-toolbar">
+        <span>Live map</span>
+        <b>{focused?focused.name.replace(' basket',''):'No theses yet'}</b>
+      </div>
+      {!data.theses.length&&<div className="canvas-empty"><b>Waiting for the ontology to publish</b><p>When research cycles write theses and relations into the dashboard snapshot, they land here as a connected dependency map.</p></div>}
+      <svg className="signal-edges" viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="edge-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgba(212,165,116,0.15)"/>
+            <stop offset="50%" stopColor="rgba(62,207,142,0.55)"/>
+            <stop offset="100%" stopColor="rgba(107,184,255,0.35)"/>
+          </linearGradient>
+        </defs>
+        {data.relations.map(relation=>{
+          const a=layout.get(relation.src_thesis_id),b=layout.get(relation.dst_thesis_id);
+          if(!a||!b)return null;
+          const hot=Boolean(focused&&(relation.src_thesis_id===focused.id||relation.dst_thesis_id===focused.id));
+          return <path
+            key={`${relation.src_thesis_id}->${relation.dst_thesis_id}:${relation.relation_type}`}
+            className={`signal-edge${hot?' hot':''}`}
+            d={edgePath(a,b)}
+            style={{opacity:hot?Math.max(0.55,relation.strength):Math.max(0.18,relation.strength*0.55)}}
+          >
+            <title>{`${toTitle(relation.relation_type)} · ${Math.round(relation.strength*100)}% · ${relation.rationale}`}</title>
+          </path>;
+        })}
+      </svg>
+      {data.theses.map(thesis=>{
+        const point=layout.get(thesis.id)||{x:CANVAS_W/2,y:CANVAS_H/2};
+        const isActive=thesis.id===activeThesisId;
+        const isLinked=linked.has(thesis.id);
+        return <button
+          type="button"
+          key={thesis.id}
+          className={`signal-node ${thesis.stance}${isActive?' active':''}${isLinked&&!isActive?' linked':''}`}
+          style={{left:`${(point.x/CANVAS_W)*100}%`,top:`${(point.y/CANVAS_H)*100}%`}}
+          title={thesis.summary}
+          onClick={()=>onFocusThesis(thesis.id)}
+        >
+          <span>{thesis.confidence}</span>
+          <b>{thesis.name.replace(' basket','').replace('AI ','')}</b>
+          <small>{thesis.symbols.slice(0,3).join(' · ')||'No symbols'}</small>
+        </button>;
+      })}
+      {focused&&<aside className="canvas-dossier">
+        <span>{toTitle(focused.stance)} · conf {focused.confidence}</span>
+        <b>{focused.name}</b>
+        <p>{focused.summary}</p>
+        <small>{focused.symbols.join(' · ')||'No symbols linked yet'}</small>
+      </aside>}
+    </div>
+    <div className="graph-log">
+      <b>Recent edges</b>
+      {data.relations.slice(0,3).map((relation,index)=>(
+        <span key={`${relation.src_thesis_id}-${relation.dst_thesis_id}-${index}`}>
+          Edge {index+1} · {toTitle(relation.relation_type)} · {relation.rationale}
+        </span>
+      ))}
+      {!data.relations.length&&<span>No ontology links published yet.</span>}
+    </div>
+    <div className="graph-stats">
+      <span>Nodes <b>{data.theses.length}</b></span>
+      <span>Edges <b>{data.relations.length}</b></span>
+      <span>Sources <b>{formatNumber(data.counts.sources)}</b></span>
+      <span>Symbols <b>{formatNumber(data.counts.symbols)}</b></span>
+      <span>Bridges <b>{data.relations.filter(r=>r.strength<.7).length}</b></span>
+    </div>
+  </>;
+}
 function CyclesSurface({data,activeCycle,activeTest,selectedScenarioId,onCycle,onTest,onScenario}:{data:Snapshot;activeCycle?:Cycle;activeTest?:Test;selectedScenarioId?:number;onCycle:(cycle:Cycle)=>void;onTest:(test:Test)=>void;onScenario:(id:number)=>void}){
   if(!activeCycle||!activeTest){
     return <div className="empty-state"><h2>No research cycles yet</h2><p>Once the orchestrator writes a cycle and test into the snapshot, this page will show the active thesis, variants, and scenario wall for that cycle.</p></div>;

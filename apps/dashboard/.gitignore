@@ -30,6 +30,7 @@ yarn-error.log*
 .env*
 .dev.vars*
 !.dev.vars.example
+!.dev.vars.prod.example
 
 # deployment and generated files
 .vercel

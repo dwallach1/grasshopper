@@ -318,11 +318,26 @@ docs/                            architecture and runbooks
 
 ## Development and operations
 
-Requirements: Bun 1.4, Node.js 22.13+, Supabase CLI, Docker (for `supabase start`), Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2, and a Robinhood Agentic connection. Python is not required.
+Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). For the Bun-only live dashboard path you only need Bun and production Worker secrets in `apps/dashboard/.dev.vars`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the full cloud path. Python is not required.
 
-### Local webapp (Supabase + Vite)
+### Local webapp against production (Bun only)
 
-Runs the dashboard Worker locally with the knowledge pipeline as an auxiliary Worker, against local Supabase Postgres/API. Cloudflare Access is replaced by a local-only identity (`LOCAL_DEV_IDENTITY`) when `CF_ACCESS_AUD=local-dev`.
+No Docker, no Cloudflare Workers, no Miniflare. Cloudflare already publishes `dashboard_snapshots.current`; local Next just reads Supabase.
+
+```sh
+# Uses THESISFORGE_DATABASE_URL from root .env.local
+bun run web:app
+```
+
+Open `http://127.0.0.1:5173`. Manager identity defaults to `local@thesisforge.dev`.
+
+Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`).
+
+`bun run local:web` is the separate Miniflare path (Workers + optional local Supabase) for binding/integration testing — not required to view live desk data.
+
+### Local webapp against local Supabase (Docker)
+
+Runs the dashboard Worker locally with the knowledge pipeline as an auxiliary Worker, against local Supabase Postgres/API.
 
 ```sh
 bun run local:setup          # copies .dev.vars.example files if missing

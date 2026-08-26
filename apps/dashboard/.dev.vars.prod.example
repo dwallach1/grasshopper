@@ -1,0 +1,21 @@
+# Optional reference for Miniflare (`bun run local:web`) against production Supabase.
+# Prefer `bun run web:app` — that path uses root `.env.local` and does not need Workers.
+#
+# You only need Supabase credentials (Workers write the snapshot; the app reads it).
+
+SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co
+THESISFORGE_DATABASE_URL=
+SUPABASE_SECRET_KEY=
+SUPABASE_PUBLISHABLE_KEY=
+THESISFORGE_DASHBOARD_TOKEN=
+THESISFORGE_MANAGER_TOKEN=
+
+LOCAL_DEV_IDENTITY=local@thesisforge.dev
+THESISFORGE_MANAGER_USER_IDS=local@thesisforge.dev
+CF_ACCESS_TEAM_DOMAIN=
+CF_ACCESS_AUD=local-dev
+
+AI_GATEWAY_ID=default
+TRADING_ENABLED=false
+BROKER_GATEWAY_MODE=unavailable
+BROKER_OWNER_EMAIL=local@thesisforge.dev

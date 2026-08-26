@@ -12,7 +12,7 @@ export default async function Home() {
       'Canonical dashboard snapshot unavailable:',
       error instanceof Error ? error.message : 'unknown error',
     );
-    return <main className="data-unavailable"><section><b>TF://SUPABASE</b><h1>Canonical data unavailable</h1><p>ThesisForge will not substitute a stale local copy. Restore the Supabase connection or publish a fresh dashboard snapshot.</p></section></main>;
+    return <main className="data-unavailable"><section><b>Supabase</b><h1>Canonical data unavailable</h1><p>ThesisForge will not substitute a stale local copy. Check <code>apps/dashboard/.dev.vars</code> (see <code>.dev.vars.prod.example</code> for live production), or restore the Supabase connection and publish a fresh dashboard snapshot.</p></section></main>;
   }
   return <OntologyDashboard initialData={current} />;
 }

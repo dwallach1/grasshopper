@@ -15,7 +15,8 @@
     "cloud:trigger": "bun run --cwd workers/research trigger",
     "local:setup": "bash scripts/local-dev-setup.sh",
     "local:web": "bun run --cwd apps/dashboard dev",
-    "dev": "bun run local:web"
+    "web:app": "bash scripts/web-app.sh",
+    "dev": "bun run web:app"
   },
   "devDependencies": {
     "@oxlint/plugins": "^1.80.0"

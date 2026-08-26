@@ -21,10 +21,13 @@
     "store_id": "9161ea4b738144c0accc37e724812d93",
     "secret_name": "INTERNAL_SERVICE_TOKEN"
   }],
-  // Empty so Miniflare exposes the binding; `.dev.vars` supplies the local identity.
-  // Production must keep this empty so Access remains the only identity path.
+  // Empty so Miniflare exposes the bindings; `.dev.vars` supplies local values.
+  // Production must keep LOCAL_DEV_IDENTITY empty so Access remains the only identity path.
+  // THESISFORGE_DATABASE_URL / SUPABASE_SECRET_KEY are local-only read paths (never set in prod).
   "vars": {
-    "LOCAL_DEV_IDENTITY": ""
+    "LOCAL_DEV_IDENTITY": "",
+    "THESISFORGE_DATABASE_URL": "",
+    "SUPABASE_SECRET_KEY": ""
   },
   "secrets": {
     "required": [

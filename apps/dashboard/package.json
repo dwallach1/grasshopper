@@ -21,6 +21,7 @@
     "@thesisforge/shared": "workspace:*",
     "jose": "6.2.10",
     "next": "16.2.6",
+    "postgres": "^3.4.9",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "zod": "^4"
