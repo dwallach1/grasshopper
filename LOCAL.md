@@ -19,13 +19,13 @@ Live GoTrue settings on `xqungxapqicdmboniezz` (2026-08-26): **passkeys on**, **
 In the Supabase dashboard:
 
 1. **Authentication → URL configuration**
-   - Site URL: `http://localhost:5173`
-   - Redirect allow-list (add **both** origins):
+   - Site URL **must** be `http://localhost:5173` (not the GoTrue default `http://localhost:3000`). If Site URL stays on `:3000`, PKCE `/token` runs against that host and the desk on `:5173` never keeps the session.
+   - Redirect allow-list (add **both** callback origins — `localhost` and `127.0.0.1` are different cookie hosts):
      - `http://localhost:5173/auth/callback`
      - `http://127.0.0.1:5173/auth/callback`
      - `http://localhost:5173/**`
      - `http://127.0.0.1:5173/**`
-2. **Authentication → Providers → Email** — leave enabled. First-time operators use **Send magic link**. Confirm the mailer delivers (hosted SMTP).
+2. **Authentication → Providers → Email** — leave enabled. First-time operators use **Send magic link**. Confirm the mailer delivers (hosted SMTP). Open the desk at **`http://localhost:5173`**, send the link from that origin, and open the email link so it returns to `/auth/callback` on the **same** host. Switching `localhost` ↔ `127.0.0.1` drops the PKCE code verifier. A failed exchange redirects to `/?auth_error=…` on the gate — never a silent re-lock.
 3. **Authentication → Passkeys** — enable. Relying party ID **`localhost`** (not `127.0.0.1` — browsers reject IP RP IDs) and origin `http://localhost:5173`. Open the desk at `http://localhost:5173`. After the first email (or OAuth) sign-in, use **Passkey+** in the header. Later you can sign in with **Passkey** alone. Passkeys cannot be the first-ever account.
 4. **Authentication → Providers** (optional social OAuth) — enable GitHub and/or Google with a real OAuth app. The sign-in screen picks them up automatically. Set `NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS` only to reorder (`google,github`).
 
@@ -71,7 +71,7 @@ bun run web:app
 # same as: bun run dev
 ```
 
-Open `http://localhost:5173` for passkeys (WebAuthn RP ID cannot be an IP). `http://127.0.0.1:5173` works for email. Sign in. Header source should read `postgrest`.
+Open `http://localhost:5173` (this is the printed Local URL, the Auth Site URL, and the passkey RP ID). `http://127.0.0.1:5173` works for email **if you start and finish on that IP** — passkeys still require `localhost`. Sign in. Header source should read `postgrest`.
 
 The shell polls `/api/ledger` every 15s (session cookie). Keyboard: `1-7` panels, `g` then `b/t/r/c/l`, `j/k` thesis, `r` refresh, `/` filter, `?` help.
 

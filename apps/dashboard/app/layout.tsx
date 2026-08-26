@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('http://127.0.0.1:5173'),
+  metadataBase: new URL('http://localhost:5173'),
   title: 'Quantanamo',
   description: 'Local research/trading terminal over the Quantanamo ledger.',
   openGraph: {

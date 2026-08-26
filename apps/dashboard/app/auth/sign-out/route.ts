@@ -1,9 +1,17 @@
-import { NextResponse } from 'next/server';
+import { type NextRequest } from 'next/server';
 
-import { createServerSupabase } from '../../../lib/supabase-server';
+import {
+  callbackSuccessUrl,
+  deskRequestOrigin,
+  newAuthCookieSink,
+  redirectWithAuthCookies,
+} from '../../../lib/auth-callback';
+import { createRequestSupabase } from '../../../lib/supabase-server';
 
-export async function POST(request: Request) {
-  const supabase = await createServerSupabase();
+export async function POST(request: NextRequest) {
+  const sink = newAuthCookieSink();
+  const supabase = createRequestSupabase(request, sink);
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL('/', new URL(request.url).origin), { status: 303 });
+  const origin = deskRequestOrigin(request.headers.get('host'), request.url);
+  return redirectWithAuthCookies(callbackSuccessUrl(origin, '/'), sink);
 }

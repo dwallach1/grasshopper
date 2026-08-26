@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { publicPublishableKeyFromEnv, publicSupabaseUrlFromEnv } from './lib/auth-public';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   try {
     const supabase = createServerClient(publicSupabaseUrlFromEnv(), publicPublishableKeyFromEnv(), {
@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(batch) {
+        setAll(batch, headers) {
           for (const item of batch) {
             request.cookies.set(item.name, item.value);
           }
@@ -22,6 +22,9 @@ export async function middleware(request: NextRequest) {
           for (const item of batch) {
             response.cookies.set(item.name, item.value, item.options);
           }
+          if (headers['Cache-Control']) response.headers.set('Cache-Control', headers['Cache-Control']);
+          if (headers.Expires) response.headers.set('Expires', headers.Expires);
+          if (headers.Pragma) response.headers.set('Pragma', headers.Pragma);
         },
       },
     });
