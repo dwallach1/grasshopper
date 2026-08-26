@@ -14,13 +14,20 @@ Workers still use `QUANTANAMO_DATABASE_URL` / `service_role` on the server. That
 
 ## Supabase Auth setup
 
-In the Supabase dashboard for `xqungxapqicdmboniezz`:
+Live GoTrue settings on `xqungxapqicdmboniezz` (2026-08-26): **passkeys on**, **email on**, GitHub/Google **off** until you add client IDs. The desk reads `/auth/v1/settings` and only shows working buttons.
+
+In the Supabase dashboard:
 
 1. **Authentication → URL configuration**
-   - Site URL: `http://127.0.0.1:5173`
-   - Redirect allow-list: `http://127.0.0.1:5173/auth/callback`
-2. **Authentication → Providers** — enable the OAuth apps you use (GitHub and Google are the desk defaults). Set `NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS` if you enabled others (`github,google,azure`).
-3. **Authentication → Passkeys** — enable passkeys. Relying party ID `127.0.0.1` (or `localhost`) and origin `http://127.0.0.1:5173`. Register a passkey from the desk header (`Passkey+`) after the first OAuth sign-in; later you can sign in with **Passkey** alone.
+   - Site URL: `http://localhost:5173`
+   - Redirect allow-list (add **both** origins):
+     - `http://localhost:5173/auth/callback`
+     - `http://127.0.0.1:5173/auth/callback`
+     - `http://localhost:5173/**`
+     - `http://127.0.0.1:5173/**`
+2. **Authentication → Providers → Email** — leave enabled. First-time operators use **Send magic link**. Confirm the mailer delivers (hosted SMTP).
+3. **Authentication → Passkeys** — enable. Relying party ID **`localhost`** (not `127.0.0.1` — browsers reject IP RP IDs) and origin `http://localhost:5173`. Open the desk at `http://localhost:5173`. After the first email (or OAuth) sign-in, use **Passkey+** in the header. Later you can sign in with **Passkey** alone. Passkeys cannot be the first-ever account.
+4. **Authentication → Providers** (optional social OAuth) — enable GitHub and/or Google with a real OAuth app. The sign-in screen picks them up automatically. Set `NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS` only to reorder (`google,github`).
 
 Add another operator after the first claim:
 
@@ -28,6 +35,8 @@ Add another operator after the first claim:
 insert into public.ledger_operators(user_id, email)
 select id, email from auth.users where email = 'you@example.com';
 ```
+
+The operator RLS migration [`supabase/migrations/20260826200000_ledger_operator_auth.sql`](supabase/migrations/20260826200000_ledger_operator_auth.sql) is **already applied** on `xqungxapqicdmboniezz` (`anon` remains revoked). Service role / `quantanamo_worker` still bypass RLS for Cloudflare Workers.
 
 ## Env
 
@@ -37,7 +46,8 @@ Copy [`.env.example`](.env.example) to the **repo root** `.env.local` (not `apps
 # required for sign-in (public)
 NEXT_PUBLIC_SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=  # Project Settings → API → publishable / anon
-# optional: comma list, default github,google
+# alias: NEXT_PUBLIC_SUPABASE_ANON_KEY=  (legacy JWT anon key; never service_role)
+# optional: reorder social buttons when those providers are enabled
 NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS=github,google
 
 # optional, server-only — workers / ontology RPC / postgres.js
@@ -61,7 +71,7 @@ bun run web:app
 # same as: bun run dev
 ```
 
-Open `http://127.0.0.1:5173`. Sign in. Header source should read `postgrest`.
+Open `http://localhost:5173` for passkeys (WebAuthn RP ID cannot be an IP). `http://127.0.0.1:5173` works for email. Sign in. Header source should read `postgrest`.
 
 The shell polls `/api/ledger` every 15s (session cookie). Keyboard: `1-7` panels, `g` then `b/t/r/c/l`, `j/k` thesis, `r` refresh, `/` filter, `?` help.
 
@@ -112,7 +122,7 @@ Auth gate checklist:
 
 1. Restart `bun run web:app` after setting `NEXT_PUBLIC_*`.
 2. Logged out: `/` is sign-in; `/api/ledger` is 401; HTML has no `neocloud_compute`.
-3. Sign in with OAuth; first user becomes the operator.
+3. Sign in with the **email magic link** (or a social provider once it is enabled). First confirmed user becomes the operator.
 4. MON/BOOK/THES load live rows. Header shows your email. **Sign out** returns to the gate.
 5. **Passkey+** then sign out and **Passkey** sign-in.
 6. Thesis evidence / status from the UI writes without `SUPABASE_SECRET_KEY` in the client bundle.

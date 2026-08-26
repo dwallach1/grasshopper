@@ -73,7 +73,8 @@ elif [[ -n "$secret_key" ]]; then
   echo "→ Live Supabase via PostgREST service_role (server-only)"
 fi
 [[ -n "$supabase_url" ]] && echo "→ $supabase_url"
-echo "→ http://127.0.0.1:5173"
+echo "→ http://127.0.0.1:5173  (email / OAuth)"
+echo "→ http://localhost:5173  (passkeys; same listener, RP ID localhost)"
 echo
 
 cd "$dashboard"

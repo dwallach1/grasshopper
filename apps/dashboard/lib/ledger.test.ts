@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
+import { parseDeskAuthMethods } from './auth-methods';
 import { isPublishableKey } from './auth-public';
+import { deskAuthErrorMessage, firstSearchParam, isLoopbackIpHost } from './auth-search';
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
 import { isPostgresPermissionDenied } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
@@ -107,5 +109,58 @@ describe('publishable keys', () => {
     expect(isPublishableKey('sb_secret_do_not_use')).toBe(false);
     expect(isPublishableKey('eyJhbGciOiJub25lIn0.eyJyb2xlIjoiYW5vbiJ9.x')).toBe(true);
     expect(isPublishableKey('eyJhbGciOiJub25lIn0.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.x')).toBe(false);
+  });
+});
+
+describe('auth method flags', () => {
+  test('hides social oauth when GoTrue has them off', () => {
+    const methods = parseDeskAuthMethods(
+      {
+        external: { email: true, github: false, google: false },
+        passkeys_enabled: true,
+      },
+      ['github', 'google'],
+    );
+    expect(methods.email).toBe(true);
+    expect(methods.passkeys).toBe(true);
+    expect(methods.oauth).toEqual([]);
+  });
+
+  test('keeps preferred oauth order among enabled providers', () => {
+    const methods = parseDeskAuthMethods(
+      {
+        external: { email: true, github: true, google: true, azure: true },
+        passkeys_enabled: true,
+      },
+      ['google', 'github'],
+    );
+    expect(methods.oauth).toEqual(['google', 'github', 'azure']);
+  });
+});
+
+describe('auth gate search params', () => {
+  test('reads auth_error from string or repeated query values', () => {
+    expect(firstSearchParam(undefined)).toBeNull();
+    expect(firstSearchParam('')).toBeNull();
+    expect(firstSearchParam('  ')).toBeNull();
+    expect(firstSearchParam('provider is not enabled')).toBe('provider is not enabled');
+    expect(firstSearchParam(['missing_auth_code', 'other'])).toBe('missing_auth_code');
+  });
+
+  test('forbidden operator message wins over callback error', () => {
+    expect(deskAuthErrorMessage(true, 'missing_auth_code')).toBe(
+      'This account is not on the operator allowlist.',
+    );
+    expect(deskAuthErrorMessage(false, 'Unsupported provider: provider is not enabled')).toBe(
+      'Unsupported provider: provider is not enabled',
+    );
+    expect(deskAuthErrorMessage(false, null)).toBeNull();
+  });
+
+  test('passkey hint only on 127.0.0.1, not localhost', () => {
+    expect(isLoopbackIpHost('127.0.0.1')).toBe(true);
+    expect(isLoopbackIpHost('127.0.0.1:5173')).toBe(true);
+    expect(isLoopbackIpHost('localhost:5173')).toBe(false);
+    expect(isLoopbackIpHost('localhost')).toBe(false);
   });
 });

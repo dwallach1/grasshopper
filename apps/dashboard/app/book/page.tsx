@@ -2,6 +2,4 @@ import { TerminalPage } from '../terminal/load';
 
 export const dynamic = 'force-dynamic';
 
-export default function BookRoute() {
-  return <TerminalPage />;
-}
+export default TerminalPage;

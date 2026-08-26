@@ -2613,6 +2613,20 @@ a:focus-visible {
   font-size: 12px;
 }
 
-.term-gate-note code {
+.term-gate-note a {
+  color: var(--amber);
+}
+
+.term-gate-email {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.term-gate-email input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--canvas);
   color: var(--text);
 }

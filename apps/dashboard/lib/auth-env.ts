@@ -1,3 +1,4 @@
+import { fallbackDeskAuthMethods, parseDeskAuthMethods, GoTrueSettingsSchema, type DeskAuthMethods } from './auth-methods';
 import { loadRootEnvLocal } from '../load-root-env';
 import {
   isPublishableKey,
@@ -9,6 +10,26 @@ import {
 
 export type { OAuthProviderId };
 export { isPublishableKey };
+export type { DeskAuthMethods };
+
+export async function loadDeskAuthMethods(): Promise<DeskAuthMethods> {
+  const preferred = oauthProviderIds();
+  try {
+    const response = await fetch(`${publicSupabaseUrl()}/auth/v1/settings`, {
+      headers: {
+        apikey: publicPublishableKey(),
+        Authorization: `Bearer ${publicPublishableKey()}`,
+      },
+      cache: 'no-store',
+    });
+    if (!response.ok) return fallbackDeskAuthMethods();
+    const parsed = GoTrueSettingsSchema.safeParse(await response.json());
+    if (!parsed.success) return fallbackDeskAuthMethods();
+    return parseDeskAuthMethods(parsed.data, preferred);
+  } catch {
+    return fallbackDeskAuthMethods();
+  }
+}
 
 export function publicSupabaseUrl(): string {
   loadRootEnvLocal();

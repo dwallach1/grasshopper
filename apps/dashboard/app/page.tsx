@@ -2,6 +2,4 @@ import { TerminalPage } from './terminal/load';
 
 export const dynamic = 'force-dynamic';
 
-export default function Home() {
-  return <TerminalPage />;
-}
+export default TerminalPage;

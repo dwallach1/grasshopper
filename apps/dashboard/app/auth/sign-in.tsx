@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-import { oauthProviderIdsFromEnv, type OAuthProviderId } from '../../lib/auth-public';
+import { deskAuthErrorMessage } from '../../lib/auth-search';
+import type { DeskAuthMethods } from '../../lib/auth-methods';
+import type { OAuthProviderId } from '../../lib/auth-public';
 import { createBrowserSupabase } from '../../lib/supabase-browser';
 
 function providerLabel(id: OAuthProviderId): string {
@@ -14,16 +16,21 @@ function providerLabel(id: OAuthProviderId): string {
   return 'Bitbucket';
 }
 
-export function SignInScreen({ denied }: { denied: boolean }) {
-  const [error, setError] = useState<string | null>(denied ? 'This account is not on the operator allowlist.' : null);
+export function SignInScreen({
+  denied,
+  methods,
+  authError,
+  loopbackHint,
+}: {
+  denied: boolean;
+  methods: DeskAuthMethods;
+  authError: string | null;
+  loopbackHint: boolean;
+}) {
+  const [error, setError] = useState<string | null>(() => deskAuthErrorMessage(denied, authError));
   const [busy, setBusy] = useState<string | null>(null);
-  const providers = oauthProviderIdsFromEnv();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const authError = params.get('auth_error');
-    if (authError) setError(authError);
-  }, []);
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
 
   async function oauth(provider: OAuthProviderId) {
     setBusy(provider);
@@ -56,6 +63,24 @@ export function SignInScreen({ denied }: { denied: boolean }) {
     window.location.assign('/');
   }
 
+  async function emailLink() {
+    setBusy('email');
+    setError(null);
+    setSent(false);
+    const supabase = createBrowserSupabase();
+    const { error: signInError } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    });
+    if (signInError) {
+      setError(signInError.message);
+      setBusy(null);
+      return;
+    }
+    setSent(true);
+    setBusy(null);
+  }
+
   return (
     <main className="term-gate">
       <header className="term-top">
@@ -65,24 +90,79 @@ export function SignInScreen({ denied }: { denied: boolean }) {
       <section className="term-gate-card">
         <b>QUANTANAMO</b>
         <h1>Operator sign-in</h1>
-        <p>Authenticate to read the live ledger. Passkeys and OAuth use your Supabase Auth project. The secret key never leaves the server.</p>
-        {error && <p className="term-gate-error" role="alert">{error}</p>}
-        <button type="button" className="term-gate-primary" disabled={busy !== null} onClick={() => void passkey()}>
-          {busy === 'passkey' ? 'Waiting on authenticator…' : 'Passkey'}
-        </button>
-        <div className="term-gate-split">OAuth</div>
-        {providers.map((provider) => (
-          <button
-            key={provider}
-            type="button"
-            className="term-gate-secondary"
-            disabled={busy !== null}
-            onClick={() => void oauth(provider)}
-          >
-            {busy === provider ? `Redirecting to ${providerLabel(provider)}…` : `Continue with ${providerLabel(provider)}`}
+        <p>
+          Authenticate to read the live ledger. The publishable key stays in the browser; the secret
+          key never does.
+        </p>
+        {error && (
+          <p className="term-gate-error" role="alert">
+            {error}
+          </p>
+        )}
+        {methods.passkeys && loopbackHint && (
+          <p className="term-gate-note">
+            Passkeys need WebAuthn RP ID <code>localhost</code>. Open{' '}
+            <a href="http://localhost:5173">http://localhost:5173</a> instead of 127.0.0.1.
+          </p>
+        )}
+        {methods.passkeys && (
+          <button type="button" className="term-gate-primary" disabled={busy !== null} onClick={() => void passkey()}>
+            {busy === 'passkey' ? 'Waiting on authenticator…' : 'Passkey'}
           </button>
-        ))}
-        <p className="term-gate-note">First confirmed sign-in claims the operator desk. Later accounts need a row in <code>ledger_operators</code>.</p>
+        )}
+        {methods.email && (
+          <>
+            <div className="term-gate-split">Email link</div>
+            <form
+              className="term-gate-email"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void emailLink();
+              }}
+            >
+              <input
+                type="email"
+                name="email"
+                autoComplete="username"
+                placeholder="operator@…"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+              <button type="submit" className="term-gate-secondary" disabled={busy !== null || email.trim() === ''}>
+                {busy === 'email' ? 'Sending…' : 'Send magic link'}
+              </button>
+            </form>
+            {sent && <p className="term-gate-note">Check your inbox, then come back to this origin.</p>}
+          </>
+        )}
+        {methods.oauth.length > 0 && (
+          <>
+            <div className="term-gate-split">OAuth</div>
+            {methods.oauth.map((provider) => (
+              <button
+                key={provider}
+                type="button"
+                className="term-gate-secondary"
+                disabled={busy !== null}
+                onClick={() => void oauth(provider)}
+              >
+                {busy === provider ? `Redirecting to ${providerLabel(provider)}…` : `Continue with ${providerLabel(provider)}`}
+              </button>
+            ))}
+          </>
+        )}
+        {methods.oauth.length === 0 && (
+          <p className="term-gate-note">
+            No social OAuth providers are enabled on this project yet. Use email once, then{' '}
+            <code>Passkey+</code> in the header. To add GitHub/Google: Authentication → Providers, then
+            this screen picks them up automatically.
+          </p>
+        )}
+        <p className="term-gate-note">
+          First confirmed sign-in claims the operator desk. Later accounts need a row in{' '}
+          <code>ledger_operators</code>.
+        </p>
       </section>
     </main>
   );

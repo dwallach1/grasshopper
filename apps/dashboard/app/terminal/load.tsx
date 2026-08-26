@@ -1,17 +1,33 @@
+import { headers } from 'next/headers';
+
 import { SignInScreen } from '../auth/sign-in';
 import { TerminalApp } from './app';
+import { loadDeskAuthMethods } from '../../lib/auth-env';
+import { firstSearchParam, isLoopbackIpHost } from '../../lib/auth-search';
 import { loadDesk } from '../../lib/ledger';
 import { readOperatorSession } from '../../lib/operator-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function TerminalPage() {
+export async function TerminalPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ auth_error?: string | string[] }>;
+} = {}) {
+  const params = searchParams ? await searchParams : {};
+  const authError = firstSearchParam(params.auth_error);
+  const host = (await headers()).get('host') ?? '';
   const session = await readOperatorSession();
-  if (session === 'unauthenticated') {
-    return <SignInScreen denied={false} />;
-  }
-  if (session === 'forbidden') {
-    return <SignInScreen denied />;
+  if (session === 'unauthenticated' || session === 'forbidden') {
+    const methods = await loadDeskAuthMethods();
+    return (
+      <SignInScreen
+        denied={session === 'forbidden'}
+        methods={methods}
+        authError={authError}
+        loopbackHint={isLoopbackIpHost(host)}
+      />
+    );
   }
   const loaded = await loadDesk(session.accessToken)
     .then((desk) => ({ ok: true as const, desk }))
