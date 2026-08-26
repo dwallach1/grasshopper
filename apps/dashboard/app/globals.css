@@ -2224,8 +2224,9 @@ a:focus-visible {
   padding: 4px 8px;
   color: var(--text-2);
   text-decoration: none;
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .term-nav a.on,
@@ -2239,20 +2240,11 @@ a:focus-visible {
   font-size: 10px;
 }
 
-.term-search {
-  width: 180px;
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  background: var(--elevated);
-  color: var(--text);
-  font-size: 12px;
-}
-
 .term-live {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
   color: var(--text-3);
   font-size: 11px;
   white-space: nowrap;
@@ -2298,9 +2290,9 @@ a:focus-visible {
   align-items: stretch;
 }
 
-.term-grid-monitor {
+.term-grid-home {
   grid-template-columns: 1.1fr 1fr 1.2fr 1fr;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .term-grid-2,
@@ -2314,6 +2306,10 @@ a:focus-visible {
   background: var(--elevated);
   padding: 8px 10px 10px;
   overflow: auto;
+}
+
+.term-panel-span {
+  grid-column: 1 / -1;
 }
 
 .term-panel > header {
@@ -2367,7 +2363,7 @@ a:focus-visible {
 
 .term-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -2479,7 +2475,7 @@ a:focus-visible {
   position: fixed;
   right: 12px;
   bottom: 36px;
-  width: 360px;
+  width: 420px;
   padding: 10px 12px;
   border: 1px solid var(--amber);
   background: #0b0d10;
@@ -2500,7 +2496,7 @@ a:focus-visible {
 }
 
 @media (max-width: 1100px) {
-  .term-grid-monitor,
+  .term-grid-home,
   .term-grid-2,
   .term-grid-theses {
     grid-template-columns: 1fr;

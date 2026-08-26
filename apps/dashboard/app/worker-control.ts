@@ -172,6 +172,7 @@ async function postWorkerJson(
   return { ok: response.ok, status: response.status, body: parsed, via: 'http' };
 }
 
+/** Unwired from the operator desk. QUANTANAMO reads X via the X connector. */
 export async function startXAuthorization(): Promise<WorkerStepResult> {
   return postWorkerJson(
     '/x/authorize',

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the Quantanamo dashboard locally with Bun + Next only.
-# Workers stay on Cloudflare and hydrate Supabase; this app reads/writes the ledger.
+# QUANTANAMO (Grok Bot) writes the live ledger; this app reads/writes as the signed-in operator.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

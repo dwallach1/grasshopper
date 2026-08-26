@@ -1,5 +1,4 @@
 import type { ParsedRunNotes } from './run-notes';
-import type { ScheduledFire } from './schedule';
 import type { ThesisStatus } from './thesis-status';
 
 export type ThesisRow = {
@@ -201,6 +200,43 @@ export type AccountRow = {
   source: string;
 };
 
+export type BookNameLine = {
+  symbol: string;
+  quantity: number;
+  average_cost: number | null;
+  cost: number | null;
+  mark: number | null;
+  pnl: number | null;
+  note: string;
+};
+
+export type BookPerformance = {
+  account_label: string | null;
+  observed_at: string | null;
+  starting_nav: number | null;
+  current_nav: number | null;
+  cash: number | null;
+  deployed: number | null;
+  vs_start: number | null;
+  vs_start_note: string;
+  day_pnl: number | null;
+  day_pnl_note: string;
+  vs_cost: number | null;
+  vs_cost_note: string;
+  names: BookNameLine[];
+};
+
+export type DeskRoutine = {
+  id: string;
+  name: string;
+  cadence: string;
+  status: 'live' | 'retired';
+  last_run_at: string | null;
+  last_run_type: string | null;
+  last_outcome: string | null;
+  last_summary: string | null;
+};
+
 export type PositionRow = {
   id: string;
   account_key: string;
@@ -357,6 +393,8 @@ export type DeskPayload = {
   scenarios: TestScenarioRow[];
   agent_runs: AgentRunRow[];
   account: AccountRow | null;
+  snapshots: AccountRow[];
+  book: BookPerformance;
   positions: PositionRow[];
   exposures: ExposureRow[];
   intents: IntentRow[];
@@ -365,7 +403,7 @@ export type DeskPayload = {
   insights: InsightRow[];
   predictions: PredictionRow[];
   risk_controls: RiskControlRow[];
-  schedule: ScheduledFire[];
+  routines: DeskRoutine[];
   ontology_themes: OntologyThemeRow[];
   ontology_symbols: OntologySymbolRow[];
   ontology_candidates: OntologyCandidateRow[];

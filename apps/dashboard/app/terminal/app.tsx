@@ -1,74 +1,51 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { z } from 'zod';
 
-import type { DeskPayload, ThesisRow } from '../../lib/ledger-types';
+import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
+import {
+  DESK_TABS,
+  hrefForSurface,
+  surfaceFromGoLetter,
+  surfaceFromPath,
+  type DeskSurface,
+} from '../../lib/desk-nav';
+import type { BookPerformance, DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
 import { THESIS_STATUSES } from '../../lib/thesis-status';
 import { SessionControls } from './session-controls';
-import { age, money, moneyPrecise, nyStamp, pct, qty, titleCase, toneForStatus, until } from './format';
+import {
+  age,
+  ledgerFigure,
+  money,
+  moneyPrecise,
+  nyStamp,
+  pct,
+  qty,
+  signedMoney,
+  titleCase,
+  toneForStatus,
+} from './format';
 
 const POLL_MS = 15_000;
 
-const NAV = [
-  { href: '/', id: 'monitor', key: '1', label: 'MON' },
-  { href: '/book', id: 'book', key: '2', label: 'BOOK' },
-  { href: '/theses', id: 'theses', key: '3', label: 'THES' },
-  { href: '/runs', id: 'runs', key: '4', label: 'RUNS' },
-  { href: '/backtests', id: 'backtests', key: '5', label: 'TEST' },
-  { href: '/catalysts', id: 'catalysts', key: '6', label: 'CAT' },
-  { href: '/learnings', id: 'learnings', key: '7', label: 'LRN' },
-] as const;
-
-const EXTRA = [
-  { href: '/ontology', id: 'ontology', label: 'ONT' },
-  { href: '/risk', id: 'risk', label: 'RISK' },
-] as const;
-
-const ErrorSchema = z.object({ error: z.string() }).passthrough();
 const DirectionSchema = z.enum(['supporting', 'challenging', 'neutral']);
-
-const DeskWireSchema = z
-  .object({
-    generated_at: z.string().min(1),
-    source: z.enum(['postgres', 'postgrest']),
-    theses: z.array(z.object({ id: z.string(), status: z.string() }).passthrough()),
-  })
-  .passthrough();
-
-function surfaceFromPath(pathname: string): string {
-  if (pathname === '/') return 'monitor';
-  return pathname.replace(/^\//, '').split('/')[0] || 'monitor';
-}
-
-function needsXReauthorization(text: string): boolean {
-  return /x token|reauthorization is required|x credential vault/i.test(text);
-}
-
-function deskNeedsXReauthorization(desk: DeskPayload): boolean {
-  return desk.runs.some((run) => (
-    run.parsed.outcome === 'failed'
-    && needsXReauthorization(`${run.parsed.error || ''} ${run.parsed.summary}`)
-  )) || desk.cloud_runs.some((run) => (
-    (run.status === 'failed' || run.status === 'error')
-    && needsXReauthorization(`${run.error_text || ''} ${run.summary}`)
-  ));
-}
 
 export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; operatorEmail: string }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const surface = surfaceFromPath(pathname);
   const [desk, setDesk] = useState(initial);
   const [now, setNow] = useState<number | null>(null);
-  const [query, setQuery] = useState('');
   const [help, setHelp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedThesisId, setSelectedThesisId] = useState(initial.theses[0]?.id ?? '');
   const [goArmed, setGoArmed] = useState(false);
+  const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
+
+  useEffect(() => {
+    rememberDesk(initial);
+  }, [initial]);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -85,6 +62,22 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
   }, []);
 
   useEffect(() => {
+    function onPop() {
+      setSurface(surfaceFromPath(window.location.pathname));
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  function go(href: string) {
+    const next = surfaceFromPath(href);
+    setSurface(next);
+    if (window.location.pathname !== href) {
+      window.history.pushState({ desk: next }, '', href);
+    }
+  }
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
@@ -96,33 +89,23 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
       }
       if (goArmed) {
         setGoArmed(false);
-        if (event.key === 'b') router.push('/book');
-        else if (event.key === 't') router.push('/theses');
-        else if (event.key === 'r') router.push('/runs');
-        else if (event.key === 'k') router.push('/backtests');
-        else if (event.key === 'c') router.push('/catalysts');
-        else if (event.key === 'l') router.push('/learnings');
-        else if (event.key === 'm' || event.key === 'h') router.push('/');
+        const next = surfaceFromGoLetter(event.key);
+        if (next) go(hrefForSurface(next));
         return;
       }
       if (event.key === 'g') {
         setGoArmed(true);
         return;
       }
-      const nav = NAV.find((item) => item.key === event.key);
+      const nav = DESK_TABS.find((item) => item.key === event.key);
       if (nav) {
         event.preventDefault();
-        router.push(nav.href);
+        go(nav.href);
         return;
       }
       if (event.key === 'r') {
         event.preventDefault();
         void refreshDesk(setDesk, setNotice);
-        return;
-      }
-      if (event.key === '/') {
-        event.preventDefault();
-        document.getElementById('term-search')?.focus();
         return;
       }
       if (event.key === '?') {
@@ -136,40 +119,38 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
         const next = event.key === 'j' ? Math.min(ids.length - 1, index + 1) : Math.max(0, index - 1);
         if (ids[next]) setSelectedThesisId(ids[next]);
       }
-      if (event.key === 'Enter' && surface !== 'theses') router.push('/theses');
+      if (event.key === 'Enter' && surface !== 'theses') go('/theses');
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [desk.theses, goArmed, router, selectedThesisId, surface]);
+  }, [desk.theses, goArmed, selectedThesisId, surface]);
 
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
-  const nextFire = desk.schedule[0];
-  const xAuthBroken = deskNeedsXReauthorization(desk);
+  const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
 
   return (
     <div className="term">
       <header className="term-top">
-        <Link className="term-brand" href="/">QUANTANAMO</Link>
+        <a
+          className="term-brand"
+          href="/"
+          onClick={(event) => onDeskClick(event, () => go('/'))}
+        >
+          QUANTANAMO
+        </a>
         <nav className="term-nav" aria-label="Terminal">
-          {NAV.map((item) => (
-            <Link key={item.href} href={item.href} className={surface === item.id ? 'on' : ''}>
+          {DESK_TABS.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className={surface === item.id ? 'on' : ''}
+              onClick={(event) => onDeskClick(event, () => go(item.href))}
+            >
               <kbd>{item.key}</kbd>
               {item.label}
-            </Link>
-          ))}
-          {EXTRA.map((item) => (
-            <Link key={item.href} href={item.href} className={surface === item.id ? 'on' : ''}>
-              {item.label}
-            </Link>
+            </a>
           ))}
         </nav>
-        <input
-          id="term-search"
-          className="term-search"
-          placeholder="/ filter"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
         <div className="term-live">
           <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
           {desk.source} · {age(desk.generated_at, now)}
@@ -177,85 +158,56 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
         <SessionControls email={operatorEmail} />
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
-      {xAuthBroken && (
-        <div className="term-banner" role="alert">
-          X bookmark access expired.{' '}
-          <a href="/api/x/authorize">Reconnect X</a>
-          {' '}then press Run on the knowledge pipeline.
-        </div>
-      )}
       <main className="term-main">
-        {surface === 'monitor' && (
-          <MonitorPanel
+        {surface === 'home' && (
+          <HomePanel
             desk={desk}
             now={now}
             selectedThesisId={selectedThesis?.id}
             onThesis={setSelectedThesisId}
           />
         )}
-        {surface === 'book' && <BookPanel desk={desk} query={query} />}
+        {surface === 'book' && <BookPanel desk={desk} />}
         {surface === 'theses' && (
           <ThesesPanel
             desk={desk}
-            query={query}
             selected={selectedThesis}
             busy={busy}
             onSelect={setSelectedThesisId}
-            onMutate={async (label, work) => {
-              setBusy(true);
-              setNotice(null);
-              try {
-                await work();
-                await refreshDesk(setDesk, setNotice);
-                setNotice(label);
-              } catch (error) {
-                setNotice(error instanceof Error ? error.message : 'Mutation failed');
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onMutate={mutate(setBusy, setNotice, setDesk)}
           />
         )}
-        {surface === 'runs' && <RunsPanel desk={desk} now={now} query={query} />}
-        {surface === 'backtests' && <BacktestsPanel desk={desk} query={query} />}
-        {surface === 'catalysts' && <CatalystsPanel desk={desk} query={query} />}
+        {surface === 'runs' && <RunsPanel desk={desk} now={now} />}
+        {surface === 'backtests' && <BacktestsPanel desk={desk} />}
+        {surface === 'catalysts' && <CatalystsPanel desk={desk} />}
         {surface === 'learnings' && (
           <LearningsPanel
             desk={desk}
-            query={query}
             busy={busy}
-            onMutate={async (label, work) => {
-              setBusy(true);
-              setNotice(null);
-              try {
-                await work();
-                await refreshDesk(setDesk, setNotice);
-                setNotice(label);
-              } catch (error) {
-                setNotice(error instanceof Error ? error.message : 'Mutation failed');
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onMutate={mutate(setBusy, setNotice, setDesk)}
           />
         )}
-        {surface === 'ontology' && <OntologyPanel desk={desk} query={query} />}
+        {surface === 'ontology' && <OntologyPanel desk={desk} />}
         {surface === 'risk' && <RiskPanel desk={desk} />}
       </main>
       <footer className="term-status">
-        <span>NAV {moneyPrecise(desk.account?.total_value)}</span>
-        <span>CASH {money(desk.account?.cash)}</span>
-        <span>BP {money(desk.account?.buying_power)}</span>
+        <span>NAV {ledgerFigure(desk.book.current_nav, moneyPrecise)}</span>
+        <span>CASH {ledgerFigure(desk.book.cash, money)}</span>
+        <span>DEPLOYED {ledgerFigure(desk.book.deployed, money)}</span>
         <span>POS {desk.counts.open_positions}</span>
         <span>Q {desk.counts.open_research}</span>
-        <span>NEXT {nextFire ? `${nextFire.name} ${until(nextFire.at, now ?? 0)}` : '—'}</span>
-        <span className="term-kbd">1-7 panels · g then b/t/r/c/l · j/k thesis · r refresh · / filter · ? help</span>
+        <span>
+          LAST {lastLive
+            ? `${lastLive.name} ${age(lastLive.last_run_at ?? undefined, now)}`
+            : 'no QUANTANAMO run in ledger'}
+        </span>
+        <span className="term-kbd">1-9 panels · g then letter · j/k thesis · r refresh · ? help</span>
       </footer>
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 MON · 2 BOOK · 3 THES · 4 RUNS · 5 TEST · 6 CAT · 7 LRN</p>
-          <p>g b book · g t theses · g r runs · g c catalysts · g l learnings</p>
+          <p>1 Home · 2 Book · 3 Theses · 4 Runs · 5 Tests · 6 Catalysts · 7 Lessons · 8 Ontology · 9 Risk</p>
+          <p>g h home · g b book · g t theses · g r runs · g e tests · g c catalysts · g l lessons · g o ontology · g i risk</p>
           <p>j/k move thesis · Enter open theses · r reload ledger · Esc close</p>
         </aside>
       )}
@@ -263,27 +215,118 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
   );
 }
 
+function onDeskClick(event: MouseEvent<HTMLAnchorElement>, navigate: () => void) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault();
+  navigate();
+}
+
+function mutate(
+  setBusy: (value: boolean) => void,
+  setNotice: (value: string | null) => void,
+  setDesk: (desk: DeskPayload) => void,
+) {
+  return async (label: string, work: () => Promise<void>) => {
+    setBusy(true);
+    setNotice(null);
+    try {
+      await work();
+      await refreshDesk(setDesk, setNotice);
+      setNotice(label);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Mutation failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+}
+
 async function refreshDesk(
   setDesk: (desk: DeskPayload) => void,
   setNotice: (value: string | null) => void,
 ): Promise<void> {
-  const response = await fetch('/api/ledger', { cache: 'no-store' });
-  const body = await response.json();
-  if (!response.ok) {
-    setNotice(ErrorSchema.safeParse(body).data?.error || 'Ledger refresh failed');
-    return;
+  try {
+    setDesk(await fetchDeskPayload());
+    setNotice(null);
+  } catch (error) {
+    setNotice(error instanceof Error ? error.message : 'Ledger refresh failed');
   }
-  const parsed = DeskWireSchema.safeParse(body);
-  if (!parsed.success) {
-    setNotice('Ledger payload failed schema checks');
-    return;
-  }
-  // SAFETY: /api/ledger serializes the DeskPayload assembled by loadDesk(); DeskWireSchema verified the envelope.
-  setDesk(parsed.data as DeskPayload);
-  setNotice(null);
 }
 
-function MonitorPanel({
+function BookStrip({ book }: { book: BookPerformance }) {
+  return (
+    <>
+      <div className="term-kpis">
+        <div>
+          <i>NAV</i>
+          <b>{ledgerFigure(book.current_nav, moneyPrecise)}</b>
+        </div>
+        <div>
+          <i>vs start</i>
+          <b className={pnlClass(book.vs_start)}>{signedMoney(book.vs_start)}</b>
+        </div>
+        <div>
+          <i>Cash</i>
+          <b>{ledgerFigure(book.cash, moneyPrecise)}</b>
+        </div>
+        <div>
+          <i>Deployed</i>
+          <b>{ledgerFigure(book.deployed, moneyPrecise)}</b>
+        </div>
+        <div>
+          <i>Day P/L</i>
+          <b className={pnlClass(book.day_pnl)}>{signedMoney(book.day_pnl)}</b>
+        </div>
+        <div>
+          <i>vs cost</i>
+          <b className={pnlClass(book.vs_cost)}>{signedMoney(book.vs_cost)}</b>
+        </div>
+      </div>
+      <p className="term-prose dim">
+        {book.account_label || 'Agentic'} proof book
+        {book.observed_at ? ` · snapshot ${nyStamp(book.observed_at)}` : ''}
+        {book.starting_nav !== null ? ` · start ${moneyPrecise(book.starting_nav)}` : ` · start ${book.vs_start_note}`}
+        {`. Day P/L: ${book.day_pnl_note}. vs cost: ${book.vs_cost_note}.`}
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Sym</th>
+            <th>Qty</th>
+            <th>Avg cost</th>
+            <th>Cost</th>
+            <th>Mark</th>
+            <th>P/L</th>
+          </tr>
+        </thead>
+        <tbody>
+          {book.names.map((row) => (
+            <tr key={row.symbol}>
+              <td className="sym">{row.symbol}</td>
+              <td>{qty(row.quantity)}</td>
+              <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
+              <td>{ledgerFigure(row.cost, moneyPrecise)}</td>
+              <td>{row.mark === null ? row.note : moneyPrecise(row.mark)}</td>
+              <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : signedMoney(row.pnl)}</td>
+            </tr>
+          ))}
+          {!book.names.length && (
+            <tr><td colSpan={6} className="empty">No open episodes in the ledger</td></tr>
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function pnlClass(value: number | null): string {
+  if (value === null) return 'muted';
+  if (value > 0) return 'up';
+  if (value < 0) return 'down';
+  return 'muted';
+}
+
+function HomePanel({
   desk,
   now,
   selectedThesisId,
@@ -295,33 +338,16 @@ function MonitorPanel({
   onThesis: (id: string) => void;
 }) {
   const latestEvidence = desk.evidence.slice(0, 8);
+  const live = desk.routines.filter((row) => row.status === 'live');
+  const retired = desk.routines.filter((row) => row.status === 'retired');
   return (
-    <div className="term-grid term-grid-monitor">
-      <section className="term-panel">
-        <header><b>BOOK</b><span>{desk.positions.length} open</span></header>
-        <table>
-          <thead><tr><th>Sym</th><th>Qty</th><th>Avg</th><th>Status</th></tr></thead>
-          <tbody>
-            {desk.positions.map((row) => (
-              <tr key={row.id}>
-                <td className="sym">{row.symbol}</td>
-                <td>{qty(row.quantity)}</td>
-                <td>{moneyPrecise(row.average_cost)}</td>
-                <td className={toneForStatus(row.status)}>{row.status}</td>
-              </tr>
-            ))}
-            {!desk.positions.length && <tr><td colSpan={4} className="empty">No open episodes</td></tr>}
-          </tbody>
-        </table>
-        <div className="term-sub">
-          {desk.intents.slice(0, 4).map((intent) => (
-            <div key={intent.id} className="term-line">
-              <b className={toneForStatus(intent.status)}>{intent.symbol}</b>
-              <span>{intent.side} {intent.mode} {money(intent.notional)}</span>
-              <i>{intent.status}</i>
-            </div>
-          ))}
-        </div>
+    <div className="term-grid term-grid-home">
+      <section className="term-panel term-panel-span">
+        <header>
+          <b>AGENTIC BOOK</b>
+          <span>proof account · canonical snapshots</span>
+        </header>
+        <BookStrip book={desk.book} />
       </section>
       <section className="term-panel">
         <header><b>THESES</b><span>{desk.theses.length}</span></header>
@@ -362,13 +388,13 @@ function MonitorPanel({
         ))}
       </section>
       <section className="term-panel">
-        <header><b>NEXT</b></header>
-        {desk.schedule.slice(0, 6).map((slot) => (
-          <div key={`${slot.source}-${slot.id}-${slot.at}`} className="term-line">
-            <b>{until(slot.at, now ?? 0)}</b>
-            <span>{slot.name}</span>
-            <i>{slot.source}</i>
-          </div>
+        <header><b>QUANTANAMO</b><span>Grok Bot routines</span></header>
+        {live.map((row) => (
+          <RoutineLine key={row.id} row={row} now={now} />
+        ))}
+        <header><b>RETIRED</b><span>Cloudflare / ThesisForge / Codex</span></header>
+        {retired.map((row) => (
+          <RoutineLine key={row.id} row={row} now={now} />
         ))}
         <header><b>QUEUE</b><span>{desk.counts.open_research} open</span></header>
         {desk.queue.filter((row) => row.status === 'open').slice(0, 6).map((row) => (
@@ -382,42 +408,46 @@ function MonitorPanel({
   );
 }
 
-function BookPanel({ desk, query }: { desk: DeskPayload; query: string }) {
-  const q = query.toLowerCase();
-  const positions = desk.positions.filter((row) => row.symbol.toLowerCase().includes(q));
-  const intents = desk.intents.filter((row) => `${row.symbol} ${row.status}`.toLowerCase().includes(q));
+function RoutineLine({ row, now }: { row: DeskRoutine; now: number | null }) {
+  return (
+    <div className="term-line">
+      <b className={row.status === 'live' ? 'up' : 'muted'}>{row.status}</b>
+      <span>{row.name}</span>
+      <i>{row.last_run_at ? age(row.last_run_at, now) : 'no run in ledger'}</i>
+      <p>{row.cadence}{row.last_summary ? ` · ${row.last_summary.slice(0, 120)}` : ''}</p>
+    </div>
+  );
+}
+
+function BookPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
         <header>
           <b>LIVE BOOK</b>
-          <span>{desk.account?.account_label || 'no snapshot'} · {nyStamp(desk.account?.observed_at)}</span>
+          <span>{desk.book.account_label || 'no snapshot'} · {nyStamp(desk.book.observed_at)}</span>
         </header>
-        <div className="term-kpis">
-          <div><i>NAV</i><b>{moneyPrecise(desk.account?.total_value)}</b></div>
-          <div><i>Equity</i><b>{moneyPrecise(desk.account?.equity_value)}</b></div>
-          <div><i>Cash</i><b>{moneyPrecise(desk.account?.cash)}</b></div>
-          <div><i>BP</i><b>{moneyPrecise(desk.account?.buying_power)}</b></div>
-        </div>
+        <BookStrip book={desk.book} />
+        <header><b>EPISODES</b></header>
         <table>
           <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Opened</th><th>Status</th></tr></thead>
           <tbody>
-            {positions.map((row) => (
+            {desk.positions.map((row) => (
               <tr key={row.id}>
                 <td className="sym">{row.symbol}</td>
                 <td>{qty(row.quantity)}</td>
-                <td>{moneyPrecise(row.average_cost)}</td>
+                <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
                 <td>{nyStamp(row.opened_at)}</td>
                 <td className={toneForStatus(row.status)}>{row.status}</td>
               </tr>
             ))}
-            {!positions.length && <tr><td colSpan={5} className="empty">No positions match</td></tr>}
+            {!desk.positions.length && <tr><td colSpan={5} className="empty">No open episodes</td></tr>}
           </tbody>
         </table>
       </section>
       <section className="term-panel">
         <header><b>INTENTS / PROPOSALS</b></header>
-        {intents.map((row) => (
+        {desk.intents.map((row) => (
           <div key={row.id} className="term-line">
             <b className="sym">{row.symbol}</b>
             <span>{row.side} {row.mode} {money(row.notional)} · {qty(row.quantity)}</span>
@@ -440,23 +470,17 @@ function BookPanel({ desk, query }: { desk: DeskPayload; query: string }) {
 
 function ThesesPanel({
   desk,
-  query,
   selected,
   busy,
   onSelect,
   onMutate,
 }: {
   desk: DeskPayload;
-  query: string;
   selected?: ThesisRow;
   busy: boolean;
   onSelect: (id: string) => void;
   onMutate: (label: string, work: () => Promise<void>) => Promise<void>;
 }) {
-  const q = query.toLowerCase();
-  const rows = desk.theses.filter((row) =>
-    `${row.id} ${row.name} ${row.status} ${row.symbols.join(' ')}`.toLowerCase().includes(q),
-  );
   const evidence = desk.evidence.filter((row) => row.thesis_id === selected?.id).slice(0, 12);
   const scores = desk.scores.filter((row) => row.thesis_id === selected?.id).slice(0, 24).reverse();
   const [summary, setSummary] = useState('');
@@ -469,7 +493,7 @@ function ThesesPanel({
         <table>
           <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Symbols</th></tr></thead>
           <tbody>
-            {rows.map((row) => (
+            {desk.theses.map((row) => (
               <tr key={row.id} className={row.id === selected?.id ? 'sel' : ''} onClick={() => onSelect(row.id)}>
                 <td className="sym">{row.id}</td>
                 <td className={toneForStatus(row.status)}>{row.status}</td>
@@ -576,46 +600,37 @@ function Sparkline({ scores }: { scores: number[] }) {
   );
 }
 
-function RunsPanel({ desk, now, query }: { desk: DeskPayload; now: number | null; query: string }) {
-  const q = query.toLowerCase();
-  const runs = desk.runs.filter((row) => `${row.run_type} ${row.parsed.summary}`.toLowerCase().includes(q));
+function RunsPanel({ desk, now }: { desk: DeskPayload; now: number | null }) {
+  const live = desk.routines.filter((row) => row.status === 'live');
+  const retired = desk.routines.filter((row) => row.status === 'retired');
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
-        <header><b>RUNS</b><span>{runs.length}</span></header>
-        {runs.map((run) => (
+        <header><b>RUNS</b><span>{desk.runs.length}</span></header>
+        {desk.runs.map((run) => (
           <div key={run.id} className="term-line">
             <b className={toneForStatus(run.parsed.outcome)}>{run.parsed.outcome}</b>
             <span>{run.run_type} · {run.parsed.headline}</span>
             <i>{nyStamp(run.started_at)}</i>
             <p>{run.parsed.summary}</p>
-            {run.parsed.outcome === 'failed' && needsXReauthorization(`${run.parsed.error || ''} ${run.parsed.summary}`) && (
-              <p><a href="/api/x/authorize">Reconnect X</a></p>
-            )}
           </div>
         ))}
       </section>
       <section className="term-panel">
-        <header><b>CLOUD</b><span>{desk.counts.queued_tasks} queued tasks</span></header>
-        {desk.schedule.map((slot) => (
-          <div key={`${slot.source}-${slot.id}-${slot.at}`} className="term-line">
-            <b>{until(slot.at, now ?? 0)}</b>
-            <span>{slot.name}</span>
-            <i>{slot.source}</i>
-          </div>
+        <header><b>QUANTANAMO ROUTINES</b><span>last run from ledger</span></header>
+        {live.map((row) => (
+          <RoutineLine key={row.id} row={row} now={now} />
         ))}
-        {desk.cloud_runs.slice(0, 12).map((run) => (
+        <header><b>RETIRED</b><span>not due</span></header>
+        {retired.map((row) => (
+          <RoutineLine key={row.id} row={row} now={now} />
+        ))}
+        {desk.cloud_runs.slice(0, 8).map((run) => (
           <div key={run.id} className="term-line">
-            <b className={toneForStatus(run.status)}>{run.status}</b>
-            <span>{run.trigger_source} {run.market_slot || ''} {run.mode}</span>
+            <b className="muted">{run.status}</b>
+            <span>retired cloud {run.trigger_source} {run.market_slot || ''} {run.mode}</span>
             <i>{nyStamp(run.started_at || run.scheduled_for)}</i>
-            {run.error_text && <p className="down">{run.error_text}</p>}
-          </div>
-        ))}
-        {desk.cloud_tasks.filter((task) => task.status === 'queued' || task.status === 'running').map((task) => (
-          <div key={task.id} className="term-line">
-            <b className="warn">{task.status}</b>
-            <span>{task.task_type} {task.entity_key || ''}</span>
+            {run.error_text && <p className="dim">{run.error_text}</p>}
           </div>
         ))}
       </section>
@@ -623,9 +638,7 @@ function RunsPanel({ desk, now, query }: { desk: DeskPayload; now: number | null
   );
 }
 
-function BacktestsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
-  const q = query.toLowerCase();
-  const tests = desk.tests.filter((row) => row.variant_label.toLowerCase().includes(q) || row.status.includes(q));
+function BacktestsPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
@@ -644,7 +657,7 @@ function BacktestsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
         <table>
           <thead><tr><th>Variant</th><th>Status</th><th>Ret</th><th>DD</th><th>dSharpe</th></tr></thead>
           <tbody>
-            {tests.map((row) => (
+            {desk.tests.map((row) => (
               <tr key={row.id}>
                 <td>{row.variant_label}</td>
                 <td className={toneForStatus(row.status)}>{row.status}</td>
@@ -668,17 +681,12 @@ function BacktestsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
   );
 }
 
-function CatalystsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
-  const q = query.toLowerCase();
-  const catalysts = desk.catalysts.filter((row) =>
-    `${row.symbol} ${row.summary} ${row.thesis_id}`.toLowerCase().includes(q),
-  );
-  const queue = desk.queue.filter((row) => `${row.topic} ${row.reason}`.toLowerCase().includes(q));
+function CatalystsPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
         <header><b>CATALYSTS</b></header>
-        {catalysts.map((row) => (
+        {desk.catalysts.map((row) => (
           <div key={row.id} className="term-line">
             <b className="sym">{row.symbol || '—'}</b>
             <span>{row.catalyst_type} · {row.event_date || 'undated'} · {row.thesis_id}</span>
@@ -689,7 +697,7 @@ function CatalystsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
       </section>
       <section className="term-panel">
         <header><b>RESEARCH QUEUE</b><span>{desk.counts.open_research} open</span></header>
-        {queue.map((row) => (
+        {desk.queue.map((row) => (
           <div key={row.id} className="term-line">
             <b>{row.priority}</b>
             <span>{row.topic}</span>
@@ -704,24 +712,20 @@ function CatalystsPanel({ desk, query }: { desk: DeskPayload; query: string }) {
 
 function LearningsPanel({
   desk,
-  query,
   busy,
   onMutate,
 }: {
   desk: DeskPayload;
-  query: string;
   busy: boolean;
   onMutate: (label: string, work: () => Promise<void>) => Promise<void>;
 }) {
-  const q = query.toLowerCase();
   const [thesisId, setThesisId] = useState(desk.theses[0]?.id ?? '');
   const [lesson, setLesson] = useState('');
-  const lessons = desk.lessons.filter((row) => row.summary.toLowerCase().includes(q));
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
         <header><b>LESSONS</b><span>{desk.lessons.filter((row) => !row.incorporated).length} open loops</span></header>
-        {lessons.map((row) => (
+        {desk.lessons.map((row) => (
           <div key={row.id} className="term-line">
             <b>{row.lesson_type}</b>
             <span>{row.thesis_id} · {row.market_regime}</span>
@@ -775,14 +779,12 @@ function LearningsPanel({
   );
 }
 
-function OntologyPanel({ desk, query }: { desk: DeskPayload; query: string }) {
-  const q = query.toLowerCase();
-  const themes = desk.ontology_themes.filter((row) => `${row.name} ${row.id}`.toLowerCase().includes(q));
+function OntologyPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
         <header><b>THEMES</b></header>
-        {themes.map((row) => (
+        {desk.ontology_themes.map((row) => (
           <div key={row.id} className="term-line">
             <b>{row.name}</b>
             <span>{row.kind} · {row.id}</span>
@@ -839,6 +841,7 @@ async function postJson(url: string, body: MutationBody): Promise<void> {
     body: JSON.stringify(body),
   });
   const parsedBody = await response.json().catch(() => null);
+  const ErrorSchema = z.object({ error: z.string() }).passthrough();
   if (!response.ok) {
     throw new Error(ErrorSchema.safeParse(parsedBody).data?.error || `Request failed (${response.status})`);
   }

@@ -3,19 +3,13 @@ import { headers } from 'next/headers';
 import { SignInScreen } from '../auth/sign-in';
 import { TerminalApp } from './app';
 import { loadDeskAuthMethods } from '../../lib/auth-env';
-import { firstSearchParam, isLoopbackIpHost } from '../../lib/auth-search';
+import { isLoopbackIpHost } from '../../lib/auth-search';
 import { loadDesk } from '../../lib/ledger';
 import { readOperatorSession } from '../../lib/operator-session';
 
 export const dynamic = 'force-dynamic';
 
-export async function TerminalPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ auth_error?: string | string[] }>;
-} = {}) {
-  const params = searchParams ? await searchParams : {};
-  const authError = firstSearchParam(params.auth_error);
+export async function TerminalShell() {
   const host = (await headers()).get('host') ?? '';
   const session = await readOperatorSession();
   if (session === 'unauthenticated' || session === 'forbidden') {
@@ -24,7 +18,6 @@ export async function TerminalPage({
       <SignInScreen
         denied={session === 'forbidden'}
         methods={methods}
-        authError={authError}
         loopbackHint={isLoopbackIpHost(host)}
       />
     );

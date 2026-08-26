@@ -8,7 +8,7 @@ alwaysApply: true
 ## Architecture
 
 - `apps/dashboard` is localhost-only: reads the live Supabase ledger and applies operator mutations; never runs ingestion/research/trading inline.
-- Workers own schedules, AI, broker calls, and dashboard publication. Trigger them via authenticated HTTP or Wrangler—not by duplicating pipeline logic in Next.js routes.
+- QUANTANAMO (Grok Bot) is the live automation that writes the ledger. The desk must render from canonical tables without Cloudflare workers. Optional worker HTTP routes stay server-side and unwired from the operator chrome.
 
 ## Cloudflare Workers
 

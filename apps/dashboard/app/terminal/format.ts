@@ -34,6 +34,17 @@ export function moneyPrecise(value: number | null | undefined): string {
   return currencyPrecise.format(value);
 }
 
+export function signedMoney(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'not in ledger';
+  if (value > 0) return `+${currencyPrecise.format(value)}`;
+  return currencyPrecise.format(value);
+}
+
+export function ledgerFigure(value: number | null | undefined, format: (n: number) => string): string {
+  if (value === null || value === undefined) return 'not in ledger';
+  return format(value);
+}
+
 export function qty(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return qtyFormat.format(value);
