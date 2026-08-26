@@ -98,6 +98,11 @@ function layoutTheses(theses:Thesis[],relations:Relation[]){
       point.y=Math.min(CANVAS_H-70,Math.max(70,point.y+f.y*0.55));
     }
   }
+  // Snap coords so SSR/client float drift does not cause hydration mismatches.
+  for(const point of nodes.values()){
+    point.x=Math.round(point.x*100)/100;
+    point.y=Math.round(point.y*100)/100;
+  }
   return nodes;
 }
 function edgePath(a:{x:number;y:number},b:{x:number;y:number}){
@@ -470,7 +475,7 @@ function QuietMap({data,activeThesisId,onFocusThesis}:{data:Snapshot;activeThesi
         type="button"
         key={thesis.id}
         className={`signal-node ${isActive?'active':''}${isLinked&&!isActive?' linked':''}`}
-        style={{left:`${(point.x/CANVAS_W)*100}%`,top:`${(point.y/CANVAS_H)*100}%`}}
+        style={{left:`${((point.x/CANVAS_W)*100).toFixed(4)}%`,top:`${((point.y/CANVAS_H)*100).toFixed(4)}%`}}
         title={thesis.summary}
         onClick={()=>onFocusThesis(thesis.id)}
       >
