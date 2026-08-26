@@ -12,6 +12,8 @@ function callbackUrl(): string {
   return `${window.location.origin}${DESK_CALLBACK_PATH}`;
 }
 
+const SIGN_IN_LABEL = 'Sign in';
+
 function providerLabel(id: OAuthProviderId): string {
   if (id === 'github') return 'GitHub';
   if (id === 'google') return 'Google';
@@ -35,6 +37,7 @@ export function SignInScreen({
   const [error, setError] = useState<string | null>(() => deskAuthErrorMessage(denied, authError));
   const [busy, setBusy] = useState<string | null>(null);
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [sent, setSent] = useState(false);
 
   async function oauth(provider: OAuthProviderId) {
@@ -67,6 +70,22 @@ export function SignInScreen({
     window.location.assign('/');
   }
 
+  async function passwordSignIn() {
+    setBusy('password');
+    setError(null);
+    const supabase = createBrowserSupabase();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInError) {
+      setError(signInError.message);
+      setBusy(null);
+      return;
+    }
+    window.location.assign('/');
+  }
+
   async function emailLink() {
     setBusy('email');
     setError(null);
@@ -88,7 +107,7 @@ export function SignInScreen({
   return (
     <main className="term-gate">
       <header className="term-top">
-        <span className="term-brand">QNMO</span>
+        <span className="term-brand">QUANTANAMO</span>
         <span className="term-live">desk locked</span>
       </header>
       <section className="term-gate-card">
@@ -103,41 +122,86 @@ export function SignInScreen({
             {error}
           </p>
         )}
+        {denied && (
+          <form action="/auth/sign-out" method="post">
+            <button type="submit" className="term-gate-secondary">
+              Sign out
+            </button>
+          </form>
+        )}
         {methods.passkeys && loopbackHint && (
           <p className="term-gate-note">
             Passkeys need WebAuthn RP ID <code>localhost</code>. Open{' '}
             <a href="http://localhost:5173">http://localhost:5173</a> instead of 127.0.0.1.
           </p>
         )}
+        {methods.oauth.length > 0 && (
+          <>
+            {methods.oauth.map((provider) => (
+              <button
+                key={provider}
+                type="button"
+                className="term-gate-primary"
+                disabled={busy !== null}
+                onClick={() => void oauth(provider)}
+              >
+                {busy === provider ? `Redirecting to ${providerLabel(provider)}…` : `Continue with ${providerLabel(provider)}`}
+              </button>
+            ))}
+            <div className="term-gate-split">or password</div>
+          </>
+        )}
+        {methods.email && (
+          <form
+            className="term-gate-email"
+            suppressHydrationWarning
+            onSubmit={(event) => {
+              event.preventDefault();
+              void passwordSignIn();
+            }}
+          >
+            <input
+              type="email"
+              name="email"
+              autoComplete="username"
+              placeholder="operator@…"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              placeholder="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            <button
+              type="submit"
+              className={methods.oauth.length > 0 ? 'term-gate-secondary' : 'term-gate-primary'}
+              disabled={busy !== null || email.trim() === '' || password === ''}
+            >
+              {busy === 'password' ? 'Signing in…' : SIGN_IN_LABEL}
+            </button>
+          </form>
+        )}
         {methods.passkeys && (
-          <button type="button" className="term-gate-primary" disabled={busy !== null} onClick={() => void passkey()}>
+          <button type="button" className="term-gate-secondary" disabled={busy !== null} onClick={() => void passkey()}>
             {busy === 'passkey' ? 'Waiting on authenticator…' : 'Passkey'}
           </button>
         )}
         {methods.email && (
           <>
-            <div className="term-gate-split">Email link</div>
-            <form
-              className="term-gate-email"
-              suppressHydrationWarning
-              onSubmit={(event) => {
-                event.preventDefault();
-                void emailLink();
-              }}
+            <button
+              type="button"
+              className="term-gate-secondary"
+              disabled={busy !== null || email.trim() === ''}
+              onClick={() => void emailLink()}
             >
-              <input
-                type="email"
-                name="email"
-                autoComplete="username"
-                placeholder="operator@…"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-              <button type="submit" className="term-gate-secondary" disabled={busy !== null || email.trim() === ''}>
-                {busy === 'email' ? 'Sending…' : 'Send magic link'}
-              </button>
-            </form>
+              {busy === 'email' ? 'Sending…' : 'Send magic link'}
+            </button>
             {sent && (
               <p className="term-gate-note">
                 Check your inbox. Open the link so it returns here — <code>localhost</code> and{' '}
@@ -146,27 +210,11 @@ export function SignInScreen({
             )}
           </>
         )}
-        {methods.oauth.length > 0 && (
-          <>
-            <div className="term-gate-split">OAuth</div>
-            {methods.oauth.map((provider) => (
-              <button
-                key={provider}
-                type="button"
-                className="term-gate-secondary"
-                disabled={busy !== null}
-                onClick={() => void oauth(provider)}
-              >
-                {busy === provider ? `Redirecting to ${providerLabel(provider)}…` : `Continue with ${providerLabel(provider)}`}
-              </button>
-            ))}
-          </>
-        )}
         {methods.oauth.length === 0 && (
           <p className="term-gate-note">
-            No social OAuth providers are enabled on this project yet. Use email once, then{' '}
-            <code>Passkey+</code> in the header. To add GitHub/Google: Authentication → Providers, then
-            this screen picks them up automatically.
+            GitHub/Google would redirect you away from this screen, but those providers are off until
+            you add an OAuth app under Authentication → Providers. Password sign-in does not send
+            email and is not rate-limited.
           </p>
         )}
         <p className="term-gate-note">

@@ -11,6 +11,7 @@ import { FinancialRequestSchema } from './financial';
 import { parseOntologyAiOutput, type AnalysisInput, type ClassifiedBookmark } from './ontology-analysis';
 import { normalizePhrase, OntologyCatalog, slugify } from './ontology';
 import { parseResearchDecision, ResearchActionSchema, seedActions } from './x-research';
+import { xOauthFailureMessage } from './x-oauth';
 
 describe('worker knowledge primitives', () => {
   test('coerces claim confidence for jsonb_to_recordset inserts', () => {
@@ -59,6 +60,16 @@ describe('worker knowledge primitives', () => {
   test('parses X tweet payloads and rejects malformed bookmarks', () => {
     expect(bookmarkFromUnknown({ id: '1', text: 'hello $VST' })).toMatchObject({ id: '1', text: 'hello $VST' });
     expect(bookmarkFromUnknown({ text: 'missing id' })).toBeNull();
+  });
+
+  test('maps X OAuth 400s to a reauthorization-required failure', () => {
+    expect(xOauthFailureMessage('X token refresh', 400, { error: 'invalid_grant' }))
+      .toBe('X token refresh failed with status 400 (invalid_grant); reauthorization is required');
+    expect(xOauthFailureMessage('X token refresh', 400, {})).toContain('reauthorization is required');
+    expect(xOauthFailureMessage('X token refresh', 500, { error: 'server_error' }))
+      .toBe('X token refresh failed with status 500 (server_error)');
+    expect(xOauthFailureMessage('X token refresh', 401, null))
+      .toBe('X token refresh failed with status 401');
   });
 
   test('validates financial and capture request boundaries', () => {

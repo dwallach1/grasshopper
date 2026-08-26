@@ -43,6 +43,20 @@ function surfaceFromPath(pathname: string): string {
   return pathname.replace(/^\//, '').split('/')[0] || 'monitor';
 }
 
+function needsXReauthorization(text: string): boolean {
+  return /x token|reauthorization is required|x credential vault/i.test(text);
+}
+
+function deskNeedsXReauthorization(desk: DeskPayload): boolean {
+  return desk.runs.some((run) => (
+    run.parsed.outcome === 'failed'
+    && needsXReauthorization(`${run.parsed.error || ''} ${run.parsed.summary}`)
+  )) || desk.cloud_runs.some((run) => (
+    (run.status === 'failed' || run.status === 'error')
+    && needsXReauthorization(`${run.error_text || ''} ${run.summary}`)
+  ));
+}
+
 export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; operatorEmail: string }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -130,11 +144,12 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
 
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
   const nextFire = desk.schedule[0];
+  const xAuthBroken = deskNeedsXReauthorization(desk);
 
   return (
     <div className="term">
       <header className="term-top">
-        <Link className="term-brand" href="/">QNMO</Link>
+        <Link className="term-brand" href="/">QUANTANAMO</Link>
         <nav className="term-nav" aria-label="Terminal">
           {NAV.map((item) => (
             <Link key={item.href} href={item.href} className={surface === item.id ? 'on' : ''}>
@@ -162,6 +177,13 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
         <SessionControls email={operatorEmail} />
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
+      {xAuthBroken && (
+        <div className="term-banner" role="alert">
+          X bookmark access expired.{' '}
+          <a href="/api/x/authorize">Reconnect X</a>
+          {' '}then press Run on the knowledge pipeline.
+        </div>
+      )}
       <main className="term-main">
         {surface === 'monitor' && (
           <MonitorPanel
@@ -567,6 +589,9 @@ function RunsPanel({ desk, now, query }: { desk: DeskPayload; now: number | null
             <span>{run.run_type} · {run.parsed.headline}</span>
             <i>{nyStamp(run.started_at)}</i>
             <p>{run.parsed.summary}</p>
+            {run.parsed.outcome === 'failed' && needsXReauthorization(`${run.parsed.error || ''} ${run.parsed.summary}`) && (
+              <p><a href="/api/x/authorize">Reconnect X</a></p>
+            )}
           </div>
         ))}
       </section>

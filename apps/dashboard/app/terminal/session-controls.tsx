@@ -14,7 +14,20 @@ export function SessionControls({ email }: { email: string }) {
     const supabase = createBrowserSupabase();
     const { error } = await supabase.auth.registerPasskey();
     setBusy(false);
-    setNotice(error ? error.message : 'Passkey registered');
+    if (!error) {
+      setNotice('Passkey registered');
+      return;
+    }
+    const origin = window.location.origin;
+    if (error.code === 'webauthn_verification_failed' || /credential verification failed/i.test(error.message)) {
+      setNotice(
+        origin === 'http://localhost:5173'
+          ? 'Passkey origin was rejected. Stay on http://localhost:5173 (not 127.0.0.1) and retry.'
+          : `Passkeys need http://localhost:5173. You are on ${origin}.`,
+      );
+      return;
+    }
+    setNotice(error.message);
   }
 
   return (

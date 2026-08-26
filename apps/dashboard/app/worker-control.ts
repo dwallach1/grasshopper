@@ -11,7 +11,9 @@ const WorkerResponseBodySchema = z.object({
   output: z.string().optional(),
   raw: z.string().optional(),
   skipped: z.boolean().optional(),
-});
+  url: z.string().optional(),
+  authorized: z.boolean().optional(),
+}).passthrough();
 
 export type WorkerResponseBody = z.infer<typeof WorkerResponseBodySchema>;
 
@@ -136,4 +138,54 @@ export async function invokeFullPipeline(): Promise<{
   }
   const research = await invokeResearchRun();
   return { knowledge, research };
+}
+
+export const X_OAUTH_REDIRECT_URI = 'http://127.0.0.1:5173/api/x/callback';
+
+function xRedirectUri(): string {
+  return process.env.X_REDIRECT_URI?.trim() || X_OAUTH_REDIRECT_URI;
+}
+
+async function postWorkerJson(
+  pathname: string,
+  baseUrl: string | undefined,
+  baseVar: string,
+  body: unknown,
+): Promise<WorkerStepResult> {
+  const url = workerUrl(baseUrl, pathname);
+  const token = internalToken();
+  if (!url || !token) {
+    throw new Error(
+      `Worker HTTP trigger requires ${missingWorkerEnv(baseUrl, baseVar)} in the repo root .env.local. Restart the webapp after updating it.`,
+    );
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-quantanamo-internal-token': token,
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+  const parsed = await readJson(response);
+  return { ok: response.ok, status: response.status, body: parsed, via: 'http' };
+}
+
+export async function startXAuthorization(): Promise<WorkerStepResult> {
+  return postWorkerJson(
+    '/x/authorize',
+    process.env.QUANTANAMO_KNOWLEDGE_WORKER_URL,
+    'QUANTANAMO_KNOWLEDGE_WORKER_URL',
+    { redirectUri: xRedirectUri() },
+  );
+}
+
+export async function completeXAuthorization(code: string, state: string): Promise<WorkerStepResult> {
+  return postWorkerJson(
+    '/x/callback',
+    process.env.QUANTANAMO_KNOWLEDGE_WORKER_URL,
+    'QUANTANAMO_KNOWLEDGE_WORKER_URL',
+    { code, state, redirectUri: xRedirectUri() },
+  );
 }

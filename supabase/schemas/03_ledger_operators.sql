@@ -54,12 +54,15 @@ begin
 end;
 $$;
 revoke all on function private.claim_first_ledger_operator() from public, anon, authenticated;
-grant execute on function private.claim_first_ledger_operator() to authenticated, service_role;
+grant execute on function private.claim_first_ledger_operator() to service_role;
 
+-- Must be SECURITY DEFINER: `authenticated` has no USAGE on schema private, so an
+-- invoker wrapper fails with "permission denied for schema private" and the desk
+-- treats the operator as not allowlisted.
 create or replace function public.claim_ledger_operator()
 returns boolean
 language sql
-security invoker
+security definer
 set search_path = ''
 as $$
   select private.claim_first_ledger_operator();

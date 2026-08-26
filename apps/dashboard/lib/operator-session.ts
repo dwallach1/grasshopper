@@ -18,7 +18,17 @@ export async function readOperatorSession(): Promise<OperatorGate> {
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) return 'unauthenticated';
   const { data: claimed, error: claimError } = await supabase.rpc('claim_ledger_operator');
-  if (claimError || claimed !== true) return 'forbidden';
+  if (claimError) {
+    console.info(
+      JSON.stringify({
+        event: 'operator_claim_failed',
+        userId: userData.user.id,
+        error: claimError.message,
+      }),
+    );
+    return 'forbidden';
+  }
+  if (claimed !== true) return 'forbidden';
   return {
     userId: userData.user.id,
     email: userData.user.email || userData.user.id,

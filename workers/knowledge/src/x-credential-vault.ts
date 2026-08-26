@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { bookmarkFromUnknown, type XBookmark, type XBookmarkPayload } from './bookmarks';
 import { readBoundedJson } from '@quantanamo/shared/http';
+import { REAUTH_OAUTH_ERRORS, TokenErrorSchema, xOauthFailureMessage } from './x-oauth';
 
 const TokenResponseSchema = z.object({
   access_token: z.string().min(1),
@@ -137,13 +138,14 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     const stored = this.storedToken();
     if (stored) return stored;
     if (!this.env.X_ACCESS_TOKEN) throw new Error('X credential vault has not been authorized');
-    const token = {
+    // Env secrets are a last-resort bootstrap after a new Worker/DO. Do not
+    // persist them until a refresh or authorization exchange succeeds — the
+    // wrangler copies go stale as soon as X rotates the refresh token.
+    return {
       access_token: this.env.X_ACCESS_TOKEN,
       refresh_token: this.env.X_REFRESH_TOKEN || null,
       expires_at: null,
     };
-    this.persistToken(token);
-    return token;
   }
 
   private persistToken(token: StoredToken): void {
@@ -160,6 +162,10 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     );
   }
 
+  private clearStoredToken(): void {
+    this.ctx.storage.sql.exec('delete from credential where singleton=1');
+  }
+
   private async requestToken(body: URLSearchParams, operation: string): Promise<StoredToken> {
     const headers = new Headers({ 'content-type': 'application/x-www-form-urlencoded' });
     if (this.env.X_CLIENT_SECRET) {
@@ -167,8 +173,21 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     }
     const response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers, body });
     const payload = await readBoundedJson(response, MAX_X_RESPONSE_BYTES);
+    if (!response.ok) {
+      const message = xOauthFailureMessage(operation, response.status, payload);
+      const parsed = TokenErrorSchema.safeParse(payload);
+      const code = parsed.success ? parsed.data.error : undefined;
+      console.error(JSON.stringify({
+        event: 'x_oauth_token_failed',
+        operation,
+        status: response.status,
+        error: code || null,
+      }));
+      if (response.status === 400 && (!code || REAUTH_OAUTH_ERRORS.has(code))) this.clearStoredToken();
+      throw new Error(message);
+    }
     const parsed = TokenResponseSchema.safeParse(payload);
-    if (!response.ok || !parsed.success) throw new Error(`${operation} failed with status ${response.status}`);
+    if (!parsed.success) throw new Error(`${operation} failed: token response was invalid`);
     const previous = this.storedToken();
     const token = {
       access_token: parsed.data.access_token,
@@ -190,15 +209,19 @@ export class XCredentialVault extends DurableObject<XVaultEnvironment> {
     }), 'X token refresh');
   }
 
-  private async xFetch(path: string, retry = true): Promise<unknown> {
+  private async authorizedFetch(path: string, accessToken: string): Promise<Response> {
+    return fetch(`https://api.x.com${path}`, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+  }
+
+  private async xFetch(path: string): Promise<unknown> {
     let token = this.bootstrapToken();
     if (token.expires_at !== null && token.expires_at <= Date.now() + 60_000) token = await this.refreshToken(token);
-    const response = await fetch(`https://api.x.com${path}`, {
-      headers: { authorization: `Bearer ${token.access_token}` },
-    });
-    if (response.status === 401 && retry) {
-      await this.refreshToken(token);
-      return this.xFetch(path, false);
+    let response = await this.authorizedFetch(path, token.access_token);
+    if (response.status === 401) {
+      token = await this.refreshToken(token);
+      response = await this.authorizedFetch(path, token.access_token);
     }
     const payload = await readBoundedJson(response, MAX_X_RESPONSE_BYTES);
     if (!response.ok) throw new Error(`X API failed with status ${response.status}`);
