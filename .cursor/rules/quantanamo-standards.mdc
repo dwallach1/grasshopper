@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Architecture
 
-- `apps/dashboard` is localhost-only: reads Supabase, never runs ingestion/research/trading inline.
+- `apps/dashboard` is localhost-only: reads the live Supabase ledger and applies operator mutations; never runs ingestion/research/trading inline.
 - Workers own schedules, AI, broker calls, and dashboard publication. Trigger them via authenticated HTTP or Wrangler—not by duplicating pipeline logic in Next.js routes.
 
 ## Cloudflare Workers

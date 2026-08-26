@@ -17,11 +17,11 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
 
  bun run web:app (localhost)
         |
-        | read Supabase only
+        | live read/write of canonical tables
         v
  +---------------------------+                                       +-------------------------------+
  | apps/dashboard (Next)     |                                       | quantanamo-knowledge-pipeline |
- | local desk UI             |                                       | LLM learning + knowledge graph |
+ | local Bloomberg terminal  |                                       | LLM learning + knowledge graph |
  +-------------+-------------+                                       +----+-----------+----------+---+
                |                                                          |           |          |
                |                                                          |           |          +--> Financial
@@ -41,7 +41,7 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
                |                                                                              canonical system of record
                |                                                                                       ^
                v                                                                                       |
-       reads dashboard_snapshots.current                                                               |
+       live tables (theses, runs, book, tests, queue)                                               |
                                                                                                        |
  Cloudflare Cron                                                                                       |
   10:05 / 13:05 / 15:25 ET                                                                            |
@@ -87,12 +87,14 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
    knowledge only:       FINANCIAL_DATASETS_API_KEY
 ```
 
-The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. Cloudflare Workers hydrate Supabase on schedules and triggers; the local desk reads `dashboard_snapshots.current` and optional manager ontology actions against Postgres. Robinhood account state updates when a research workflow pulls it, or when you run `bun run cloud:trigger`.
+The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. Cloudflare Workers hydrate Supabase on schedules and triggers; the local terminal reads the canonical tables (theses, runs, positions, tests, queue) and can apply operator mutations. Robinhood account state updates when a research workflow pulls it, or when you run `bun run cloud:trigger`.
+
+See [`LOCAL.md`](LOCAL.md) for env vars, how to confirm live ledger data, and how desk writes hit Supabase without a deploy.
 
 ## Production status
 
 - Cloudflare Workers: knowledge pipeline, research orchestrator, and Robinhood gateway
-- Local webapp: `apps/dashboard` via `bun run web:app` (reads Supabase only)
+- Local webapp: `apps/dashboard` via `bun run web:app` (live ledger, localhost only)
 - Cloudflare data services: Workflows, Queues, Durable Objects, Workers AI, Hyperdrive, and private R2 originals
 - Supabase: canonical Postgres, narrow Edge Functions, and RLS
 - Autonomous equity actions: open, hold, add, reduce, and exit
@@ -109,7 +111,7 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 
 | Component | Responsibility | Boundary |
 |---|---|---|
-| `apps/dashboard` (local) | Private research desk UI | Localhost only; server-side Supabase reads; no Cloudflare hosting |
+| `apps/dashboard` (local) | Bloomberg-style terminal over the live ledger | Localhost only; server-side Supabase reads/writes; no Cloudflare hosting |
 | `quantanamo-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
 | `quantanamo-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
 | `quantanamo-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
@@ -303,7 +305,7 @@ No production capability depends on a laptop, Python environment, Codex automati
 ## Repository map
 
 ```text
-apps/dashboard/                  local Next desk (reads Supabase)
+apps/dashboard/                  local Next terminal (live Supabase ledger)
 workers/knowledge/               knowledge-pipeline Worker
 workers/research/                research orchestrator, Workflows, DOs
 workers/broker/                  Robinhood broker gateway Agent
@@ -322,7 +324,7 @@ Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local de
 
 ### Local webapp against production Supabase
 
-No Docker, no Cloudflare Workers. Cloud Workers already publish `dashboard_snapshots.current`; local Next just reads Supabase.
+No Docker, no Cloudflare Workers. The Next server reads and writes canonical tables with `QUANTANAMO_DATABASE_URL` or `SUPABASE_SECRET_KEY`. Details and a verification checklist: [`LOCAL.md`](LOCAL.md).
 
 ```sh
 # Uses QUANTANAMO_DATABASE_URL from root .env.local
@@ -331,7 +333,7 @@ bun run web:app
 
 Open `http://127.0.0.1:5173`. Manager identity defaults to `local@quantanamo.dev`.
 
-Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`).
+Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`). Do not put that key in `NEXT_PUBLIC_*`.
 
 ### Local end-to-end tests (publication / knowledge)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the Quantanamo dashboard locally with Bun + Next only.
-# Workers stay on Cloudflare and hydrate Supabase; this app only reads it.
+# Workers stay on Cloudflare and hydrate Supabase; this app reads/writes the ledger.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         })},
         true
       )`;
-      const rows = await sql<{ manage_ontology_entity: unknown }>`
+      const rows = await sql<Array<{ manage_ontology_entity: unknown }>>`
         select public.manage_ontology_entity(${entityType}, ${key}, ${action}) as manage_ontology_entity
       `;
       const dbResult = rows[0]?.manage_ontology_entity;
