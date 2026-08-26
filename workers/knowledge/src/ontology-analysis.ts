@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
-import { AI_MODELS, parseAiJsonObject, runAiRole } from '@thesisforge/shared/ai';
+import { AI_MODELS, jsonSchemaResponseFormat, parseAiJsonObject, runAiRole } from '@thesisforge/shared/ai';
 
 import type { XBookmark, XContextAnnotation } from './bookmarks';
 import { normalizePhrase, type OntologyCatalog, type ThemeMatch } from './ontology';
 
 export const ONTOLOGY_AI_MODEL = AI_MODELS.triage;
-export const ONTOLOGY_PROMPT_VERSION = 'ontology-semantic-v1';
+export const ONTOLOGY_PROMPT_VERSION = 'ontology-semantic-v2';
 export const MAX_ONTOLOGY_BOOKMARKS_PER_SYNC = 96;
 
 const BATCH_SIZE = 4;
@@ -305,80 +305,85 @@ async function analyzeBatch(
   const claimTypes = ClaimTypeSchema.options;
   const directions = ThemeDirectionSchema.options;
   const candidateTypes = CandidateTypeSchema.options;
+  const ontologySchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      analyses: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            bookmark_id: { type: 'string' },
+            market_relevance: { type: 'integer', minimum: 0, maximum: 100 },
+            claim_type: { type: 'string', enum: claimTypes },
+            claim_summary: { type: 'string' },
+            claim_confidence: { type: 'integer', minimum: 0, maximum: 100 },
+            claim_evidence_excerpt: { type: 'string' },
+            symbols: { type: 'array', items: { type: 'string' } },
+            themes: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  theme_id: { type: 'string' },
+                  confidence: { type: 'integer', minimum: 0, maximum: 100 },
+                  direction: { type: 'string', enum: directions },
+                  evidence_excerpt: { type: 'string' },
+                },
+                required: ['theme_id', 'confidence', 'direction', 'evidence_excerpt'],
+              },
+            },
+            candidates: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  candidate_type: { type: 'string', enum: candidateTypes },
+                  theme_id: { type: 'string' },
+                  label: { type: 'string' },
+                  description: { type: 'string' },
+                  confidence: { type: 'integer', minimum: 0, maximum: 100 },
+                  evidence_excerpt: { type: 'string' },
+                },
+                required: [
+                  'candidate_type',
+                  'theme_id',
+                  'label',
+                  'description',
+                  'confidence',
+                  'evidence_excerpt',
+                ],
+              },
+            },
+          },
+          required: [
+            'bookmark_id',
+            'market_relevance',
+            'claim_type',
+            'claim_summary',
+            'claim_confidence',
+            'claim_evidence_excerpt',
+            'symbols',
+            'themes',
+            'candidates',
+          ],
+        },
+      },
+    },
+    required: ['analyses'],
+  };
   const result = await runAiRole(
     ai,
     'triage',
     {
       messages: [{ role: 'user', content: promptFor(inputs, catalog) }],
       max_tokens: 4_096,
-      temperature: 0.1,
-      guided_json: {
-        type: 'object',
-        properties: {
-          analyses: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                bookmark_id: { type: 'string' },
-                market_relevance: { type: 'integer', minimum: 0, maximum: 100 },
-                claim_type: { type: 'string', enum: claimTypes },
-                claim_summary: { type: 'string' },
-                claim_confidence: { type: 'integer', minimum: 0, maximum: 100 },
-                claim_evidence_excerpt: { type: 'string' },
-                symbols: { type: 'array', items: { type: 'string' } },
-                themes: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      theme_id: { type: 'string' },
-                      confidence: { type: 'integer', minimum: 0, maximum: 100 },
-                      direction: { type: 'string', enum: directions },
-                      evidence_excerpt: { type: 'string' },
-                    },
-                    required: ['theme_id', 'confidence', 'direction', 'evidence_excerpt'],
-                  },
-                },
-                candidates: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      candidate_type: { type: 'string', enum: candidateTypes },
-                      theme_id: { type: 'string' },
-                      label: { type: 'string' },
-                      description: { type: 'string' },
-                      confidence: { type: 'integer', minimum: 0, maximum: 100 },
-                      evidence_excerpt: { type: 'string' },
-                    },
-                    required: [
-                      'candidate_type',
-                      'theme_id',
-                      'label',
-                      'description',
-                      'confidence',
-                      'evidence_excerpt',
-                    ],
-                  },
-                },
-              },
-              required: [
-                'bookmark_id',
-                'market_relevance',
-                'claim_type',
-                'claim_summary',
-                'claim_confidence',
-                'claim_evidence_excerpt',
-                'symbols',
-                'themes',
-                'candidates',
-              ],
-            },
-          },
-        },
-        required: ['analyses'],
-      },
+      response_format: jsonSchemaResponseFormat('ontology_analysis', ontologySchema),
+      reasoning: { effort: 'low' },
     },
     {
       gatewayId,

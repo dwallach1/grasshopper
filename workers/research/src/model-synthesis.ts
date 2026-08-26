@@ -1,11 +1,12 @@
 import {
   AI_MODELS,
+  jsonSchemaResponseFormat,
   modelForRole,
   parseAiJsonObject,
   runAiRole,
   type AiRole,
 } from '@thesisforge/shared/ai';
-import type { JsonObject } from '@thesisforge/shared/json';
+import { isJsonObject, type JsonObject } from '@thesisforge/shared/json';
 
 import {
   parsePositionAiOutput,
@@ -136,13 +137,12 @@ function compactThesisForSynthesis(thesis: ResearchTask['thesis']): Record<strin
 
 function compactDecisionContext(decisionContext: JsonObject): JsonObject {
   const broker = decisionContext.broker;
-  if (!broker || typeof broker !== 'object' || Array.isArray(broker)) return decisionContext;
-  const record = broker as Record<string, unknown>;
-  const quotes = Array.isArray(record.quotes) ? record.quotes.slice(0, 8) : record.quotes;
-  const research = Array.isArray(record.research) ? record.research.slice(0, 8) : record.research;
+  if (!isJsonObject(broker)) return decisionContext;
+  const quotes = Array.isArray(broker.quotes) ? broker.quotes.slice(0, 8) : broker.quotes;
+  const research = Array.isArray(broker.research) ? broker.research.slice(0, 8) : broker.research;
   return {
     ...decisionContext,
-    broker: { ...record, quotes, research },
+    broker: { ...broker, quotes, research },
   };
 }
 
@@ -196,8 +196,7 @@ async function runSynthesis(
     },
     tags: ['thesisforge', role],
   };
-  const schemaHint = JSON.stringify((schema as { properties?: Record<string, unknown> }).properties ?? schema);
-  const grokFirst = async (): Promise<unknown> => {
+  const primary = async (): Promise<unknown> => {
     const result = await runAiRole(
       env.AI,
       role,
@@ -205,46 +204,28 @@ async function runSynthesis(
         system: [
           system,
           'Return strict JSON only. Do not wrap the payload in markdown.',
-          `Required JSON properties: ${schemaHint}`,
         ].join(' '),
         messages: [{ role: 'user', content: user }],
         max_tokens: 1_200,
         temperature: 0.1,
+        response_format: jsonSchemaResponseFormat(schemaName, schema),
+        reasoning: { effort: role === 'synthesis_escalate' ? 'high' : 'medium' },
       },
       gatewayOptions,
     );
     return parseAiJsonObject(result);
   };
   try {
-    return await grokFirst();
+    return await primary();
   } catch (error) {
     if (!aiErrorRetryable(error)) throw error;
     console.warn(JSON.stringify({
-      event: 'synthesis_grok_failed',
+      event: 'synthesis_primary_retry',
       role,
       error: error instanceof Error ? error.message : 'unknown',
-      fallback: AI_MODELS.triage,
+      model: modelForRole(role),
     }));
-    return runAiRole(
-      env.AI,
-      'triage',
-      {
-        system,
-        messages: [{ role: 'user', content: user }],
-        max_tokens: 1_200,
-        temperature: 0.1,
-        guided_json: schema,
-      },
-      {
-        ...gatewayOptions,
-        metadata: {
-          ...gatewayOptions.metadata,
-          ai_model: AI_MODELS.triage,
-          synthesis_fallback: 'llama_guided',
-        },
-        tags: ['thesisforge', role, 'synthesis_fallback'],
-      },
-    );
+    return primary();
   }
 }
 

@@ -129,7 +129,7 @@ describe('worker knowledge primitives', () => {
     }] }, inputs, catalog)).toThrow('exact source excerpt');
   });
 
-  test('gates and validates Grok investigation packets without trade advice', () => {
+  test('gates and validates claim investigation packets without trade advice', () => {
     const classified = {
       marketScore: 80,
       claim: { type: 'company_event', summary: 'Contract signed', confidence: 70, evidenceExcerpt: 'signed' },

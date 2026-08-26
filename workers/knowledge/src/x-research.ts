@@ -639,7 +639,6 @@ export async function runResearchStep(
         content: decisionPrompt(session, dossier, priorFindings, execution.observations, budget),
       }],
       max_tokens: 3_000,
-      temperature: 0.2,
       reasoning: { effort: 'low' },
       response_format: jsonSchemaResponseFormat('x_research_decision', DecisionJsonSchema),
     },

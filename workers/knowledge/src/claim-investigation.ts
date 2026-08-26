@@ -12,7 +12,7 @@ import type { ClassifiedBookmark } from './ontology-analysis';
 import type { XBookmark } from './bookmarks';
 
 export const INVESTIGATION_AI_MODEL = AI_MODELS.investigation;
-export const INVESTIGATION_PROMPT_VERSION = 'claim-investigation-v1';
+export const INVESTIGATION_PROMPT_VERSION = 'claim-investigation-v2';
 export const MAX_INVESTIGATIONS_PER_SYNC = 8;
 export const INVESTIGATION_CONCURRENCY = 2;
 export const INVESTIGATION_MIN_MARKET_SCORE = 35;
@@ -170,7 +170,9 @@ function linkedUrls(bookmark: XBookmark): string[] {
 function investigationPrompt(item: ClassifiedBookmark): string {
   return [
     'You are an investigative research agent for equity claims extracted from X bookmarks.',
-    'Use web_search and x_search to gather corroborating or contradicting primary sources.',
+    'Use web_search to gather corroborating or contradicting primary sources (filings, IR, reputable news, transcripts).',
+    'The bookmark tweet is already provided as the social claim — do not treat it as independent corroboration.',
+    'Follow linked_urls when present; prefer primary documents over secondary commentary.',
     'Rank sources: SEC/IR/regulators first, transcripts and reputable news second, company/primary third, social/X last.',
     'You must NOT produce ratings, price targets, buy/sell advice, position sizes, or portfolio recommendations.',
     'trade_recommendation must always be the string "none".',
@@ -197,9 +199,9 @@ async function investigateOne(
     {
       messages: [{ role: 'user', content: investigationPrompt(item) }],
       max_tokens: 2_500,
-      temperature: 0.1,
       reasoning: { effort: 'low' },
-      tools: [{ type: 'web_search' }, { type: 'x_search' }],
+      // OpenAI Responses API hosted search (AI Gateway proxies this for openai/* models).
+      tools: [{ type: 'web_search' }],
       response_format: jsonSchemaResponseFormat('claim_investigation', InvestigationJsonSchema),
     },
     {

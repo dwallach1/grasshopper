@@ -120,7 +120,7 @@ export async function bookmarksNeedingAi(
   });
 }
 
-/** Rebuild classified rows that still need a Grok investigation packet. */
+/** Rebuild classified rows that still need a claim investigation packet. */
 export async function classifiedNeedingInvestigation(
   database: Database,
   limit = 8,

@@ -4,7 +4,7 @@ A bookmarked tweet is a signal, not a conclusion. The compounding research
 pipeline turns each bookmark event into a bounded, self-directed research
 session: it reads the conversation under the tweet, hydrates quoted and
 referenced tweets, opens linked articles, and then lets the research model
-(`xai/grok-4.6` through Cloudflare AI Gateway) decide which hops are worth
+(`openai/gpt-5.6-sol` through Cloudflare AI Gateway BYOK) decide which hops are worth
 taking next — more reply threads, tweet lookups, X searches, or article
 fetches — until evidence saturates or the budget runs out.
 
@@ -27,7 +27,7 @@ runResearchStep()
      later steps execute the model's chosen actions
   2. persist discovered tweets (x_research_tweets) and
      archived articles (existing articles + R2 pipeline)
-  3. build the dossier: bookmark, classification, prior Grok
+  3. build the dossier: bookmark, classification, prior claim
      investigation, discovered tweets, article excerpts,
      prior findings, remaining budget
   4. ask the research model for findings + next actions
@@ -64,7 +64,7 @@ exist in the dossier (unknown refs fail the step closed), and tweet/article
 content is passed as untrusted evidence with explicit instructions never to
 follow instructions found inside it. Findings become `thesis_evidence`
 (type `x_compounding_research`) via the same symbol → theme mapping as
-Grok claim investigation; the deterministic policy and broker agent remain
+claim investigation; the deterministic policy and broker agent remain
 the only path to trades.
 
 ## Storage
