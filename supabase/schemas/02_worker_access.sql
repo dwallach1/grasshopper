@@ -1088,6 +1088,8 @@ begin
     'research_document_sources','research_document_annotations','graph_nodes','graph_edges',
     'research_events','research_queue','predictions','insights','insight_links','thesis_relations',
     'event_decisions','research_cycles','strategy_tests','test_scenarios','agent_runs',
+    'cloud_runs','cloud_tasks','position_episodes','position_monitor_events',
+    'trade_intents','broker_execution_attempts','broker_fills',
     'research_lessons','risk_controls','financial_api_requests','financial_request_cache',
     'financial_access_log','financial_records','dashboard_snapshots'
   ]

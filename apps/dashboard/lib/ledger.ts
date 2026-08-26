@@ -31,9 +31,10 @@ import {
   mapTests,
   mapThemes,
   mapTheses,
+  type JsonObjectRow,
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
-import { hasDatabaseUrl, hasSecretKey, openSql, restAuthHeaders, supabaseUrl } from './postgres';
+import { hasDatabaseUrl, hasSecretKey, isPostgresPermissionDenied, openSql, restAuthHeaders, supabaseUrl } from './postgres';
 import { upcomingWorkerFires } from './schedule';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
@@ -47,6 +48,18 @@ async function restRows(path: string) {
     throw new Error(`Supabase REST ${path} failed: ${response.status}`);
   }
   return JsonArraySchema.parse(await response.json());
+}
+
+async function optionalRows(label: string, query: Promise<JsonObjectRow[]>): Promise<JsonObjectRow[]> {
+  try {
+    return JsonArraySchema.parse(await query);
+  } catch (error) {
+    if (error instanceof Error && isPostgresPermissionDenied(error.message)) {
+      console.error(JSON.stringify({ event: 'ledger_query_denied', table: label, error: error.message }));
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function loadDesk(): Promise<DeskPayload> {
@@ -134,14 +147,19 @@ async function loadDeskFromPostgres(): Promise<DeskPayload> {
         order by started_at desc, id desc
         limit 80
       `,
-      sql`
+      optionalRows(
+        'cloud_runs',
+        sql`
         select id, trigger_key, trigger_source, market_slot, mode, status,
                scheduled_for, started_at, completed_at, error_text, summary::text as summary
         from public.cloud_runs
         order by coalesce(started_at, scheduled_for, created_at) desc
         limit 40
       `,
-      sql`
+      ),
+      optionalRows(
+        'cloud_tasks',
+        sql`
         select id, run_id, task_type, entity_type, entity_key, status, attempt_count,
                error_text, queued_at, started_at, completed_at
         from public.cloud_tasks
@@ -150,6 +168,7 @@ async function loadDeskFromPostgres(): Promise<DeskPayload> {
           queued_at desc
         limit 60
       `,
+      ),
       sql`
         select id, name, status, rrule, model, next_run_at, last_run_at
         from public.codex_automations
@@ -207,37 +226,46 @@ async function loadDeskFromPostgres(): Promise<DeskPayload> {
         order by observed_at desc, id desc
         limit 1
       `,
-      sql`
+      optionalRows(
+        'position_episodes',
+        sql`
         select id, account_key, symbol, status, quantity, average_cost, opened_at, next_review_at
         from public.position_episodes
         where status in ('proposed', 'open', 'closing')
         order by opened_at desc nulls last, symbol
       `,
+      ),
       sql`
         select symbol, quantity, average_buy_price, observed_at
         from public.portfolio_exposure
         where observed_at = (select max(observed_at) from public.portfolio_exposure)
         order by quantity desc, symbol
       `,
-      sql`
+      optionalRows(
+        'trade_intents',
+        sql`
         select id, symbol, side, status, mode, notional, quantity, order_type,
                broker_order_id, created_at, updated_at
         from public.trade_intents
         order by created_at desc
         limit 40
       `,
+      ),
       sql`
         select id, thesis_id, symbol, side, notional, order_type, status, rationale, created_at
         from public.trade_proposals
         order by created_at desc, id desc
         limit 40
       `,
-      sql`
+      optionalRows(
+        'broker_fills',
+        sql`
         select id, trade_intent_id, quantity, price, executed_at
         from public.broker_fills
         order by executed_at desc
         limit 40
       `,
+      ),
       sql`
         select id, title, summary, insight_type, novelty, confidence, status
         from public.insights
@@ -287,8 +315,14 @@ async function loadDeskFromPostgres(): Promise<DeskPayload> {
       sql`select count(*)::int as n from public.strategy_tests where status = 'killed'`,
       sql`select count(*)::int as n from public.strategy_tests where status = 'survived'`,
       sql`select count(*)::int as n from public.test_scenarios`,
-      sql`select count(*)::int as n from public.position_episodes where status in ('proposed', 'open', 'closing')`,
-      sql`select count(*)::int as n from public.cloud_tasks where status in ('queued', 'running')`,
+      optionalRows(
+        'open_positions',
+        sql`select count(*)::int as n from public.position_episodes where status in ('proposed', 'open', 'closing')`,
+      ),
+      optionalRows(
+        'queued_tasks',
+        sql`select count(*)::int as n from public.cloud_tasks where status in ('queued', 'running')`,
+      ),
     ]);
 
     return assembleDesk('postgres', {

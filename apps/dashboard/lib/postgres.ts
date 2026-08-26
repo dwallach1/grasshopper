@@ -54,3 +54,8 @@ export function hasSecretKey(): boolean {
   loadRootEnvLocal();
   return Boolean(process.env.SUPABASE_SECRET_KEY?.trim());
 }
+
+/** Table GRANT/RLS failures from postgres.js (`42501`). */
+export function isPostgresPermissionDenied(message: string): boolean {
+  return /permission denied for (table|relation)/i.test(message);
+}

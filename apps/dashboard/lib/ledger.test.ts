@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
+import { isPostgresPermissionDenied } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
 import { nextSlotFire, upcomingWorkerFires, WORKER_SLOTS } from './schedule';
 import { isThesisStatus, parseThesisStatus } from './thesis-status';
@@ -88,5 +89,13 @@ describe('worker schedule', () => {
     const nextMorning = nextSlotFire(research!, from);
     expect(nextMorning).not.toBeNull();
     expect(new Date(nextMorning!).toISOString()).toContain('2026-08-27');
+  });
+});
+
+describe('postgres permission errors', () => {
+  test('matches table and relation denials', () => {
+    expect(isPostgresPermissionDenied('permission denied for table cloud_runs')).toBe(true);
+    expect(isPostgresPermissionDenied('permission denied for relation trade_intents')).toBe(true);
+    expect(isPostgresPermissionDenied('duplicate key value violates unique constraint')).toBe(false);
   });
 });
