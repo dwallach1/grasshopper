@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare local .dev.vars files for the dashboard + knowledge Worker.
+# Prepare local .dev.vars files for Cloudflare Workers (not the webapp).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,25 +16,26 @@ copy_if_missing() {
 }
 
 copy_if_missing \
-  "$root/apps/dashboard/.dev.vars.example" \
-  "$root/apps/dashboard/.dev.vars"
-copy_if_missing \
   "$root/workers/knowledge/.dev.vars.example" \
   "$root/workers/knowledge/.dev.vars"
 copy_if_missing \
   "$root/workers/research/.dev.vars.example" \
   "$root/workers/research/.dev.vars"
+copy_if_missing \
+  "$root/workers/broker/.dev.vars.example" \
+  "$root/workers/broker/.dev.vars"
 
 echo
-echo "Live production data (Bun + Next, no Docker / Workers):"
+echo "Local webapp (reads Supabase; Workers stay in Cloudflare):"
 echo "  bun run web:app"
 echo "  # uses THESISFORGE_DATABASE_URL from root .env.local"
 echo
-echo "Local Supabase + Miniflare (Docker; for Worker binding tests):"
+echo "Worker local secrets for deploy/sync tooling:"
+echo "  fill workers/*/.dev.vars as needed"
+echo
+echo "Optional local Supabase e2e:"
 echo "  1. bunx supabase start --exclude storage-api,imgproxy"
 echo "  2. bunx supabase db reset"
-echo "  3. bunx supabase functions serve   # optional"
-echo "  4. bun run local:web"
-echo "  5. bun run test:e2e"
+echo "  3. bun run test:e2e"
 echo
 echo "Open http://127.0.0.1:5173"

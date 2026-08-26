@@ -195,11 +195,8 @@ export function OntologyDashboard({initialData}:{initialData:Snapshot}){
     setRefreshing(true);
     setRefreshError(null);
     try{
-      const response=await fetch('/api/broker/refresh',{method:'POST'});
-      const RefreshErrorSchema=z.object({error:z.string().optional()}).passthrough();
-      const parsed=RefreshErrorSchema.safeParse(await response.json().catch(()=>({})));
-      if(!response.ok)throw new Error(parsed.success&&parsed.data.error?parsed.data.error:`Refresh failed (${response.status})`);
-      router.refresh();
+      // Broker refresh runs in Cloudflare Workers, not the local webapp.
+      throw new Error('Use `bun run cloud:trigger` (research orchestrator) to refresh Robinhood account state.');
     }catch(error){
       setRefreshError(error instanceof Error?error.message:'Refresh failed');
     }finally{

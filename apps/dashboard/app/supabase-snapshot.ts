@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import { headers } from 'next/headers';
 import postgres from 'postgres';
 import { z } from 'zod';
@@ -80,10 +79,6 @@ const OntologyActionRowSchema = z.object({
   created_at: z.string(),
 }).passthrough();
 
-function isLocalDevAccess(): boolean {
-  return (env.CF_ACCESS_AUD || '').trim() === 'local-dev';
-}
-
 async function fetchRows<Row>(
   url: string,
   requestHeaders: HeadersInit,
@@ -96,14 +91,14 @@ async function fetchRows<Row>(
 }
 
 function restAuthHeaders(): HeadersInit {
-  const url = env.SUPABASE_URL;
-  const secretKey = env.SUPABASE_SECRET_KEY?.trim();
-  const publishableKey = env.SUPABASE_PUBLISHABLE_KEY?.trim();
-  const dashboardToken = env.THESISFORGE_DASHBOARD_TOKEN?.trim();
+  const url = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
+  const dashboardToken = process.env.THESISFORGE_DASHBOARD_TOKEN?.trim();
 
   if (!url) throw new Error('SUPABASE_URL is not configured');
 
-  // Local / operator path: service_role bypasses RLS. No Cloudflare dashboard token required.
+  // Preferred local path: service_role bypasses RLS.
   if (secretKey) {
     return {
       apikey: secretKey,
@@ -113,7 +108,7 @@ function restAuthHeaders(): HeadersInit {
 
   if (!publishableKey || !dashboardToken) {
     throw new Error(
-      'Supabase is not configured. For local web:app set SUPABASE_SECRET_KEY (Supabase → Settings → API) or THESISFORGE_DATABASE_URL, or set SUPABASE_PUBLISHABLE_KEY + THESISFORGE_DASHBOARD_TOKEN.',
+      'Supabase is not configured. Set THESISFORGE_DATABASE_URL or SUPABASE_SECRET_KEY in .env.local, or SUPABASE_PUBLISHABLE_KEY + THESISFORGE_DASHBOARD_TOKEN.',
     );
   }
 
@@ -178,15 +173,19 @@ async function loadSnapshotFromDatabase(connectionString: string, includeManager
     const candidateRows = z.array(OntologyCandidateRowSchema).safeParse(candidates);
     const actionRows = z.array(OntologyActionRowSchema).safeParse(actions);
     if (themeRows.success) {
+      // SAFETY: OntologyThemeRowSchema validated every row in themeRows.data.
       managerSnapshot.ontology_themes = themeRows.data as NonNullable<Snapshot['ontology_themes']>;
     }
     if (symbolRows.success) {
+      // SAFETY: OntologySymbolRowSchema validated every row in symbolRows.data.
       managerSnapshot.ontology_symbols = symbolRows.data as NonNullable<Snapshot['ontology_symbols']>;
     }
     if (candidateRows.success) {
+      // SAFETY: OntologyCandidateRowSchema validated every row in candidateRows.data.
       managerSnapshot.ontology_candidates = candidateRows.data as NonNullable<Snapshot['ontology_candidates']>;
     }
     if (actionRows.success) {
+      // SAFETY: OntologyActionRowSchema validated every row in actionRows.data.
       managerSnapshot.ontology_actions = actionRows.data as NonNullable<Snapshot['ontology_actions']>;
     }
     return managerSnapshot;
@@ -196,7 +195,7 @@ async function loadSnapshotFromDatabase(connectionString: string, includeManager
 }
 
 async function loadSnapshotFromRest(viewerIdentity: string): Promise<Snapshot> {
-  const url = env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL;
   if (!url) throw new Error('SUPABASE_URL is not configured');
   const authHeaders = restAuthHeaders();
 
@@ -210,8 +209,8 @@ async function loadSnapshotFromRest(viewerIdentity: string): Promise<Snapshot> {
 
   // SAFETY: SnapshotRowSchema only accepts payload objects from the canonical dashboard snapshot row.
   const snapshot = rows.data[0].payload as Snapshot;
-  const managerToken = env.THESISFORGE_MANAGER_TOKEN?.trim();
-  const usingSecretKey = Boolean(env.SUPABASE_SECRET_KEY?.trim());
+  const managerToken = process.env.THESISFORGE_MANAGER_TOKEN?.trim();
+  const usingSecretKey = Boolean(process.env.SUPABASE_SECRET_KEY?.trim());
   const canManage = isManagerIdentity(viewerIdentity) && (usingSecretKey || Boolean(managerToken));
   if (!canManage) return snapshot;
 
@@ -254,11 +253,11 @@ export async function loadSnapshot(): Promise<Snapshot> {
   const requestHeaders = await headers();
   const viewerIdentity = await authenticatedIdentity(requestHeaders);
   if (!viewerIdentity) {
-    throw new Error('Dashboard authentication required');
+    throw new Error('Dashboard authentication required. Set LOCAL_DEV_IDENTITY in .env.local.');
   }
 
-  const databaseUrl = env.THESISFORGE_DATABASE_URL?.trim();
-  if (databaseUrl && isLocalDevAccess()) {
+  const databaseUrl = process.env.THESISFORGE_DATABASE_URL?.trim();
+  if (databaseUrl) {
     return loadSnapshotFromDatabase(databaseUrl, isManagerIdentity(viewerIdentity));
   }
 

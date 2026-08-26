@@ -12,28 +12,27 @@ The production research and trading path runs in Cloudflare and Supabase. It doe
 LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
          [( )] durable storage                       [DO] Durable Object state
 
- TRIGGERS + SOURCES                    CLOUDFLARE WORKERS                        DATA + EXTERNAL SYSTEMS
+ LOCAL OPERATOR                        CLOUDFLARE WORKERS                        DATA + EXTERNAL SYSTEMS
  =============================================================================================================
 
- Browser / operator
+ bun run web:app (localhost)
         |
-        | Cloudflare Access
+        | read Supabase only
         v
- +---------------------------+        private service binding       +-------------------------------+
- | thesisforge-dashboard     | ------------------------------------> | thesisforge-knowledge-pipeline |
- | webapp + manager API      |                                       | LLM learning + knowledge graph |
+ +---------------------------+                                       +-------------------------------+
+ | apps/dashboard (Next)     |                                       | thesisforge-knowledge-pipeline |
+ | local desk UI             |                                       | LLM learning + knowledge graph |
  +-------------+-------------+                                       +----+-----------+----------+---+
                |                                                          |           |          |
-               | read-only Supabase API                                   |           |          +--> Financial
+               |                                                          |           |          +--> Financial
                |                                                          |           |               Datasets API
-               |             manager-triggered: X sync, financial query,  |           |
-               |             research capture, projection refresh         |           +==> article Queue + DLQ
-               |                                                          |                       |
-               |             Cron: every 30m X sync ---------------------->+                       v
-               |             Cron: Sunday event map ---------------------->+                  [(private R2)]
+               |                                                          |           |
+               |             Cron: every 30m X sync ---------------------->+           +==> article Queue + DLQ
+               |             Cron: Sunday event map ---------------------->+                       |
+               |                                                          |                       v
+               |             X API <--> [DO: XCredentialVault] <----------+                  [(private R2)]
                |                                                          |                  original HTML/PDF
-               |             X API <--> [DO: XCredentialVault] <----------+                       |
-               |                                                          |                       |
+               |                                                          |
                |                                                          +--> Workers AI / AI Gateway
                |                                                          +--> Hyperdrive --------+----+
                |                                                                                       |
@@ -83,16 +82,17 @@ LEGEND:  --> synchronous HTTP/RPC/service binding    ==> asynchronous delivery
  +-----------------------------------------------------------------------------------------------------+
 
  Cloudflare Secrets Store supplies only the Workers that need each shared credential:
-   dashboard + knowledge + research: INTERNAL_SERVICE_TOKEN
-   knowledge + research:  THESISFORGE_PUBLICATION_TOKEN
-   knowledge only:        FINANCIAL_DATASETS_API_KEY
+   knowledge + research: INTERNAL_SERVICE_TOKEN
+   knowledge + research: THESISFORGE_PUBLICATION_TOKEN
+   knowledge only:       FINANCIAL_DATASETS_API_KEY
 ```
 
-The webapp never runs ingestion, research, publication, or trading jobs. It reads the bounded `dashboard_snapshots.current` projection produced from canonical Postgres rows on every request, then exposes manager-only commands through private service bindings. Knowledge mutations and terminal research runs refresh that projection immediately, so the UI consumes the system's data exhaust without becoming part of the decision loop. Robinhood account state only updates when a research workflow pulls it, or when a manager triggers a manual refresh.
+The webapp runs only on your laptop (`bun run web:app`). It never runs ingestion, research, publication, or trading jobs. Cloudflare Workers hydrate Supabase on schedules and triggers; the local desk reads `dashboard_snapshots.current` and optional manager ontology actions against Postgres. Robinhood account state updates when a research workflow pulls it, or when you run `bun run cloud:trigger`.
 
 ## Production status
 
-- Cloudflare Workers: private dashboard, knowledge pipeline, research orchestrator, and Robinhood gateway
+- Cloudflare Workers: knowledge pipeline, research orchestrator, and Robinhood gateway
+- Local webapp: `apps/dashboard` via `bun run web:app` (reads Supabase only)
 - Cloudflare data services: Workflows, Queues, Durable Objects, Workers AI, Hyperdrive, and private R2 originals
 - Supabase: canonical Postgres, narrow Edge Functions, and RLS
 - Autonomous equity actions: open, hold, add, reduce, and exit
@@ -109,7 +109,7 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 
 | Component | Responsibility | Boundary |
 |---|---|---|
-| `thesisforge-dashboard` | Serves the private dashboard | Cloudflare Access; server-side Supabase reads; no service-role secret in the browser |
+| `apps/dashboard` (local) | Private research desk UI | Localhost only; server-side Supabase reads; no Cloudflare hosting |
 | `thesisforge-knowledge-pipeline` | Rotates X OAuth, syncs bookmarks, uses Workers AI for semantic classification and ontology proposals, archives linked pages/PDFs, caches paid financial data, and refreshes the dashboard read model | Route-less/internal API; scoped Hyperdrive role; private R2; serialized X credential DO; typed LLM output with exact-evidence validation |
 | `thesisforge-research-orchestrator` | Runs scheduled research, position decisions, and trade-intent coordination | Route-less control Worker with bounded Supabase control access; it never owns source ingestion |
 | `thesisforge-broker-gateway` | Robinhood connection and final broker enforcement | Access-protected operator UI; exact tool allowlist; OAuth state in its Agent DO |
@@ -119,7 +119,7 @@ Durable Object SQLite stores coordination, deduplication, and broker-connection 
 | `thesisforge-knowledge-x-research` | Compounding research from bookmark events: reply threads, quoted tweets, LLM-chosen X searches and article hops | Batch 1, concurrency 1, three retries, DLQ; per-session step/read/fetch budgets plus vault-level X API budgets |
 | Workers AI / AI Gateway | OpenAI gpt-5.6-sol for triage, investigation, research, and synthesis (AI Gateway BYOK) | No broker credentials, tools, or placement authority |
 
-Shared production credentials use the account-level Cloudflare Secrets Store. The dashboard and knowledge Worker resolve `INTERNAL_SERVICE_TOKEN`; knowledge and research resolve `THESISFORGE_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
+Shared production credentials use the account-level Cloudflare Secrets Store. Knowledge and research resolve `INTERNAL_SERVICE_TOKEN` and `THESISFORGE_PUBLICATION_TOKEN`; only knowledge resolves `FINANCIAL_DATASETS_API_KEY`. Worker-local secrets remain for credentials that are intentionally scoped to one deployment, such as X OAuth and Supabase configuration. Secrets Store bindings are asynchronous and are resolved only inside request or job handlers.
 
 ### Durable Objects
 
@@ -303,7 +303,7 @@ No production capability depends on a laptop, Python environment, Codex automati
 ## Repository map
 
 ```text
-apps/dashboard/                  private dashboard Worker
+apps/dashboard/                  local Next desk (reads Supabase)
 workers/knowledge/               knowledge-pipeline Worker
 workers/research/                research orchestrator, Workflows, DOs
 workers/broker/                  Robinhood broker gateway Agent
@@ -318,11 +318,11 @@ docs/                            architecture and runbooks
 
 ## Development and operations
 
-Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). For the Bun-only live dashboard path you only need Bun and production Worker secrets in `apps/dashboard/.dev.vars`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the full cloud path. Python is not required.
+Requirements: Bun 1.4+, Node.js 22.13+ (for Wrangler deploy/types). The local desk needs Bun and `THESISFORGE_DATABASE_URL` (or `SUPABASE_SECRET_KEY`) in root `.env.local`. Local Supabase e2e still needs the Supabase CLI and Docker. Cloudflare Workers/Workflows/Queues/Durable Objects/Workers AI/Hyperdrive/R2 and a Robinhood Agentic connection are required for the cloud path. Python is not required.
 
-### Local webapp against production (Bun only)
+### Local webapp against production Supabase
 
-No Docker, no Cloudflare Workers, no Miniflare. Cloudflare already publishes `dashboard_snapshots.current`; local Next just reads Supabase.
+No Docker, no Cloudflare Workers. Cloud Workers already publish `dashboard_snapshots.current`; local Next just reads Supabase.
 
 ```sh
 # Uses THESISFORGE_DATABASE_URL from root .env.local
@@ -333,27 +333,14 @@ Open `http://127.0.0.1:5173`. Manager identity defaults to `local@thesisforge.de
 
 Optional: set `SUPABASE_SECRET_KEY` in `.env.local` instead of the database URL (Supabase → Project Settings → API → `service_role`).
 
-`bun run local:web` is the separate Miniflare path (Workers + optional local Supabase) for binding/integration testing — not required to view live desk data.
-
-### Local webapp against local Supabase (Docker)
-
-Runs the dashboard Worker locally with the knowledge pipeline as an auxiliary Worker, against local Supabase Postgres/API.
-
-```sh
-bun run local:setup          # copies .dev.vars.example files if missing
-bunx supabase start --exclude storage-api,imgproxy
-bunx supabase db reset       # schemas + ontology seed + dashboard_snapshots.current
-bunx supabase functions serve     # optional for e2e; needed for full edge parity
-bun run local:web            # Vite + knowledge auxiliary Worker
-```
-
-Then open the Vite URL (typically `http://127.0.0.1:5173`). Manager identity is `local@thesisforge.dev`. Local tokens in `.dev.vars.example` match hashes accepted only for local development; never deploy them.
-
 ### Local end-to-end tests (publication / knowledge)
 
 Requires `supabase start` (and `supabase db reset` after pulling schema changes). Edge-function coverage also needs functions reachable on `http://127.0.0.1:54321/functions/v1`.
 
 ```sh
+bun run local:setup          # copies workers/*/.dev.vars.example if missing
+bunx supabase start --exclude storage-api,imgproxy
+bunx supabase db reset
 bun run test:e2e
 ```
 
@@ -380,7 +367,6 @@ bun run --cwd workers/broker types
 bun run --cwd workers/broker typecheck
 bun run --cwd workers/broker test
 bun run --cwd workers/broker dry-run
-bun run build
 ```
 
 Operational commands:
@@ -391,7 +377,8 @@ bun run --cwd workers/broker oauth-relay
 bun run --cwd workers/knowledge deploy
 bun run --cwd workers/research deploy
 bun run --cwd workers/broker deploy
-bun run --cwd apps/dashboard deploy
+bun run cloud:sync
+bun run cloud:trigger
 ```
 
 `bun run cloud:trigger` forces a Workflow. In live mode during the execution window, it can create real orders if every gate passes.

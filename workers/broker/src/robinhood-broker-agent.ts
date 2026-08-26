@@ -24,7 +24,7 @@ const ROBINHOOD_SERVER_NAME = 'Robinhood Trading';
 const ROBINHOOD_MCP_HOST = 'agent.robinhood.com';
 const PRIMARY_AGENT_NAME = 'primary';
 const THESISFORGE_OAUTH_CLIENT_NAME = 'ThesisForge';
-const THESISFORGE_CLIENT_URI = 'https://thesisforge-dashboard.davidwallach2.workers.dev/';
+const THESISFORGE_CLIENT_URI = 'https://thesisforge-broker-gateway.davidwallach2.workers.dev/';
 
 const ToolResultEnvelopeSchema = z.object({
   structuredContent: z.object({
@@ -693,7 +693,7 @@ body{font-family:ui-sans-serif,system-ui,sans-serif;background:#08110d;color:#e8
 <div class="status"><strong>Connection:</strong> <code>${status.connection}</code><br><strong>Discovered tools:</strong> ${status.toolCount}<br><strong>Required read tools present:</strong> ${status.requiredReadToolsPresent ? 'yes' : 'no'}<br><strong>Trade execution:</strong> ${status.executionEnabled ? 'autonomous, policy-gated' : 'disabled'}</div>
 ${action}
 <ul><li>OAuth tokens remain in the account Durable Object</li><li>Orders require fresh account, quote, tradability, spread, sizing, and broker-review gates</li><li>Duplicate intent IDs are rejected or returned idempotently</li></ul>
-<p><a href="https://thesisforge-dashboard.davidwallach2.workers.dev/">Back to ThesisForge</a></p></main></body></html>`;
+<p>Run the local desk with <code>bun run web:app</code> to read live Supabase snapshots.</p></main></body></html>`;
   const headers = new Headers(securityHeaders('text/html; charset=utf-8'));
   headers.set('set-cookie', `__Host-thesisforge_csrf=${csrfToken}; Path=/; Secure; SameSite=Strict; Max-Age=600`);
   return new Response(html, { headers });
