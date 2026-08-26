@@ -89,7 +89,7 @@ On **Book** you should see the same Agentic book plus intents.
 
 On **Runs** you should see QUANTANAMO routines (weekday hourly market scan 10:59–15:59 ET, weekday 16:15 ET missed-swing autopsy) with **last run** from `runs` — not a fake next-due clock. Cloudflare / ThesisForge / Codex jobs are labeled **retired**.
 
-On **Tests** you should see `strategy_tests` variants (survived/killed) and `test_scenarios`.
+On **Tests** you should see every `strategy_tests` row (including old seed keys like `ai-power-base`). Selecting a row opens a detail pane on the same tab: `summary_json`, equity curve (`chart_svg` or `equity_curve`), trades, params, and Financial Datasets `price_source`. Rows with no `backtest_artifacts` say **no artifacts in ledger** — the desk never draws a fake curve. Null metrics say **not in ledger**.
 
 On **Catalysts** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue`.
 

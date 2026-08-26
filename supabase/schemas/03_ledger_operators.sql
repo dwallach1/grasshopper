@@ -96,7 +96,7 @@ begin
   foreach target_table in array array[
     'theses','thesis_symbols','thesis_evidence','thesis_scores','thesis_relations','runs',
     'cloud_runs','cloud_tasks','codex_automations','catalysts','research_queue','research_lessons',
-    'postmortems','research_cycles','strategy_tests','test_scenarios','agent_runs','account_snapshots',
+    'postmortems','research_cycles','strategy_tests','test_scenarios','backtest_artifacts','agent_runs','account_snapshots',
     'position_episodes','portfolio_exposure','trade_intents','trade_proposals','broker_fills',
     'insights','predictions','risk_controls','ontology_themes','symbols','ontology_candidates',
     'ontology_management_actions','graph_nodes'

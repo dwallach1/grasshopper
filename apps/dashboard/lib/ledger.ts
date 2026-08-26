@@ -1,3 +1,4 @@
+import { mapBacktestArtifacts } from './backtest-artifacts';
 import { z } from 'zod';
 
 import {
@@ -88,6 +89,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       postmortems,
       cycles,
       tests,
+      artifacts,
       scenarios,
       agentRuns,
       accountLatest,
@@ -205,10 +207,21 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       `,
       sql`
         select id, external_key, cycle_id, variant_label, status, total_return, max_drawdown,
-               deflated_sharpe, cost_multiplier, stress_regime, failure_reason, autopsy, tested_at
+               deflated_sharpe, cost_multiplier, stress_regime, failure_reason, autopsy, tested_at,
+               price_source, window_start::text as window_start, window_end::text as window_end,
+               symbols, params_json
         from public.strategy_tests
         order by tested_at desc, id desc
       `,
+      optionalRows(
+        'backtest_artifacts',
+        sql`
+        select id, test_id, thesis_id, artifact_kind, title, mime_type, payload_json,
+               storage_bucket, storage_path, source, created_at
+        from public.backtest_artifacts
+        order by created_at desc, id desc
+      `,
+      ),
       sql`
         select id, test_id, scenario_key, market_regime, cost_multiplier, outcome,
                metric_value, breach_type
@@ -348,6 +361,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       postmortems: mapPostmortems(postmortems),
       cycles: mapCycles(cycles),
       tests: mapTests(tests),
+      backtest_artifacts: mapBacktestArtifacts(artifacts),
       scenarios: mapScenarios(scenarios),
       agent_runs: mapAgentRuns(agentRuns),
       ...bookFields(accountLatest, accountFirst, positions, exposures),
@@ -394,6 +408,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     postmortems,
     cycles,
     tests,
+    artifacts,
     scenarios,
     agentRuns,
     accountLatest,
@@ -425,7 +440,8 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('research_lessons?select=id,cycle_id,test_id,thesis_id,lesson_type,summary,market_regime,incorporated,created_at&order=created_at.desc,id.desc', accessToken),
     restRows('postmortems?select=id,trade_proposal_id,thesis_id,created_at,outcome,lesson&order=created_at.desc,id.desc&limit=40', accessToken),
     restRows('research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&order=updated_at.desc,id.desc', accessToken),
-    restRows('strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at&order=tested_at.desc,id.desc', accessToken),
+    restRows('strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at,price_source,window_start,window_end,symbols,params_json&order=tested_at.desc,id.desc', accessToken),
+    restRows('backtest_artifacts?select=id,test_id,thesis_id,artifact_kind,title,mime_type,payload_json,storage_bucket,storage_path,source,created_at&order=created_at.desc,id.desc', accessToken),
     restRows('test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&order=tested_at.desc,id.desc', accessToken),
     restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
@@ -445,6 +461,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
   ]);
 
   const mappedTests = mapTests(tests);
+  const mappedArtifacts = mapBacktestArtifacts(artifacts);
   return assembleDesk('postgrest', {
     theses: mapTheses(theses, symbols),
     evidence: mapEvidence(evidence),
@@ -460,6 +477,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     postmortems: mapPostmortems(postmortems),
     cycles: mapCycles(cycles),
     tests: mappedTests,
+    backtest_artifacts: mappedArtifacts,
     scenarios: mapScenarios(scenarios),
     agent_runs: mapAgentRuns(agentRuns),
     ...bookFields(accountLatest, accountFirst, positions, exposures),

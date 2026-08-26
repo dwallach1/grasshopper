@@ -151,7 +151,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 | 2 | Book | Episodes, intents, same book numbers |
 | 3 | Theses | Lifecycle + evidence |
 | 4 | Runs | Ledger runs + QUANTANAMO routines (retired jobs marked retired) |
-| 5 | Tests | Strategy tests / scenarios |
+| 5 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 | 6 | Catalysts | Catalysts + research queue |
 | 7 | Lessons | Lessons / postmortems |
 | 8 | Ontology | Themes / candidates |
@@ -159,7 +159,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–9`, `g` then letter, `j/k` thesis, `r` refresh, `?` help. No filter box.
 
-Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, `theses`, `runs`. Not `dashboard_snapshots.current`.
+Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, `theses`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`.
 
 ---
 
@@ -170,7 +170,7 @@ Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `por
 | Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
-| Tests | `research_cycles`, `strategy_tests`, `test_scenarios` |
+| Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (SECURITY DEFINER) |
 
 Operator mutations from the desk: thesis status, evidence, lessons. See [`LOCAL.md`](LOCAL.md).

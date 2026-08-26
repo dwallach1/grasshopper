@@ -14,6 +14,7 @@ import {
 } from '../../lib/desk-nav';
 import type { BookPerformance, DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
 import { THESIS_STATUSES } from '../../lib/thesis-status';
+import { BacktestsPanel } from './backtests-panel';
 import { SessionControls } from './session-controls';
 import {
   age,
@@ -21,7 +22,6 @@ import {
   money,
   moneyPrecise,
   nyStamp,
-  pct,
   qty,
   signedMoney,
   titleCase,
@@ -40,6 +40,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedThesisId, setSelectedThesisId] = useState(initial.theses[0]?.id ?? '');
+  const [selectedTestId, setSelectedTestId] = useState(initial.tests[0]?.id ?? null);
   const [goArmed, setGoArmed] = useState(false);
   const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
 
@@ -114,6 +115,13 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
       }
       if (event.key === 'Escape') setHelp(false);
       if (event.key === 'j' || event.key === 'k') {
+        if (surface === 'backtests') {
+          const ids = desk.tests.map((row) => row.id);
+          const index = ids.indexOf(selectedTestId ?? -1);
+          const next = event.key === 'j' ? Math.min(ids.length - 1, Math.max(0, index) + 1) : Math.max(0, index - 1);
+          if (ids[next] !== undefined) setSelectedTestId(ids[next]);
+          return;
+        }
         const ids = desk.theses.map((row) => row.id);
         const index = ids.indexOf(selectedThesisId);
         const next = event.key === 'j' ? Math.min(ids.length - 1, index + 1) : Math.max(0, index - 1);
@@ -123,7 +131,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [desk.theses, goArmed, selectedThesisId, surface]);
+  }, [desk.tests, desk.theses, goArmed, selectedTestId, selectedThesisId, surface]);
 
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
   const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
@@ -178,7 +186,13 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
           />
         )}
         {surface === 'runs' && <RunsPanel desk={desk} now={now} />}
-        {surface === 'backtests' && <BacktestsPanel desk={desk} />}
+        {surface === 'backtests' && (
+          <BacktestsPanel
+            desk={desk}
+            selectedId={selectedTestId}
+            onSelect={setSelectedTestId}
+          />
+        )}
         {surface === 'catalysts' && <CatalystsPanel desk={desk} />}
         {surface === 'learnings' && (
           <LearningsPanel
@@ -208,7 +222,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
           <b>Keyboard</b>
           <p>1 Home · 2 Book · 3 Theses · 4 Runs · 5 Tests · 6 Catalysts · 7 Lessons · 8 Ontology · 9 Risk</p>
           <p>g h home · g b book · g t theses · g r runs · g e tests · g c catalysts · g l lessons · g o ontology · g i risk</p>
-          <p>j/k move thesis · Enter open theses · r reload ledger · Esc close</p>
+          <p>j/k move thesis or test · Enter open theses · r reload ledger · Esc close</p>
         </aside>
       )}
     </div>
@@ -631,49 +645,6 @@ function RunsPanel({ desk, now }: { desk: DeskPayload; now: number | null }) {
             <span>retired cloud {run.trigger_source} {run.market_slot || ''} {run.mode}</span>
             <i>{nyStamp(run.started_at || run.scheduled_for)}</i>
             {run.error_text && <p className="dim">{run.error_text}</p>}
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function BacktestsPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <div className="term-grid term-grid-2">
-      <section className="term-panel">
-        <header><b>CYCLES</b></header>
-        {desk.cycles.map((cycle) => (
-          <div key={cycle.id} className="term-line">
-            <b>{cycle.thesis_id}</b>
-            <span>{cycle.stage} · {cycle.status} · {cycle.market_regime}</span>
-            <p>{cycle.hypothesis}</p>
-            <p className="dim">Preregistered: {cycle.preregistered_outcome}</p>
-          </div>
-        ))}
-      </section>
-      <section className="term-panel">
-        <header><b>STRATEGY TESTS</b><span>{desk.counts.tests_survived} survived / {desk.counts.tests_killed} killed</span></header>
-        <table>
-          <thead><tr><th>Variant</th><th>Status</th><th>Ret</th><th>DD</th><th>dSharpe</th></tr></thead>
-          <tbody>
-            {desk.tests.map((row) => (
-              <tr key={row.id}>
-                <td>{row.variant_label}</td>
-                <td className={toneForStatus(row.status)}>{row.status}</td>
-                <td className={row.total_return !== null && row.total_return < 0 ? 'down' : 'up'}>{pct(row.total_return)}</td>
-                <td className="down">{pct(row.max_drawdown)}</td>
-                <td>{row.deflated_sharpe?.toFixed(2) ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <header><b>SCENARIOS</b><span>{desk.counts.scenario_cells}</span></header>
-        {desk.scenarios.slice(0, 18).map((row) => (
-          <div key={row.id} className="term-line">
-            <b className={toneForStatus(row.outcome)}>{row.outcome}</b>
-            <span>{row.scenario_key} · {row.market_regime} · {row.cost_multiplier}x</span>
-            <i>{pct(row.metric_value)}</i>
           </div>
         ))}
       </section>
