@@ -67,11 +67,13 @@ $$;
 revoke all on function public.claim_ledger_operator() from public, anon;
 grant execute on function public.claim_ledger_operator() to authenticated, service_role;
 
+-- SECURITY DEFINER: authenticated RLS cannot see ledger_operators rows without
+-- a policy, so an INVOKER exists() is always false. Empty search_path; anon revoked.
 create or replace function public.is_ledger_operator()
 returns boolean
 language sql
 stable
-security invoker
+security definer
 set search_path = ''
 as $$
   select exists (

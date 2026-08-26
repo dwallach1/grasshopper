@@ -8,7 +8,7 @@ The webapp is a localhost Bloomberg-style desk over the **live Quantanamo ledger
 - Supabase Auth with **OAuth and/or passkeys** enabled on project `xqungxapqicdmboniezz`
 - The **publishable / anon** key in the browser (`NEXT_PUBLIC_*`). Never put `service_role` or `QUANTANAMO_DATABASE_URL` in `NEXT_PUBLIC_*`.
 
-Signed-out, the desk shows a sign-in screen and does not load theses, book, or runs. After sign-in, PostgREST runs as that user. RLS allows only rows in `public.ledger_operators`. The first confirmed sign-in claims an empty allowlist; later accounts need a SQL insert.
+Signed-out, the desk shows a sign-in screen and does not load theses, book, or runs. After sign-in, PostgREST runs as that user. RLS allows only rows in `public.ledger_operators`. The first confirmed sign-in is claimed via `claim_ledger_operator` when that table is empty; later accounts need a `ledger_operators` row (SQL insert). `is_ledger_operator()` is `SECURITY DEFINER` so the signed-in JWT can see that row under RLS — without it the desk shows "This account is not on the operator allowlist" even when the row exists.
 
 Workers still use `QUANTANAMO_DATABASE_URL` / `service_role` on the server. That path is not the watch-the-agent UX.
 
@@ -29,14 +29,19 @@ In the Supabase dashboard:
 3. **Authentication → Passkeys** — enable. Relying party ID **`localhost`** (not `127.0.0.1` — browsers reject IP RP IDs) and origin `http://localhost:5173`. Open the desk at `http://localhost:5173`. After the first email (or OAuth) sign-in, use **Passkey+** in the header. Later you can sign in with **Passkey** alone. Passkeys cannot be the first-ever account.
 4. **Authentication → Providers** (optional social OAuth) — enable GitHub and/or Google with a real OAuth app. The sign-in screen picks them up automatically. Set `NEXT_PUBLIC_AUTH_OAUTH_PROVIDERS` only to reorder (`google,github`).
 
-Add another operator after the first claim:
+Add another operator after the first `claim_ledger_operator` (empty allowlist only):
 
 ```sql
 insert into public.ledger_operators(user_id, email)
 select id, email from auth.users where email = 'you@example.com';
 ```
 
-The operator RLS migration [`supabase/migrations/20260826200000_ledger_operator_auth.sql`](supabase/migrations/20260826200000_ledger_operator_auth.sql) is **already applied** on `xqungxapqicdmboniezz` (`anon` remains revoked). Service role / `quantanamo_worker` still bypass RLS for Cloudflare Workers.
+Operator RLS is **already applied** on `xqungxapqicdmboniezz` (`anon` remains revoked):
+
+- [`supabase/migrations/20260826200000_ledger_operator_auth.sql`](supabase/migrations/20260826200000_ledger_operator_auth.sql)
+- [`supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql`](supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql) (`is_ledger_operator` SECURITY DEFINER + `ledger_operators_self_select`)
+
+Service role / `quantanamo_worker` still bypass RLS for Cloudflare Workers.
 
 ## Env
 
@@ -122,7 +127,7 @@ Auth gate checklist:
 
 1. Restart `bun run web:app` after setting `NEXT_PUBLIC_*`.
 2. Logged out: `/` is sign-in; `/api/ledger` is 401; HTML has no `neocloud_compute`.
-3. Sign in with the **email magic link** (or a social provider once it is enabled). First confirmed user becomes the operator.
+3. Sign in with the **email magic link** (or a social provider once it is enabled). First confirmed user is claimed via `claim_ledger_operator`. Later accounts need a `ledger_operators` row.
 4. MON/BOOK/THES load live rows. Header shows your email. **Sign out** returns to the gate.
 5. **Passkey+** then sign out and **Passkey** sign-in.
 6. Thesis evidence / status from the UI writes without `SUPABASE_SECRET_KEY` in the client bundle.
