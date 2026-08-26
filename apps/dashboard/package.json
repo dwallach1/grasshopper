@@ -13,9 +13,13 @@
     "start": "bun --bun next start --hostname 127.0.0.1 --port 5173",
     "lint": "bun run lint:eslint && bun run lint:anti-slop",
     "lint:eslint": "bun --bun eslint . --ignore-pattern .next",
-    "lint:anti-slop": "bun --bun oxlint ."
+    "lint:anti-slop": "bun --bun oxlint .",
+    "test": "bun test lib/ledger.test.ts",
+    "typecheck": "bun --bun tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
     "next": "16.2.6",
     "postgres": "^3.4.9",
     "react": "19.2.6",

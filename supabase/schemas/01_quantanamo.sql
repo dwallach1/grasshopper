@@ -130,7 +130,7 @@ create table public.theses (
   id text primary key,
   name text not null,
   summary text not null,
-  status text not null default 'forming',
+  status text not null default 'forming' check (status in ('forming', 'hardening', 'rejected', 'killed')),
   confidence smallint not null default 40 check (confidence between 0 and 100),
   time_horizon text not null default 'days_to_weeks',
   created_at timestamptz not null,

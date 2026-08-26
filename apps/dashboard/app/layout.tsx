@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   metadataBase: new URL('http://127.0.0.1:5173'),
   title: 'Quantanamo',
-  description: 'Private research desk — preregister, break, learn, deploy.',
+  description: 'Local research/trading terminal over the Quantanamo ledger.',
   openGraph: {
     title: 'Quantanamo',
     description: 'Preregister. Break. Learn. Deploy.',
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>

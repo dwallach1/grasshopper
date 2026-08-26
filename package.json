@@ -6,8 +6,8 @@
   "type": "module",
   "workspaces": ["apps/*", "workers/*", "packages/*", "tests/*"],
   "scripts": {
-    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd workers/research typecheck && bun run --cwd workers/knowledge typecheck && bun run --cwd workers/broker typecheck",
-    "test": "bun run --cwd packages/shared test && bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/dashboard typecheck && bun run --cwd workers/research typecheck && bun run --cwd workers/knowledge typecheck && bun run --cwd workers/broker typecheck",
+    "test": "bun run --cwd packages/shared test && bun run --cwd apps/dashboard test && bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "dry-run": "bun run --cwd workers/research dry-run && bun run --cwd workers/knowledge dry-run && bun run --cwd workers/broker dry-run",
     "cloud:sync": "bun run --cwd workers/knowledge sync",
