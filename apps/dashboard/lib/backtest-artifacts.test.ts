@@ -90,6 +90,7 @@ const thesis: ThesisRow = {
   created_at: testedAt,
   updated_at: testedAt,
   symbols: ['VST', 'CEG'],
+  lots: [],
 };
 
 describe('mapTests backtest columns', () => {

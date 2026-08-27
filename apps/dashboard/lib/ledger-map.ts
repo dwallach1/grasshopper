@@ -34,6 +34,7 @@ import type {
   ThesisRelationRow,
   ThesisRow,
   ThesisScoreRow,
+  ThesisSymbolLink,
 } from './ledger-types';
 
 const JsonObjectSchema = z.object({}).passthrough();
@@ -55,6 +56,7 @@ export const ThesisSymbolLinkSchema = z
   .object({
     thesis_id: z.string(),
     symbol: z.string(),
+    role: z.string().default('candidate'),
   })
   .passthrough();
 
@@ -88,6 +90,7 @@ export function mapThesis(row: z.infer<typeof ThesisRawSchema>, symbols: string[
     created_at: requireIso(row.created_at, 'thesis.created_at'),
     updated_at: requireIso(row.updated_at, 'thesis.updated_at'),
     symbols,
+    lots: [],
   };
 }
 
@@ -453,6 +456,7 @@ const ExposureSchema = z
     quantity: Money,
     average_buy_price: OptionalMoney,
     observed_at: Timestamp,
+    account_last4: z.string(),
   })
   .passthrough();
 
@@ -463,6 +467,7 @@ export function mapExposures(rows: JsonObjectRow[]): ExposureRow[] {
 const IntentSchema = z
   .object({
     id: z.string(),
+    account_key: z.string(),
     symbol: z.string(),
     side: z.string(),
     status: z.string(),
@@ -643,8 +648,16 @@ export function mapCount(rows: JsonObjectRow[]): number {
   return parsed[0]?.n ?? 0;
 }
 
+export function mapThesisSymbolLinks(rows: JsonObjectRow[]): ThesisSymbolLink[] {
+  return z.array(ThesisSymbolLinkSchema).parse(rows).map((row) => ({
+    thesis_id: row.thesis_id,
+    symbol: row.symbol,
+    role: row.role,
+  }));
+}
+
 export function groupSymbols(rows: JsonObjectRow[]): Map<string, string[]> {
-  const parsed = z.array(ThesisSymbolLinkSchema).parse(rows);
+  const parsed = mapThesisSymbolLinks(rows);
   const grouped = new Map<string, string[]>();
   for (const row of parsed) {
     const current = grouped.get(row.thesis_id) ?? [];

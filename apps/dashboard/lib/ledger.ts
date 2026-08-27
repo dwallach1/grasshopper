@@ -33,6 +33,7 @@ import {
   mapTests,
   mapThemes,
   mapTheses,
+  mapThesisSymbolLinks,
   type JsonObjectRow,
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
@@ -40,6 +41,7 @@ import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import { isPostgresPermissionDenied, openSql } from './postgres';
 import { assembleBookPerformance } from './book-performance';
 import { assembleRoutines } from './routines';
+import { assembleFillLog, attachThesisLots, latestBookExposures } from './thesis-book';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
@@ -122,7 +124,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         order by confidence desc, name
       `,
       sql`
-        select thesis_id, symbol
+        select thesis_id, symbol, role
         from public.thesis_symbols
         order by weight_hint desc, symbol
       `,
@@ -257,7 +259,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       `,
       ),
       sql`
-        select symbol, quantity, average_buy_price, observed_at
+        select symbol, quantity, average_buy_price, observed_at, account_last4
         from public.portfolio_exposure
         where observed_at = (select max(observed_at) from public.portfolio_exposure)
         order by quantity desc, symbol
@@ -265,7 +267,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       optionalRows(
         'trade_intents',
         sql`
-        select id, symbol, side, status, mode, notional, quantity, order_type,
+        select id, account_key, symbol, side, status, mode, notional, quantity, order_type,
                broker_order_id, created_at, updated_at
         from public.trade_intents
         order by created_at desc
@@ -346,8 +348,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    return assembleDesk('postgres', {
-      theses: mapTheses(theses, symbols),
+    return assembleDesk('postgres', decorateDesk(theses, symbols, {
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
       relations: mapRelations(relations),
@@ -385,7 +386,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    });
+    }));
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -427,7 +428,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     actions,
   ] = await Promise.all([
     restRows('theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', accessToken),
-    restRows('thesis_symbols?select=thesis_id,symbol&order=weight_hint.desc,symbol.asc', accessToken),
+    restRows('thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc', accessToken),
     restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200', accessToken),
     restRows('thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400', accessToken),
     restRows('thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale', accessToken),
@@ -447,8 +448,8 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
     restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
-    restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at&order=observed_at.desc,quantity.desc&limit=80', accessToken),
-    restRows('trade_intents?select=id,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
+    restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at,account_last4&order=observed_at.desc,quantity.desc&limit=80', accessToken),
+    restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
     restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', accessToken),
     restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40', accessToken),
     restRows('insights?select=id,title,summary,insight_type,novelty,confidence,status&order=updated_at.desc,id.desc&limit=40', accessToken),
@@ -462,8 +463,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
 
   const mappedTests = mapTests(tests);
   const mappedArtifacts = mapBacktestArtifacts(artifacts);
-  return assembleDesk('postgrest', {
-    theses: mapTheses(theses, symbols),
+  return assembleDesk('postgrest', decorateDesk(theses, symbols, {
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),
     relations: mapRelations(relations),
@@ -503,7 +503,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  });
+  }));
 }
 
 function bookFields(
@@ -515,13 +515,7 @@ function bookFields(
   const snapshots = mapAccounts(latestRows);
   const starting = mapAccount(firstRows);
   const positions = mapPositions(positionRows);
-  const mappedExposures = mapExposures(exposureRows);
-  const latestExposureAt = mappedExposures[0]?.observed_at;
-  const latestExposures = latestExposureAt
-    ? mappedExposures.filter((row) => row.observed_at === latestExposureAt)
-    : [];
-  const openSymbols = new Set(positions.map((row) => row.symbol));
-  const exposures = latestExposures.filter((row) => openSymbols.has(row.symbol));
+  const exposures = latestBookExposures(mapExposures(exposureRows));
   return {
     account: snapshots[0] ?? starting,
     snapshots,
@@ -532,6 +526,23 @@ function bookFields(
     }),
     positions,
     exposures,
+  };
+}
+
+function decorateDesk(
+  thesisRows: JsonObjectRow[],
+  symbolRows: JsonObjectRow[],
+  body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines' | 'theses' | 'fill_log'>,
+): Omit<DeskPayload, 'generated_at' | 'source' | 'routines'> {
+  return {
+    ...body,
+    theses: attachThesisLots(mapTheses(thesisRows, symbolRows), {
+      links: mapThesisSymbolLinks(symbolRows),
+      proposals: body.proposals,
+      exposures: body.exposures,
+      positions: body.positions,
+    }),
+    fill_log: assembleFillLog({ fills: body.fills, intents: body.intents }),
   };
 }
 
