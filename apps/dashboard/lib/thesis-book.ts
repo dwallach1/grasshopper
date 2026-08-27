@@ -1,5 +1,4 @@
 import {
-  AGENTIC_LAST4,
   latestBookExposures,
   MARK_NOT_IN_LEDGER,
   NOT_IN_LEDGER,
