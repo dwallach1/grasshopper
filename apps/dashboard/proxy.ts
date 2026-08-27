@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { refreshAuthCookies } from './lib/auth-session';
 import { publicPublishableKeyFromEnv, publicSupabaseUrlFromEnv } from './lib/auth-public';
 
 export async function proxy(request: NextRequest) {
@@ -28,7 +29,7 @@ export async function proxy(request: NextRequest) {
         },
       },
     });
-    await supabase.auth.getUser();
+    await refreshAuthCookies(supabase);
   } catch {
     return response;
   }

@@ -38,17 +38,19 @@ import {
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
-import { isPostgresPermissionDenied, openSql } from './postgres';
+import { hasDatabaseUrl, isPostgresPermissionDenied, openSql } from './postgres';
 import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures, snapshotForBook } from './book-performance';
 import { assembleRoutines } from './routines';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
+const REST_FETCH_MS = 8_000;
 
 async function restRows(path: string, accessToken: string) {
   const response = await fetch(`${publicSupabaseUrl()}/rest/v1/${path}`, {
     headers: userRestHeaders(accessToken),
     cache: 'no-store',
+    signal: AbortSignal.timeout(REST_FETCH_MS),
   });
   if (!response.ok) {
     throw new Error(`Supabase REST ${path} failed: ${response.status}`);
@@ -69,6 +71,7 @@ async function optionalRows(label: string, query: Promise<JsonObjectRow[]>): Pro
 }
 
 export async function loadDesk(accessToken: string): Promise<DeskPayload> {
+  if (hasDatabaseUrl()) return loadDeskFromPostgres();
   return loadDeskFromRest(accessToken);
 }
 
