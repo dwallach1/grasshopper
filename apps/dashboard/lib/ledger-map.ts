@@ -455,6 +455,7 @@ const ExposureSchema = z
     symbol: z.string(),
     quantity: Money,
     average_buy_price: OptionalMoney,
+    last_price: OptionalMoney.optional().transform((value) => value ?? null),
     observed_at: Timestamp,
     account_last4: z.string(),
   })

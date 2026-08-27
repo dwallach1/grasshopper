@@ -363,6 +363,7 @@ export type ExposureRow = {
   symbol: string;
   quantity: number;
   average_buy_price: number | null;
+  last_price: number | null;
   observed_at: string;
   account_last4: string;
 };

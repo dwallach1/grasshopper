@@ -50,7 +50,7 @@ export function openLotsFromLedger(input: {
       symbol: row.symbol,
       quantity: row.quantity,
       average_cost: row.average_buy_price,
-      mark: input.marks?.get(row.symbol) ?? null,
+      mark: input.marks?.get(row.symbol) ?? row.last_price ?? null,
     });
   }
   return lots;

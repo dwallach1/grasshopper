@@ -33,11 +33,13 @@ function exposure(
   quantity: number,
   average_buy_price: number,
   observed_at = '2026-08-27T13:22:00.000Z',
+  last_price: number | null = null,
 ): ExposureRow {
   return {
     symbol,
     quantity,
     average_buy_price,
+    last_price,
     observed_at,
     account_last4: AGENTIC_LAST4,
   };
@@ -286,6 +288,7 @@ describe('Agentic book performance', () => {
         symbol: 'IREN',
         quantity: 25,
         average_buy_price: null,
+        last_price: null,
         observed_at: '2026-08-27T13:22:00.000Z',
         account_last4: AGENTIC_LAST4,
       }],
@@ -318,6 +321,33 @@ describe('Agentic book performance', () => {
     expect(book.current_nav).toBeCloseTo(5134.57473627);
     expect(book.vs_start).toBe(0);
     expect(book.names.map((row) => row.symbol)).toEqual(['DG']);
+  });
+
+  test('uses last_price on the lot when the optional marks map is absent', () => {
+    const latest = snapshot({
+      observed_at: '2026-08-27T16:37:52.267794Z',
+      total_value: 5046.93965125,
+      cash: 148.5,
+      equity_value: 4898.43965125,
+      buying_power: 148.5,
+    });
+    const at = '2026-08-27T16:37:52.267794Z';
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [latest],
+      starting: snapshot({ observed_at: '2026-08-23T20:26:25.000Z', total_value: 5000 }),
+      exposures: [
+        exposure('CIFR', 63.211524, 15.82, at, 16.615),
+        exposure('DG', 14, 132.25, at, null),
+      ],
+    });
+    const cifr = book.names.find((row) => row.symbol === 'CIFR');
+    const dg = book.names.find((row) => row.symbol === 'DG');
+    expect(cifr?.mark).toBeCloseTo(16.615);
+    expect(cifr?.pnl).toBeCloseTo((16.615 - 15.82) * 63.211524);
+    expect(cifr?.note).toBe('');
+    expect(dg?.mark).toBeNull();
+    expect(dg?.pnl).toBeNull();
+    expect(dg?.note).toBe(MARK_NOT_IN_LEDGER);
   });
 });
 
@@ -410,6 +440,18 @@ describe('book lot tiles', () => {
     expect(dg?.notional).toBeCloseTo(14 * 140);
     expect(dg?.pnl).toBeCloseTo((140 - 132.25) * 14);
     expect(slabTone(dg!)).toBe('up');
+
+    const fromLedgerMark = assembleBookPerformance({
+      snapshotsNewestFirst: [latest],
+      starting: latest,
+      exposures: [exposure('CIFR', 63.211524, 15.82, latest.observed_at, 16.615)],
+    });
+    const cifr = bookSlabs(fromLedgerMark).find((row) => row.id === 'CIFR');
+    expect(cifr?.muted).toBe(false);
+    expect(cifr?.mark).toBeCloseTo(16.615);
+    expect(cifr?.notional).toBeCloseTo(63.211524 * 16.615);
+    expect(cifr?.pnl).toBeCloseTo((16.615 - 15.82) * 63.211524);
+    expect(slabTone(cifr!)).toBe('up');
   });
 
   test('cash missing from the ledger is leftover mass labeled not in ledger', () => {

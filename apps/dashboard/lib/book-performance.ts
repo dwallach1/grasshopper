@@ -100,7 +100,7 @@ export function assembleBookPerformance(input: {
     .sort((a, b) => a.symbol.localeCompare(b.symbol))
     .map((lot) => {
       const cost = costBasis(lot.quantity, lot.average_buy_price);
-      const mark = input.marks?.get(lot.symbol) ?? null;
+      const mark = input.marks?.get(lot.symbol) ?? lot.last_price ?? null;
       const pnl = mark === null || lot.average_buy_price === null
         ? null
         : (mark - lot.average_buy_price) * lot.quantity;
