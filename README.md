@@ -171,7 +171,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
-| Operators | `ledger_operators` + `is_ledger_operator()` (SECURITY DEFINER) |
+| Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
 
 The desk is read-only. QUANTANAMO writes the ledger. See [`LOCAL.md`](LOCAL.md).
 

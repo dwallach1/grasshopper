@@ -10,7 +10,7 @@ The webapp is a localhost Bloomberg-style desk over the **live Quantanamo ledger
 - Supabase Auth with **OAuth and/or passkeys** enabled on project `xqungxapqicdmboniezz`
 - The **publishable / anon** key in the browser (`NEXT_PUBLIC_*`). Never put `service_role` or `QUANTANAMO_DATABASE_URL` in `NEXT_PUBLIC_*`.
 
-Signed-out, the desk shows a sign-in screen and does not load theses, book, or runs. After sign-in, PostgREST runs as that user. RLS allows only rows in `public.ledger_operators`. The first confirmed sign-in is claimed via `claim_ledger_operator` when that table is empty; later accounts need a `ledger_operators` row (SQL insert). `is_ledger_operator()` is `SECURITY DEFINER` so the signed-in JWT can see that row under RLS — without it the desk shows "This account is not on the operator allowlist" even when the row exists.
+Signed-out, the desk shows a sign-in screen and does not load theses, book, or runs. After sign-in, PostgREST runs as that user. RLS allows only rows in `public.ledger_operators`. The first confirmed sign-in is claimed via `claim_ledger_operator` when that table is empty; later accounts need a `ledger_operators` row (SQL insert). `private.is_ledger_operator()` is `SECURITY DEFINER` so the signed-in JWT can see that row under RLS; the public wrapper is `SECURITY INVOKER` so it is not an exposed definer RPC. Without the private helper the desk shows "This account is not on the operator allowlist" even when the row exists.
 
 Optional worker / postgres.js env (`QUANTANAMO_DATABASE_URL`, `SUPABASE_SECRET_KEY`) is server-only and is not required to watch the agent.
 
@@ -42,6 +42,7 @@ Operator RLS is **already applied** on `xqungxapqicdmboniezz` (`anon` remains re
 
 - [`supabase/migrations/20260826200000_ledger_operator_auth.sql`](supabase/migrations/20260826200000_ledger_operator_auth.sql)
 - [`supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql`](supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql) (`is_ledger_operator` SECURITY DEFINER + `ledger_operators_self_select`)
+- [`supabase/migrations/20260827142807_lock_exposed_security_definer_rpcs.sql`](supabase/migrations/20260827142807_lock_exposed_security_definer_rpcs.sql) (public operator RPCs are INVOKER wrappers; ontology write RPC dropped)
 
 ## Env
 

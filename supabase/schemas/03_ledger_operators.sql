@@ -20,6 +20,8 @@ to authenticated
 using (user_id = (select auth.uid()));
 
 create schema if not exists private;
+grant usage on schema private to authenticated;
+alter default privileges in schema private revoke execute on functions from public, anon, authenticated;
 
 create or replace function private.claim_first_ledger_operator()
 returns boolean
@@ -53,16 +55,17 @@ begin
   return true;
 end;
 $$;
-revoke all on function private.claim_first_ledger_operator() from public, anon, authenticated;
-grant execute on function private.claim_first_ledger_operator() to service_role;
+revoke all on function private.claim_first_ledger_operator() from public, anon;
+grant execute on function private.claim_first_ledger_operator() to authenticated, service_role;
 
--- Must be SECURITY DEFINER: `authenticated` has no USAGE on schema private, so an
--- invoker wrapper fails with "permission denied for schema private" and the desk
--- treats the operator as not allowlisted.
+-- Public wrappers are SECURITY INVOKER so advisors 0028/0029 do not treat them
+-- as exposed definer RPCs. The private helpers stay DEFINER (RLS bypass +
+-- schema private). authenticated has USAGE on private and EXECUTE only on
+-- these two helpers; PostgREST does not expose schema private.
 create or replace function public.claim_ledger_operator()
 returns boolean
 language sql
-security definer
+security invoker
 set search_path = ''
 as $$
   select private.claim_first_ledger_operator();
@@ -70,9 +73,7 @@ $$;
 revoke all on function public.claim_ledger_operator() from public, anon;
 grant execute on function public.claim_ledger_operator() to authenticated, service_role;
 
--- SECURITY DEFINER: authenticated RLS cannot see ledger_operators rows without
--- a policy, so an INVOKER exists() is always false. Empty search_path; anon revoked.
-create or replace function public.is_ledger_operator()
+create or replace function private.is_ledger_operator()
 returns boolean
 language sql
 stable
@@ -84,6 +85,18 @@ as $$
     from public.ledger_operators
     where user_id = (select auth.uid())
   );
+$$;
+revoke all on function private.is_ledger_operator() from public, anon;
+grant execute on function private.is_ledger_operator() to authenticated, service_role;
+
+create or replace function public.is_ledger_operator()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select private.is_ledger_operator();
 $$;
 revoke all on function public.is_ledger_operator() from public, anon;
 grant execute on function public.is_ledger_operator() to authenticated, service_role;
