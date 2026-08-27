@@ -1,19 +1,22 @@
-import { NOT_IN_LEDGER } from './book-performance';
+import {
+  latestBookExposures,
+  MARK_NOT_IN_LEDGER,
+  NOT_IN_LEDGER,
+} from './book-performance';
 import type {
   ExposureRow,
   FillLogRow,
   FillRow,
   IntentRow,
-  PositionRow,
   ProposalRow,
   ThesisLot,
   ThesisRow,
   ThesisSymbolLink,
 } from './ledger-types';
 
+export { AGENTIC_LAST4, latestBookExposures, MARK_NOT_IN_LEDGER } from './book-performance';
+
 export const NO_POSITION = 'no position';
-export const MARK_NOT_IN_LEDGER = 'mark not in ledger';
-export const AGENTIC_LAST4 = '7638';
 
 const LIVE_PROPOSAL_STATUSES = new Set(['filled', 'approved', 'submitted', 'open']);
 const HELD_ROLES = new Set(['held']);
@@ -37,35 +40,11 @@ function pnlFor(lot: OpenLot) {
   return { pnl: (lot.mark - lot.average_cost) * lot.quantity, note: '' };
 }
 
-/**
- * Latest Agentic book only. Newer `observed_at` wins; if last4 7638 is present
- * at that timestamp, drop other accounts so personal books cannot leak in.
- */
-export function latestBookExposures(rows: ExposureRow[]): ExposureRow[] {
-  if (rows.length === 0) return [];
-  const agentic = rows.filter((row) => row.account_last4 === AGENTIC_LAST4);
-  const pool = agentic.length > 0 ? agentic : rows;
-  let latestAt = pool[0]!.observed_at;
-  for (const row of pool) {
-    if (row.observed_at > latestAt) latestAt = row.observed_at;
-  }
-  return pool.filter((row) => row.observed_at === latestAt);
-}
-
 export function openLotsFromLedger(input: {
   exposures: ExposureRow[];
-  positions: PositionRow[];
   marks?: ReadonlyMap<string, number>;
 }): Map<string, OpenLot> {
   const lots = new Map<string, OpenLot>();
-  for (const row of input.positions) {
-    lots.set(row.symbol, {
-      symbol: row.symbol,
-      quantity: row.quantity,
-      average_cost: row.average_cost,
-      mark: input.marks?.get(row.symbol) ?? null,
-    });
-  }
   for (const row of latestBookExposures(input.exposures)) {
     lots.set(row.symbol, {
       symbol: row.symbol,
@@ -113,6 +92,7 @@ function sideFor(thesisId: string, symbol: string, lot: OpenLot, proposals: Prop
 /**
  * Bind a thesis to an open Agentic lot only via a live trade_proposal
  * (filled/approved/submitted/open) or thesis_symbols.role = held.
+ * Lots come from the same latest 7638 `portfolio_exposure` snapshot as the Book.
  * Candidate/member watchlist tags do not count as skin-in-the-game.
  */
 export function attachThesisLots(
@@ -121,7 +101,6 @@ export function attachThesisLots(
     links: ThesisSymbolLink[];
     proposals: ProposalRow[];
     exposures: ExposureRow[];
-    positions: PositionRow[];
     marks?: ReadonlyMap<string, number>;
   },
 ): ThesisRow[] {

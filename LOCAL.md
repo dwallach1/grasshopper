@@ -81,9 +81,9 @@ Logged **out**: sign-in only. `/api/ledger` returns 401. No thesis names in the 
 
 Logged **in**:
 
-On **Home** the first panel is the Agentic proof book from `account_snapshots` + `position_episodes` (not `dashboard_snapshots.current`): current NAV vs the first Agentic snapshot (~$5,000), cash vs deployed, day P/L when a prior NY-session snapshot exists, otherwise vs average cost. Per-name mark is shown only when the ledger has it — otherwise the cell says **not in ledger** / **mark not in ledger**. IREN / NBIS / CIFR are the 2026-08-26 fills.
+On **Home** the first panel is the Agentic proof book from the latest `portfolio_exposure` snapshot for last4 **7638**, plus cash / buying power / NAV from the matching `account_snapshots` row (same `observed_at`). Not `dashboard_snapshots.current`, and not `position_episodes`. Book, thesis Position/Invested, and NAV share that snapshot clock. Missing marks stay **not in ledger**. A refresh (or the 15s poll / realtime) picks up a new QUANTANAMO snapshot without a restart.
 
-Each thesis on Home shows its linked open lots (symbol, side, qty, cost, P&L) from the latest Agentic `portfolio_exposure` joined through `trade_proposals.thesis_id` (filled/approved) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position**. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first. Empty fills say **not in ledger**.
+Each thesis on Home shows its linked open lots from that **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position**. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first, each row using its own fill time. Empty fills say **not in ledger**.
 
 On **Theses** you should see the eight theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`) with statuses `forming` or `hardening`.
 
@@ -97,25 +97,16 @@ On **Catalysts** you should see the NVDA / IREN / MRVL / CRDO catalysts and the 
 
 On **Lessons** you should see `research_lessons` and postmortems.
 
-## Mutations (no Worker deploy)
+The desk is **read-only**. QUANTANAMO writes the ledger. Sign-in stays as the operator gate. There are no thesis status buttons, evidence/lesson forms, or other operator RPCs that insert/update/delete ledger rows.
 
-These hit Supabase as the signed-in operator and show up on the next poll:
-
-| UI | API | Table |
-|---|---|---|
-| Theses status buttons | `POST /api/ledger/thesis` | `theses.status` |
-| Theses evidence form | `POST /api/ledger/evidence` | `thesis_evidence` |
-| Learnings form | `POST /api/ledger/lesson` | `research_lessons` (requires an existing `research_cycles` row for that thesis) |
-| (API) operator run | `POST /api/ledger/run` | `runs` with `notes` JSON `{ "outcome": "passed"\|"failed"\|"skipped", ... }` |
-
-`curl` without the session cookie is 401. Use the UI, or pass the browser cookie.
+`curl` without the session cookie is 401. `POST /api/ledger/thesis|evidence|lesson|run` returns 410.
 
 ## What this app does not do
 
 - It does not place trades or call Robinhood.
 - It does not ingest X bookmarks or run Workers AI.
 - `/api/x/authorize` is retired (410). QUANTANAMO reads X via the X connector.
-- Optional leftover `POST /api/system/run` routes still exist in the repo but are unwired from the desk.
+- `POST /api/system/run`, `/api/system/refresh-account`, and `/api/ontology/manage` return 410. The desk does not write.
 
 ## Tests
 
@@ -131,4 +122,4 @@ Auth gate checklist:
 4. Home / Book / Theses load live rows. Header shows your email. **Sign out** returns to the gate.
 5. Tab switches (1–9 or click) paint immediately from cached data; the filter box is gone.
 6. **Passkey+** then sign out and **Passkey** sign-in.
-7. Thesis evidence / status from the UI writes without `SUPABASE_SECRET_KEY` in the client bundle.
+7. Theses / Lessons have no write controls. Status and evidence are ledger reads.

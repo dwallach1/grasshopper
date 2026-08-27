@@ -2,9 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { assembleBookPerformance, isAgenticAccount } from './book-performance';
 import { DESK_TABS, surfaceFromGoLetter, surfaceFromPath } from './desk-nav';
-import type { AccountRow, AutomationRow, CloudRunRow, PositionRow, RunRow } from './ledger-types';
+import type { AccountRow, AutomationRow, CloudRunRow, ExposureRow, RunRow } from './ledger-types';
 import { nyDateKey } from './ny-date';
 import { assembleRoutines } from './routines';
+import { AGENTIC_LAST4 } from './thesis-book';
 
 function snapshot(partial: Partial<AccountRow> & Pick<AccountRow, 'observed_at' | 'total_value'>): AccountRow {
   return {
@@ -17,16 +18,13 @@ function snapshot(partial: Partial<AccountRow> & Pick<AccountRow, 'observed_at' 
   };
 }
 
-function position(symbol: string, quantity: number, average_cost: number | null): PositionRow {
+function exposure(symbol: string, quantity: number, average_buy_price: number): ExposureRow {
   return {
-    id: symbol,
-    account_key: 'agentic',
     symbol,
-    status: 'open',
     quantity,
-    average_cost,
-    opened_at: '2026-08-26T19:01:00.000Z',
-    next_review_at: null,
+    average_buy_price,
+    observed_at: '2026-08-27T13:22:00.000Z',
+    account_last4: AGENTIC_LAST4,
   };
 }
 
@@ -56,7 +54,7 @@ describe('desk nav labels', () => {
 });
 
 describe('Agentic book performance', () => {
-  test('uses prior NY session snapshot for day P/L and does not invent marks', () => {
+  test('uses the matching 8/27 snapshot and latest 7638 lots including DG', () => {
     const starting = snapshot({
       observed_at: '2026-08-23T20:26:25.000Z',
       total_value: 5000,
@@ -64,80 +62,113 @@ describe('Agentic book performance', () => {
       equity_value: 0,
     });
     const prior = snapshot({
-      observed_at: '2026-08-25T22:42:14.567Z',
-      total_value: 5000,
-      cash: 5000,
-      equity_value: 0,
-    });
-    const latest = snapshot({
       observed_at: '2026-08-26T20:03:24.218Z',
       total_value: 5002.99,
       cash: 2000,
       equity_value: 3002.99,
+      buying_power: 2000,
+    });
+    const latest = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
     });
     const book = assembleBookPerformance({
       snapshotsNewestFirst: [latest, prior, starting],
       starting,
-      positions: [
-        position('IREN', 25.208855, 39.6686),
-        position('NBIS', 4.653004, 214.9149),
-        position('CIFR', 63.211524, 15.8199),
+      exposures: [
+        exposure('IREN', 25.208855, 39.67),
+        exposure('NBIS', 4.653004, 214.91),
+        exposure('CIFR', 63.211524, 15.82),
+        exposure('DG', 14, 132.25),
       ],
     });
     expect(isAgenticAccount('Agentic ••••7638')).toBe(true);
     expect(isAgenticAccount('robinhood_7254')).toBe(false);
-    expect(book.current_nav).toBeCloseTo(5002.99);
-    expect(book.starting_nav).toBe(5000);
-    expect(book.cash).toBe(2000);
-    expect(book.deployed).toBeCloseTo(3002.99);
-    expect(book.vs_start).toBeCloseTo(2.99);
-    expect(book.day_pnl).toBeCloseTo(2.99);
-    expect(book.day_pnl_note).toContain('prior NY session');
-    expect(book.vs_cost).toBeCloseTo(2.99, 1);
-    expect(book.names).toHaveLength(3);
+    expect(book.current_nav).toBeCloseTo(5134.57473627);
+    expect(book.cash).toBeCloseTo(148.5);
+    expect(book.buying_power).toBeCloseTo(148.5);
+    expect(book.deployed).toBeCloseTo(4986.07473627);
+    expect(book.observed_at).toBe('2026-08-27T13:22:00.000Z');
+    expect(book.last4).toBe(AGENTIC_LAST4);
+    expect(book.names.map((row) => row.symbol)).toEqual(['CIFR', 'DG', 'IREN', 'NBIS']);
+    expect(book.names.find((row) => row.symbol === 'DG')?.quantity).toBe(14);
     expect(book.names.every((row) => row.mark === null && row.pnl === null)).toBe(true);
     expect(book.names.every((row) => row.note === 'mark not in ledger')).toBe(true);
-    expect(nyDateKey(latest.observed_at)).toBe('2026-08-26');
+    expect(book.day_pnl).toBeCloseTo(5134.57473627 - 5002.99);
+    expect(nyDateKey(latest.observed_at)).toBe('2026-08-27');
   });
 
-  test('says so when day P/L or cost is missing', () => {
-    const onlyToday = snapshot({
+  test('does not keep yesterday NAV when the 7638 book has no matching snapshot', () => {
+    const stale = snapshot({
       observed_at: '2026-08-26T20:03:24.218Z',
       total_value: 5002.99,
       cash: 2000,
       equity_value: 3002.99,
+      buying_power: 2000,
+    });
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [stale],
+      starting: stale,
+      exposures: [exposure('DG', 14, 132.25)],
+    });
+    expect(book.names.map((row) => row.symbol)).toEqual(['DG']);
+    expect(book.observed_at).toBe('2026-08-27T13:22:00.000Z');
+    expect(book.current_nav).toBeNull();
+    expect(book.cash).toBeNull();
+    expect(book.buying_power).toBeNull();
+    expect(book.day_pnl).toBeNull();
+  });
+
+  test('says so when day P/L or cost is missing', () => {
+    const onlyToday = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
     });
     const book = assembleBookPerformance({
       snapshotsNewestFirst: [onlyToday],
       starting: onlyToday,
-      positions: [position('IREN', 25, null)],
+      exposures: [{
+        symbol: 'IREN',
+        quantity: 25,
+        average_buy_price: null,
+        observed_at: '2026-08-27T13:22:00.000Z',
+        account_last4: AGENTIC_LAST4,
+      }],
     });
     expect(book.day_pnl).toBeNull();
     expect(book.day_pnl_note).toBe('no prior-session snapshot in ledger');
     expect(book.vs_cost).toBeNull();
-    expect(book.vs_cost_note).toBe('average cost missing on an open episode');
+    expect(book.vs_cost_note).toBe('average buy missing on an open lot');
     expect(book.names[0]?.mark).toBeNull();
   });
 
   test('ignores non-Agentic snapshots so personal accounts cannot invent proof P/L', () => {
     const personal = snapshot({
       account_label: 'robinhood_7254',
-      observed_at: '2026-08-26T21:00:00.000Z',
+      observed_at: '2026-08-27T14:00:00.000Z',
       total_value: 480261.61,
     });
     const agentic = snapshot({
-      observed_at: '2026-08-26T20:03:24.218Z',
-      total_value: 5002.99,
-      cash: 2000,
-      equity_value: 3002.99,
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
     });
     const book = assembleBookPerformance({
       snapshotsNewestFirst: [personal, agentic],
       starting: agentic,
-      positions: [],
+      exposures: [exposure('DG', 14, 132.25)],
     });
-    expect(book.current_nav).toBeCloseTo(5002.99);
+    expect(book.current_nav).toBeCloseTo(5134.57473627);
     expect(book.vs_start).toBe(0);
+    expect(book.names.map((row) => row.symbol)).toEqual(['DG']);
   });
 });
 

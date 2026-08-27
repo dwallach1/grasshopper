@@ -101,7 +101,7 @@ sequenceDiagram
 
 ## Trading
 
-Live book: **Agentic** proof account (last4 7638). Starting capital is the first Agentic `account_snapshots` row (~$5,000). Open names from the **2026-08-26** fills: **IREN**, **NBIS**, **CIFR**. The Home panel shows NAV vs that start, cash vs deployed, and day P/L only when a prior NY-session snapshot exists. Per-name mark is shown only if the ledger has it.
+Live book: **Agentic** proof account (last4 7638). Starting capital is the first Agentic `account_snapshots` row (~$5,000). Open names are **every lot** on the latest `portfolio_exposure` snapshot for that last4 (as of 2026-08-27: IREN, NBIS, CIFR, DG). The Home/Book panels show NAV, cash, and buying power from the matching `account_snapshots` row. Per-name mark is shown only if the ledger has it.
 
 | Limit | Value | Note |
 |---|---|---|
@@ -159,7 +159,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–9`, `g` then letter, `j/k` thesis, `r` refresh, `?` help. No filter box.
 
-Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `broker_fills`, `portfolio_exposure`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`.
+Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`. Book names come from that exposure snapshot, not `position_episodes`.
 
 ---
 
@@ -173,7 +173,7 @@ Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `bro
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (SECURITY DEFINER) |
 
-Operator mutations from the desk: thesis status, evidence, lessons. See [`LOCAL.md`](LOCAL.md).
+The desk is read-only. QUANTANAMO writes the ledger. See [`LOCAL.md`](LOCAL.md).
 
 ---
 

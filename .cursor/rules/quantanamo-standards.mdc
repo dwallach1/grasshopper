@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Architecture
 
-- `apps/dashboard` is localhost-only: reads the live Supabase ledger and applies operator mutations; never runs ingestion/research/trading inline.
+- `apps/dashboard` is localhost-only: reads the live Supabase ledger. The operator looks; QUANTANAMO writes. Never run ingestion/research/trading inline.
 - QUANTANAMO (Grok Bot) is the live automation that writes the ledger. The desk must render from canonical tables without Cloudflare workers. Optional worker HTTP routes stay server-side and unwired from the operator chrome.
 
 ## Cloudflare Workers

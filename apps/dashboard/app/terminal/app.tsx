@@ -2,9 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type MouseEvent } from 'react';
-import { z } from 'zod';
 
-import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
+import { fetchDeskPayload, rememberDesk, subscribeDeskRefresh } from '../../lib/desk-client';
 import {
   DESK_TABS,
   hrefForSurface,
@@ -15,7 +14,6 @@ import {
 import type { BookPerformance, DeskPayload, DeskRoutine, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
-import { THESIS_STATUSES } from '../../lib/thesis-status';
 import { BacktestsPanel } from './backtests-panel';
 import { SessionControls } from './session-controls';
 import {
@@ -32,15 +30,12 @@ import {
 
 const POLL_MS = 15_000;
 
-const DirectionSchema = z.enum(['supporting', 'challenging', 'neutral']);
-
 export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; operatorEmail: string }) {
   const pathname = usePathname();
   const [desk, setDesk] = useState(initial);
   const [now, setNow] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [selectedThesisId, setSelectedThesisId] = useState(initial.theses[0]?.id ?? '');
   const [selectedTestId, setSelectedTestId] = useState(initial.tests[0]?.id ?? null);
   const [goArmed, setGoArmed] = useState(false);
@@ -62,6 +57,20 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
       void refreshDesk(setDesk, setNotice);
     }, POLL_MS);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => subscribeDeskRefresh(() => {
+    void refreshDesk(setDesk, setNotice);
+  }), []);
+
+  useEffect(() => {
+    function onVis() {
+      if (document.visibilityState === 'visible') {
+        void refreshDesk(setDesk, setNotice);
+      }
+    }
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   useEffect(() => {
@@ -182,9 +191,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
           <ThesesPanel
             desk={desk}
             selected={selectedThesis}
-            busy={busy}
             onSelect={setSelectedThesisId}
-            onMutate={mutate(setBusy, setNotice, setDesk)}
           />
         )}
         {surface === 'runs' && <RunsPanel desk={desk} now={now} />}
@@ -196,21 +203,17 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
           />
         )}
         {surface === 'catalysts' && <CatalystsPanel desk={desk} />}
-        {surface === 'learnings' && (
-          <LearningsPanel
-            desk={desk}
-            busy={busy}
-            onMutate={mutate(setBusy, setNotice, setDesk)}
-          />
-        )}
+        {surface === 'learnings' && <LearningsPanel desk={desk} />}
         {surface === 'ontology' && <OntologyPanel desk={desk} />}
         {surface === 'risk' && <RiskPanel desk={desk} />}
       </main>
       <footer className="term-status">
         <span>NAV {ledgerFigure(desk.book.current_nav, moneyPrecise)}</span>
         <span>CASH {ledgerFigure(desk.book.cash, money)}</span>
+        <span>BP {ledgerFigure(desk.book.buying_power, money)}</span>
         <span>DEPLOYED {ledgerFigure(desk.book.deployed, money)}</span>
         <span>POS {desk.counts.open_positions}</span>
+        <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
         <span>
           LAST {lastLive
@@ -235,26 +238,6 @@ function onDeskClick(event: MouseEvent<HTMLAnchorElement>, navigate: () => void)
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
   event.preventDefault();
   navigate();
-}
-
-function mutate(
-  setBusy: (value: boolean) => void,
-  setNotice: (value: string | null) => void,
-  setDesk: (desk: DeskPayload) => void,
-) {
-  return async (label: string, work: () => Promise<void>) => {
-    setBusy(true);
-    setNotice(null);
-    try {
-      await work();
-      await refreshDesk(setDesk, setNotice);
-      setNotice(label);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Mutation failed');
-    } finally {
-      setBusy(false);
-    }
-  };
 }
 
 async function refreshDesk(
@@ -286,6 +269,10 @@ function BookStrip({ book }: { book: BookPerformance }) {
           <b>{ledgerFigure(book.cash, moneyPrecise)}</b>
         </div>
         <div>
+          <i>Buying power</i>
+          <b>{ledgerFigure(book.buying_power, moneyPrecise)}</b>
+        </div>
+        <div>
           <i>Deployed</i>
           <b>{ledgerFigure(book.deployed, moneyPrecise)}</b>
         </div>
@@ -299,10 +286,10 @@ function BookStrip({ book }: { book: BookPerformance }) {
         </div>
       </div>
       <p className="term-prose dim">
-        {book.account_label || 'Agentic'} proof book
-        {book.observed_at ? ` · snapshot ${nyStamp(book.observed_at)}` : ''}
+        {book.account_label || 'Agentic'} last4 {book.last4 || '7638'}
+        {book.observed_at ? ` · snapshot ${nyStamp(book.observed_at)}` : ` · snapshot ${NOT_IN_LEDGER}`}
         {book.starting_nav !== null ? ` · start ${moneyPrecise(book.starting_nav)}` : ` · start ${book.vs_start_note}`}
-        {`. Day P/L: ${book.day_pnl_note}. vs cost: ${book.vs_cost_note}.`}
+        {`. Day P/L: ${book.day_pnl_note}. vs cost: ${book.vs_cost_note}. Marks are ledger-only.`}
       </p>
       <table>
         <thead>
@@ -327,7 +314,7 @@ function BookStrip({ book }: { book: BookPerformance }) {
             </tr>
           ))}
           {!book.names.length && (
-            <tr><td colSpan={6} className="empty">No open episodes in the ledger</td></tr>
+            <tr><td colSpan={6} className="empty">{NOT_IN_LEDGER}</td></tr>
           )}
         </tbody>
       </table>
@@ -362,12 +349,20 @@ function HomePanel({
       <section className="term-panel term-panel-span">
         <header>
           <b>AGENTIC BOOK</b>
-          <span>proof account · canonical snapshots</span>
+          <span>
+            last4 7638 · {desk.book.observed_at ? `snapshot ${nyStamp(desk.book.observed_at)}` : NOT_IN_LEDGER}
+          </span>
         </header>
         <BookStrip book={desk.book} />
       </section>
       <section className="term-panel term-home-theses">
-        <header><b>THESES</b><span>open lots from the Agentic book</span></header>
+        <header>
+          <b>THESES</b>
+          <span>
+            lots from the same snapshot
+            {desk.book.observed_at ? ` · ${nyStamp(desk.book.observed_at)}` : ` · ${NOT_IN_LEDGER}`}
+          </span>
+        </header>
         {desk.theses.map((row) => (
           <ThesisSkin
             key={row.id}
@@ -380,7 +375,7 @@ function HomePanel({
       <section className="term-panel term-home-fills">
         <header>
           <b>FILLS</b>
-          <span>{fillLogCaption(fillLog)}</span>
+          <span>{fillLogCaption(fillLog)} · tape time per row</span>
         </header>
         <FillLogTable rows={fillLog} />
       </section>
@@ -512,25 +507,11 @@ function BookPanel({ desk }: { desk: DeskPayload }) {
       <section className="term-panel">
         <header>
           <b>LIVE BOOK</b>
-          <span>{desk.book.account_label || 'no snapshot'} · {nyStamp(desk.book.observed_at)}</span>
+          <span>
+            {desk.book.account_label || 'Agentic'} · last4 {desk.book.last4 || '7638'} · {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}
+          </span>
         </header>
         <BookStrip book={desk.book} />
-        <header><b>EPISODES</b></header>
-        <table>
-          <thead><tr><th>Symbol</th><th>Qty</th><th>Avg cost</th><th>Opened</th><th>Status</th></tr></thead>
-          <tbody>
-            {desk.positions.map((row) => (
-              <tr key={row.id}>
-                <td className="sym">{row.symbol}</td>
-                <td>{qty(row.quantity)}</td>
-                <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
-                <td>{nyStamp(row.opened_at)}</td>
-                <td className={toneForStatus(row.status)}>{row.status}</td>
-              </tr>
-            ))}
-            {!desk.positions.length && <tr><td colSpan={5} className="empty">No open episodes</td></tr>}
-          </tbody>
-        </table>
       </section>
       <section className="term-panel">
         <header><b>INTENTS / PROPOSALS</b></header>
@@ -558,25 +539,20 @@ function BookPanel({ desk }: { desk: DeskPayload }) {
 function ThesesPanel({
   desk,
   selected,
-  busy,
   onSelect,
-  onMutate,
 }: {
   desk: DeskPayload;
   selected?: ThesisRow;
-  busy: boolean;
   onSelect: (id: string) => void;
-  onMutate: (label: string, work: () => Promise<void>) => Promise<void>;
 }) {
   const evidence = desk.evidence.filter((row) => row.thesis_id === selected?.id).slice(0, 12);
   const scores = desk.scores.filter((row) => row.thesis_id === selected?.id).slice(0, 24).reverse();
-  const [summary, setSummary] = useState('');
-  const [direction, setDirection] = useState<'supporting' | 'challenging' | 'neutral'>('supporting');
+  const asOf = desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER;
 
   return (
     <div className="term-grid term-grid-theses">
       <section className="term-panel">
-        <header><b>THESES</b><span>j/k · enter</span></header>
+        <header><b>THESES</b><span>j/k · enter · snapshot {asOf}</span></header>
         <table>
           <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Symbols</th></tr></thead>
           <tbody>
@@ -602,56 +578,11 @@ function ThesesPanel({
             <p className="term-prose">{selected.summary}</p>
             {selected.falsifier && <p className="term-prose dim">Falsifier: {selected.falsifier}</p>}
             <Sparkline scores={scores.map((row) => row.confidence)} />
-            <div className="term-actions">
-              {THESIS_STATUSES.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={selected.status === status ? 'on' : ''}
-                  disabled={busy}
-                  onClick={() => void onMutate(`Status → ${status}`, async () => {
-                    await postJson('/api/ledger/thesis', { thesis_id: selected.id, status });
-                  })}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-            <form
-              className="term-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!summary.trim()) return;
-                void onMutate('Evidence appended', async () => {
-                  await postJson('/api/ledger/evidence', {
-                    thesis_id: selected.id,
-                    evidence_type: 'operator_note',
-                    direction,
-                    summary,
-                    confidence: selected.confidence,
-                  });
-                  setSummary('');
-                });
-              }}
-            >
-              <select
-                value={direction}
-                onChange={(event) => {
-                  const parsed = DirectionSchema.safeParse(event.target.value);
-                  if (parsed.success) setDirection(parsed.data);
-                }}
-              >
-                <option value="supporting">supporting</option>
-                <option value="challenging">challenging</option>
-                <option value="neutral">neutral</option>
-              </select>
-              <input
-                value={summary}
-                onChange={(event) => setSummary(event.target.value)}
-                placeholder="Append evidence to this thesis"
-              />
-              <button type="submit" disabled={busy || !summary.trim()}>Add</button>
-            </form>
+            <header><b>POSITION</b><span>same 7638 snapshot · {asOf}</span></header>
+            {selected.lots.length === 0 && <p className="empty">{NO_POSITION}</p>}
+            {selected.lots.map((lot) => (
+              <LotBar key={`${selected.id}-${lot.symbol}`} lot={lot} />
+            ))}
             <header><b>EVIDENCE</b><span>{evidence.length}</span></header>
             {evidence.map((row) => (
               <div key={row.id} className="term-line">
@@ -754,17 +685,7 @@ function CatalystsPanel({ desk }: { desk: DeskPayload }) {
   );
 }
 
-function LearningsPanel({
-  desk,
-  busy,
-  onMutate,
-}: {
-  desk: DeskPayload;
-  busy: boolean;
-  onMutate: (label: string, work: () => Promise<void>) => Promise<void>;
-}) {
-  const [thesisId, setThesisId] = useState(desk.theses[0]?.id ?? '');
-  const [lesson, setLesson] = useState('');
+function LearningsPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
@@ -777,30 +698,7 @@ function LearningsPanel({
             <p>{row.summary}</p>
           </div>
         ))}
-        <form
-          className="term-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!lesson.trim() || !thesisId) return;
-            void onMutate('Lesson recorded', async () => {
-              await postJson('/api/ledger/lesson', {
-                thesis_id: thesisId,
-                lesson_type: 'operator_note',
-                summary: lesson,
-                market_regime: 'live_desk',
-              });
-              setLesson('');
-            });
-          }}
-        >
-          <select value={thesisId} onChange={(event) => setThesisId(event.target.value)}>
-            {desk.theses.map((row) => (
-              <option key={row.id} value={row.id}>{row.id}</option>
-            ))}
-          </select>
-          <input value={lesson} onChange={(event) => setLesson(event.target.value)} placeholder="Append a lesson" />
-          <button type="submit" disabled={busy || !lesson.trim()}>Add</button>
-        </form>
+        {!desk.lessons.length && <p className="empty">{NOT_IN_LEDGER}</p>}
       </section>
       <section className="term-panel">
         <header><b>POSTMORTEMS / INSIGHTS</b></header>
@@ -865,28 +763,4 @@ function RiskPanel({ desk }: { desk: DeskPayload }) {
       ))}
     </section>
   );
-}
-
-type MutationBody =
-  | { thesis_id: string; status: string }
-  | {
-      thesis_id: string;
-      evidence_type: string;
-      direction: string;
-      summary: string;
-      confidence: number;
-    }
-  | { thesis_id: string; lesson_type: string; summary: string; market_regime: string };
-
-async function postJson(url: string, body: MutationBody): Promise<void> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const parsedBody = await response.json().catch(() => null);
-  const ErrorSchema = z.object({ error: z.string() }).passthrough();
-  if (!response.ok) {
-    throw new Error(ErrorSchema.safeParse(parsedBody).data?.error || `Request failed (${response.status})`);
-  }
 }
