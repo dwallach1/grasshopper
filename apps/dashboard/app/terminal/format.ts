@@ -103,3 +103,13 @@ export function pct(value: number | null | undefined, digits = 1): string {
   const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(digits)}%`;
 }
+
+export function ledgerPct(value: number | null | undefined, digits = 1): string {
+  if (value === null || value === undefined) return 'not in ledger';
+  return pct(value, digits);
+}
+
+export function ledgerCount(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'not in ledger';
+  return String(value);
+}

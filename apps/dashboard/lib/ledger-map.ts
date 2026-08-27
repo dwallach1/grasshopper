@@ -15,6 +15,7 @@ import type {
   FillRow,
   InsightRow,
   IntentRow,
+  JsonBag,
   LessonRow,
   OntologyActionRow,
   OntologyCandidateRow,
@@ -325,6 +326,29 @@ export function mapCycles(rows: JsonObjectRow[]): CycleRow[] {
   return z.array(CycleSchema).parse(rows);
 }
 
+const OptionalDate = z
+  .union([z.string(), z.date(), z.null()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === null) return null;
+    if (value instanceof Date) return value.toISOString().slice(0, 10);
+    return value.slice(0, 10);
+  });
+
+const OptionalSymbols = z
+  .union([z.array(z.string()), z.null()])
+  .optional()
+  .transform((value) => value ?? null);
+
+const OptionalJsonBag = z
+  .union([z.object({}).passthrough(), z.null()])
+  .optional()
+  .transform((value): JsonBag | null => {
+    if (value === undefined || value === null) return null;
+    // SAFETY: strategy_tests.params_json is jsonb; backtest param parser re-decodes scalars.
+    return value as JsonBag;
+  });
+
 const TestSchema = z
   .object({
     id: Id,
@@ -340,6 +364,11 @@ const TestSchema = z
     failure_reason: z.string().nullable(),
     autopsy: z.string().nullable(),
     tested_at: Timestamp,
+    price_source: z.string().nullable().optional().transform((value) => value ?? null),
+    window_start: OptionalDate,
+    window_end: OptionalDate,
+    symbols: OptionalSymbols,
+    params_json: OptionalJsonBag,
   })
   .passthrough();
 

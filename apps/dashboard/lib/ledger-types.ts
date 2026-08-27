@@ -152,6 +152,11 @@ export type CycleRow = {
   market_regime: string | null;
 };
 
+export type JsonScalar = string | number | boolean | null;
+export type JsonBag = {
+  [key: string]: JsonScalar | JsonScalar[] | JsonBag | JsonBag[] | undefined;
+};
+
 export type StrategyTestRow = {
   id: number;
   external_key: string;
@@ -166,6 +171,92 @@ export type StrategyTestRow = {
   failure_reason: string | null;
   autopsy: string | null;
   tested_at: string;
+  price_source: string | null;
+  window_start: string | null;
+  window_end: string | null;
+  symbols: string[] | null;
+  params_json: JsonBag | null;
+};
+
+export type BacktestArtifactKind =
+  | 'summary_json'
+  | 'equity_curve'
+  | 'trades'
+  | 'daily_returns'
+  | 'params_json'
+  | 'price_source'
+  | 'chart_svg';
+
+export type BacktestArtifactRow = {
+  id: number;
+  test_id: number;
+  thesis_id: string | null;
+  artifact_kind: BacktestArtifactKind;
+  title: string;
+  mime_type: string;
+  payload_json: JsonBag | null;
+  payload_items: JsonBag[] | null;
+  payload_text: string | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
+  source: string;
+  created_at: string;
+};
+
+export type EquityPoint = {
+  t: string | null;
+  equity: number;
+  drawdown: number | null;
+};
+
+export type BacktestTrade = {
+  t: string | null;
+  symbol: string | null;
+  side: string | null;
+  qty: number | null;
+  price: number | null;
+  reason: string | null;
+};
+
+export type BacktestMetric = {
+  key: string;
+  numeric: number | null;
+  text: string | null;
+};
+
+export type BacktestParam = {
+  key: string;
+  value: string | null;
+};
+
+export type BacktestPriceSource = {
+  tickers: string[] | null;
+  interval: string | null;
+  bar_start: string | null;
+  bar_end: string | null;
+  source: string | null;
+  label: string | null;
+};
+
+export type BacktestView = {
+  test: StrategyTestRow;
+  thesis_id: string | null;
+  thesis_name: string | null;
+  artifact_kinds: BacktestArtifactKind[];
+  artifact_count: number;
+  window_start: string | null;
+  window_end: string | null;
+  symbols: string[] | null;
+  price_source_column: string | null;
+  total_return: number | null;
+  max_drawdown: number | null;
+  trade_count: number | null;
+  summary: BacktestMetric[];
+  equity_points: EquityPoint[];
+  chart_svg: string | null;
+  trades: BacktestTrade[];
+  params: BacktestParam[];
+  price_source: BacktestPriceSource | null;
 };
 
 export type TestScenarioRow = {
@@ -390,6 +481,7 @@ export type DeskPayload = {
   postmortems: PostmortemRow[];
   cycles: CycleRow[];
   tests: StrategyTestRow[];
+  backtest_artifacts: BacktestArtifactRow[];
   scenarios: TestScenarioRow[];
   agent_runs: AgentRunRow[];
   account: AccountRow | null;
