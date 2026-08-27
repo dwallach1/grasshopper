@@ -39,9 +39,10 @@ import {
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import { isPostgresPermissionDenied, openSql } from './postgres';
-import { assembleBookPerformance } from './book-performance';
+import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures } from './book-performance';
 import { assembleRoutines } from './routines';
-import { assembleFillLog, attachThesisLots, latestBookExposures } from './thesis-book';
+import { assembleFillLog, attachThesisLots } from './thesis-book';
+import { sameInstant } from './ny-date';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
@@ -261,7 +262,12 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       sql`
         select symbol, quantity, average_buy_price, observed_at, account_last4
         from public.portfolio_exposure
-        where observed_at = (select max(observed_at) from public.portfolio_exposure)
+        where account_last4 = ${AGENTIC_LAST4}
+          and observed_at = (
+            select max(observed_at)
+            from public.portfolio_exposure
+            where account_last4 = ${AGENTIC_LAST4}
+          )
         order by quantity desc, symbol
       `,
       optionalRows(
@@ -448,7 +454,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
     restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
-    restRows('portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at,account_last4&order=observed_at.desc,quantity.desc&limit=80', accessToken),
+    restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, accessToken),
     restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
     restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', accessToken),
     restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40', accessToken),
@@ -516,14 +522,16 @@ function bookFields(
   const starting = mapAccount(firstRows);
   const positions = mapPositions(positionRows);
   const exposures = latestBookExposures(mapExposures(exposureRows));
+  const book = assembleBookPerformance({
+    snapshotsNewestFirst: snapshots,
+    starting,
+    exposures,
+  });
   return {
-    account: snapshots[0] ?? starting,
+    account: snapshots.find((row) => book.observed_at !== null && sameInstant(row.observed_at, book.observed_at))
+      ?? (book.observed_at ? null : snapshots[0] ?? starting),
     snapshots,
-    book: assembleBookPerformance({
-      snapshotsNewestFirst: snapshots,
-      starting,
-      positions,
-    }),
+    book,
     positions,
     exposures,
   };
@@ -540,7 +548,6 @@ function decorateDesk(
       links: mapThesisSymbolLinks(symbolRows),
       proposals: body.proposals,
       exposures: body.exposures,
-      positions: body.positions,
     }),
     fill_log: assembleFillLog({ fills: body.fills, intents: body.intents }),
   };
@@ -559,5 +566,9 @@ function assembleDesk(
       automations: body.automations,
       cloudRuns: body.cloud_runs,
     }),
+    counts: {
+      ...body.counts,
+      open_positions: body.exposures.length,
+    },
   };
 }

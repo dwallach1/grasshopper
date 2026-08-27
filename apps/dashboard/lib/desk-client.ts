@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DeskPayload } from './ledger-types';
+import { createBrowserSupabase } from './supabase-browser';
 
 const ErrorSchema = z.object({ error: z.string() }).passthrough();
 const DeskWireSchema = z
@@ -11,10 +12,21 @@ const DeskWireSchema = z
     book: z.object({
       current_nav: z.number().nullable(),
       starting_nav: z.number().nullable(),
+      observed_at: z.string().nullable(),
     }).passthrough(),
     routines: z.array(z.object({ id: z.string(), status: z.string() }).passthrough()),
   })
   .passthrough();
+
+const LEDGER_WATCH = [
+  'portfolio_exposure',
+  'account_snapshots',
+  'trade_intents',
+  'trade_proposals',
+  'thesis_symbols',
+  'broker_fills',
+  'theses',
+] as const;
 
 let inflight: Promise<DeskPayload> | null = null;
 let memory: DeskPayload | null = null;
@@ -49,4 +61,23 @@ export async function fetchDeskPayload(): Promise<DeskPayload> {
   } finally {
     inflight = null;
   }
+}
+
+/** Refetch when QUANTANAMO writes a new snapshot. Polling remains the fallback. */
+export function subscribeDeskRefresh(onChange: () => void): () => void {
+  const supabase = createBrowserSupabase();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const bounce = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(onChange, 400);
+  };
+  let channel = supabase.channel('desk-ledger');
+  for (const table of LEDGER_WATCH) {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, bounce);
+  }
+  void channel.subscribe();
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+    void supabase.removeChannel(channel);
+  };
 }

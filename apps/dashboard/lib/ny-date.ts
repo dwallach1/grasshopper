@@ -11,3 +11,8 @@ const nyDay = new Intl.DateTimeFormat('en-CA', {
 export function nyDateKey(iso: string): string {
   return nyDay.format(new Date(iso));
 }
+
+/** True when two ledger timestamps are the same instant after ISO coercion. */
+export function sameInstant(left: string, right: string): boolean {
+  return new Date(left).getTime() === new Date(right).getTime();
+}

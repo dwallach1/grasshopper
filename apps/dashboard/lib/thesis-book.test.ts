@@ -5,7 +5,6 @@ import type {
   ExposureRow,
   FillRow,
   IntentRow,
-  PositionRow,
   ProposalRow,
   ThesisRow,
   ThesisSymbolLink,
@@ -20,10 +19,11 @@ import {
   NO_POSITION,
 } from './thesis-book';
 
-const OBSERVED = '2026-08-26T19:04:32.415Z';
+const LIVE = '2026-08-27T13:22:00.000Z';
+const YESTERDAY = '2026-08-26T19:04:32.415Z';
 const OLDER = '2026-08-24T16:18:10.000Z';
-const LATER_PERSONAL = '2026-08-26T21:00:00.000Z';
-const FILLED_AT = '2026-08-26T19:05:48.528Z';
+const LATER_PERSONAL = '2026-08-27T14:00:00.000Z';
+const FILLED_AT = '2026-08-27T13:23:10.587Z';
 
 function thesis(id: string, symbols: string[] = []): ThesisRow {
   return {
@@ -36,8 +36,8 @@ function thesis(id: string, symbols: string[] = []): ThesisRow {
     stance: 'bullish',
     variant_perception: null,
     falsifier: null,
-    created_at: OBSERVED,
-    updated_at: OBSERVED,
+    created_at: LIVE,
+    updated_at: LIVE,
     symbols,
     lots: [],
   };
@@ -53,22 +53,9 @@ function exposure(
     symbol,
     quantity,
     average_buy_price,
-    observed_at: OBSERVED,
+    observed_at: LIVE,
     account_last4: AGENTIC_LAST4,
     ...extra,
-  };
-}
-
-function position(symbol: string, quantity: number, average_cost: number): PositionRow {
-  return {
-    id: symbol,
-    account_key: 'agentic-7638',
-    symbol,
-    status: 'open',
-    quantity,
-    average_cost,
-    opened_at: '2026-08-26T19:01:00.000Z',
-    next_review_at: null,
   };
 }
 
@@ -115,21 +102,23 @@ function intent(
 }
 
 const liveBook = [
-  exposure('IREN', 25.208855, 39.6686),
-  exposure('NBIS', 4.653004, 214.9149),
-  exposure('CIFR', 63.211524, 15.8199),
+  exposure('IREN', 25.208855, 39.67),
+  exposure('NBIS', 4.653004, 214.91),
+  exposure('CIFR', 63.211524, 15.82),
+  exposure('DG', 14, 132.25),
 ];
 
-const livePositions = [
-  position('IREN', 25.208855, 39.6686),
-  position('NBIS', 4.653004, 214.9149),
-  position('CIFR', 63.211524, 15.8199),
+const yesterdayBook = [
+  exposure('IREN', 25.208855, 39.6686, { observed_at: YESTERDAY }),
+  exposure('NBIS', 4.653004, 214.9149, { observed_at: YESTERDAY }),
+  exposure('CIFR', 63.211524, 15.8199, { observed_at: YESTERDAY }),
 ];
 
 const liveProposals = [
   proposal('neocloud_compute', 'IREN', 'filled', { id: 28 }),
   proposal('neocloud_compute', 'NBIS', 'filled', { id: 29 }),
   proposal('neocloud_compute', 'CIFR', 'filled', { id: 30 }),
+  proposal('earnings_gap_structure', 'DG', 'filled', { id: 32, notional: 1851.5 }),
   proposal('ai_power_nuclear', 'CEG', 'deferred', { id: 24, notional: 0 }),
   proposal('semis_photonics', 'LITE', 'rejected', { id: 22, notional: 0 }),
 ];
@@ -138,23 +127,26 @@ const liveLinks: ThesisSymbolLink[] = [
   { thesis_id: 'neocloud_compute', symbol: 'CIFR', role: 'held' },
   { thesis_id: 'neocloud_compute', symbol: 'NBIS', role: 'held' },
   { thesis_id: 'neocloud_compute', symbol: 'IREN', role: 'held' },
+  { thesis_id: 'earnings_gap_structure', symbol: 'DG', role: 'held' },
+  { thesis_id: 'earnings_gap_structure', symbol: 'DLTR', role: 'pre_open_primary' },
+  { thesis_id: 'earnings_gap_structure', symbol: 'ANF', role: 'case_study' },
   { thesis_id: 'semis_photonics', symbol: 'NBIS', role: 'member' },
   { thesis_id: 'semis_photonics', symbol: 'IREN', role: 'member' },
   { thesis_id: 'ai_power_nuclear', symbol: 'IREN', role: 'candidate' },
   { thesis_id: 'ai_power_nuclear', symbol: 'NBIS', role: 'candidate' },
-  { thesis_id: 'earnings_gap_structure', symbol: 'ANF', role: 'case_study' },
 ];
 
 describe('latest Agentic book', () => {
-  test('keeps the 2026-08-26 7638 snapshot and drops older personal books', () => {
-    const rows = [
+  test('latest 7638 snapshot includes DG and drops the 8/26 lots', () => {
+    const book = latestBookExposures([
+      ...yesterdayBook,
       ...liveBook,
       exposure('IREN', 480.926017, 47.82, { observed_at: OLDER, account_last4: '7254' }),
-      exposure('NVDA', 126.56, 153.05, { observed_at: OLDER, account_last4: '7254' }),
-    ];
-    const book = latestBookExposures(rows);
-    expect(book.map((row) => row.symbol).sort()).toEqual(['CIFR', 'IREN', 'NBIS']);
+    ]);
+    expect(book.map((row) => row.symbol).sort()).toEqual(['CIFR', 'DG', 'IREN', 'NBIS']);
     expect(book.every((row) => row.account_last4 === AGENTIC_LAST4)).toBe(true);
+    expect(book.every((row) => row.observed_at === LIVE)).toBe(true);
+    expect(book.find((row) => row.symbol === 'DG')?.quantity).toBe(14);
     expect(book.find((row) => row.symbol === 'IREN')?.quantity).toBeCloseTo(25.208855);
   });
 
@@ -163,47 +155,67 @@ describe('latest Agentic book', () => {
       ...liveBook,
       exposure('HOOD', 500, 33.4, { observed_at: LATER_PERSONAL, account_last4: '7254' }),
     ]);
-    expect(book.map((row) => row.symbol).sort()).toEqual(['CIFR', 'IREN', 'NBIS']);
+    expect(book.map((row) => row.symbol).sort()).toEqual(['CIFR', 'DG', 'IREN', 'NBIS']);
+  });
+
+  test('other last4 books are ignored when 7638 is missing, not used as a fallback', () => {
+    const book = latestBookExposures([
+      exposure('HOOD', 500, 33.4, { account_last4: '7254' }),
+      exposure('NVDA', 10, 100, { account_last4: '7094' }),
+    ]);
+    expect(book).toEqual([]);
   });
 });
 
 describe('thesis lots', () => {
-  test('binds neocloud_compute to IREN/NBIS/CIFR from filled proposals and held roles', () => {
+  test('binds earnings_gap_structure to the DG lot on the latest 7638 snapshot', () => {
     const theses = attachThesisLots(
       [
         thesis('neocloud_compute', ['CIFR', 'NBIS', 'IREN']),
-        thesis('earnings_gap_structure', ['ANF']),
+        thesis('earnings_gap_structure', ['DG', 'DLTR', 'ANF']),
         thesis('ai_power_nuclear', ['IREN', 'NBIS', 'CEG']),
         thesis('semis_photonics', ['NBIS', 'IREN', 'NVDA']),
       ],
       {
         links: liveLinks,
         proposals: liveProposals,
-        exposures: liveBook,
-        positions: livePositions,
+        exposures: [...yesterdayBook, ...liveBook],
       },
     );
+    const gap = theses.find((row) => row.id === 'earnings_gap_structure');
+    expect(gap?.lots.map((lot) => lot.symbol)).toEqual(['DG']);
+    expect(gap?.lots[0]?.quantity).toBe(14);
+    expect(gap?.lots[0]?.average_cost).toBeCloseTo(132.25);
+    expect(gap?.lots[0]?.invested).toBeCloseTo(14 * 132.25);
+    expect(gap?.lots[0]?.mark).toBeNull();
+    expect(gap?.lots[0]?.pnl).toBeNull();
+    expect(gap?.lots[0]?.note).toBe(MARK_NOT_IN_LEDGER);
     const neocloud = theses.find((row) => row.id === 'neocloud_compute');
     expect(neocloud?.lots.map((lot) => lot.symbol)).toEqual(['CIFR', 'IREN', 'NBIS']);
-    const iren = neocloud?.lots.find((lot) => lot.symbol === 'IREN');
-    expect(iren?.side).toBe('buy');
-    expect(iren?.quantity).toBeCloseTo(25.208855);
-    expect(iren?.average_cost).toBeCloseTo(39.6686);
-    expect(iren?.invested).toBeCloseTo(25.208855 * 39.6686);
-    expect(iren?.mark).toBeNull();
-    expect(iren?.pnl).toBeNull();
-    expect(iren?.note).toBe(MARK_NOT_IN_LEDGER);
-    expect(theses.find((row) => row.id === 'earnings_gap_structure')?.lots).toEqual([]);
     expect(theses.find((row) => row.id === 'ai_power_nuclear')?.lots).toEqual([]);
     expect(theses.find((row) => row.id === 'semis_photonics')?.lots).toEqual([]);
+  });
+
+  test('unheld symbols stay no position, including DLTR on earnings_gap_structure', () => {
+    const theses = attachThesisLots(
+      [thesis('earnings_gap_structure'), thesis('ai_power_nuclear'), thesis('crypto')],
+      {
+        links: liveLinks,
+        proposals: liveProposals,
+        exposures: liveBook,
+      },
+    );
+    expect(theses.find((row) => row.id === 'earnings_gap_structure')?.lots.map((lot) => lot.symbol))
+      .toEqual(['DG']);
+    expect(theses.find((row) => row.id === 'ai_power_nuclear')?.lots).toEqual([]);
+    expect(theses.find((row) => row.id === 'crypto')?.lots).toEqual([]);
   });
 
   test('held role alone binds an open lot when no filled proposal exists', () => {
     const theses = attachThesisLots([thesis('neocloud_compute')], {
       links: [{ thesis_id: 'neocloud_compute', symbol: 'IREN', role: 'held' }],
       proposals: [],
-      exposures: [exposure('IREN', 25.208855, 39.6686)],
-      positions: [],
+      exposures: [exposure('IREN', 25.208855, 39.67)],
     });
     expect(theses[0]?.lots).toHaveLength(1);
     expect(theses[0]?.lots[0]?.symbol).toBe('IREN');
@@ -214,7 +226,6 @@ describe('thesis lots', () => {
       links: liveLinks,
       proposals: liveProposals,
       exposures: liveBook,
-      positions: livePositions,
     });
     expect(theses.every((row) => row.lots.length === 0)).toBe(true);
   });
@@ -223,14 +234,22 @@ describe('thesis lots', () => {
     const theses = attachThesisLots([thesis('neocloud_compute')], {
       links: [{ thesis_id: 'neocloud_compute', symbol: 'IREN', role: 'held' }],
       proposals: [proposal('neocloud_compute', 'IREN', 'filled')],
-      exposures: [exposure('IREN', 25.208855, 39.6686)],
-      positions: [],
+      exposures: [exposure('IREN', 25.208855, 39.67)],
       marks: new Map([['IREN', 40]]),
     });
     const lot = theses[0]?.lots[0];
     expect(lot?.mark).toBe(40);
-    expect(lot?.pnl).toBeCloseTo((40 - 39.6686) * 25.208855);
+    expect(lot?.pnl).toBeCloseTo((40 - 39.67) * 25.208855);
     expect(lot?.note).toBe('');
+  });
+
+  test('8/26 lots are not the live book once a newer 7638 snapshot exists', () => {
+    const theses = attachThesisLots([thesis('earnings_gap_structure')], {
+      links: liveLinks,
+      proposals: liveProposals,
+      exposures: yesterdayBook,
+    });
+    expect(theses[0]?.lots).toEqual([]);
   });
 });
 
@@ -242,15 +261,19 @@ describe('fill log', () => {
         intent('iren', 'IREN', { quantity: 25.208855, notional: 1000 }),
         intent('nbis', 'NBIS', { quantity: 4.653004, notional: 1000 }),
         intent('cifr', 'CIFR', { quantity: 63.211524, notional: 1000 }),
+        intent('dg', 'DG', {
+          quantity: 14,
+          notional: 1851.5,
+          created_at: FILLED_AT,
+          updated_at: FILLED_AT,
+        }),
       ],
     });
-    expect(rows).toHaveLength(3);
-    expect(rows.map((row) => row.symbol)).toEqual(['CIFR', 'IREN', 'NBIS']);
+    expect(rows.map((row) => row.symbol)).toEqual(['CIFR', 'DG', 'IREN', 'NBIS']);
     expect(rows.every((row) => row.source === 'filled_intent')).toBe(true);
-    expect(rows.every((row) => row.status === 'filled')).toBe(true);
-    const iren = rows.find((row) => row.symbol === 'IREN');
-    expect(iren?.price).toBeCloseTo(1000 / 25.208855);
-    expect(iren?.notional).toBe(1000);
+    const dg = rows.find((row) => row.symbol === 'DG');
+    expect(dg?.price).toBeCloseTo(1851.5 / 14);
+    expect(dg?.at).toBe(FILLED_AT);
     expect(fillLogCaption(rows)).toBe('filled intents · broker fills not in ledger');
   });
 
@@ -260,7 +283,7 @@ describe('fill log', () => {
         id: 'fill-iren',
         trade_intent_id: 'iren',
         quantity: 25.208855,
-        price: 39.6686,
+        price: 39.67,
         executed_at: '2026-08-26T19:06:00.000Z',
       },
     ];
@@ -270,8 +293,7 @@ describe('fill log', () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.source).toBe('broker_fill');
-    expect(rows[0]?.price).toBeCloseTo(39.6686);
-    expect(rows[0]?.notional).toBeCloseTo(25.208855 * 39.6686);
+    expect(rows[0]?.price).toBeCloseTo(39.67);
     expect(fillLogCaption(rows)).toBe('broker fills');
   });
 

@@ -1,7 +1,9 @@
-import type { AccountRow, BookNameLine, BookPerformance, PositionRow } from './ledger-types';
-import { nyDateKey } from './ny-date';
+import type { AccountRow, BookNameLine, BookPerformance, ExposureRow } from './ledger-types';
+import { nyDateKey, sameInstant } from './ny-date';
 
 export const NOT_IN_LEDGER = 'not in ledger';
+export const MARK_NOT_IN_LEDGER = 'mark not in ledger';
+export const AGENTIC_LAST4 = '7638';
 
 const AGENTIC_LABEL = /agentic/i;
 
@@ -24,32 +26,61 @@ function lastPriorSession(snapshotsNewestFirst: AccountRow[], latest: AccountRow
 }
 
 /**
- * Proof-account performance from canonical ledger rows.
+ * Latest Agentic book only (last4 7638). Newer `observed_at` wins.
+ * Other last4 books (7254 / 2786 / 7094 / …) stay out — no personal-book fallback.
+ */
+export function latestBookExposures(rows: ExposureRow[]): ExposureRow[] {
+  const agentic = rows.filter((row) => row.account_last4 === AGENTIC_LAST4);
+  if (agentic.length === 0) return [];
+  let latestAt = agentic[0]!.observed_at;
+  for (const row of agentic) {
+    if (row.observed_at > latestAt) latestAt = row.observed_at;
+  }
+  return agentic.filter((row) => row.observed_at === latestAt);
+}
+
+function snapshotAt(snapshots: AccountRow[], observedAt: string): AccountRow | null {
+  return snapshots.find((row) => sameInstant(row.observed_at, observedAt)) ?? null;
+}
+
+/**
+ * Proof-account performance from the latest Agentic 7638 exposure snapshot
+ * plus the matching `account_snapshots` row (same observed_at).
  * Never invents marks or P/L: missing inputs become `null` plus a note.
+ * A newer book never borrows yesterday's NAV/cash.
  */
 export function assembleBookPerformance(input: {
   snapshotsNewestFirst: AccountRow[];
   starting: AccountRow | null;
-  positions: PositionRow[];
+  exposures: ExposureRow[];
+  marks?: ReadonlyMap<string, number>;
 }): BookPerformance {
   const snapshots = agenticSnapshots(input.snapshotsNewestFirst);
-  const latest = snapshots[0] ?? null;
+  const lots = latestBookExposures(input.exposures);
+  const asOf = lots[0]?.observed_at ?? null;
+  const latest = asOf ? snapshotAt(snapshots, asOf) : snapshots[0] ?? null;
   const starting = input.starting && isAgenticAccount(input.starting.account_label)
     ? input.starting
     : snapshots[snapshots.length - 1] ?? null;
 
-  const names: BookNameLine[] = input.positions.map((position) => {
-    const cost = costBasis(position.quantity, position.average_cost);
-    return {
-      symbol: position.symbol,
-      quantity: position.quantity,
-      average_cost: position.average_cost,
-      cost,
-      mark: null,
-      pnl: null,
-      note: 'mark not in ledger',
-    };
-  });
+  const names: BookNameLine[] = [...lots]
+    .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    .map((lot) => {
+      const cost = costBasis(lot.quantity, lot.average_buy_price);
+      const mark = input.marks?.get(lot.symbol) ?? null;
+      const pnl = mark === null || lot.average_buy_price === null
+        ? null
+        : (mark - lot.average_buy_price) * lot.quantity;
+      return {
+        symbol: lot.symbol,
+        quantity: lot.quantity,
+        average_cost: lot.average_buy_price,
+        cost,
+        mark,
+        pnl,
+        note: mark === null ? MARK_NOT_IN_LEDGER : '',
+      };
+    });
 
   const costs = names.map((row) => row.cost);
   const costMissing = names.length === 0 || costs.some((value) => value === null);
@@ -58,6 +89,7 @@ export function assembleBookPerformance(input: {
   const currentNav = latest?.total_value ?? null;
   const startingNav = starting?.total_value ?? null;
   const cash = latest?.cash ?? null;
+  const buyingPower = latest?.buying_power ?? null;
   const deployed = latest?.equity_value ?? null;
 
   let vsStart: number | null = null;
@@ -68,7 +100,7 @@ export function assembleBookPerformance(input: {
   }
 
   let dayPnl: number | null = null;
-  let dayPnlNote = 'no prior-session snapshot in ledger';
+  let dayPnlNote = latest ? 'no prior-session snapshot in ledger' : NOT_IN_LEDGER;
   if (latest) {
     const prior = lastPriorSession(snapshots, latest);
     if (prior) {
@@ -81,14 +113,18 @@ export function assembleBookPerformance(input: {
   let vsCostNote = NOT_IN_LEDGER;
   if (deployed !== null && totalCost !== null) {
     vsCost = deployed - totalCost;
-    vsCostNote = 'equity vs sum(qty × average cost)';
+    vsCostNote = 'equity vs sum(qty × average buy)';
   } else if (names.some((row) => row.average_cost === null)) {
-    vsCostNote = 'average cost missing on an open episode';
+    vsCostNote = 'average buy missing on an open lot';
+  } else if (asOf && !latest) {
+    vsCostNote = NOT_IN_LEDGER;
   }
 
   return {
-    account_label: latest?.account_label ?? null,
-    observed_at: latest?.observed_at ?? null,
+    account_label: latest?.account_label ?? (asOf ? `Agentic ••••${AGENTIC_LAST4}` : null),
+    observed_at: asOf ?? latest?.observed_at ?? null,
+    last4: lots[0]?.account_last4 ?? (asOf ? AGENTIC_LAST4 : null),
+    buying_power: buyingPower,
     starting_nav: startingNav,
     current_nav: currentNav,
     cash,

@@ -322,6 +322,8 @@ export type BookNameLine = {
 export type BookPerformance = {
   account_label: string | null;
   observed_at: string | null;
+  last4: string | null;
+  buying_power: number | null;
   starting_nav: number | null;
   current_nav: number | null;
   cash: number | null;
