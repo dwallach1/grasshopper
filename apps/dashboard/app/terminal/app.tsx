@@ -12,7 +12,9 @@ import {
   surfaceFromPath,
   type DeskSurface,
 } from '../../lib/desk-nav';
-import type { BookPerformance, DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
+import type { BookPerformance, DeskPayload, DeskRoutine, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
+import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
 import { THESIS_STATUSES } from '../../lib/thesis-status';
 import { BacktestsPanel } from './backtests-panel';
 import { SessionControls } from './session-controls';
@@ -354,6 +356,7 @@ function HomePanel({
   const latestEvidence = desk.evidence.slice(0, 8);
   const live = desk.routines.filter((row) => row.status === 'live');
   const retired = desk.routines.filter((row) => row.status === 'retired');
+  const fillLog = desk.fill_log;
   return (
     <div className="term-grid term-grid-home">
       <section className="term-panel term-panel-span">
@@ -363,27 +366,25 @@ function HomePanel({
         </header>
         <BookStrip book={desk.book} />
       </section>
-      <section className="term-panel">
-        <header><b>THESES</b><span>{desk.theses.length}</span></header>
-        <table>
-          <thead><tr><th>Id</th><th>St</th><th>Conf</th><th>Stance</th></tr></thead>
-          <tbody>
-            {desk.theses.map((row) => (
-              <tr
-                key={row.id}
-                className={row.id === selectedThesisId ? 'sel' : ''}
-                onClick={() => onThesis(row.id)}
-              >
-                <td className="sym">{row.id}</td>
-                <td className={toneForStatus(row.status)}>{row.status}</td>
-                <td>{row.confidence}</td>
-                <td>{row.stance}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="term-panel term-home-theses">
+        <header><b>THESES</b><span>open lots from the Agentic book</span></header>
+        {desk.theses.map((row) => (
+          <ThesisSkin
+            key={row.id}
+            row={row}
+            selected={row.id === selectedThesisId}
+            onSelect={onThesis}
+          />
+        ))}
       </section>
-      <section className="term-panel">
+      <section className="term-panel term-home-fills">
+        <header>
+          <b>FILLS</b>
+          <span>{fillLogCaption(fillLog)}</span>
+        </header>
+        <FillLogTable rows={fillLog} />
+      </section>
+      <section className="term-panel term-home-tape">
         <header><b>TAPE</b><span>runs + evidence</span></header>
         {desk.runs.slice(0, 6).map((run) => (
           <div key={run.id} className="term-line">
@@ -401,7 +402,7 @@ function HomePanel({
           </div>
         ))}
       </section>
-      <section className="term-panel">
+      <section className="term-panel term-home-routines">
         <header><b>QUANTANAMO</b><span>Grok Bot routines</span></header>
         {live.map((row) => (
           <RoutineLine key={row.id} row={row} now={now} />
@@ -419,6 +420,78 @@ function HomePanel({
         ))}
       </section>
     </div>
+  );
+}
+
+function ThesisSkin({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ThesisRow;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div
+      className={selected ? 'term-thesis sel' : 'term-thesis'}
+      onClick={() => onSelect(row.id)}
+    >
+      <div className="term-thesis-head">
+        <b className="sym">{row.id}</b>
+        <span className={toneForStatus(row.status)}>{row.status}</span>
+        <i>{row.confidence} · {row.stance}</i>
+      </div>
+      {row.lots.length === 0 && <p className="empty term-thesis-empty">{NO_POSITION}</p>}
+      {row.lots.map((lot) => (
+        <LotBar key={`${row.id}-${lot.symbol}`} lot={lot} />
+      ))}
+    </div>
+  );
+}
+
+function LotBar({ lot }: { lot: ThesisLot }) {
+  return (
+    <div className="term-skin">
+      <div>
+        <i>Position</i>
+        <b>{lot.symbol} · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
+      </div>
+      <div>
+        <i>Invested</i>
+        <b>{ledgerFigure(lot.invested, moneyPrecise)}</b>
+      </div>
+      <div>
+        <i>Current</i>
+        <b className={pnlClass(lot.pnl)}>{currentCell(lot)}</b>
+      </div>
+    </div>
+  );
+}
+
+function currentCell(lot: ThesisLot): string {
+  if (lot.mark === null) return lot.note || 'mark not in ledger';
+  if (lot.pnl === null) return moneyPrecise(lot.mark);
+  return `${moneyPrecise(lot.mark)} ${signedMoney(lot.pnl)}`;
+}
+
+function FillLogTable({ rows }: { rows: FillLogRow[] }) {
+  if (!rows.length) {
+    return <p className="empty">{NOT_IN_LEDGER}</p>;
+  }
+  return (
+    <>
+      {rows.map((row) => (
+        <div key={row.id} className="term-line">
+          <b className="sym">{row.symbol || NOT_IN_LEDGER}</b>
+          <span>
+            {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)} / {ledgerFigure(row.notional, moneyPrecise)}
+          </span>
+          <i className={toneForStatus(row.status)}>{row.status}</i>
+          <p>{nyStamp(row.at)}</p>
+        </div>
+      ))}
+    </>
   );
 }
 

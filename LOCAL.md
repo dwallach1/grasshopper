@@ -83,6 +83,8 @@ Logged **in**:
 
 On **Home** the first panel is the Agentic proof book from `account_snapshots` + `position_episodes` (not `dashboard_snapshots.current`): current NAV vs the first Agentic snapshot (~$5,000), cash vs deployed, day P/L when a prior NY-session snapshot exists, otherwise vs average cost. Per-name mark is shown only when the ledger has it — otherwise the cell says **not in ledger** / **mark not in ledger**. IREN / NBIS / CIFR are the 2026-08-26 fills.
 
+Each thesis on Home shows its linked open lots (symbol, side, qty, cost, P&L) from the latest Agentic `portfolio_exposure` joined through `trade_proposals.thesis_id` (filled/approved) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position**. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first. Empty fills say **not in ledger**.
+
 On **Theses** you should see the eight theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`) with statuses `forming` or `hardening`.
 
 On **Book** you should see the same Agentic book plus intents.

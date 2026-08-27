@@ -147,7 +147,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Home | Agentic book performance, then tape / routines |
+| 1 | Home | Agentic book, theses with open lots (entry / size / P&L or **mark not in ledger**), fill log, then tape / routines |
 | 2 | Book | Episodes, intents, same book numbers |
 | 3 | Theses | Lifecycle + evidence |
 | 4 | Runs | Ledger runs + QUANTANAMO routines (retired jobs marked retired) |
@@ -159,7 +159,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–9`, `g` then letter, `j/k` thesis, `r` refresh, `?` help. No filter box.
 
-Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, `theses`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`.
+Canonical reads: `account_snapshots`, `position_episodes`, `trade_intents`, `broker_fills`, `portfolio_exposure`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`.
 
 ---
 

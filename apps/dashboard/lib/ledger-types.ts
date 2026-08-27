@@ -1,6 +1,23 @@
 import type { ParsedRunNotes } from './run-notes';
 import type { ThesisStatus } from './thesis-status';
 
+export type ThesisSymbolLink = {
+  thesis_id: string;
+  symbol: string;
+  role: string;
+};
+
+export type ThesisLot = {
+  symbol: string;
+  side: string;
+  quantity: number;
+  average_cost: number | null;
+  invested: number | null;
+  mark: number | null;
+  pnl: number | null;
+  note: string;
+};
+
 export type ThesisRow = {
   id: string;
   name: string;
@@ -14,6 +31,7 @@ export type ThesisRow = {
   created_at: string;
   updated_at: string;
   symbols: string[];
+  lots: ThesisLot[];
 };
 
 export type ThesisEvidenceRow = {
@@ -344,10 +362,12 @@ export type ExposureRow = {
   quantity: number;
   average_buy_price: number | null;
   observed_at: string;
+  account_last4: string;
 };
 
 export type IntentRow = {
   id: string;
+  account_key: string;
   symbol: string;
   side: string;
   status: string;
@@ -378,6 +398,19 @@ export type FillRow = {
   quantity: number;
   price: number;
   executed_at: string;
+};
+
+export type FillLogRow = {
+  id: string;
+  at: string;
+  symbol: string;
+  side: string;
+  quantity: number | null;
+  price: number | null;
+  notional: number | null;
+  status: string;
+  source: 'broker_fill' | 'filled_intent';
+  note: string;
 };
 
 export type InsightRow = {
@@ -492,6 +525,7 @@ export type DeskPayload = {
   intents: IntentRow[];
   proposals: ProposalRow[];
   fills: FillRow[];
+  fill_log: FillLogRow[];
   insights: InsightRow[];
   predictions: PredictionRow[];
   risk_controls: RiskControlRow[];
