@@ -39,10 +39,9 @@ import {
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import { isPostgresPermissionDenied, openSql } from './postgres';
-import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures } from './book-performance';
+import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures, snapshotForBook } from './book-performance';
 import { assembleRoutines } from './routines';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
-import { sameInstant } from './ny-date';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
@@ -528,8 +527,9 @@ function bookFields(
     exposures,
   });
   return {
-    account: snapshots.find((row) => book.observed_at !== null && sameInstant(row.observed_at, book.observed_at))
-      ?? (book.observed_at ? null : snapshots[0] ?? starting),
+    account: book.observed_at
+      ? snapshotForBook(snapshots, book.observed_at)
+      : snapshots[0] ?? starting,
     snapshots,
     book,
     positions,

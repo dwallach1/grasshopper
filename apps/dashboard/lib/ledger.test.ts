@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseDeskAuthMethods } from './auth-methods';
 import { isPublishableKey } from './auth-public';
 import { deskAuthErrorMessage, firstSearchParam, isLoopbackIpHost } from './auth-search';
+import { mapAccounts } from './ledger-map';
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
 import { isPostgresPermissionDenied } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
@@ -28,6 +29,27 @@ describe('asFiniteNumber', () => {
     expect(asFiniteNumber('25.2088550000', 'qty')).toBeCloseTo(25.208855);
     expect(asOptionalNumber(null, 'qty')).toBeNull();
     expect(asOptionalNumber('', 'qty')).toBeNull();
+  });
+});
+
+describe('mapAccounts', () => {
+  test('coerces PostgREST numeric strings on Agentic snapshots', () => {
+    const rows = mapAccounts([
+      {
+        observed_at: '2026-08-27T16:22:10.669472+00:00',
+        account_label: 'Agentic',
+        total_value: '5056.2710',
+        equity_value: '4907.7710',
+        cash: '148.50',
+        buying_power: '148.50',
+        source: 'robinhood_mcp',
+      },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.total_value).toBeCloseTo(5056.271);
+    expect(rows[0]?.equity_value).toBeCloseTo(4907.771);
+    expect(rows[0]?.cash).toBeCloseTo(148.5);
+    expect(rows[0]?.buying_power).toBeCloseTo(148.5);
   });
 });
 

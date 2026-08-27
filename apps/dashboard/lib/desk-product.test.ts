@@ -28,12 +28,17 @@ function snapshot(partial: Partial<AccountRow> & Pick<AccountRow, 'observed_at' 
   };
 }
 
-function exposure(symbol: string, quantity: number, average_buy_price: number): ExposureRow {
+function exposure(
+  symbol: string,
+  quantity: number,
+  average_buy_price: number,
+  observed_at = '2026-08-27T13:22:00.000Z',
+): ExposureRow {
   return {
     symbol,
     quantity,
     average_buy_price,
-    observed_at: '2026-08-27T13:22:00.000Z',
+    observed_at,
     account_last4: AGENTIC_LAST4,
   };
 }
@@ -142,6 +147,107 @@ describe('Agentic book performance', () => {
     expect(book.names.every((row) => row.note === 'mark not in ledger')).toBe(true);
     expect(book.day_pnl).toBeCloseTo(5134.57473627 - 5002.99);
     expect(nyDateKey(latest.observed_at)).toBe('2026-08-27');
+  });
+
+  test('joins Agentic NAV when lots trail the snapshot by nine seconds', () => {
+    const starting = snapshot({
+      observed_at: '2026-08-23T20:26:25.000Z',
+      total_value: 5000,
+      cash: 5000,
+      equity_value: 0,
+    });
+    const prior = snapshot({
+      observed_at: '2026-08-26T20:03:24.218Z',
+      total_value: 5002.99,
+      cash: 2000,
+      equity_value: 3002.99,
+      buying_power: 2000,
+    });
+    const morning = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
+    });
+    const mid = snapshot({
+      observed_at: '2026-08-27T15:29:00.000Z',
+      total_value: 5100,
+      cash: 148.5,
+      equity_value: 4951.5,
+      buying_power: 148.5,
+    });
+    const latest = snapshot({
+      observed_at: '2026-08-27T16:22:10.669472Z',
+      total_value: 5056.271,
+      cash: 148.5,
+      equity_value: 4907.771,
+      buying_power: 148.5,
+    });
+    const lotAt = '2026-08-27T16:22:19.730934Z';
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [latest, mid, morning, prior, starting],
+      starting,
+      exposures: [
+        exposure('CIFR', 63.211524, 15.82, lotAt),
+        exposure('DG', 14, 132.25, lotAt),
+        exposure('IREN', 25.208855, 39.67, lotAt),
+        exposure('NBIS', 4.653004, 214.91, lotAt),
+      ],
+    });
+    expect(book.current_nav).toBeCloseTo(5056.271);
+    expect(book.cash).toBeCloseTo(148.5);
+    expect(book.buying_power).toBeCloseTo(148.5);
+    expect(book.deployed).toBeCloseTo(4907.771);
+    expect(book.vs_start).toBeCloseTo(56.271);
+    expect(book.starting_nav).toBe(5000);
+    expect(book.day_pnl).toBeCloseTo(5056.271 - 5002.99);
+    expect(book.observed_at).toBe(lotAt);
+    expect(book.last4).toBe(AGENTIC_LAST4);
+  });
+
+  test('still fills same-day Agentic NAV when lots are minutes off the snapshot', () => {
+    const latest = snapshot({
+      observed_at: '2026-08-27T16:10:00.000Z',
+      total_value: 5056.271,
+      cash: 148.5,
+      equity_value: 4907.771,
+      buying_power: 148.5,
+    });
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [latest],
+      starting: snapshot({ observed_at: '2026-08-23T20:26:25.000Z', total_value: 5000 }),
+      exposures: [exposure('DG', 14, 132.25, '2026-08-27T16:22:19.730934Z')],
+    });
+    expect(book.current_nav).toBeCloseTo(5056.271);
+    expect(book.cash).toBeCloseTo(148.5);
+    expect(book.buying_power).toBeCloseTo(148.5);
+    expect(book.deployed).toBeCloseTo(4907.771);
+    expect(book.vs_start).toBeCloseTo(56.271);
+  });
+
+  test('prefers the nearer same-day snapshot over a later one on that NY day', () => {
+    const morning = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
+    });
+    const afternoon = snapshot({
+      observed_at: '2026-08-27T16:22:10.669472Z',
+      total_value: 5056.271,
+      cash: 148.5,
+      equity_value: 4907.771,
+      buying_power: 148.5,
+    });
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [afternoon, morning],
+      starting: snapshot({ observed_at: '2026-08-23T20:26:25.000Z', total_value: 5000 }),
+      exposures: [exposure('DG', 14, 132.25, '2026-08-27T13:22:09.000Z')],
+    });
+    expect(book.current_nav).toBeCloseTo(5134.57473627);
+    expect(book.deployed).toBeCloseTo(4986.07473627);
   });
 
   test('does not keep yesterday NAV when the 7638 book has no matching snapshot', () => {
