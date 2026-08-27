@@ -31,15 +31,19 @@ describe('desk IA smoke', () => {
     expect(nav).not.toMatch(/label: 'Risk'/);
   });
 
-  test('exploded viz is Book-only and table-first', async () => {
+  test('Book diagnostic is table-first and not a spinning cluster', async () => {
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const app = await readDashboard('app/terminal/app.tsx');
-    const theses = await readDashboard('app/terminal/app.tsx');
+    const ribbon = await readDashboard('app/terminal/book-nav-ribbon.tsx');
     expect(book).toContain('<BookTable');
-    expect(book.indexOf('<BookTable')).toBeLessThan(book.indexOf('<BookExploded'));
+    expect(book).toContain('<BookDiagnostic');
+    expect(book.indexOf('<BookTable')).toBeLessThan(book.indexOf('<BookDiagnostic'));
     expect(book).toContain('table is canonical');
+    expect(book).not.toContain('BookExploded');
+    expect(book).not.toContain('cluster.rotation');
     expect(app).not.toContain('BookExploded');
-    expect(theses).not.toContain('book-exploded');
-    expect(theses).not.toContain('from \'three\'');
+    expect(app).not.toContain('from \'three\'');
+    expect(ribbon).not.toContain('rotation.y');
+    expect(ribbon).toContain('OrthographicCamera');
   });
 });

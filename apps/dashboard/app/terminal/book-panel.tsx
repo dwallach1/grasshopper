@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from 'react';
 
-import { bookSlabs } from '../../lib/book-slabs';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import { nextHeldCatalyst } from '../../lib/held-catalyst';
 import type { BookPerformance, DeskPayload, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
 import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
-import { BookExploded } from './book-exploded';
+import { BookDiagnostic } from './book-diagnostic';
 import {
   ledgerFigure,
   moneyPrecise,
@@ -26,7 +25,6 @@ export function BookPanel({
   nowIso: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const slabs = useMemo(() => bookSlabs(desk.book), [desk.book]);
   const catalyst = useMemo(
     () => nextHeldCatalyst(desk.catalysts, desk.book.names, nowIso),
     [desk.book.names, desk.catalysts, nowIso],
@@ -57,17 +55,11 @@ export function BookPanel({
           onSelect={setSelectedId}
         />
       </section>
-      <section className="term-panel term-book-viz" aria-hidden={false}>
-        <header>
-          <b>EXPLODED</b>
-          <span>wireframe · size by notional · P/L color only when marked</span>
-        </header>
-        <BookExploded
-          slabs={slabs}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
-      </section>
+      <BookDiagnostic
+        desk={desk}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
       <section className="term-panel term-book-catalyst">
         <header>
           <b>NEXT DATED CATALYST</b>

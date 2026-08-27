@@ -8,7 +8,11 @@ export type BookSlab = {
   id: string;
   kind: BookSlabKind;
   symbol: string;
-  /** Visual mass: marked notional, else cost, else 0. Never a fabricated mark. */
+  quantity: number | null;
+  average_cost: number | null;
+  cost: number | null;
+  mark: number | null;
+  /** Visual mass: marked notional, else cost, else leftover cash, else 0. */
   mass: number;
   /** quantity × mark when the ledger has a mark; cash amount for leftover; else null. */
   notional: number | null;
@@ -30,6 +34,10 @@ function lotSlab(row: BookNameLine): BookSlab {
     id: row.symbol,
     kind: 'lot',
     symbol: row.symbol,
+    quantity: row.quantity,
+    average_cost: row.average_cost,
+    cost: row.cost,
+    mark: row.mark,
     mass: notional ?? row.cost ?? 0,
     notional,
     pnl: hasPnl ? row.pnl : null,
@@ -45,6 +53,10 @@ function cashSlab(book: BookPerformance): BookSlab {
       id: 'CASH',
       kind: 'cash',
       symbol: 'CASH',
+      quantity: null,
+      average_cost: null,
+      cost: null,
+      mark: null,
       mass: 0,
       notional: null,
       pnl: null,
@@ -56,6 +68,10 @@ function cashSlab(book: BookPerformance): BookSlab {
     id: 'CASH',
     kind: 'cash',
     symbol: 'CASH',
+    quantity: null,
+    average_cost: null,
+    cost: null,
+    mark: null,
     mass: leftover,
     notional: leftover,
     pnl: null,
@@ -65,7 +81,7 @@ function cashSlab(book: BookPerformance): BookSlab {
 }
 
 /**
- * Exploded-book primitives. Lots size from ledger notional (or cost if unmarked).
+ * Lot-tile primitives. Size from ledger notional (or cost if unmarked).
  * Cash is leftover mass, never a fake fifth equity. P/L tone only when both
  * cost and mark exist.
  */
@@ -79,4 +95,25 @@ export function slabTone(slab: BookSlab): BookSlabTone {
   if (slab.pnl > 0) return 'up';
   if (slab.pnl < 0) return 'down';
   return 'neutral';
+}
+
+export type AllocSlice = {
+  id: string;
+  symbol: string;
+  mass: number;
+  pct: number | null;
+  tone: BookSlabTone;
+  muted: boolean;
+};
+
+/** Stacked allocation vs NAV. Missing NAV → pct null, never a invented share. */
+export function allocationSlices(slabs: readonly BookSlab[], nav: number | null): AllocSlice[] {
+  return slabs.map((slab) => ({
+    id: slab.id,
+    symbol: slab.symbol,
+    mass: slab.mass,
+    pct: nav !== null && nav > 0 ? slab.mass / nav : null,
+    tone: slabTone(slab),
+    muted: slab.muted,
+  }));
 }

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { assembleBookPerformance, isAgenticAccount, MARK_NOT_IN_LEDGER, NOT_IN_LEDGER } from './book-performance';
-import { bookSlabs, slabTone } from './book-slabs';
+import { allocationSlices, bookSlabs, slabTone } from './book-slabs';
+import { navPathSeries } from './book-nav-path';
 import {
   canonicalDeskPath,
   DESK_PATH_REDIRECTS,
@@ -260,7 +261,7 @@ describe('QUANTANAMO routines', () => {
   });
 });
 
-describe('exploded book slabs', () => {
+describe('book lot tiles', () => {
   test('sizes lots from ledger mass and keeps cash as leftover, never invented P/L tone', () => {
     const latest = snapshot({
       observed_at: '2026-08-27T13:22:00.000Z',
@@ -316,6 +317,59 @@ describe('exploded book slabs', () => {
     expect(cash?.muted).toBe(true);
     expect(cash?.note).toBe(NOT_IN_LEDGER);
     expect(slabTone(cash!)).toBe('cash');
+  });
+});
+
+describe('Agentic NAV path series', () => {
+  test('keeps sparse Agentic snapshots, windows, and never uses a personal book', () => {
+    const starting = snapshot({
+      observed_at: '2026-08-23T20:26:25.000Z',
+      total_value: 5000,
+    });
+    const prior = snapshot({
+      observed_at: '2026-08-26T20:03:24.218Z',
+      total_value: 5002.99,
+    });
+    const latest = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+    });
+    const personal = snapshot({
+      account_label: 'robinhood_7254',
+      observed_at: '2026-08-27T14:00:00.000Z',
+      total_value: 480261.61,
+    });
+    const newestFirst = [personal, latest, prior, starting];
+    const all = navPathSeries({
+      snapshotsNewestFirst: newestFirst,
+      window: 'all',
+      latestObservedAt: latest.observed_at,
+    });
+    expect(all.map((row) => row.value)).toEqual([5000, 5002.99, 5134.57473627]);
+    expect(all[0]?.time).toBe(Date.parse(starting.observed_at));
+    const session = navPathSeries({
+      snapshotsNewestFirst: newestFirst,
+      window: 'session',
+      latestObservedAt: latest.observed_at,
+    });
+    expect(session.map((row) => row.value)).toEqual([5134.57473627]);
+    const day = navPathSeries({
+      snapshotsNewestFirst: newestFirst,
+      window: '1d',
+      latestObservedAt: latest.observed_at,
+    });
+    expect(day.map((row) => row.value)).toEqual([5002.99, 5134.57473627]);
+  });
+
+  test('allocation pct is null when NAV is missing — never invented', () => {
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [],
+      starting: null,
+      exposures: [exposure('DG', 14, 132.25)],
+    });
+    const slices = allocationSlices(bookSlabs(book), book.current_nav);
+    expect(book.current_nav).toBeNull();
+    expect(slices.every((row) => row.pct === null)).toBe(true);
   });
 });
 

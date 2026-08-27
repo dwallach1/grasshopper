@@ -147,7 +147,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Book | Landing (`/`). Agentic last4 7638 NAV / cash / lots from the latest `portfolio_exposure` snapshot plus the matching `account_snapshots` row. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Exploded wireframe of open lots beside the table — table stays canonical; unmarked lots are muted, never a fake P/L color. |
+| 1 | Book | Landing (`/`). Agentic last4 7638 NAV / cash / lots from the latest `portfolio_exposure` snapshot plus the matching `account_snapshots` row. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic beside/above the table: lot tiles (inner plate sized by notional, Δ only when marked) + interpolating NAV path from Agentic snapshots. Table stays canonical; unmarked lots are muted, never a fake P/L color. |
 | 2 | Theses | Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons pane |
 | 3 | Events | Catalysts + `research_queue` (pre-event sheet; not AI-filtered). `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
