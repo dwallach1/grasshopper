@@ -2188,6 +2188,9 @@ a:focus-visible {
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   background: var(--canvas);
   color: var(--text);
 }
@@ -2288,6 +2291,8 @@ a:focus-visible {
   gap: 8px;
   height: 100%;
   align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .term-grid-home {
@@ -2583,6 +2588,10 @@ a:focus-visible {
 
 .up {
   color: var(--green);
+}
+
+.muted {
+  color: var(--text-3);
 }
 
 .empty {

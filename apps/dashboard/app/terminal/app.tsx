@@ -476,36 +476,22 @@ function currentCell(lot: ThesisLot): string {
 }
 
 function FillLogTable({ rows }: { rows: FillLogRow[] }) {
+  if (!rows.length) {
+    return <p className="empty">{NOT_IN_LEDGER}</p>;
+  }
   return (
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Sym</th>
-          <th>Side</th>
-          <th>Qty</th>
-          <th>Price</th>
-          <th>Notional</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id}>
-            <td>{nyStamp(row.at)}</td>
-            <td className="sym">{row.symbol || NOT_IN_LEDGER}</td>
-            <td>{row.side || NOT_IN_LEDGER}</td>
-            <td>{qty(row.quantity)}</td>
-            <td>{row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)}</td>
-            <td>{ledgerFigure(row.notional, moneyPrecise)}</td>
-            <td className={toneForStatus(row.status)}>{row.status}</td>
-          </tr>
-        ))}
-        {!rows.length && (
-          <tr><td colSpan={7} className="empty">{NOT_IN_LEDGER}</td></tr>
-        )}
-      </tbody>
-    </table>
+    <>
+      {rows.map((row) => (
+        <div key={row.id} className="term-line">
+          <b className="sym">{row.symbol || NOT_IN_LEDGER}</b>
+          <span>
+            {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)} / {ledgerFigure(row.notional, moneyPrecise)}
+          </span>
+          <i className={toneForStatus(row.status)}>{row.status}</i>
+          <p>{nyStamp(row.at)}</p>
+        </div>
+      ))}
+    </>
   );
 }
 
