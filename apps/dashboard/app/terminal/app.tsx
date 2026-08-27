@@ -508,7 +508,7 @@ function BookPanel({ desk }: { desk: DeskPayload }) {
         <header>
           <b>LIVE BOOK</b>
           <span>
-            {desk.book.account_label || 'Agentic'} ••••{desk.book.last4 || '7638'} · {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}
+            {desk.book.account_label || 'Agentic'} · last4 {desk.book.last4 || '7638'} · {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}
           </span>
         </header>
         <BookStrip book={desk.book} />
