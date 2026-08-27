@@ -113,3 +113,10 @@ export function ledgerCount(value: number | null | undefined): string {
   if (value === null || value === undefined) return 'not in ledger';
   return String(value);
 }
+
+export function pnlClass(value: number | null): string {
+  if (value === null) return 'muted';
+  if (value > 0) return 'up';
+  if (value < 0) return 'down';
+  return 'muted';
+}

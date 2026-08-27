@@ -1,8 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 
-import { assembleBookPerformance, isAgenticAccount } from './book-performance';
-import { DESK_TABS, surfaceFromGoLetter, surfaceFromPath } from './desk-nav';
-import type { AccountRow, AutomationRow, CloudRunRow, ExposureRow, RunRow } from './ledger-types';
+import { assembleBookPerformance, isAgenticAccount, MARK_NOT_IN_LEDGER, NOT_IN_LEDGER } from './book-performance';
+import { bookSlabs, slabTone } from './book-slabs';
+import {
+  canonicalDeskPath,
+  DESK_PATH_REDIRECTS,
+  DESK_SURFACES,
+  DESK_TABS,
+  surfaceFromGoLetter,
+  surfaceFromPath,
+} from './desk-nav';
+import { nextHeldCatalyst } from './held-catalyst';
+import type { AccountRow, AutomationRow, CatalystRow, CloudRunRow, ExposureRow, RunRow } from './ledger-types';
 import { nyDateKey } from './ny-date';
 import { assembleRoutines } from './routines';
 import { AGENTIC_LAST4 } from './thesis-book';
@@ -29,27 +38,60 @@ function exposure(symbol: string, quantity: number, average_buy_price: number): 
 }
 
 describe('desk nav labels', () => {
-  test('tab bar uses spelled-out words, not 3–4 letter codes', () => {
+  test('four operator tabs: Book landing, Theses, Events, Tests', () => {
     const labels = DESK_TABS.map((tab) => tab.label);
-    expect(labels).toEqual([
-      'Home', 'Book', 'Theses', 'Runs', 'Tests', 'Catalysts', 'Lessons', 'Ontology', 'Risk',
-    ]);
+    expect(labels).toEqual(['Book', 'Theses', 'Events', 'Tests']);
+    expect(DESK_TABS.map((tab) => tab.id)).toEqual(['book', 'theses', 'events', 'backtests']);
+    expect(DESK_TABS.map((tab) => tab.key)).toEqual(['1', '2', '3', '4']);
+    expect(DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/theses', '/events', '/backtests']);
+    expect(DESK_TABS.map((tab) => tab.go)).toEqual(['b', 't', 'c', 'e']);
+    expect(DESK_SURFACES).toEqual(['book', 'theses', 'events', 'backtests']);
+    expect(labels).not.toContain('Home');
+    expect(labels).not.toContain('Risk');
+    expect(labels).not.toContain('Ontology');
+    expect(labels).not.toContain('Runs');
+    expect(labels).not.toContain('Lessons');
+    expect(DESK_TABS.some((tab) => tab.go === 'r')).toBe(false);
     for (const label of labels) {
       expect(label.length).toBeGreaterThan(3);
       expect(/^[A-Z]{3,4}$/.test(label)).toBe(false);
     }
-    expect(DESK_TABS.map((tab) => tab.key)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
   });
 
-  test('path and go-letter map to the same surfaces', () => {
-    expect(surfaceFromPath('/')).toBe('home');
+  test('/ is the book surface; retired paths fold in and redirect', () => {
+    expect(surfaceFromPath('/')).toBe('book');
     expect(surfaceFromPath('/book')).toBe('book');
-    expect(surfaceFromPath('/learnings')).toBe('learnings');
-    expect(surfaceFromGoLetter('h')).toBe('home');
+    expect(surfaceFromPath('/risk')).toBe('book');
+    expect(surfaceFromPath('/runs')).toBe('book');
+    expect(surfaceFromPath('/home')).toBe('book');
+    expect(surfaceFromPath('/events')).toBe('events');
+    expect(surfaceFromPath('/catalysts')).toBe('events');
+    expect(surfaceFromPath('/theses')).toBe('theses');
+    expect(surfaceFromPath('/ontology')).toBe('theses');
+    expect(surfaceFromPath('/learnings')).toBe('theses');
+    expect(surfaceFromPath('/backtests')).toBe('backtests');
+    expect(canonicalDeskPath('/book')).toBe('/');
+    expect(canonicalDeskPath('/catalysts')).toBe('/events');
+    expect(canonicalDeskPath('/ontology')).toBe('/theses');
+    expect(canonicalDeskPath('/risk')).toBe('/');
+    expect(canonicalDeskPath('/runs')).toBe('/');
+    expect(canonicalDeskPath('/learnings')).toBe('/theses');
+    expect(DESK_PATH_REDIRECTS.map((row) => row.source)).toEqual([
+      '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings',
+    ]);
+  });
+
+  test('path and go-letter map to the same surfaces without colliding with r refresh', () => {
     expect(surfaceFromGoLetter('b')).toBe('book');
-    expect(surfaceFromGoLetter('k')).toBe('backtests');
+    expect(surfaceFromGoLetter('t')).toBe('theses');
+    expect(surfaceFromGoLetter('c')).toBe('events');
     expect(surfaceFromGoLetter('e')).toBe('backtests');
-    expect(surfaceFromGoLetter('i')).toBe('risk');
+    expect(surfaceFromGoLetter('h')).toBe('book');
+    expect(surfaceFromGoLetter('k')).toBe('backtests');
+    expect(surfaceFromGoLetter('l')).toBe('theses');
+    expect(surfaceFromGoLetter('o')).toBe('theses');
+    expect(surfaceFromGoLetter('i')).toBe('book');
+    expect(surfaceFromGoLetter('r')).toBeNull();
   });
 });
 
@@ -217,3 +259,126 @@ describe('QUANTANAMO routines', () => {
     expect(retired.every((row) => row.status === 'retired')).toBe(true);
   });
 });
+
+describe('exploded book slabs', () => {
+  test('sizes lots from ledger mass and keeps cash as leftover, never invented P/L tone', () => {
+    const latest = snapshot({
+      observed_at: '2026-08-27T13:22:00.000Z',
+      total_value: 5134.57473627,
+      cash: 148.5,
+      equity_value: 4986.07473627,
+      buying_power: 148.5,
+    });
+    const unmarked = assembleBookPerformance({
+      snapshotsNewestFirst: [latest],
+      starting: latest,
+      exposures: [
+        exposure('IREN', 25.208855, 39.67),
+        exposure('NBIS', 4.653004, 214.91),
+        exposure('CIFR', 63.211524, 15.82),
+        exposure('DG', 14, 132.25),
+      ],
+    });
+    const slabs = bookSlabs(unmarked);
+    const lots = slabs.filter((row) => row.kind === 'lot');
+    const cash = slabs.find((row) => row.kind === 'cash');
+    expect(lots.map((row) => row.symbol)).toEqual(['CIFR', 'DG', 'IREN', 'NBIS']);
+    expect(lots.every((row) => row.muted && row.pnl === null && row.notional === null)).toBe(true);
+    expect(lots.every((row) => slabTone(row) === 'neutral')).toBe(true);
+    expect(lots.every((row) => row.note === MARK_NOT_IN_LEDGER)).toBe(true);
+    expect(lots.every((row) => row.mass > 0)).toBe(true);
+    expect(cash?.symbol).toBe('CASH');
+    expect(cash?.kind).toBe('cash');
+    expect(cash?.notional).toBeCloseTo(148.5);
+    expect(slabTone(cash!)).toBe('cash');
+
+    const marked = assembleBookPerformance({
+      snapshotsNewestFirst: [latest],
+      starting: latest,
+      exposures: [exposure('DG', 14, 132.25)],
+      marks: new Map([['DG', 140]]),
+    });
+    const dg = bookSlabs(marked).find((row) => row.id === 'DG');
+    expect(dg?.muted).toBe(false);
+    expect(dg?.notional).toBeCloseTo(14 * 140);
+    expect(dg?.pnl).toBeCloseTo((140 - 132.25) * 14);
+    expect(slabTone(dg!)).toBe('up');
+  });
+
+  test('cash missing from the ledger is leftover mass labeled not in ledger', () => {
+    const book = assembleBookPerformance({
+      snapshotsNewestFirst: [],
+      starting: null,
+      exposures: [exposure('DG', 14, 132.25)],
+    });
+    const cash = bookSlabs(book).find((row) => row.kind === 'cash');
+    expect(cash?.notional).toBeNull();
+    expect(cash?.muted).toBe(true);
+    expect(cash?.note).toBe(NOT_IN_LEDGER);
+    expect(slabTone(cash!)).toBe('cash');
+  });
+});
+
+describe('next dated catalyst on held names', () => {
+  test('picks the soonest dated event on an open lot and ignores AI-only filtering', () => {
+    const names = [{ symbol: 'IREN' }, { symbol: 'DG' }] as const;
+    const rows: CatalystRow[] = [
+      {
+        id: 1,
+        thesis_id: 'software_ai_apps',
+        symbol: 'NVDA',
+        catalyst_type: 'earnings',
+        event_date: '2026-08-28',
+        summary: 'NVDA print',
+        source: 'test',
+        status: 'upcoming',
+        created_at: '2026-08-20T00:00:00.000Z',
+      },
+      {
+        id: 2,
+        thesis_id: 'neocloud_compute',
+        symbol: 'IREN',
+        catalyst_type: 'earnings',
+        event_date: '2026-09-02',
+        summary: 'IREN print',
+        source: 'test',
+        status: 'upcoming',
+        created_at: '2026-08-20T00:00:00.000Z',
+      },
+      {
+        id: 3,
+        thesis_id: 'retail',
+        symbol: 'DG',
+        catalyst_type: 'earnings',
+        event_date: '2026-08-29',
+        summary: 'DG print',
+        source: 'test',
+        status: 'upcoming',
+        created_at: '2026-08-20T00:00:00.000Z',
+      },
+      {
+        id: 4,
+        thesis_id: 'neocloud_compute',
+        symbol: 'IREN',
+        catalyst_type: 'earnings',
+        event_date: '2026-08-20',
+        summary: 'already printed',
+        source: 'test',
+        status: 'upcoming',
+        created_at: '2026-08-01T00:00:00.000Z',
+      },
+    ];
+    const next = nextHeldCatalyst(rows, [...names].map((row) => ({
+      symbol: row.symbol,
+      quantity: 1,
+      average_cost: 1,
+      cost: 1,
+      mark: null,
+      pnl: null,
+      note: MARK_NOT_IN_LEDGER,
+    })), '2026-08-27T13:22:00.000Z');
+    expect(next?.symbol).toBe('DG');
+    expect(next?.event_date).toBe('2026-08-29');
+  });
+});
+

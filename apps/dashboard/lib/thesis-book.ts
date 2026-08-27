@@ -157,7 +157,7 @@ function priceFromIntent(intent: IntentRow): number | null {
 }
 
 /**
- * Home fill tape. Prefer `broker_fills`; if that table is empty, show filled
+ * Book fill tape. Prefer `broker_fills`; if that table is empty, show filled
  * trade_intents. Never invent a price — derive from ledger qty/notional only.
  */
 export function assembleFillLog(input: {

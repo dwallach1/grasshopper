@@ -304,7 +304,7 @@ describe('fill log', () => {
     expect(NO_POSITION).toBe('no position');
   });
 
-  test('ignores non-Agentic intents so personal fills stay off Home', () => {
+  test('ignores non-Agentic intents so personal fills stay off the Book tape', () => {
     const rows = assembleFillLog({
       fills: [],
       intents: [

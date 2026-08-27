@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { CookieOptions } from '@supabase/ssr';
 
+import { canonicalDeskPath } from './desk-nav';
+
 /** Path GoTrue must allow-list for both localhost and 127.0.0.1. */
 export const DESK_CALLBACK_PATH = '/auth/callback';
 
@@ -66,6 +68,10 @@ export function safeNextPath(next: string | null): string {
   if (trimmed.startsWith('//')) return '/';
   if (trimmed.includes('\\')) return '/';
   if (trimmed === DESK_CALLBACK_PATH || trimmed.startsWith(`${DESK_CALLBACK_PATH}?`)) return '/';
+  const queryAt = trimmed.indexOf('?');
+  const path = queryAt === -1 ? trimmed : trimmed.slice(0, queryAt);
+  const canonical = canonicalDeskPath(path);
+  if (canonical !== path) return canonical;
   return trimmed;
 }
 

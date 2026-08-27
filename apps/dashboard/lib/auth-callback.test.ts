@@ -42,8 +42,10 @@ describe('safeNextPath', () => {
     expect(safeNextPath('/\\evil')).toBe('/');
     expect(safeNextPath(DESK_CALLBACK_PATH)).toBe('/');
     expect(safeNextPath('/auth/callback?code=replay')).toBe('/');
-    expect(safeNextPath('/book')).toBe('/book');
-    expect(safeNextPath('/runs?tab=test')).toBe('/runs?tab=test');
+    expect(safeNextPath('/book')).toBe('/');
+    expect(safeNextPath('/runs?tab=test')).toBe('/');
+    expect(safeNextPath('/catalysts')).toBe('/events');
+    expect(safeNextPath('/theses')).toBe('/theses');
   });
 });
 
@@ -51,7 +53,7 @@ describe('callback destinations', () => {
   test('success and error redirects keep the request origin', () => {
     const ip = 'http://127.0.0.1:5173';
     const local = 'http://localhost:5173';
-    expect(callbackSuccessUrl(ip, '/book').href).toBe('http://127.0.0.1:5173/book');
+    expect(callbackSuccessUrl(ip, '/book').href).toBe('http://127.0.0.1:5173/');
     expect(callbackSuccessUrl(local, 'https://evil.example').href).toBe('http://localhost:5173/');
     const failed = callbackErrorUrl(ip, 'invalid flow state, no valid flow state found');
     expect(failed.origin).toBe(ip);
