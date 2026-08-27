@@ -5,16 +5,18 @@ import { useEffect, useState, type MouseEvent } from 'react';
 
 import { fetchDeskPayload, rememberDesk, subscribeDeskRefresh } from '../../lib/desk-client';
 import {
+  canonicalDeskPath,
   DESK_TABS,
   hrefForSurface,
   surfaceFromGoLetter,
   surfaceFromPath,
   type DeskSurface,
 } from '../../lib/desk-nav';
-import type { BookPerformance, DeskPayload, DeskRoutine, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
+import { heldAndCandidateSymbols } from '../../lib/held-catalyst';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
+import type { DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
 import { BacktestsPanel } from './backtests-panel';
+import { BookPanel } from './book-panel';
 import { SessionControls } from './session-controls';
 import {
   age,
@@ -22,9 +24,8 @@ import {
   money,
   moneyPrecise,
   nyStamp,
+  pnlClass,
   qty,
-  signedMoney,
-  titleCase,
   toneForStatus,
 } from './format';
 
@@ -74,12 +75,20 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
   }, []);
 
   useEffect(() => {
+    function syncPath(path: string) {
+      const canonical = canonicalDeskPath(path);
+      setSurface(surfaceFromPath(canonical));
+      if (canonical !== path && window.location.pathname !== canonical) {
+        window.history.replaceState({ desk: surfaceFromPath(canonical) }, '', canonical);
+      }
+    }
+    syncPath(window.location.pathname);
     function onPop() {
-      setSurface(surfaceFromPath(window.location.pathname));
+      syncPath(window.location.pathname);
     }
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [pathname]);
 
   function go(href: string) {
     const next = surfaceFromPath(href);
@@ -146,6 +155,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
 
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
   const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
+  const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
 
   return (
     <div className="term">
@@ -170,6 +180,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
             </a>
           ))}
         </nav>
+        <LastRunChip routine={lastLive} now={now} />
         <div className="term-live">
           <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
           {desk.source} · {age(desk.generated_at, now)}
@@ -178,15 +189,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
       <main className="term-main">
-        {surface === 'home' && (
-          <HomePanel
-            desk={desk}
-            now={now}
-            selectedThesisId={selectedThesis?.id}
-            onThesis={setSelectedThesisId}
-          />
-        )}
-        {surface === 'book' && <BookPanel desk={desk} />}
+        {surface === 'book' && <BookPanel desk={desk} nowIso={nowIso} />}
         {surface === 'theses' && (
           <ThesesPanel
             desk={desk}
@@ -194,7 +197,6 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
             onSelect={setSelectedThesisId}
           />
         )}
-        {surface === 'runs' && <RunsPanel desk={desk} now={now} />}
         {surface === 'backtests' && (
           <BacktestsPanel
             desk={desk}
@@ -202,10 +204,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
             onSelect={setSelectedTestId}
           />
         )}
-        {surface === 'catalysts' && <CatalystsPanel desk={desk} />}
-        {surface === 'learnings' && <LearningsPanel desk={desk} />}
-        {surface === 'ontology' && <OntologyPanel desk={desk} />}
-        {surface === 'risk' && <RiskPanel desk={desk} />}
+        {surface === 'events' && <EventsPanel desk={desk} />}
       </main>
       <footer className="term-status">
         <span>NAV {ledgerFigure(desk.book.current_nav, moneyPrecise)}</span>
@@ -215,23 +214,45 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
         <span>POS {desk.counts.open_positions}</span>
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
-        <span>
-          LAST {lastLive
-            ? `${lastLive.name} ${age(lastLive.last_run_at ?? undefined, now)}`
-            : 'no QUANTANAMO run in ledger'}
-        </span>
-        <span className="term-kbd">1-9 panels · g then letter · j/k thesis · r refresh · ? help</span>
+        <span className="term-kbd">1-4 panels · g then letter · j/k thesis · r refresh · ? help</span>
       </footer>
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 Home · 2 Book · 3 Theses · 4 Runs · 5 Tests · 6 Catalysts · 7 Lessons · 8 Ontology · 9 Risk</p>
-          <p>g h home · g b book · g t theses · g r runs · g e tests · g c catalysts · g l lessons · g o ontology · g i risk</p>
+          <p>1 Book · 2 Theses · 3 Events · 4 Tests</p>
+          <p>g b book · g t theses · g c events · g e tests</p>
           <p>j/k move thesis or test · Enter open theses · r reload ledger · Esc close</p>
         </aside>
       )}
     </div>
   );
+}
+
+function LastRunChip({ routine, now }: { routine?: DeskRoutine; now: number | null }) {
+  if (!routine) {
+    return (
+      <div className="term-chip" title="No live QUANTANAMO run in public.runs">
+        <i className="stale" />
+        no QUANTANAMO run
+      </div>
+    );
+  }
+  const outcome = routine.last_outcome ?? '';
+  return (
+    <div
+      className="term-chip"
+      title={routine.last_summary || `${routine.name} · ${routine.cadence}`}
+    >
+      <i className={outcome ? toneForStatus(outcome) : 'live'} />
+      {shortRoutine(routine.name)} {age(routine.last_run_at ?? undefined, now)}
+    </div>
+  );
+}
+
+function shortRoutine(name: string): string {
+  if (/market scan/i.test(name)) return 'scan';
+  if (/autopsy/i.test(name)) return 'autopsy';
+  return name.replace(/^QUANTANAMO\s+/i, '');
 }
 
 function onDeskClick(event: MouseEvent<HTMLAnchorElement>, navigate: () => void) {
@@ -252,290 +273,6 @@ async function refreshDesk(
   }
 }
 
-function BookStrip({ book }: { book: BookPerformance }) {
-  return (
-    <>
-      <div className="term-kpis">
-        <div>
-          <i>NAV</i>
-          <b>{ledgerFigure(book.current_nav, moneyPrecise)}</b>
-        </div>
-        <div>
-          <i>vs start</i>
-          <b className={pnlClass(book.vs_start)}>{signedMoney(book.vs_start)}</b>
-        </div>
-        <div>
-          <i>Cash</i>
-          <b>{ledgerFigure(book.cash, moneyPrecise)}</b>
-        </div>
-        <div>
-          <i>Buying power</i>
-          <b>{ledgerFigure(book.buying_power, moneyPrecise)}</b>
-        </div>
-        <div>
-          <i>Deployed</i>
-          <b>{ledgerFigure(book.deployed, moneyPrecise)}</b>
-        </div>
-        <div>
-          <i>Day P/L</i>
-          <b className={pnlClass(book.day_pnl)}>{signedMoney(book.day_pnl)}</b>
-        </div>
-        <div>
-          <i>vs cost</i>
-          <b className={pnlClass(book.vs_cost)}>{signedMoney(book.vs_cost)}</b>
-        </div>
-      </div>
-      <p className="term-prose dim">
-        {book.account_label || 'Agentic'} last4 {book.last4 || '7638'}
-        {book.observed_at ? ` · snapshot ${nyStamp(book.observed_at)}` : ` · snapshot ${NOT_IN_LEDGER}`}
-        {book.starting_nav !== null ? ` · start ${moneyPrecise(book.starting_nav)}` : ` · start ${book.vs_start_note}`}
-        {`. Day P/L: ${book.day_pnl_note}. vs cost: ${book.vs_cost_note}. Marks are ledger-only.`}
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Sym</th>
-            <th>Qty</th>
-            <th>Avg cost</th>
-            <th>Cost</th>
-            <th>Mark</th>
-            <th>P/L</th>
-          </tr>
-        </thead>
-        <tbody>
-          {book.names.map((row) => (
-            <tr key={row.symbol}>
-              <td className="sym">{row.symbol}</td>
-              <td>{qty(row.quantity)}</td>
-              <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
-              <td>{ledgerFigure(row.cost, moneyPrecise)}</td>
-              <td>{row.mark === null ? row.note : moneyPrecise(row.mark)}</td>
-              <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : signedMoney(row.pnl)}</td>
-            </tr>
-          ))}
-          {!book.names.length && (
-            <tr><td colSpan={6} className="empty">{NOT_IN_LEDGER}</td></tr>
-          )}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
-function pnlClass(value: number | null): string {
-  if (value === null) return 'muted';
-  if (value > 0) return 'up';
-  if (value < 0) return 'down';
-  return 'muted';
-}
-
-function HomePanel({
-  desk,
-  now,
-  selectedThesisId,
-  onThesis,
-}: {
-  desk: DeskPayload;
-  now: number | null;
-  selectedThesisId?: string;
-  onThesis: (id: string) => void;
-}) {
-  const latestEvidence = desk.evidence.slice(0, 8);
-  const live = desk.routines.filter((row) => row.status === 'live');
-  const retired = desk.routines.filter((row) => row.status === 'retired');
-  const fillLog = desk.fill_log;
-  return (
-    <div className="term-grid term-grid-home">
-      <section className="term-panel term-panel-span">
-        <header>
-          <b>AGENTIC BOOK</b>
-          <span>
-            last4 7638 · {desk.book.observed_at ? `snapshot ${nyStamp(desk.book.observed_at)}` : NOT_IN_LEDGER}
-          </span>
-        </header>
-        <BookStrip book={desk.book} />
-      </section>
-      <section className="term-panel term-home-theses">
-        <header>
-          <b>THESES</b>
-          <span>
-            lots from the same snapshot
-            {desk.book.observed_at ? ` · ${nyStamp(desk.book.observed_at)}` : ` · ${NOT_IN_LEDGER}`}
-          </span>
-        </header>
-        {desk.theses.map((row) => (
-          <ThesisSkin
-            key={row.id}
-            row={row}
-            selected={row.id === selectedThesisId}
-            onSelect={onThesis}
-          />
-        ))}
-      </section>
-      <section className="term-panel term-home-fills">
-        <header>
-          <b>FILLS</b>
-          <span>{fillLogCaption(fillLog)} · tape time per row</span>
-        </header>
-        <FillLogTable rows={fillLog} />
-      </section>
-      <section className="term-panel term-home-tape">
-        <header><b>TAPE</b><span>runs + evidence</span></header>
-        {desk.runs.slice(0, 6).map((run) => (
-          <div key={run.id} className="term-line">
-            <b className={toneForStatus(run.parsed.outcome)}>{run.parsed.outcome}</b>
-            <span>{run.run_type}</span>
-            <i>{age(run.started_at, now)}</i>
-            <p>{run.parsed.summary.slice(0, 140)}</p>
-          </div>
-        ))}
-        {latestEvidence.map((row) => (
-          <div key={`ev-${row.id}`} className="term-line">
-            <b className={toneForStatus(row.direction)}>{row.thesis_id}</b>
-            <span>{row.evidence_type}</span>
-            <p>{row.summary.slice(0, 140)}</p>
-          </div>
-        ))}
-      </section>
-      <section className="term-panel term-home-routines">
-        <header><b>QUANTANAMO</b><span>Grok Bot routines</span></header>
-        {live.map((row) => (
-          <RoutineLine key={row.id} row={row} now={now} />
-        ))}
-        <header><b>RETIRED</b><span>Cloudflare / ThesisForge / Codex</span></header>
-        {retired.map((row) => (
-          <RoutineLine key={row.id} row={row} now={now} />
-        ))}
-        <header><b>QUEUE</b><span>{desk.counts.open_research} open</span></header>
-        {desk.queue.filter((row) => row.status === 'open').slice(0, 6).map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.priority}</b>
-            <span>{row.topic}</span>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function ThesisSkin({
-  row,
-  selected,
-  onSelect,
-}: {
-  row: ThesisRow;
-  selected: boolean;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div
-      className={selected ? 'term-thesis sel' : 'term-thesis'}
-      onClick={() => onSelect(row.id)}
-    >
-      <div className="term-thesis-head">
-        <b className="sym">{row.id}</b>
-        <span className={toneForStatus(row.status)}>{row.status}</span>
-        <i>{row.confidence} · {row.stance}</i>
-      </div>
-      {row.lots.length === 0 && <p className="empty term-thesis-empty">{NO_POSITION}</p>}
-      {row.lots.map((lot) => (
-        <LotBar key={`${row.id}-${lot.symbol}`} lot={lot} />
-      ))}
-    </div>
-  );
-}
-
-function LotBar({ lot }: { lot: ThesisLot }) {
-  return (
-    <div className="term-skin">
-      <div>
-        <i>Position</i>
-        <b>{lot.symbol} · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
-      </div>
-      <div>
-        <i>Invested</i>
-        <b>{ledgerFigure(lot.invested, moneyPrecise)}</b>
-      </div>
-      <div>
-        <i>Current</i>
-        <b className={pnlClass(lot.pnl)}>{currentCell(lot)}</b>
-      </div>
-    </div>
-  );
-}
-
-function currentCell(lot: ThesisLot): string {
-  if (lot.mark === null) return lot.note || 'mark not in ledger';
-  if (lot.pnl === null) return moneyPrecise(lot.mark);
-  return `${moneyPrecise(lot.mark)} ${signedMoney(lot.pnl)}`;
-}
-
-function FillLogTable({ rows }: { rows: FillLogRow[] }) {
-  if (!rows.length) {
-    return <p className="empty">{NOT_IN_LEDGER}</p>;
-  }
-  return (
-    <>
-      {rows.map((row) => (
-        <div key={row.id} className="term-line">
-          <b className="sym">{row.symbol || NOT_IN_LEDGER}</b>
-          <span>
-            {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)} / {ledgerFigure(row.notional, moneyPrecise)}
-          </span>
-          <i className={toneForStatus(row.status)}>{row.status}</i>
-          <p>{nyStamp(row.at)}</p>
-        </div>
-      ))}
-    </>
-  );
-}
-
-function RoutineLine({ row, now }: { row: DeskRoutine; now: number | null }) {
-  return (
-    <div className="term-line">
-      <b className={row.status === 'live' ? 'up' : 'muted'}>{row.status}</b>
-      <span>{row.name}</span>
-      <i>{row.last_run_at ? age(row.last_run_at, now) : 'no run in ledger'}</i>
-      <p>{row.cadence}{row.last_summary ? ` · ${row.last_summary.slice(0, 120)}` : ''}</p>
-    </div>
-  );
-}
-
-function BookPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <div className="term-grid term-grid-2">
-      <section className="term-panel">
-        <header>
-          <b>LIVE BOOK</b>
-          <span>
-            {desk.book.account_label || 'Agentic'} · last4 {desk.book.last4 || '7638'} · {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}
-          </span>
-        </header>
-        <BookStrip book={desk.book} />
-      </section>
-      <section className="term-panel">
-        <header><b>INTENTS / PROPOSALS</b></header>
-        {desk.intents.map((row) => (
-          <div key={row.id} className="term-line">
-            <b className="sym">{row.symbol}</b>
-            <span>{row.side} {row.mode} {money(row.notional)} · {qty(row.quantity)}</span>
-            <i className={toneForStatus(row.status)}>{row.status}</i>
-            <p>{row.order_type} {row.broker_order_id || ''}</p>
-          </div>
-        ))}
-        {desk.proposals.slice(0, 8).map((row) => (
-          <div key={`p-${row.id}`} className="term-line">
-            <b>{row.symbol}</b>
-            <span>{row.side} {money(row.notional)}</span>
-            <i>{row.status}</i>
-            <p>{row.rationale.slice(0, 180)}</p>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
 function ThesesPanel({
   desk,
   selected,
@@ -548,23 +285,47 @@ function ThesesPanel({
   const evidence = desk.evidence.filter((row) => row.thesis_id === selected?.id).slice(0, 12);
   const scores = desk.scores.filter((row) => row.thesis_id === selected?.id).slice(0, 24).reverse();
   const asOf = desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER;
+  const roles = selected
+    ? heldAndCandidateSymbols(selected.symbols, selected.lots.map((lot) => lot.symbol))
+    : { held: [], candidates: [] };
+  const themes = selected
+    ? desk.ontology_themes.filter((row) => row.thesis_id === selected.id)
+    : [];
+  const themeIds = new Set(themes.map((row) => row.id));
+  const candidates = selected
+    ? desk.ontology_candidates.filter((row) =>
+      (row.proposed_theme_id !== null && themeIds.has(row.proposed_theme_id))
+      || selected.symbols.includes(row.proposed_label)
+      || selected.symbols.includes(row.candidate_key),
+    ).slice(0, 16)
+    : [];
+  const lessons = selected
+    ? desk.lessons.filter((row) => row.thesis_id === selected.id)
+    : desk.lessons;
+  const postmortems = selected
+    ? desk.postmortems.filter((row) => row.thesis_id === selected.id)
+    : desk.postmortems;
 
   return (
     <div className="term-grid term-grid-theses">
       <section className="term-panel">
         <header><b>THESES</b><span>j/k · enter · snapshot {asOf}</span></header>
         <table>
-          <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Symbols</th></tr></thead>
+          <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Held</th><th>Candidates</th></tr></thead>
           <tbody>
-            {desk.theses.map((row) => (
-              <tr key={row.id} className={row.id === selected?.id ? 'sel' : ''} onClick={() => onSelect(row.id)}>
-                <td className="sym">{row.id}</td>
-                <td className={toneForStatus(row.status)}>{row.status}</td>
-                <td>{row.confidence}</td>
-                <td>{row.stance}</td>
-                <td>{row.symbols.slice(0, 4).join(' ')}</td>
-              </tr>
-            ))}
+            {desk.theses.map((row) => {
+              const split = heldAndCandidateSymbols(row.symbols, row.lots.map((lot) => lot.symbol));
+              return (
+                <tr key={row.id} className={row.id === selected?.id ? 'sel' : ''} onClick={() => onSelect(row.id)}>
+                  <td className="sym">{row.id}</td>
+                  <td className={toneForStatus(row.status)}>{row.status}</td>
+                  <td>{row.confidence}</td>
+                  <td>{row.stance}</td>
+                  <td>{split.held.slice(0, 4).join(' ') || '—'}</td>
+                  <td>{split.candidates.slice(0, 4).join(' ') || '—'}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>
@@ -578,11 +339,48 @@ function ThesesPanel({
             <p className="term-prose">{selected.summary}</p>
             {selected.falsifier && <p className="term-prose dim">Falsifier: {selected.falsifier}</p>}
             <Sparkline scores={scores.map((row) => row.confidence)} />
-            <header><b>POSITION</b><span>same 7638 snapshot · {asOf}</span></header>
-            {selected.lots.length === 0 && <p className="empty">{NO_POSITION}</p>}
+            <header><b>HELD / CANDIDATES</b><span>thesis_symbols · lots from 7638 snapshot</span></header>
+            <p className="term-prose">
+              Held {roles.held.join(' ') || '—'} · candidates {roles.candidates.join(' ') || '—'}
+            </p>
             {selected.lots.map((lot) => (
-              <LotBar key={`${selected.id}-${lot.symbol}`} lot={lot} />
+              <div key={`${selected.id}-${lot.symbol}`} className="term-skin">
+                <div>
+                  <i>Position</i>
+                  <b>{lot.symbol} · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
+                </div>
+                <div>
+                  <i>Invested</i>
+                  <b>{ledgerFigure(lot.invested, moneyPrecise)}</b>
+                </div>
+                <div>
+                  <i>Current</i>
+                  <b className={pnlClass(lot.pnl)}>
+                    {lot.mark === null ? (lot.note || 'mark not in ledger') : moneyPrecise(lot.mark)}
+                  </b>
+                </div>
+              </div>
             ))}
+            {!selected.lots.length && <p className="empty">no position</p>}
+            <header><b>THEMES</b><span>folded from ontology</span></header>
+            {themes.map((row) => (
+              <div key={row.id} className="term-line">
+                <b>{row.name}</b>
+                <span>{row.kind} · {row.id}</span>
+                <i className={toneForStatus(row.status)}>{row.status}</i>
+                <p>{row.description}</p>
+              </div>
+            ))}
+            {!themes.length && <p className="empty">{NOT_IN_LEDGER}</p>}
+            <header><b>CANDIDATES</b><span>linked to this thesis</span></header>
+            {candidates.map((row) => (
+              <div key={row.id} className="term-line">
+                <b>{row.proposed_label}</b>
+                <span>{row.candidate_type} · {row.source_count} src</span>
+                <i>{row.score}</i>
+              </div>
+            ))}
+            {!candidates.length && <p className="empty">{NOT_IN_LEDGER}</p>}
             <header><b>EVIDENCE</b><span>{evidence.length}</span></header>
             {evidence.map((row) => (
               <div key={row.id} className="term-line">
@@ -594,6 +392,36 @@ function ThesesPanel({
             ))}
           </>
         ) : <p className="empty">No thesis selected</p>}
+      </section>
+      <section className="term-panel">
+        <header>
+          <b>LESSONS</b>
+          <span>{desk.lessons.filter((row) => !row.incorporated).length} open loops</span>
+        </header>
+        {lessons.map((row) => (
+          <div key={row.id} className="term-line">
+            <b>{row.lesson_type}</b>
+            <span>{row.thesis_id} · {row.market_regime}</span>
+            <i className={row.incorporated ? 'up' : 'warn'}>{row.incorporated ? 'in model' : 'pending'}</i>
+            <p>{row.summary}</p>
+          </div>
+        ))}
+        {!lessons.length && <p className="empty">{NOT_IN_LEDGER}</p>}
+        <header><b>POSTMORTEMS</b></header>
+        {postmortems.map((row) => (
+          <div key={row.id} className="term-line">
+            <b>{row.outcome}</b>
+            <span>{row.thesis_id || 'unlinked'}</span>
+            <p>{row.lesson}</p>
+          </div>
+        ))}
+        {selected && desk.insights.slice(0, 6).map((row) => (
+          <div key={row.id} className="term-line">
+            <b>{row.title}</b>
+            <span>{row.insight_type} · conf {row.confidence}</span>
+            <p>{row.summary}</p>
+          </div>
+        ))}
       </section>
     </div>
   );
@@ -618,49 +446,11 @@ function Sparkline({ scores }: { scores: number[] }) {
   );
 }
 
-function RunsPanel({ desk, now }: { desk: DeskPayload; now: number | null }) {
-  const live = desk.routines.filter((row) => row.status === 'live');
-  const retired = desk.routines.filter((row) => row.status === 'retired');
+function EventsPanel({ desk }: { desk: DeskPayload }) {
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
-        <header><b>RUNS</b><span>{desk.runs.length}</span></header>
-        {desk.runs.map((run) => (
-          <div key={run.id} className="term-line">
-            <b className={toneForStatus(run.parsed.outcome)}>{run.parsed.outcome}</b>
-            <span>{run.run_type} · {run.parsed.headline}</span>
-            <i>{nyStamp(run.started_at)}</i>
-            <p>{run.parsed.summary}</p>
-          </div>
-        ))}
-      </section>
-      <section className="term-panel">
-        <header><b>QUANTANAMO ROUTINES</b><span>last run from ledger</span></header>
-        {live.map((row) => (
-          <RoutineLine key={row.id} row={row} now={now} />
-        ))}
-        <header><b>RETIRED</b><span>not due</span></header>
-        {retired.map((row) => (
-          <RoutineLine key={row.id} row={row} now={now} />
-        ))}
-        {desk.cloud_runs.slice(0, 8).map((run) => (
-          <div key={run.id} className="term-line">
-            <b className="muted">{run.status}</b>
-            <span>retired cloud {run.trigger_source} {run.market_slot || ''} {run.mode}</span>
-            <i>{nyStamp(run.started_at || run.scheduled_for)}</i>
-            {run.error_text && <p className="dim">{run.error_text}</p>}
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function CatalystsPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <div className="term-grid term-grid-2">
-      <section className="term-panel">
-        <header><b>CATALYSTS</b></header>
+        <header><b>CATALYSTS</b><span>pre-event sheet · not AI-filtered</span></header>
         {desk.catalysts.map((row) => (
           <div key={row.id} className="term-line">
             <b className="sym">{row.symbol || '—'}</b>
@@ -669,6 +459,7 @@ function CatalystsPanel({ desk }: { desk: DeskPayload }) {
             <p>{row.summary}</p>
           </div>
         ))}
+        {!desk.catalysts.length && <p className="empty">{NOT_IN_LEDGER}</p>}
       </section>
       <section className="term-panel">
         <header><b>RESEARCH QUEUE</b><span>{desk.counts.open_research} open</span></header>
@@ -680,87 +471,8 @@ function CatalystsPanel({ desk }: { desk: DeskPayload }) {
             <p>{row.reason}</p>
           </div>
         ))}
+        {!desk.queue.length && <p className="empty">{NOT_IN_LEDGER}</p>}
       </section>
     </div>
-  );
-}
-
-function LearningsPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <div className="term-grid term-grid-2">
-      <section className="term-panel">
-        <header><b>LESSONS</b><span>{desk.lessons.filter((row) => !row.incorporated).length} open loops</span></header>
-        {desk.lessons.map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.lesson_type}</b>
-            <span>{row.thesis_id} · {row.market_regime}</span>
-            <i className={row.incorporated ? 'up' : 'warn'}>{row.incorporated ? 'in model' : 'pending'}</i>
-            <p>{row.summary}</p>
-          </div>
-        ))}
-        {!desk.lessons.length && <p className="empty">{NOT_IN_LEDGER}</p>}
-      </section>
-      <section className="term-panel">
-        <header><b>POSTMORTEMS / INSIGHTS</b></header>
-        {desk.postmortems.map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.outcome}</b>
-            <span>{row.thesis_id || 'unlinked'}</span>
-            <p>{row.lesson}</p>
-          </div>
-        ))}
-        {desk.insights.map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.title}</b>
-            <span>{row.insight_type} · conf {row.confidence}</span>
-            <p>{row.summary}</p>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function OntologyPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <div className="term-grid term-grid-2">
-      <section className="term-panel">
-        <header><b>THEMES</b></header>
-        {desk.ontology_themes.map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.name}</b>
-            <span>{row.kind} · {row.id}</span>
-            <i className={toneForStatus(row.status)}>{row.status}</i>
-            <p>{row.description}</p>
-          </div>
-        ))}
-      </section>
-      <section className="term-panel">
-        <header><b>CANDIDATES</b></header>
-        {desk.ontology_candidates.slice(0, 30).map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.proposed_label}</b>
-            <span>{row.candidate_type} · {row.source_count} src</span>
-            <i>{row.score}</i>
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function RiskPanel({ desk }: { desk: DeskPayload }) {
-  return (
-    <section className="term-panel">
-      <header><b>RISK CONTROLS</b></header>
-      {desk.risk_controls.map((row) => (
-        <div key={row.id} className="term-line">
-          <b>{titleCase(row.control_type)}</b>
-          <span>{row.scope} · {row.enforcement_level}</span>
-          <i className={toneForStatus(row.status)}>{row.status}</i>
-          <p>{row.threshold_json}</p>
-        </div>
-      ))}
-    </section>
   );
 }

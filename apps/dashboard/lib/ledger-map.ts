@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { asOptionalNumber, asSmallint, requireIso } from './numbers';
+import { asFiniteNumber, asOptionalNumber, asSmallint, requireIso } from './numbers';
 import { parseRunNotes } from './run-notes';
 import { parseThesisStatus } from './thesis-status';
 import type {
@@ -45,7 +45,7 @@ const OptionalTimestamp = z
   .union([z.string(), z.date(), z.null()])
   .transform((value) => (value === null ? null : requireIso(value, 'timestamp')));
 const Numeric = z.union([z.string(), z.number()]).transform((value) => asSmallint(value, 'smallint'));
-const Money = z.union([z.string(), z.number()]).transform((value) => Number(value));
+const Money = z.union([z.string(), z.number()]).transform((value) => asFiniteNumber(value, 'numeric'));
 const OptionalMoney = z
   .union([z.string(), z.number(), z.null()])
   .transform((value) => asOptionalNumber(value, 'numeric'));
@@ -455,6 +455,7 @@ const ExposureSchema = z
     symbol: z.string(),
     quantity: Money,
     average_buy_price: OptionalMoney,
+    last_price: OptionalMoney.optional().transform((value) => value ?? null),
     observed_at: Timestamp,
     account_last4: z.string(),
   })

@@ -74,7 +74,7 @@ bun run web:app
 
 Open `http://localhost:5173` (this is the printed Local URL, the Auth Site URL, and the passkey RP ID). `http://127.0.0.1:5173` works for email **if you start and finish on that IP** — passkeys still require `localhost`. Sign in. Header source should read `postgrest`.
 
-Tabs are spelled-out words: **Home, Book, Theses, Runs, Tests, Catalysts, Lessons, Ontology, Risk**. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-9` panels, `g` then letter (`h/b/t/r/e/c/l/o/i`), `j/k` thesis, `r` refresh, `?` help. There is no filter box.
+Tabs are spelled-out words: **Book, Theses, Events, Tests**. Book is the landing page at `/`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-4` panels, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab.
 
 ## Confirm you are on the real ledger
 
@@ -82,21 +82,15 @@ Logged **out**: sign-in only. `/api/ledger` returns 401. No thesis names in the 
 
 Logged **in**:
 
-On **Home** the first panel is the Agentic proof book from the latest `portfolio_exposure` snapshot for last4 **7638**, plus cash / buying power / NAV from the matching `account_snapshots` row (same `observed_at`). Not `dashboard_snapshots.current`, and not `position_episodes`. Book, thesis Position/Invested, and NAV share that snapshot clock. Missing marks stay **not in ledger**. A refresh (or the 15s poll / realtime) picks up a new QUANTANAMO snapshot without a restart.
+On **Book** (`/`) the first panel is the Agentic proof book from the latest `portfolio_exposure` snapshot for last4 **7638**, plus cash / buying power / NAV from the matching `account_snapshots` row (same `observed_at`). Not `dashboard_snapshots.current`, and not `position_episodes`. Book, thesis Position/Invested, and NAV share that snapshot clock. Missing marks stay **not in ledger**. A refresh (or the 15s poll / realtime) picks up a new QUANTANAMO snapshot without a restart. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first. Empty fills say **not in ledger**. Lot tiles and an interpolating NAV path sit above the table; the table still renders if WebGL is off. Sparse snapshots are honest — the desk does not invent prints.
 
-Each thesis on Home shows its linked open lots from that **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position**. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first, each row using its own fill time. Empty fills say **not in ledger**.
+Each thesis with an open lot shows that lot from the **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position** on Theses.
 
-On **Theses** you should see the eight theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`) with statuses `forming` or `hardening`.
+On **Theses** you should see the eight theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`) with statuses `forming` or `hardening`, plus held/candidate symbols and a lessons pane.
 
-On **Book** you should see the same Agentic book plus intents.
-
-On **Runs** you should see QUANTANAMO routines (weekday hourly market scan 10:59–15:59 ET, weekday 16:15 ET missed-swing autopsy) with **last run** from `runs` — not a fake next-due clock. Cloudflare / ThesisForge / Codex jobs are labeled **retired**.
+On **Events** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue` (not AI-filtered). `/catalysts` redirects here.
 
 On **Tests** you should see every `strategy_tests` row (including old seed keys like `ai-power-base`). Selecting a row opens a detail pane on the same tab: `summary_json`, equity curve (`chart_svg` or `equity_curve`), trades, params, and Financial Datasets `price_source`. Rows with no `backtest_artifacts` say **no artifacts in ledger** — the desk never draws a fake curve. Null metrics say **not in ledger**.
-
-On **Catalysts** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue`.
-
-On **Lessons** you should see `research_lessons` and postmortems.
 
 The desk is **read-only**. QUANTANAMO writes the ledger. Sign-in stays as the operator gate. There are no thesis status buttons, evidence/lesson forms, or other operator RPCs that insert/update/delete ledger rows.
 
@@ -120,7 +114,7 @@ Auth gate checklist:
 1. Restart `bun run web:app` after setting `NEXT_PUBLIC_*`.
 2. Logged out: `/` is sign-in; `/api/ledger` is 401; HTML has no `neocloud_compute`.
 3. Sign in with the **email magic link** (or a social provider once it is enabled). First confirmed user is claimed via `claim_ledger_operator`. Later accounts need a `ledger_operators` row.
-4. Home / Book / Theses load live rows. Header shows your email. **Sign out** returns to the gate.
-5. Tab switches (1–9 or click) paint immediately from cached data; the filter box is gone.
+4. Book / Theses / Events load live rows. Header shows your email. **Sign out** returns to the gate.
+5. Tab switches (1–4 or click) paint immediately from cached data; the filter box is gone.
 6. **Passkey+** then sign out and **Passkey** sign-in.
-7. Theses / Lessons have no write controls. Status and evidence are ledger reads.
+7. Theses have no write controls. Status, evidence, and lessons are ledger reads.

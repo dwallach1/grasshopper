@@ -1,3 +1,5 @@
+import { nyClock, nyStamp } from '../../lib/ny-date';
+
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -10,19 +12,8 @@ const currencyPrecise = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 const qtyFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 });
-const nyDate = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/New_York',
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
-const nyTime = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/New_York',
-  hour: 'numeric',
-  minute: '2-digit',
-  second: '2-digit',
-});
+
+export { nyClock, nyStamp };
 
 export function money(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
@@ -48,16 +39,6 @@ export function ledgerFigure(value: number | null | undefined, format: (n: numbe
 export function qty(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return qtyFormat.format(value);
-}
-
-export function nyStamp(timestamp: string | null | undefined): string {
-  if (!timestamp) return '—';
-  return `${nyDate.format(new Date(timestamp))} ET`;
-}
-
-export function nyClock(timestamp: string | null | undefined): string {
-  if (!timestamp) return '—';
-  return nyTime.format(new Date(timestamp));
 }
 
 export function age(timestamp: string | undefined, now: number | null): string {
@@ -112,4 +93,11 @@ export function ledgerPct(value: number | null | undefined, digits = 1): string 
 export function ledgerCount(value: number | null | undefined): string {
   if (value === null || value === undefined) return 'not in ledger';
   return String(value);
+}
+
+export function pnlClass(value: number | null): string {
+  if (value === null) return 'muted';
+  if (value > 0) return 'up';
+  if (value < 0) return 'down';
+  return 'muted';
 }

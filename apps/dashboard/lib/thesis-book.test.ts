@@ -53,6 +53,7 @@ function exposure(
     symbol,
     quantity,
     average_buy_price,
+    last_price: null,
     observed_at: LIVE,
     account_last4: AGENTIC_LAST4,
     ...extra,
@@ -243,6 +244,27 @@ describe('thesis lots', () => {
     expect(lot?.note).toBe('');
   });
 
+  test('uses last_price on the exposure when the marks map is absent', () => {
+    const theses = attachThesisLots([thesis('earnings_gap_structure')], {
+      links: [{ thesis_id: 'earnings_gap_structure', symbol: 'CIFR', role: 'held' }],
+      proposals: [proposal('earnings_gap_structure', 'CIFR', 'filled')],
+      exposures: [exposure('CIFR', 63.211524, 15.82, { last_price: 16.615 })],
+    });
+    const lot = theses[0]?.lots[0];
+    expect(lot?.mark).toBeCloseTo(16.615);
+    expect(lot?.pnl).toBeCloseTo((16.615 - 15.82) * 63.211524);
+    expect(lot?.note).toBe('');
+
+    const unmarked = attachThesisLots([thesis('earnings_gap_structure')], {
+      links: [{ thesis_id: 'earnings_gap_structure', symbol: 'DG', role: 'held' }],
+      proposals: [proposal('earnings_gap_structure', 'DG', 'filled')],
+      exposures: [exposure('DG', 14, 132.25, { last_price: null })],
+    });
+    expect(unmarked[0]?.lots[0]?.mark).toBeNull();
+    expect(unmarked[0]?.lots[0]?.pnl).toBeNull();
+    expect(unmarked[0]?.lots[0]?.note).toBe(MARK_NOT_IN_LEDGER);
+  });
+
   test('8/26 lots are not the live book once a newer 7638 snapshot exists', () => {
     const theses = attachThesisLots([thesis('earnings_gap_structure')], {
       links: liveLinks,
@@ -304,7 +326,7 @@ describe('fill log', () => {
     expect(NO_POSITION).toBe('no position');
   });
 
-  test('ignores non-Agentic intents so personal fills stay off Home', () => {
+  test('ignores non-Agentic intents so personal fills stay off the Book tape', () => {
     const rows = assembleFillLog({
       fills: [],
       intents: [

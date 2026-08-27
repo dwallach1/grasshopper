@@ -50,7 +50,7 @@ export function openLotsFromLedger(input: {
       symbol: row.symbol,
       quantity: row.quantity,
       average_cost: row.average_buy_price,
-      mark: input.marks?.get(row.symbol) ?? null,
+      mark: input.marks?.get(row.symbol) ?? row.last_price ?? null,
     });
   }
   return lots;
@@ -157,7 +157,7 @@ function priceFromIntent(intent: IntentRow): number | null {
 }
 
 /**
- * Home fill tape. Prefer `broker_fills`; if that table is empty, show filled
+ * Book fill tape. Prefer `broker_fills`; if that table is empty, show filled
  * trade_intents. Never invent a price — derive from ledger qty/notional only.
  */
 export function assembleFillLog(input: {

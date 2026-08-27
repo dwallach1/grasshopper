@@ -94,14 +94,14 @@ sequenceDiagram
   end
   Bot->>DB: runs, evidence
   Desk->>DB: GET /api/ledger JWT
-  DB-->>Desk: Home book, Runs, Theses
+  DB-->>Desk: Book, Theses, Events
 ```
 
 ---
 
 ## Trading
 
-Live book: **Agentic** proof account (last4 7638). Starting capital is the first Agentic `account_snapshots` row (~$5,000). Open names are **every lot** on the latest `portfolio_exposure` snapshot for that last4 (as of 2026-08-27: IREN, NBIS, CIFR, DG). The Home/Book panels show NAV, cash, and buying power from the matching `account_snapshots` row. Per-name mark is shown only if the ledger has it.
+Live book: **Agentic** proof account (last4 7638). Starting capital is the first Agentic `account_snapshots` row (~$5,000). Open names are **every lot** on the latest `portfolio_exposure` snapshot for that last4 (as of 2026-08-27: IREN, NBIS, CIFR, DG). The Book panel shows NAV, cash, and buying power from the matching `account_snapshots` row. Per-name mark is shown only if the ledger has it.
 
 | Limit | Value | Note |
 |---|---|---|
@@ -143,21 +143,18 @@ bun run web:app    # same as: bash scripts/web-app.sh
 
 Open `http://localhost:5173`. Sign in with **email magic link** or a **passkey** (RP ID `localhost`). The publishable / anon key is the only Supabase key in the browser (`NEXT_PUBLIC_*`). `service_role` and `QUANTANAMO_DATABASE_URL` stay server-side. First confirmed user is claimed via `claim_ledger_operator`; later operators need a `public.ledger_operators` row. `anon` is revoked. The desk queries PostgREST as that JWT.
 
-It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410).
+It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410). The desk does not display retired worker caps (3 buys/day, 20% name, RTH 09:45–15:45); those contradict the live mandate. PLTR is a compliance skip, not a position.
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Home | Agentic book, theses with open lots (entry / size / P&L or **mark not in ledger**), fill log, then tape / routines |
-| 2 | Book | Episodes, intents, same book numbers |
-| 3 | Theses | Lifecycle + evidence |
-| 4 | Runs | Ledger runs + QUANTANAMO routines (retired jobs marked retired) |
-| 5 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
-| 6 | Catalysts | Catalysts + research queue |
-| 7 | Lessons | Lessons / postmortems |
-| 8 | Ontology | Themes / candidates |
-| 9 | Risk | Risk controls |
+| 1 | Book | Landing (`/`). Agentic last4 7638 NAV / cash / lots from the latest `portfolio_exposure` snapshot plus the matching `account_snapshots` row. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic beside/above the table: lot tiles (inner plate sized by notional, Δ only when marked) + interpolating NAV path from Agentic snapshots. Table stays canonical; unmarked lots are muted, never a fake P/L color. |
+| 2 | Theses | Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons pane |
+| 3 | Events | Catalysts + `research_queue` (pre-event sheet; not AI-filtered). `/catalysts` redirects here. |
+| 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–9`, `g` then letter, `j/k` thesis, `r` refresh, `?` help. No filter box.
+Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`. Risk controls stay in the database and are not a settings page.
+
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–4`, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. No filter box.
 
 Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`. Book names come from that exposure snapshot, not `position_episodes`.
 

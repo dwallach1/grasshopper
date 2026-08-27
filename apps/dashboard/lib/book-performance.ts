@@ -39,13 +39,46 @@ export function latestBookExposures(rows: ExposureRow[]): ExposureRow[] {
   return agentic.filter((row) => row.observed_at === latestAt);
 }
 
-function snapshotAt(snapshots: AccountRow[], observedAt: string): AccountRow | null {
-  return snapshots.find((row) => sameInstant(row.observed_at, observedAt)) ?? null;
+/** QUANTANAMO writes the snapshot, then lots a few seconds later. */
+const SAME_DAY_NEAR_MS = 2 * 60 * 1000;
+
+/**
+ * Exact `observed_at` first; else nearest Agentic row on the same NY calendar
+ * day within two minutes; else the newest Agentic row on that NY day.
+ * Never borrows a previous NY session.
+ */
+export function snapshotForBook(snapshots: AccountRow[], observedAt: string): AccountRow | null {
+  const exact = snapshots.find((row) => sameInstant(row.observed_at, observedAt));
+  if (exact) return exact;
+
+  const day = nyDateKey(observedAt);
+  const sameDay = snapshots.filter((row) => nyDateKey(row.observed_at) === day);
+  if (sameDay.length === 0) return null;
+
+  const asOfMs = Date.parse(observedAt);
+  let nearest: AccountRow | null = null;
+  let nearestDelta = Infinity;
+  let newest: AccountRow | null = null;
+  let newestMs = -Infinity;
+  for (const row of sameDay) {
+    const ms = Date.parse(row.observed_at);
+    const delta = Math.abs(ms - asOfMs);
+    if (delta < nearestDelta) {
+      nearest = row;
+      nearestDelta = delta;
+    }
+    if (ms > newestMs) {
+      newest = row;
+      newestMs = ms;
+    }
+  }
+  if (nearest !== null && nearestDelta <= SAME_DAY_NEAR_MS) return nearest;
+  return newest;
 }
 
 /**
  * Proof-account performance from the latest Agentic 7638 exposure snapshot
- * plus the matching `account_snapshots` row (same observed_at).
+ * plus the Agentic `account_snapshots` row for that NY day.
  * Never invents marks or P/L: missing inputs become `null` plus a note.
  * A newer book never borrows yesterday's NAV/cash.
  */
@@ -58,7 +91,7 @@ export function assembleBookPerformance(input: {
   const snapshots = agenticSnapshots(input.snapshotsNewestFirst);
   const lots = latestBookExposures(input.exposures);
   const asOf = lots[0]?.observed_at ?? null;
-  const latest = asOf ? snapshotAt(snapshots, asOf) : snapshots[0] ?? null;
+  const latest = asOf ? snapshotForBook(snapshots, asOf) : snapshots[0] ?? null;
   const starting = input.starting && isAgenticAccount(input.starting.account_label)
     ? input.starting
     : snapshots[snapshots.length - 1] ?? null;
@@ -67,7 +100,7 @@ export function assembleBookPerformance(input: {
     .sort((a, b) => a.symbol.localeCompare(b.symbol))
     .map((lot) => {
       const cost = costBasis(lot.quantity, lot.average_buy_price);
-      const mark = input.marks?.get(lot.symbol) ?? null;
+      const mark = input.marks?.get(lot.symbol) ?? lot.last_price ?? null;
       const pnl = mark === null || lot.average_buy_price === null
         ? null
         : (mark - lot.average_buy_price) * lot.quantity;

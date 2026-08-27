@@ -38,18 +38,19 @@ import {
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
-import { isPostgresPermissionDenied, openSql } from './postgres';
-import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures } from './book-performance';
+import { hasDatabaseUrl, isPostgresPermissionDenied, openSql } from './postgres';
+import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures, snapshotForBook } from './book-performance';
 import { assembleRoutines } from './routines';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
-import { sameInstant } from './ny-date';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
+const REST_FETCH_MS = 8_000;
 
 async function restRows(path: string, accessToken: string) {
   const response = await fetch(`${publicSupabaseUrl()}/rest/v1/${path}`, {
     headers: userRestHeaders(accessToken),
     cache: 'no-store',
+    signal: AbortSignal.timeout(REST_FETCH_MS),
   });
   if (!response.ok) {
     throw new Error(`Supabase REST ${path} failed: ${response.status}`);
@@ -70,6 +71,7 @@ async function optionalRows(label: string, query: Promise<JsonObjectRow[]>): Pro
 }
 
 export async function loadDesk(accessToken: string): Promise<DeskPayload> {
+  if (hasDatabaseUrl()) return loadDeskFromPostgres();
   return loadDeskFromRest(accessToken);
 }
 
@@ -260,7 +262,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       `,
       ),
       sql`
-        select symbol, quantity, average_buy_price, observed_at, account_last4
+        select symbol, quantity, average_buy_price, last_price, observed_at, account_last4
         from public.portfolio_exposure
         where account_last4 = ${AGENTIC_LAST4}
           and observed_at = (
@@ -454,7 +456,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
     restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
-    restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, accessToken),
+    restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,last_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, accessToken),
     restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
     restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', accessToken),
     restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40', accessToken),
@@ -528,8 +530,9 @@ function bookFields(
     exposures,
   });
   return {
-    account: snapshots.find((row) => book.observed_at !== null && sameInstant(row.observed_at, book.observed_at))
-      ?? (book.observed_at ? null : snapshots[0] ?? starting),
+    account: book.observed_at
+      ? snapshotForBook(snapshots, book.observed_at)
+      : snapshots[0] ?? starting,
     snapshots,
     book,
     positions,

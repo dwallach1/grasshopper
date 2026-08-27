@@ -11,15 +11,10 @@
  */
 
 export const DESK_SURFACES = [
-  'home',
   'book',
   'theses',
-  'runs',
+  'events',
   'backtests',
-  'catalysts',
-  'learnings',
-  'ontology',
-  'risk',
 ] as const;
 
 export type DeskSurface = (typeof DESK_SURFACES)[number];
@@ -33,28 +28,61 @@ export type DeskTab = {
 };
 
 export const DESK_TABS: readonly DeskTab[] = [
-  { href: '/', id: 'home', key: '1', label: 'Home', go: 'h' },
-  { href: '/book', id: 'book', key: '2', label: 'Book', go: 'b' },
-  { href: '/theses', id: 'theses', key: '3', label: 'Theses', go: 't' },
-  { href: '/runs', id: 'runs', key: '4', label: 'Runs', go: 'r' },
-  { href: '/backtests', id: 'backtests', key: '5', label: 'Tests', go: 'e' },
-  { href: '/catalysts', id: 'catalysts', key: '6', label: 'Catalysts', go: 'c' },
-  { href: '/learnings', id: 'learnings', key: '7', label: 'Lessons', go: 'l' },
-  { href: '/ontology', id: 'ontology', key: '8', label: 'Ontology', go: 'o' },
-  { href: '/risk', id: 'risk', key: '9', label: 'Risk', go: 'i' },
+  { href: '/', id: 'book', key: '1', label: 'Book', go: 'b' },
+  { href: '/theses', id: 'theses', key: '2', label: 'Theses', go: 't' },
+  { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
+  { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
 ] as const;
 
-/** Extra go-letter aliases that must not collide with `r` refresh when un-prefixed. */
-const GO_ALIASES: Record<string, DeskSurface> = {
-  m: 'home',
-  k: 'backtests',
+/** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
+export type DeskPathRedirect = {
+  source: string;
+  destination: string;
 };
 
+export const DESK_PATH_REDIRECTS = [
+  { source: '/book', destination: '/' },
+  { source: '/catalysts', destination: '/events' },
+  { source: '/ontology', destination: '/theses' },
+  { source: '/risk', destination: '/' },
+  { source: '/runs', destination: '/' },
+  { source: '/learnings', destination: '/theses' },
+] as const satisfies readonly DeskPathRedirect[];
+
+function surfaceFromHead(head: string): DeskSurface {
+  switch (head) {
+    case '':
+    case 'book':
+    case 'home':
+    case 'risk':
+    case 'runs':
+      return 'book';
+    case 'theses':
+    case 'ontology':
+    case 'learnings':
+      return 'theses';
+    case 'events':
+    case 'catalysts':
+      return 'events';
+    case 'backtests':
+    case 'tests':
+      return 'backtests';
+    default:
+      return 'book';
+  }
+}
+
+export function canonicalDeskPath(pathname: string): string {
+  const path = pathname.split('?')[0] || '/';
+  const normalized = path === '' ? '/' : path.replace(/\/+$/, '') || '/';
+  const hit = DESK_PATH_REDIRECTS.find((row) => row.source === normalized);
+  return hit?.destination ?? normalized;
+}
+
 export function surfaceFromPath(pathname: string): DeskSurface {
-  if (pathname === '/') return 'home';
-  const head = pathname.replace(/^\//, '').split('/')[0] || 'home';
-  const match = DESK_TABS.find((tab) => tab.id === head || tab.href === `/${head}`);
-  return match?.id ?? 'home';
+  const canonical = canonicalDeskPath(pathname);
+  const head = canonical.replace(/^\//, '').split('/')[0] || '';
+  return surfaceFromHead(head);
 }
 
 export function tabForSurface(id: DeskSurface): DeskTab {
@@ -66,7 +94,18 @@ export function tabForSurface(id: DeskSurface): DeskTab {
 export function surfaceFromGoLetter(letter: string): DeskSurface | null {
   const direct = DESK_TABS.find((tab) => tab.go === letter);
   if (direct) return direct.id;
-  return GO_ALIASES[letter] ?? null;
+  switch (letter) {
+    case 'h':
+    case 'i':
+      return 'book';
+    case 'k':
+      return 'backtests';
+    case 'l':
+    case 'o':
+      return 'theses';
+    default:
+      return null;
+  }
 }
 
 export function hrefForSurface(id: DeskSurface): string {
