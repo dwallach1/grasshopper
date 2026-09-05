@@ -51,5 +51,5 @@ export function PublicTerminal() {
     );
   }
 
-  return <TerminalApp initial={desk} operatorEmail="" publicView />;
+  return <TerminalApp initial={desk} publicView />;
 }

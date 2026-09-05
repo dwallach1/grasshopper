@@ -1,9 +1,9 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
-import { fetchDeskPayload, rememberDesk, subscribeDeskRefresh } from '../../lib/desk-client';
+import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
   canonicalDeskPath,
   DESK_TABS,
@@ -17,7 +17,6 @@ import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
 import { BacktestsPanel } from './backtests-panel';
 import { BookPanel } from './book-panel';
-import { SessionControls } from './session-controls';
 import {
   age,
   ledgerFigure,
@@ -33,12 +32,14 @@ const POLL_MS = 15_000;
 
 export function TerminalApp({
   initial,
-  operatorEmail,
   publicView = false,
+  chrome = null,
+  subscribeRefresh,
 }: {
   initial: DeskPayload;
-  operatorEmail: string;
   publicView?: boolean;
+  chrome?: ReactNode;
+  subscribeRefresh?: (onChange: () => void) => () => void;
 }) {
   const pathname = usePathname();
   const [desk, setDesk] = useState(initial);
@@ -68,9 +69,12 @@ export function TerminalApp({
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => subscribeDeskRefresh(() => {
-    void refreshDesk(setDesk, setNotice);
-  }), []);
+  useEffect(() => {
+    if (!subscribeRefresh) return undefined;
+    return subscribeRefresh(() => {
+      void refreshDesk(setDesk, setNotice);
+    });
+  }, [subscribeRefresh]);
 
   useEffect(() => {
     function onVis() {
@@ -166,7 +170,7 @@ export function TerminalApp({
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
 
   return (
-    <div className="term">
+    <div className={publicView ? 'term term-public' : 'term'}>
       <header className="term-top">
         <a
           className="term-brand"
@@ -193,7 +197,7 @@ export function TerminalApp({
           <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
           {desk.source} · {age(desk.generated_at, now)}
         </div>
-        {!publicView && <SessionControls email={operatorEmail} />}
+        {chrome}
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
       <main className="term-main">
