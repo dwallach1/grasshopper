@@ -215,17 +215,13 @@ operator machine / QUANTANAMO  →  bun run desk:publish  →  file + optional P
 ### Deploy
 
 ```sh
-# 1. Create the KV namespace once and paste the id into workers/desk/wrangler.jsonc
-bun --cwd workers/desk wrangler kv namespace create DESK_SNAPSHOT
-
-# 2. Set the publish token (Worker secret — not in the repo)
+# KV DESK_SNAPSHOT is already created (id in workers/desk/wrangler.jsonc).
+# Publish token is a Worker secret — never commit it.
 bun --cwd workers/desk wrangler secret put DESK_PUBLISH_TOKEN
-
-# 3. Build the public SPA (no Supabase keys) and deploy
 bun run desk:deploy
 ```
 
-The Worker is `quantanamo-desk` (`*.workers.dev` until you attach a custom domain). Local preview of the Worker: `bun run desk:build && bun run desk:dev` (port 8787).
+The Worker is `quantanamo-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787).
 
 ### Local operator vs public
 
@@ -255,7 +251,7 @@ Env (see `.env.example`; never commit secrets):
 | `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` |
 | `DESK_PUBLISH_TOKEN` | Publisher + `wrangler secret` | Timing-safe ingest. Not `NEXT_PUBLIC_*`. |
 
-GRASSHOPPER follow-ups: create the KV namespace and paste the id; `wrangler secret put DESK_PUBLISH_TOKEN`; deploy; run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`); optional custom domain; keep writing `pm_*` (publisher already maps them — do not add a second public app). Apply `20260905120000_revoke_anon_dashboard_snapshots.sql` on live if not applied.
+After deploy: run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`) so the public URL is not an empty snapshot. Optional custom domain. Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
 
 ```sh
 bun run --cwd apps/dashboard test

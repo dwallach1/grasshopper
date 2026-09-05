@@ -52,10 +52,10 @@ export function BookPanel({
     <div className="term-grid term-grid-book">
       <section className="term-panel term-book-kpis">
         <header>
-          <b>LIVE BOOK</b>
+          <b>BOOK</b>
           <span>
-            QUANTANAMO + ODDSBORNE · one tape
-            {desk.book.observed_at ? ` · EQ ${nyStamp(desk.book.observed_at)}` : ` · EQ ${NOT_IN_LEDGER}`}
+            one desk · two venues
+            {desk.book.observed_at ? ` · ${nyStamp(desk.book.observed_at)}` : ''}
           </span>
         </header>
         <VenueFilterBar value={venue} onChange={setVenue} />
@@ -145,7 +145,7 @@ function BookKpis({ book }: { book: BookPerformance }) {
   return (
     <>
       <div className="term-kpis">
-        <div>
+        <div className="term-kpi-hero">
           <i>NAV</i>
           <b>{ledgerFigure(book.current_nav, moneyPrecise)}</b>
         </div>

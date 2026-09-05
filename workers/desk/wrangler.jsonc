@@ -21,12 +21,10 @@
       "/learnings"
     ]
   },
-  // Create with: bun --cwd workers/desk wrangler kv namespace create DESK_SNAPSHOT
-  // then replace this id. Local `wrangler dev` uses Miniflare and ignores the remote id.
   "kv_namespaces": [
     {
       "binding": "DESK_SNAPSHOT",
-      "id": "00000000000000000000000000000000"
+      "id": "55a8dea844924c09a6a4c86db15ed8a0"
     }
   ],
   "secrets": {
