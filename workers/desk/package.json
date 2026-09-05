@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "types": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler types --config wrangler.jsonc --include-runtime false worker-configuration.d.ts",
+    "types": "WRANGLER_LOG_PATH=.wrangler/logs wrangler types --config wrangler.jsonc --include-runtime false worker-configuration.d.ts",
     "typecheck": "bun --bun tsc --project tsconfig.json",
     "test": "bun test src/desk-api.test.ts",
-    "dry-run": "mkdir -p dist && test -f dist/index.html || cp public/index.html dist/index.html && WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc --dry-run",
-    "dev": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler dev --config wrangler.jsonc --port 8787",
-    "deploy": "WRANGLER_LOG_PATH=.wrangler/logs bun --bun wrangler deploy --config wrangler.jsonc"
+    "dry-run": "mkdir -p dist && test -f dist/index.html || cp public/index.html dist/index.html && WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --config wrangler.jsonc --dry-run",
+    "dev": "WRANGLER_LOG_PATH=.wrangler/logs wrangler dev --config wrangler.jsonc --port 8787",
+    "deploy": "WRANGLER_LOG_PATH=.wrangler/logs wrangler deploy --config wrangler.jsonc"
   },
   "dependencies": {
     "@quantanamo/contracts": "workspace:*",
