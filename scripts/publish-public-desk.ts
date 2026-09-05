@@ -76,7 +76,11 @@ if (publishUrl) {
     console.error('DESK_PUBLISH_TOKEN is required with --push / DESK_PUBLISH_URL.');
     process.exit(1);
   }
-  const response = await fetch(publishUrl, {
+  // Accept base Worker URL or full /internal/snapshot path.
+  const pushTarget = /\/internal\/snapshot\/?$/.test(publishUrl.replace(/\/+$/, ''))
+    ? publishUrl.replace(/\/+$/, '')
+    : `${publishUrl.replace(/\/+$/, '')}/internal/snapshot`;
+  const response = await fetch(pushTarget, {
     method: 'PUT',
     headers: {
       authorization: `Bearer ${publishToken}`,
