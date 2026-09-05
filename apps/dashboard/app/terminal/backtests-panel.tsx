@@ -54,7 +54,7 @@ export function BacktestsPanel({
           <b>STRATEGY TESTS</b>
           <span>{desk.counts.tests_survived} survived / {desk.counts.tests_killed} killed</span>
         </header>
-        <div className="term-scroll">
+        <div className="term-scroll term-tests-table">
         <table>
           <thead>
             <tr>
@@ -92,6 +92,35 @@ export function BacktestsPanel({
             )}
           </tbody>
         </table>
+        </div>
+        <div className="term-tests-cards">
+          {views.map((row) => (
+            <button
+              key={row.test.id}
+              type="button"
+              className={row.test.id === selected?.test.id ? 'term-test-card sel' : 'term-test-card'}
+              onClick={() => onSelect(row.test.id)}
+            >
+              <div className="term-test-card-head">
+                <b>{row.test.variant_label}</b>
+                <i className={toneForStatus(row.test.status)}>{row.test.status}</i>
+              </div>
+              <p>
+                {ledgerOrMissing(row.thesis_id)}
+                {' · '}
+                {formatWindow(row.window_start, row.window_end)}
+              </p>
+              <p>{formatSymbols(row.symbols)}</p>
+              <div className="term-test-card-metrics">
+                <span className={pnlTone(row.total_return)}>Ret {ledgerPct(row.total_return)}</span>
+                <span className={row.max_drawdown === null ? 'muted' : 'down'}>
+                  DD {ledgerPct(row.max_drawdown)}
+                </span>
+                <span>Trades {ledgerCount(row.trade_count)}</span>
+              </div>
+            </button>
+          ))}
+          {!views.length && <p className="empty">No strategy tests in ledger</p>}
         </div>
       </section>
       <section className="term-panel">
@@ -180,30 +209,54 @@ function BacktestDetail({ view }: { view: ReturnType<typeof assembleBacktestView
         <span>{view.trades.length ? `${view.trades.length} in ledger` : NOT_IN_LEDGER}</span>
       </header>
       {view.trades.length ? (
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Sym</th>
-              <th>Side</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          <div className="term-scroll term-test-trades-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Sym</th>
+                  <th>Side</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.trades.map((row, index) => (
+                  <tr key={`${row.t ?? 't'}-${row.symbol ?? 'sym'}-${index}`}>
+                    <td>{row.t ? nyStamp(row.t) : NOT_IN_LEDGER}</td>
+                    <td className="sym">{ledgerOrMissing(row.symbol)}</td>
+                    <td>{ledgerOrMissing(row.side)}</td>
+                    <td>{row.qty === null ? NOT_IN_LEDGER : row.qty}</td>
+                    <td>{row.price === null ? NOT_IN_LEDGER : moneyPrecise(row.price)}</td>
+                    <td>{ledgerOrMissing(row.reason)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="term-test-trades-cards">
             {view.trades.map((row, index) => (
-              <tr key={`${row.t ?? 't'}-${row.symbol ?? 'sym'}-${index}`}>
-                <td>{row.t ? nyStamp(row.t) : NOT_IN_LEDGER}</td>
-                <td className="sym">{ledgerOrMissing(row.symbol)}</td>
-                <td>{ledgerOrMissing(row.side)}</td>
-                <td>{row.qty === null ? NOT_IN_LEDGER : row.qty}</td>
-                <td>{row.price === null ? NOT_IN_LEDGER : moneyPrecise(row.price)}</td>
-                <td>{ledgerOrMissing(row.reason)}</td>
-              </tr>
+              <div
+                key={`${row.t ?? 't'}-${row.symbol ?? 'sym'}-${index}`}
+                className="term-test-trade"
+              >
+                <b className="sym">{ledgerOrMissing(row.symbol)}</b>
+                <span>
+                  {ledgerOrMissing(row.side)}
+                  {' · '}
+                  {row.qty === null ? NOT_IN_LEDGER : row.qty}
+                </span>
+                <i>{row.price === null ? NOT_IN_LEDGER : moneyPrecise(row.price)}</i>
+                <p>
+                  {row.t ? nyStamp(row.t) : NOT_IN_LEDGER}
+                  {row.reason ? ` · ${ledgerOrMissing(row.reason)}` : ''}
+                </p>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </>
       ) : (
         <p className="empty">{NOT_IN_LEDGER}</p>
       )}

@@ -6,8 +6,8 @@ export type VenueFilter = 'all' | DeskVenue;
 
 export const VENUE_FILTERS = [
   { id: 'all' as const, label: 'All', short: 'All' },
-  { id: 'equity' as const, label: 'QUANTANAMO', short: 'EQ' },
-  { id: 'prediction' as const, label: 'ODDSBORNE', short: 'PM' },
+  { id: 'equity' as const, label: 'STOCKS', short: 'STOCKS' },
+  { id: 'prediction' as const, label: 'PREDICTIONS', short: 'PREDICTIONS' },
 ] as const;
 
 export function venueLabel(venue: DeskVenue): string {
@@ -15,7 +15,7 @@ export function venueLabel(venue: DeskVenue): string {
 }
 
 export function venueShort(venue: DeskVenue): string {
-  return venue === 'prediction' ? 'PM' : 'EQ';
+  return venue === 'prediction' ? 'PREDICTIONS' : 'STOCKS';
 }
 
 export function rowVenue(row: { venue?: DeskVenue | null }): DeskVenue {

@@ -191,7 +191,7 @@ export function TerminalApp({
           href="/"
           onClick={(event) => onDeskClick(event, () => go('/'))}
         >
-          QUANTANAMO
+          GRASSHOPPER
         </a>
         <nav className="term-nav" aria-label="Terminal">
           {DESK_TABS.map((item) => (
@@ -239,7 +239,7 @@ export function TerminalApp({
         <span>DEPLOYED {ledgerFigure(desk.book.deployed, money)}</span>
         <span>POS {desk.counts.open_positions}</span>
         {pmPnl && (
-          <span>PM {ledgerFigure(pmPnl.equity, moneyPrecise)}</span>
+          <span>PREDICTIONS {ledgerFigure(pmPnl.equity, moneyPrecise)}</span>
         )}
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>

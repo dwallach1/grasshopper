@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* Quantanamo — local Bloomberg-style research terminal */
+/* Grasshopper — local Bloomberg-style research terminal */
 
 :root {
   --canvas: #07080a;
@@ -3044,6 +3044,11 @@ a:focus-visible {
   max-width: 100%;
 }
 
+.term-tests-cards,
+.term-test-trades-cards {
+  display: none;
+}
+
 .term-venues {
   display: inline-flex;
   width: 100%;
@@ -3282,5 +3287,134 @@ a:focus-visible {
 
   .term-nav-value {
     font-size: 16px;
+  }
+
+  .term-venues {
+    max-width: 100%;
+  }
+
+  .term-venues button {
+    min-width: 0;
+    padding: 8px 6px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+
+  .term-venue-tag {
+    margin-left: 4px;
+    padding: 1px 4px;
+    letter-spacing: 0.02em;
+  }
+
+  .term-grid-backtests {
+    gap: 10px;
+  }
+
+  .term-grid-backtests .term-panel {
+    padding: 12px;
+  }
+
+  .term-grid-backtests .term-panel > header {
+    flex-wrap: wrap;
+    align-items: baseline;
+    row-gap: 4px;
+  }
+
+  .term-tests-table,
+  .term-test-trades-table {
+    display: none;
+  }
+
+  .term-tests-cards,
+  .term-test-trades-cards {
+    display: grid;
+    gap: 0;
+  }
+
+  .term-test-card {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 4px;
+    border: 0;
+    border-bottom: 1px solid #1b2129;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .term-test-card.sel {
+    background: var(--elevated-2);
+    margin: 0 -8px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .term-test-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .term-test-card-head b {
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .term-test-card-head i {
+    flex-shrink: 0;
+    font-style: normal;
+    font-size: 12px;
+  }
+
+  .term-test-card p {
+    margin: 0;
+    color: var(--text-2);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .term-test-card-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .term-test-trade {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 12px 0;
+    border-bottom: 1px solid #1b2129;
+    font-size: 12px;
+  }
+
+  .term-test-trade p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--text-2);
+  }
+
+  .term-grid-backtests .term-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .term-grid-backtests .term-line span {
+    grid-column: 1 / -1;
+    overflow-wrap: anywhere;
+  }
+
+  .term-grid-backtests .term-kpis-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .term-grid-backtests table {
+    min-width: 0;
   }
 }
