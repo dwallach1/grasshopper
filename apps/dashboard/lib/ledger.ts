@@ -38,8 +38,21 @@ import {
 } from './ledger-map';
 import type { DeskPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
-import { hasDatabaseUrl, isPostgresPermissionDenied, openSql } from './postgres';
+import {
+  hasDatabaseUrl,
+  isPostgresPermissionDenied,
+  isPostgresUndefinedRelation,
+  openSql,
+  type Sql,
+} from './postgres';
 import { AGENTIC_LAST4, assembleBookPerformance, latestBookExposures, snapshotForBook } from './book-performance';
+import {
+  emptyPredictionMarkets,
+  hydratePredictionDesk,
+  mapPredictionMarkets,
+  openPredictionCount,
+  type PredictionMarketsPayload,
+} from './prediction-book';
 import { assembleRoutines } from './routines';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
 
@@ -356,6 +369,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
+    const prediction = await loadPredictionMarkets(sql);
     return assembleDesk('postgres', decorateDesk(theses, symbols, {
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
@@ -394,7 +408,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }));
+    }, prediction));
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -471,6 +485,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
 
   const mappedTests = mapTests(tests);
   const mappedArtifacts = mapBacktestArtifacts(artifacts);
+  const prediction = await loadPredictionMarketsRest(accessToken);
   return assembleDesk('postgrest', decorateDesk(theses, symbols, {
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),
@@ -511,7 +526,95 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }));
+  }, prediction));
+}
+
+async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload> {
+  try {
+    const present = await sql`select to_regclass('public.pm_markets') is not null as ok`;
+    if (!present[0]?.ok) return emptyPredictionMarkets();
+    const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
+      sql`
+        select id, venue, slug, question, status, close_time, last_yes, last_no,
+               last_marked_at, thesis_id, rules_summary
+        from public.pm_markets
+        order by close_time nulls last, updated_at desc
+        limit 200
+      `,
+      sql`
+        select id, market_id, account_key, thesis_id, outcome, status, quantity,
+               average_cost, mark, mark_at, thesis_text
+        from public.pm_positions
+        order by updated_at desc
+        limit 200
+      `,
+      sql`
+        select id, market_id, thesis_id, outcome, side, order_type, size, price,
+               status, mode, venue_order_id, submitted_at, created_at
+        from public.pm_orders
+        order by created_at desc
+        limit 200
+      `,
+      sql`
+        select id, order_id, position_id, outcome, side, quantity, price, executed_at
+        from public.pm_fills
+        order by executed_at desc
+        limit 200
+      `,
+      sql`
+        select id, account_key, as_of, realized, unrealized, fees, cash, equity, notes
+        from public.pm_pnl
+        order by as_of desc
+        limit 20
+      `,
+      sql`
+        select id, market_id, thesis_id, note_type, title, body, created_at
+        from public.pm_notes
+        order by created_at desc
+        limit 80
+      `,
+    ]);
+    return mapPredictionMarkets({
+      markets: markets as unknown as Record<string, unknown>[],
+      positions: positions as unknown as Record<string, unknown>[],
+      orders: orders as unknown as Record<string, unknown>[],
+      fills: fills as unknown as Record<string, unknown>[],
+      pnl: pnl as unknown as Record<string, unknown>[],
+      notes: notes as unknown as Record<string, unknown>[],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (isPostgresPermissionDenied(message) || isPostgresUndefinedRelation(message)) {
+      console.error(JSON.stringify({ event: 'prediction_ledger_skipped', error: message }));
+      return emptyPredictionMarkets();
+    }
+    throw error;
+  }
+}
+
+async function restOptional(path: string, accessToken: string): Promise<JsonObjectRow[]> {
+  try {
+    return await restRows(path, accessToken);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'prediction_rest_skipped',
+      path,
+      error: error instanceof Error ? error.message : 'unknown',
+    }));
+    return [];
+  }
+}
+
+async function loadPredictionMarketsRest(accessToken: string): Promise<PredictionMarketsPayload> {
+  const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
+    restOptional('pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200', accessToken),
+    restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
+    restOptional('pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
+    restOptional('pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200', accessToken),
+    restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=20', accessToken),
+    restOptional('pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', accessToken),
+  ]);
+  return mapPredictionMarkets({ markets, positions, orders, fills, pnl, notes });
 }
 
 function bookFields(
@@ -544,15 +647,17 @@ function decorateDesk(
   thesisRows: JsonObjectRow[],
   symbolRows: JsonObjectRow[],
   body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines' | 'theses' | 'fill_log'>,
+  prediction: PredictionMarketsPayload = emptyPredictionMarkets(),
 ): Omit<DeskPayload, 'generated_at' | 'source' | 'routines'> {
+  const theses = attachThesisLots(mapTheses(thesisRows, symbolRows), {
+    links: mapThesisSymbolLinks(symbolRows),
+    proposals: body.proposals,
+    exposures: body.exposures,
+  });
+  const fillLog = assembleFillLog({ fills: body.fills, intents: body.intents });
   return {
     ...body,
-    theses: attachThesisLots(mapTheses(thesisRows, symbolRows), {
-      links: mapThesisSymbolLinks(symbolRows),
-      proposals: body.proposals,
-      exposures: body.exposures,
-    }),
-    fill_log: assembleFillLog({ fills: body.fills, intents: body.intents }),
+    ...hydratePredictionDesk(theses, fillLog, prediction),
   };
 }
 
@@ -571,7 +676,7 @@ function assembleDesk(
     }),
     counts: {
       ...body.counts,
-      open_positions: body.exposures.length,
+      open_positions: body.exposures.length + openPredictionCount(body.prediction_markets ?? emptyPredictionMarkets()),
     },
   };
 }

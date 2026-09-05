@@ -11,6 +11,7 @@ async function readDashboard(relative: string): Promise<string> {
 describe('desk IA smoke', () => {
   test('chrome lands on Book; Home and Risk are gone as destinations', async () => {
     const app = await readDashboard('app/terminal/app.tsx');
+    const book = await readDashboard('app/terminal/book-panel.tsx');
     const nav = await readDashboard('lib/desk-nav.ts');
     expect(app).toContain("surface === 'book'");
     expect(app).toContain("surface === 'events'");
@@ -29,6 +30,9 @@ describe('desk IA smoke', () => {
     expect(nav).not.toMatch(/id: 'risk'/);
     expect(nav).not.toMatch(/label: 'Home'/);
     expect(nav).not.toMatch(/label: 'Risk'/);
+    expect(nav).not.toMatch(/Polymarket/);
+    expect(app).toContain('VenueFilterBar');
+    expect(book).toContain('VenueFilterBar');
   });
 
   test('Book diagnostic is table-first and not a spinning cluster', async () => {

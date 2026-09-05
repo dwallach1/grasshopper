@@ -5,7 +5,7 @@ import { isPublishableKey } from './auth-public';
 import { deskAuthErrorMessage, firstSearchParam, isLoopbackIpHost } from './auth-search';
 import { mapAccounts, mapExposures } from './ledger-map';
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
-import { isPostgresPermissionDenied } from './postgres';
+import { isPostgresPermissionDenied, isPostgresUndefinedRelation } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
 import { nextSlotFire, upcomingWorkerFires, WORKER_SLOTS } from './schedule';
 import { isThesisStatus, parseThesisStatus } from './thesis-status';
@@ -147,6 +147,8 @@ describe('postgres permission errors', () => {
     expect(isPostgresPermissionDenied('permission denied for table cloud_runs')).toBe(true);
     expect(isPostgresPermissionDenied('permission denied for relation trade_intents')).toBe(true);
     expect(isPostgresPermissionDenied('duplicate key value violates unique constraint')).toBe(false);
+    expect(isPostgresUndefinedRelation('relation "pm_markets" does not exist')).toBe(true);
+    expect(isPostgresUndefinedRelation('permission denied for table pm_markets')).toBe(false);
   });
 });
 

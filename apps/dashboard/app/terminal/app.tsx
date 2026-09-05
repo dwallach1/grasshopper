@@ -15,8 +15,21 @@ import {
 import { heldAndCandidateSymbols } from '../../lib/held-catalyst';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
+import type { VenueFilter } from '../../lib/desk-venue';
+import { rowVenue } from '../../lib/desk-venue';
+import {
+  deskEvents,
+  deskLessons,
+  filterEvents,
+  filterLessons,
+  filterTheses,
+  latestPredictionPnl,
+  predictionDesk,
+  venueChipLabel,
+} from '../../lib/prediction-book';
 import { BacktestsPanel } from './backtests-panel';
 import { BookPanel } from './book-panel';
+import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   age,
   ledgerFigure,
@@ -168,6 +181,7 @@ export function TerminalApp({
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
   const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
+  const pmPnl = latestPredictionPnl(predictionDesk(desk));
 
   return (
     <div className={publicView ? 'term term-public' : 'term'}>
@@ -224,6 +238,9 @@ export function TerminalApp({
         <span>BP {ledgerFigure(desk.book.buying_power, money)}</span>
         <span>DEPLOYED {ledgerFigure(desk.book.deployed, money)}</span>
         <span>POS {desk.counts.open_positions}</span>
+        {pmPnl && (
+          <span>PM {ledgerFigure(pmPnl.equity, moneyPrecise)}</span>
+        )}
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
         <span className="term-kbd">1-4 panels · g then letter · j/k thesis · r refresh · ? help</span>
@@ -306,12 +323,17 @@ function ThesesPanel({
   selected?: ThesisRow;
   onSelect: (id: string) => void;
 }) {
+  const [venue, setVenue] = useState<VenueFilter>('all');
+  const theses = filterTheses(desk.theses, venue);
   const evidence = desk.evidence.filter((row) => row.thesis_id === selected?.id).slice(0, 12);
   const scores = desk.scores.filter((row) => row.thesis_id === selected?.id).slice(0, 24).reverse();
   const asOf = desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER;
   const roles = selected
     ? heldAndCandidateSymbols(selected.symbols, selected.lots.map((lot) => lot.symbol))
     : { held: [], candidates: [] };
+  const lots = selected
+    ? selected.lots.filter((lot) => venue === 'all' || rowVenue(lot) === venue)
+    : [];
   const themes = selected
     ? desk.ontology_themes.filter((row) => row.thesis_id === selected.id)
     : [];
@@ -323,9 +345,7 @@ function ThesesPanel({
       || selected.symbols.includes(row.candidate_key),
     ).slice(0, 16)
     : [];
-  const lessons = selected
-    ? desk.lessons.filter((row) => row.thesis_id === selected.id)
-    : desk.lessons;
+  const lessons = filterLessons(deskLessons(desk, selected?.id), venue);
   const postmortems = selected
     ? desk.postmortems.filter((row) => row.thesis_id === selected.id)
     : desk.postmortems;
@@ -334,15 +354,17 @@ function ThesesPanel({
     <div className="term-grid term-grid-theses">
       <section className="term-panel">
         <header><b>THESES</b><span>j/k · enter · snapshot {asOf}</span></header>
+        <VenueFilterBar value={venue} onChange={setVenue} />
         <div className="term-scroll">
         <table>
-          <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Held</th><th>Candidates</th></tr></thead>
+          <thead><tr><th>Id</th><th>Src</th><th>Status</th><th>C</th><th>Stance</th><th>Held</th><th>Candidates</th></tr></thead>
           <tbody>
-            {desk.theses.map((row) => {
+            {theses.map((row) => {
               const split = heldAndCandidateSymbols(row.symbols, row.lots.map((lot) => lot.symbol));
               return (
                 <tr key={row.id} className={row.id === selected?.id ? 'sel' : ''} onClick={() => onSelect(row.id)}>
                   <td className="sym">{row.id}</td>
+                  <td>{venueChipLabel(row.venues)}</td>
                   <td className={toneForStatus(row.status)}>{row.status}</td>
                   <td>{row.confidence}</td>
                   <td>{row.stance}</td>
@@ -369,11 +391,11 @@ function ThesesPanel({
             <p className="term-prose">
               Held {roles.held.join(' ') || '—'} · candidates {roles.candidates.join(' ') || '—'}
             </p>
-            {selected.lots.map((lot) => (
-              <div key={`${selected.id}-${lot.symbol}`} className="term-skin">
+            {lots.map((lot) => (
+              <div key={`${selected.id}-${rowVenue(lot)}-${lot.symbol}`} className="term-skin">
                 <div>
                   <i>Position</i>
-                  <b>{lot.symbol} · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
+                  <b>{lot.symbol} <VenueMark venue={rowVenue(lot)} /> · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
                 </div>
                 <div>
                   <i>Invested</i>
@@ -387,7 +409,7 @@ function ThesesPanel({
                 </div>
               </div>
             ))}
-            {!selected.lots.length && <p className="empty">no position</p>}
+            {!lots.length && <p className="empty">no position</p>}
             <header><b>THEMES</b><span>folded from ontology</span></header>
             {themes.map((row) => (
               <div key={row.id} className="term-line">
@@ -425,10 +447,10 @@ function ThesesPanel({
           <span>{desk.lessons.filter((row) => !row.incorporated).length} open loops</span>
         </header>
         {lessons.map((row) => (
-          <div key={row.id} className="term-line">
-            <b>{row.lesson_type}</b>
-            <span>{row.thesis_id} · {row.market_regime}</span>
-            <i className={row.incorporated ? 'up' : 'warn'}>{row.incorporated ? 'in model' : 'pending'}</i>
+          <div key={row.key} className="term-line">
+            <b>{row.kind} <VenueMark venue={row.venue} /></b>
+            <span>{row.thesis_id || 'unlinked'} · {row.regime || '—'}</span>
+            <i className={row.pending ? 'warn' : 'up'}>{row.pending ? 'pending' : 'in model'}</i>
             <p>{row.summary}</p>
           </div>
         ))}
@@ -473,19 +495,22 @@ function Sparkline({ scores }: { scores: number[] }) {
 }
 
 function EventsPanel({ desk }: { desk: DeskPayload }) {
+  const [venue, setVenue] = useState<VenueFilter>('all');
+  const events = filterEvents(deskEvents(desk), venue);
   return (
     <div className="term-grid term-grid-2">
       <section className="term-panel">
-        <header><b>CATALYSTS</b><span>pre-event sheet · not AI-filtered</span></header>
-        {desk.catalysts.map((row) => (
-          <div key={row.id} className="term-line">
-            <b className="sym">{row.symbol || '—'}</b>
-            <span>{row.catalyst_type} · {row.event_date || 'undated'} · {row.thesis_id}</span>
+        <header><b>CATALYSTS</b><span>dated events · earnings and market close</span></header>
+        <VenueFilterBar value={venue} onChange={setVenue} />
+        {events.map((row) => (
+          <div key={row.key} className="term-line">
+            <b className="sym">{row.name} <VenueMark venue={row.venue} /></b>
+            <span>{row.kind} · {row.when || 'undated'} · {row.thesis_id || 'unlinked'}</span>
             <i className={toneForStatus(row.status)}>{row.status}</i>
             <p>{row.summary}</p>
           </div>
         ))}
-        {!desk.catalysts.length && <p className="empty">{NOT_IN_LEDGER}</p>}
+        {!events.length && <p className="empty">{NOT_IN_LEDGER}</p>}
       </section>
       <section className="term-panel">
         <header><b>RESEARCH QUEUE</b><span>{desk.counts.open_research} open</span></header>

@@ -149,16 +149,16 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Book | Landing (`/`). Agentic last4 7638 NAV / cash / lots from the latest `portfolio_exposure` snapshot plus the matching `account_snapshots` row. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic beside/above the table: lot tiles (inner plate sized by notional, Δ only when marked) + interpolating NAV path from Agentic snapshots. Table stays canonical; unmarked lots are muted, never a fake P/L color. |
-| 2 | Theses | Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons pane |
-| 3 | Events | Catalysts + `research_queue` (pre-event sheet; not AI-filtered). `/catalysts` redirects here. |
+| 1 | Book | Landing (`/`). One book, two venues: QUANTANAMO (Agentic last4 7638 NAV / cash / lots from `portfolio_exposure` + `account_snapshots`) and ODDSBORNE (`pm_positions` / `pm_pnl` when present). Venue chips filter the same lots / fills / intents table — not a second app. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic is the Agentic 7638 path (hidden on the ODDSBORNE-only chip). Unmarked lots are muted, never a fake P/L color. Equities and markets are **not** summed into one NAV. |
+| 2 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
+| 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–4`, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. No filter box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–4`, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / QUANTANAMO / ODDSBORNE) filter Book, Theses, and Events — not a search box.
 
-Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`. Book names come from that exposure snapshot, not `position_episodes`.
+Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist. Missing `pm_*` tables yield an empty prediction payload — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
 ---
 
@@ -168,6 +168,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 |---|---|
 | Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
+| Prediction | `pm_markets`, `pm_positions`, `pm_orders`, `pm_fills`, `pm_pnl`, `pm_notes` (ODDSBORNE / Polymarket; GRASSHOPPER) |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
@@ -209,7 +210,7 @@ operator machine / QUANTANAMO  →  bun run desk:publish  →  file + optional P
 
 `anon` cannot read `dashboard_snapshots` (or live tables) through PostgREST. Do not put `service_role`, `QUANTANAMO_DATABASE_URL`, or a publishable/anon key in the public client. Ignore retired 410 stubs `dashboard-publication` and `cloud-control` — they are not this path.
 
-Prediction-market tables `pm_*` are an optional `prediction_markets` key on the snapshot. GRASSHOPPER can add them later without a Worker change.
+`pm_*` rows (now live on Supabase) map into the **same** Book / Theses / Events language as equities. The public Worker does not query them — the publisher folds `prediction_markets` into the snapshot. Empty tables stay empty; no invented P/L.
 
 ### Deploy
 
@@ -254,7 +255,7 @@ Env (see `.env.example`; never commit secrets):
 | `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` |
 | `DESK_PUBLISH_TOKEN` | Publisher + `wrangler secret` | Timing-safe ingest. Not `NEXT_PUBLIC_*`. |
 
-GRASSHOPPER follow-ups: create the KV namespace and paste the id; `wrangler secret put DESK_PUBLISH_TOKEN`; deploy; run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`); optional custom domain; when `pm_*` tables exist, extend the publisher payload.
+GRASSHOPPER follow-ups: create the KV namespace and paste the id; `wrangler secret put DESK_PUBLISH_TOKEN`; deploy; run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`); optional custom domain; keep writing `pm_*` (publisher already maps them — do not add a second public app). Apply `20260905120000_revoke_anon_dashboard_snapshots.sql` on live if not applied.
 
 ```sh
 bun run --cwd apps/dashboard test

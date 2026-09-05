@@ -1,3 +1,5 @@
+import type { DeskVenue } from './desk-venue';
+import type { PredictionMarketsPayload } from './prediction-book';
 import type { ParsedRunNotes } from './run-notes';
 import type { ThesisStatus } from './thesis-status';
 
@@ -16,6 +18,7 @@ export type ThesisLot = {
   mark: number | null;
   pnl: number | null;
   note: string;
+  venue?: DeskVenue;
 };
 
 export type ThesisRow = {
@@ -32,6 +35,8 @@ export type ThesisRow = {
   updated_at: string;
   symbols: string[];
   lots: ThesisLot[];
+  /** QUANTANAMO and/or ODDSBORNE. Default equity when omitted. */
+  venues?: DeskVenue[];
 };
 
 export type ThesisEvidenceRow = {
@@ -317,6 +322,7 @@ export type BookNameLine = {
   mark: number | null;
   pnl: number | null;
   note: string;
+  venue?: DeskVenue;
 };
 
 export type BookPerformance = {
@@ -412,8 +418,9 @@ export type FillLogRow = {
   price: number | null;
   notional: number | null;
   status: string;
-  source: 'broker_fill' | 'filled_intent';
+  source: 'broker_fill' | 'filled_intent' | 'prediction_fill';
   note: string;
+  venue?: DeskVenue;
 };
 
 export type InsightRow = {
@@ -503,8 +510,8 @@ export type DeskCounts = {
 export type DeskPayload = {
   generated_at: string;
   source: 'postgres' | 'postgrest' | 'snapshot';
-  /** Reserved for GRASSHOPPER `pm_*` tables. Absent until a publisher includes them. */
-  prediction_markets?: { generated_at?: string; markets?: unknown[] };
+  /** ODDSBORNE `pm_*` snapshot. Empty object when those tables are missing. */
+  prediction_markets?: PredictionMarketsPayload;
   theses: ThesisRow[];
   evidence: ThesisEvidenceRow[];
   scores: ThesisScoreRow[];

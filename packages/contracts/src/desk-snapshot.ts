@@ -61,8 +61,7 @@ export function publicDeskJsonError(message = PUBLIC_DESK_UNAVAILABLE): { error:
 
 /**
  * Mark a live desk payload as the public snapshot. Drops operator-only audit
- * rows. Prediction-market tables (`pm_*`) pass through when present so
- * GRASSHOPPER can extend the snapshot without a Worker change.
+ * rows. `prediction_markets` (ODDSBORNE `pm_*`) passes through when present.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const {
