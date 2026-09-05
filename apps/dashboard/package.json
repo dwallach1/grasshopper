@@ -18,6 +18,7 @@
     "typecheck": "bun --bun tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@quantanamo/contracts": "workspace:*",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "next": "16.2.6",

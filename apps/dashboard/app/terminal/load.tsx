@@ -1,15 +1,18 @@
 import { headers } from 'next/headers';
 
+import { isPublicDesk } from '../../lib/desk-mode';
 import { SignInScreen } from '../auth/sign-in';
-import { TerminalApp } from './app';
+import { OperatorTerminal } from './operator-app';
+import { PublicTerminal } from './public-shell';
 import { loadDeskAuthMethods } from '../../lib/auth-env';
 import { isLoopbackIpHost } from '../../lib/auth-search';
 import { loadDesk } from '../../lib/ledger';
 import { readOperatorSession } from '../../lib/operator-session';
 
-export const dynamic = 'force-dynamic';
-
 export async function TerminalShell() {
+  if (isPublicDesk()) {
+    return <PublicTerminal />;
+  }
   const host = (await headers()).get('host') ?? '';
   const session = await readOperatorSession();
   if (session === 'unauthenticated' || session === 'forbidden') {
@@ -46,5 +49,5 @@ export async function TerminalShell() {
       </main>
     );
   }
-  return <TerminalApp initial={loaded.desk} operatorEmail={session.email} />;
+  return <OperatorTerminal initial={loaded.desk} email={session.email} />;
 }

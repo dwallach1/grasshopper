@@ -1,0 +1,38 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "quantanamo-desk",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/internal/*",
+      "/book",
+      "/catalysts",
+      "/ontology",
+      "/risk",
+      "/runs",
+      "/learnings"
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "DESK_SNAPSHOT",
+      "id": "55a8dea844924c09a6a4c86db15ed8a0"
+    }
+  ],
+  "secrets": {
+    "required": ["DESK_PUBLISH_TOKEN"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

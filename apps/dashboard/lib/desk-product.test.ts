@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { PUBLIC_DESK_REDIRECTS } from '@quantanamo/contracts/desk-snapshot';
+
 import { assembleBookPerformance, isAgenticAccount, MARK_NOT_IN_LEDGER, NOT_IN_LEDGER } from './book-performance';
 import { allocationSlices, bookSlabs, slabTone } from './book-slabs';
 import { navPathSeries } from './book-nav-path';
@@ -87,6 +89,7 @@ describe('desk nav labels', () => {
     expect(DESK_PATH_REDIRECTS.map((row) => row.source)).toEqual([
       '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings',
     ]);
+    expect(PUBLIC_DESK_REDIRECTS).toEqual(DESK_PATH_REDIRECTS);
   });
 
   test('path and go-letter map to the same surfaces without colliding with r refresh', () => {

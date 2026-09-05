@@ -112,6 +112,7 @@ export function assembleBookPerformance(input: {
         mark,
         pnl,
         note: mark === null ? MARK_NOT_IN_LEDGER : '',
+        venue: 'equity',
       };
     });
 

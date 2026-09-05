@@ -6,14 +6,19 @@
   "type": "module",
   "workspaces": ["apps/*", "workers/*", "packages/*", "tests/*"],
   "scripts": {
-    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/dashboard typecheck && bun run --cwd workers/research typecheck && bun run --cwd workers/knowledge typecheck && bun run --cwd workers/broker typecheck",
-    "test": "bun run --cwd packages/shared test && bun run --cwd apps/dashboard test && bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd apps/dashboard typecheck && bun run --cwd workers/research typecheck && bun run --cwd workers/knowledge typecheck && bun run --cwd workers/broker typecheck && bun run --cwd workers/desk typecheck",
+    "test": "bun run --cwd packages/shared test && bun run --cwd packages/contracts test && bun run --cwd apps/dashboard test && bun run --cwd workers/research test && bun run --cwd workers/knowledge test && bun run --cwd workers/broker test && bun run --cwd workers/desk test",
     "test:e2e": "bun run --cwd tests/e2e test",
     "dry-run": "bun run --cwd workers/research dry-run && bun run --cwd workers/knowledge dry-run && bun run --cwd workers/broker dry-run",
     "cloud:sync": "bun run --cwd workers/knowledge sync",
     "cloud:trigger": "bun run --cwd workers/research trigger",
     "local:setup": "bash scripts/local-dev-setup.sh",
     "web:app": "bash scripts/web-app.sh",
+    "web:public": "NEXT_PUBLIC_DESK_MODE=public bash scripts/web-app.sh",
+    "desk:build": "bash scripts/build-public-desk.sh",
+    "desk:publish": "bun scripts/publish-public-desk.ts",
+    "desk:dev": "bun run --cwd workers/desk dev",
+    "desk:deploy": "bash scripts/build-public-desk.sh && bun run --cwd workers/desk deploy",
     "dev": "bun run web:app"
   },
   "devDependencies": {

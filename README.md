@@ -32,13 +32,14 @@ flowchart LR
   X["X bookmarks<br/>@wallachworld<br/>seeds only"]
   G["QUANTANAMO<br/>Grok Bot"]
   L[("Supabase ledger<br/>xqungxapqicdmboniezz")]
-  D["Local desk<br/>bun run web:app"]
+  D["Local operator desk<br/>bun run web:app"]
+  P["Public phone desk<br/>Cloudflare Worker"]
   R["Robinhood MCP<br/>Agentic ····7638"]
 
   X -->|X connector| G
   G -->|theses · runs · snapshots| L
   L -->|PostgREST as operator| D
-  D -->|status · evidence · lessons| L
+  L -->|publish-public-desk| P
   G -->|review then place| R
   R -->|NAV · fills · positions| G
 ```
@@ -48,10 +49,11 @@ flowchart LR
 | **QUANTANAMO (Grok Bot)** | Research and trading brain. Writes the ledger. Places equities through Robinhood MCP when gates pass. |
 | **Supabase** `xqungxapqicdmboniezz` | Canonical store: theses, runs, `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, … |
 | **Local desk** | `bun run web:app` / `bash scripts/web-app.sh`. Reads the ledger as the signed-in operator. Does not run the bot. |
+| **Public phone desk** | Cloudflare Worker `quantanamo-desk`. Same Book/Theses/Events/Tests chrome, read-only snapshot from KV. No Supabase keys in the browser. |
 | **X connector** | Bookmark seeds from `@wallachworld`. Not the reconnect-OAuth path on the desk. |
 | **Robinhood Agentic** | Live proof account, nickname **Agentic**, last4 **7638**. Official MCP only. |
 
-Cloudflare workers, ThesisForge cron, and the `dashboard-publication` / `cloud-control` edge functions are **retired ingest**. The desk talks to PostgREST as the signed-in operator. Worker folders may still exist in the repo; they are not the live loop.
+ThesisForge cron and the `dashboard-publication` / `cloud-control` edge functions are **retired ingest**. The operator desk talks to PostgREST as the signed-in user. `workers/desk` is the public read-only phone site (snapshot only). Other worker folders are not the live research/trading loop.
 
 ---
 
@@ -147,16 +149,16 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Book | Landing (`/`). Agentic last4 7638 NAV / cash / lots from the latest `portfolio_exposure` snapshot plus the matching `account_snapshots` row. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic beside/above the table: lot tiles (inner plate sized by notional, Δ only when marked) + interpolating NAV path from Agentic snapshots. Table stays canonical; unmarked lots are muted, never a fake P/L color. |
-| 2 | Theses | Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons pane |
-| 3 | Events | Catalysts + `research_queue` (pre-event sheet; not AI-filtered). `/catalysts` redirects here. |
+| 1 | Book | Landing (`/`). One book, two venues: QUANTANAMO (Agentic last4 7638 NAV / cash / lots from `portfolio_exposure` + `account_snapshots`) and ODDSBORNE (`pm_positions` / `pm_pnl` when present). Venue chips filter the same lots / fills / intents table — not a second app. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic is the Agentic 7638 path (hidden on the ODDSBORNE-only chip). Unmarked lots are muted, never a fake P/L color. Equities and markets are **not** summed into one NAV. |
+| 2 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
+| 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–4`, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. No filter box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–4`, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / QUANTANAMO / ODDSBORNE) filter Book, Theses, and Events — not a search box.
 
-Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`. Not `dashboard_snapshots.current`. Book names come from that exposure snapshot, not `position_episodes`.
+Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist. Missing `pm_*` tables yield an empty prediction payload — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
 ---
 
@@ -166,6 +168,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 |---|---|
 | Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
+| Prediction | `pm_markets`, `pm_positions`, `pm_orders`, `pm_fills`, `pm_pnl`, `pm_notes` (ODDSBORNE / Polymarket; GRASSHOPPER) |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
@@ -177,14 +180,78 @@ The desk is read-only. QUANTANAMO writes the ledger. See [`LOCAL.md`](LOCAL.md).
 ## Repository
 
 ```text
-apps/dashboard/          local Next desk (PostgREST as operator)
+apps/dashboard/          local Next desk (PostgREST as operator; public mode via env)
 config/trade_policy.json human-authored live limits (keep in sync with Trading)
 docs/                    runbooks (some still describe retired Cloudflare ingest)
 supabase/schemas/        declarative Postgres
 supabase/migrations/     history
 packages/                shared helpers
+workers/desk             public phone desk (static assets + snapshot API)
 workers/                 retired Cloudflare ingest — not the live brain
 ```
+
+---
+
+## Public phone desk
+
+The operator desk stays localhost-only (`bun run web:app`). The public site is the **same terminal chrome** (Book / Theses / Events / Tests) hosted on Cloudflare Workers static assets. It never talks to PostgREST.
+
+```
+phone  →  Worker GET /api/desk  →  KV key `current`  (curated DeskPayload, source=snapshot)
+operator machine / QUANTANAMO  →  bun run desk:publish  →  file + optional PUT /internal/snapshot
+```
+
+### How data is published (no live DB on the public Worker)
+
+1. `bun run desk:publish` runs **server-side** with `QUANTANAMO_DATABASE_URL`. It uses the same `loadDeskFromPostgres()` assembler as the operator desk, then `toPublicDeskSnapshot()` (`source: 'snapshot'`, operator audit rows dropped).
+2. It writes `workers/desk/.data/current.json` (gitignored) and, when the DB is reachable, an audit row `dashboard_snapshots.id = 'public'`.
+3. With `DESK_PUBLISH_URL` + `DESK_PUBLISH_TOKEN` it PUTs that JSON to the Worker (`/internal/snapshot`). The Worker stores it in KV. Wrong/missing token looks like `404`.
+4. The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
+
+`anon` cannot read `dashboard_snapshots` (or live tables) through PostgREST. Do not put `service_role`, `QUANTANAMO_DATABASE_URL`, or a publishable/anon key in the public client. Ignore retired 410 stubs `dashboard-publication` and `cloud-control` — they are not this path.
+
+`pm_*` rows (now live on Supabase) map into the **same** Book / Theses / Events language as equities. The public Worker does not query them — the publisher folds `prediction_markets` into the snapshot. Empty tables stay empty; no invented P/L.
+
+### Deploy
+
+```sh
+# KV DESK_SNAPSHOT is already created (id in workers/desk/wrangler.jsonc).
+# Publish token is a Worker secret — never commit it.
+bun --cwd workers/desk wrangler secret put DESK_PUBLISH_TOKEN
+bun run desk:deploy
+```
+
+The Worker is `quantanamo-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787).
+
+### Local operator vs public
+
+| | Operator (`bun run web:app`) | Public (`NEXT_PUBLIC_DESK_MODE=public` or the Worker) |
+|---|---|---|
+| Auth | Magic link / passkey; `ledger_operators` RLS | None. Snapshot only. |
+| Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` from a file (local) or KV (Cloudflare) |
+| Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys |
+| Writes | Retired 410s | 405 / 404 |
+| Chrome | Sign out / Passkey+ | Hidden |
+
+Local public preview (same Next app, no Cloudflare):
+
+```sh
+bun run desk:publish          # needs QUANTANAMO_DATABASE_URL
+bun run web:public            # http://localhost:5173 — GET /api/desk
+```
+
+Env (see `.env.example`; never commit secrets):
+
+| Var | Where | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_DESK_MODE=public` | Public client / `web:public` | Skip operator auth |
+| `NEXT_PUBLIC_DESK_URL` | Public metadata | Canonical public origin |
+| `PUBLIC_DESK_SNAPSHOT_PATH` | Local Next `/api/desk` | Snapshot file (default `workers/desk/.data/current.json`) |
+| `QUANTANAMO_DATABASE_URL` | Publisher only | Assemble the snapshot |
+| `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` |
+| `DESK_PUBLISH_TOKEN` | Publisher + `wrangler secret` | Timing-safe ingest. Not `NEXT_PUBLIC_*`. |
+
+After deploy: run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`) so the public URL is not an empty snapshot. Optional custom domain. Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
 
 ```sh
 bun run --cwd apps/dashboard test

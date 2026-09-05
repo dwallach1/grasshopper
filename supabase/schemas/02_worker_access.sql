@@ -670,10 +670,9 @@ revoke all on function public.publish_dashboard_snapshot(jsonb, boolean)
 grant execute on function public.publish_dashboard_snapshot(jsonb, boolean)
   to service_role;
 
--- Owner-only Quantanamo Sites reads use a publishable API key plus a
--- high-entropy server token. The token is never sent to the browser, and RLS
--- restricts this role to the single canonical dashboard row.
-grant select on table public.dashboard_snapshots to anon;
+-- Public phone desk reads a Worker-served KV snapshot, not PostgREST.
+-- Keep dashboard_snapshots private: service_role / QUANTANAMO_DATABASE_URL only.
+revoke all on table public.dashboard_snapshots from anon, authenticated;
 
 create or replace function public.is_quantanamo_dashboard_reader()
 returns boolean
@@ -682,34 +681,13 @@ stable
 security invoker
 set search_path = ''
 as $$
-  select encode(
-    extensions.digest(
-      coalesce(
-        current_setting('request.headers', true)::jsonb ->> 'x-quantanamo-dashboard-token',
-        ''
-      ),
-      'sha256'
-    ),
-    'hex'
-  ) in (
-    '28390b6c34a3ce62cadb7b5423d2602398eb4d23cf0c7edeeef876474c08a35a',
-    'f92815d42576ec7de57769076d2c547f8ee4811db0cba6fc1e8a94cfe212eef9',
-    -- local-dashboard-token-do-not-use-in-prod
-    '329669fba60b385cfa668bb781897f56cdbecf54101b96b1d642c05473fd311b'
-  );
+  select false
 $$;
-revoke all on function public.is_quantanamo_dashboard_reader() from public, authenticated, service_role;
-grant execute on function public.is_quantanamo_dashboard_reader() to anon;
+revoke all on function public.is_quantanamo_dashboard_reader()
+  from public, anon, authenticated, service_role;
 
 drop policy if exists quantanamo_site_snapshot_select on public.dashboard_snapshots;
-create policy quantanamo_site_snapshot_select
-on public.dashboard_snapshots
-for select
-to anon
-using (
-  id = 'current'
-  and (select public.is_quantanamo_dashboard_reader())
-);
+drop policy if exists thesisforge_site_snapshot_select on public.dashboard_snapshots;
 
 create or replace function public.is_quantanamo_site_manager()
 returns boolean

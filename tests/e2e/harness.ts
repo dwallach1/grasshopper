@@ -109,8 +109,8 @@ export async function readCurrentSnapshot(): Promise<SnapshotPayload> {
     `${LOCAL.supabaseUrl}/rest/v1/dashboard_snapshots?id=eq.current&select=payload`,
     {
       headers: {
-        apikey: LOCAL.anonKey,
-        'x-quantanamo-dashboard-token': LOCAL.dashboardToken,
+        apikey: LOCAL.serviceRoleKey,
+        authorization: `Bearer ${LOCAL.serviceRoleKey}`,
       },
     },
   );

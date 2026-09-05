@@ -1,22 +1,39 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+
+import { isPublicDesk, publicDeskOrigin } from '../lib/desk-mode';
 import './globals.css';
 
+const publicOrigin = publicDeskOrigin();
+
 export const metadata: Metadata = {
-  metadataBase: new URL('http://localhost:5173'),
+  metadataBase: new URL(publicOrigin || 'http://localhost:5173'),
   title: 'Quantanamo',
-  description: 'Local research/trading terminal over the Quantanamo ledger.',
+  description: isPublicDesk()
+    ? 'Read-only Quantanamo desk. Published snapshot only — the site cannot write the ledger.'
+    : 'Local research/trading terminal over the Quantanamo ledger.',
   openGraph: {
     title: 'Quantanamo',
-    description: 'Preregister. Break. Learn. Deploy.',
+    description: isPublicDesk()
+      ? 'Read-only public desk over a published snapshot.'
+      : 'Preregister. Break. Learn. Deploy.',
     type: 'website',
     images: [{ url: '/og.png', width: 1672, height: 941, alt: 'Quantanamo' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Quantanamo',
-    description: 'Preregister. Break. Learn. Deploy.',
+    description: isPublicDesk()
+      ? 'Read-only public desk over a published snapshot.'
+      : 'Preregister. Break. Learn. Deploy.',
     images: ['/og.png'],
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#07080a',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

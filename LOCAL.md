@@ -2,7 +2,7 @@
 
 The webapp is a localhost Bloomberg-style desk over the **live Quantanamo ledger** in Supabase (`xqungxapqicdmboniezz`). It does not serve a mock dataset and it does not run ingestion, research, or broker jobs.
 
-**QUANTANAMO (Grok Bot) is the only live automation.** It reads X through the X connector and trades through Robinhood, then writes canonical tables (`runs`, `account_snapshots`, `theses`, `position_episodes`, …). Cloudflare workers and the old ThesisForge / Codex pipeline are retired from this desk: do not reconnect X OAuth here, do not press Run on a knowledge worker, and do not treat Cloudflare cron as due.
+**QUANTANAMO (Grok Bot) is the only live automation.** It reads X through the X connector and trades through Robinhood, then writes canonical tables (`runs`, `account_snapshots`, `theses`, `position_episodes`, …). ODDSBORNE `pm_*` rows (Polymarket) land on the same Book / Theses / Events chrome via venue chips when present. The public phone desk (`bun run desk:deploy`) is a read-only snapshot — see the README Public phone desk section. Cloudflare ingest workers and the old ThesisForge / Codex pipeline are retired from this desk: do not reconnect X OAuth here, do not press Run on a knowledge worker, and do not treat Cloudflare cron as due.
 
 ## Requirements
 
@@ -93,6 +93,8 @@ On **Events** you should see the NVDA / IREN / MRVL / CRDO catalysts and the ope
 On **Tests** you should see every `strategy_tests` row (including old seed keys like `ai-power-base`). Selecting a row opens a detail pane on the same tab: `summary_json`, equity curve (`chart_svg` or `equity_curve`), trades, params, and Financial Datasets `price_source`. Rows with no `backtest_artifacts` say **no artifacts in ledger** — the desk never draws a fake curve. Null metrics say **not in ledger**.
 
 The desk is **read-only**. QUANTANAMO writes the ledger. Sign-in stays as the operator gate. There are no thesis status buttons, evidence/lesson forms, or other operator RPCs that insert/update/delete ledger rows.
+
+The **public phone desk** is a different build: `NEXT_PUBLIC_DESK_MODE=public` or the Cloudflare Worker `quantanamo-desk`. It reads a published snapshot (`/api/desk`) and never signs in. See the README **Public phone desk** section. Do not point the public SPA at PostgREST.
 
 `curl` without the session cookie is 401. `POST /api/ledger/thesis|evidence|lesson|run` returns 410.
 

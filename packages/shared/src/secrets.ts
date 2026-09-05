@@ -33,7 +33,16 @@ export async function secretsEqual(left: string, right: string): Promise<boolean
   ]);
   // SAFETY: Cloudflare Workers extends SubtleCrypto with timingSafeEqual at runtime.
   const subtle = crypto.subtle as SubtleCrypto & {
-    timingSafeEqual(first: ArrayBuffer, second: ArrayBuffer): boolean;
+    timingSafeEqual?(first: ArrayBuffer, second: ArrayBuffer): boolean;
   };
-  return subtle.timingSafeEqual(leftHash, rightHash);
+  if (typeof subtle.timingSafeEqual === 'function') {
+    return subtle.timingSafeEqual(leftHash, rightHash);
+  }
+  const leftBytes = new Uint8Array(leftHash);
+  const rightBytes = new Uint8Array(rightHash);
+  let diff = 0;
+  for (let i = 0; i < leftBytes.length; i += 1) {
+    diff |= (leftBytes[i] ?? 0) ^ (rightBytes[i] ?? 0);
+  }
+  return diff === 0;
 }

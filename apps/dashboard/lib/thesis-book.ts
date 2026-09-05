@@ -121,6 +121,7 @@ export function attachThesisLots(
           mark: null,
           pnl: null,
           note: NO_POSITION,
+          venue: 'equity',
         };
       }
       const { pnl, note } = pnlFor(lot);
@@ -133,6 +134,7 @@ export function attachThesisLots(
         mark: lot.mark,
         pnl,
         note,
+        venue: 'equity',
       };
     });
     return { ...thesis, lots: attached };
@@ -183,6 +185,7 @@ export function assembleFillLog(input: {
         status: intent?.status ?? 'filled',
         source: 'broker_fill',
         note: intent ? '' : 'intent not in ledger',
+        venue: 'equity',
       });
     }
     return rows.sort(compareFillLog);
@@ -204,6 +207,7 @@ export function assembleFillLog(input: {
         status: intent.status,
         source: 'filled_intent' as const,
         note: price === null ? 'price not in ledger' : 'broker fills not in ledger',
+        venue: 'equity' as const,
       };
     })
     .sort(compareFillLog);

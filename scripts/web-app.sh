@@ -41,20 +41,28 @@ if [[ -z "$next_supabase_url" && -n "$supabase_url" ]]; then
   next_supabase_url="$supabase_url"
 fi
 
-if [[ -z "$db_url" && -z "$secret_key" && -z "$publishable" && -z "$next_publishable" && -z "$next_anon" ]]; then
+public_desk="${NEXT_PUBLIC_DESK_MODE:-}"
+if [[ "${public_desk,,}" == "public" ]]; then
+  export NEXT_PUBLIC_DESK_MODE=public
+  echo "→ Public desk mode (snapshot only; no operator sign-in)"
+  echo "→ GET /api/desk reads PUBLIC_DESK_SNAPSHOT_PATH or workers/desk/.data/current.json"
+elif [[ -z "$db_url" && -z "$secret_key" && -z "$publishable" && -z "$next_publishable" && -z "$next_anon" ]]; then
   echo "Need a Supabase credential in root .env.local:"
   echo "  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...  # required for operator sign-in"
   echo "  QUANTANAMO_DATABASE_URL=...               # optional, workers / postgres.js"
   echo "  or SUPABASE_SECRET_KEY=...                # service_role, server-only"
+  echo "  or NEXT_PUBLIC_DESK_MODE=public           # snapshot preview, no live ledger"
   exit 1
 fi
 
 export LOCAL_DEV_IDENTITY="${LOCAL_DEV_IDENTITY:-local@quantanamo.dev}"
 export QUANTANAMO_MANAGER_USER_IDS="${QUANTANAMO_MANAGER_USER_IDS:-$LOCAL_DEV_IDENTITY}"
 export SUPABASE_URL="${supabase_url:-}"
-[[ -n "$next_supabase_url" ]] && export NEXT_PUBLIC_SUPABASE_URL="$next_supabase_url"
-[[ -n "$next_publishable" ]] && export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$next_publishable"
-[[ -n "$next_anon" ]] && export NEXT_PUBLIC_SUPABASE_ANON_KEY="$next_anon"
+if [[ "${public_desk,,}" != "public" ]]; then
+  [[ -n "$next_supabase_url" ]] && export NEXT_PUBLIC_SUPABASE_URL="$next_supabase_url"
+  [[ -n "$next_publishable" ]] && export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$next_publishable"
+  [[ -n "$next_anon" ]] && export NEXT_PUBLIC_SUPABASE_ANON_KEY="$next_anon"
+fi
 [[ -n "$db_url" ]] && export QUANTANAMO_DATABASE_URL="$db_url"
 [[ -n "$secret_key" ]] && export SUPABASE_SECRET_KEY="$secret_key"
 [[ -n "$publishable" ]] && export SUPABASE_PUBLISHABLE_KEY="$publishable"

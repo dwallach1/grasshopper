@@ -3,10 +3,20 @@
 import { useMemo, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import { lotKey, rowVenue, type VenueFilter } from '../../lib/desk-venue';
 import { nextHeldCatalyst } from '../../lib/held-catalyst';
 import type { BookPerformance, DeskPayload, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
+import {
+  deskBookNames,
+  filterBookNames,
+  filterFillLog,
+  filterIntents,
+  latestPredictionPnl,
+  predictionDesk,
+} from '../../lib/prediction-book';
 import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
 import { BookDiagnostic } from './book-diagnostic';
+import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   ledgerFigure,
   moneyPrecise,
@@ -25,41 +35,57 @@ export function BookPanel({
   nowIso: string;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [venue, setVenue] = useState<VenueFilter>('all');
+  const names = useMemo(() => filterBookNames(deskBookNames(desk), venue), [desk, venue]);
+  const prediction = useMemo(() => predictionDesk(desk), [desk]);
   const catalyst = useMemo(
     () => nextHeldCatalyst(desk.catalysts, desk.book.names, nowIso),
     [desk.book.names, desk.catalysts, nowIso],
   );
-  const skinned = desk.theses.filter((row) => row.lots.length > 0);
-  const fillLog = desk.fill_log;
+  const skinned = desk.theses.filter((row) =>
+    row.lots.some((lot) => venue === 'all' || rowVenue(lot) === venue),
+  );
+  const fillLog = filterFillLog(desk.fill_log, venue);
+  const intents = filterIntents(desk.intents, prediction, venue);
 
   return (
     <div className="term-grid term-grid-book">
       <section className="term-panel term-book-kpis">
         <header>
-          <b>LIVE BOOK</b>
+          <b>BOOK</b>
           <span>
-            {desk.book.account_label || 'Agentic'} last4 {desk.book.last4 || '7638'}
-            {desk.book.observed_at ? ` · snapshot ${nyStamp(desk.book.observed_at)}` : ` · snapshot ${NOT_IN_LEDGER}`}
+            one desk · two venues
+            {desk.book.observed_at ? ` · ${nyStamp(desk.book.observed_at)}` : ''}
           </span>
         </header>
-        <BookKpis book={desk.book} />
+        <VenueFilterBar value={venue} onChange={setVenue} />
+        {venue === 'prediction' ? (
+          <PredictionKpis desk={desk} />
+        ) : (
+          <BookKpis book={desk.book} />
+        )}
+        {venue === 'all' && <PredictionKpis desk={desk} compact />}
       </section>
       <section className="term-panel term-book-table">
         <header>
           <b>LOTS</b>
-          <span>table is canonical · marks ledger-only</span>
+          <span>table is canonical · venue chip · marks ledger-only</span>
         </header>
-        <BookTable
-          book={desk.book}
+        <div className="term-scroll">
+          <BookTable
+            names={names}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
+      </section>
+      {venue !== 'prediction' && (
+        <BookDiagnostic
+          desk={desk}
           selectedId={selectedId}
           onSelect={setSelectedId}
         />
-      </section>
-      <BookDiagnostic
-        desk={desk}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
+      )}
       <section className="term-panel term-book-catalyst">
         <header>
           <b>NEXT DATED CATALYST</b>
@@ -86,12 +112,12 @@ export function BookPanel({
           <b>INTENTS</b>
           <span>unfilled / working</span>
         </header>
-        {desk.intents.filter((row) => {
+        {intents.filter((row) => {
           const status = row.status.toLowerCase();
           return status !== 'filled' && status !== 'canceled' && status !== 'cancelled';
         }).slice(0, 8).map((row) => (
-          <div key={row.id} className="term-line">
-            <b className="sym">{row.symbol}</b>
+          <div key={`${row.venue}-${row.id}`} className="term-line">
+            <b className="sym">{row.symbol} <VenueMark venue={row.venue} /></b>
             <span>{row.side} {row.mode} {row.notional === null ? NOT_IN_LEDGER : moneyPrecise(row.notional)} · {qty(row.quantity)}</span>
             <i className={toneForStatus(row.status)}>{row.status}</i>
             <p>{row.order_type} {row.broker_order_id || ''}</p>
@@ -107,7 +133,7 @@ export function BookPanel({
           </span>
         </header>
         {skinned.map((row) => (
-          <ThesisSkin key={row.id} row={row} />
+          <ThesisSkin key={row.id} row={row} venue={venue} />
         ))}
         {!skinned.length && <p className="empty">{NO_POSITION}</p>}
       </section>
@@ -119,7 +145,7 @@ function BookKpis({ book }: { book: BookPerformance }) {
   return (
     <>
       <div className="term-kpis">
-        <div>
+        <div className="term-kpi-hero">
           <i>NAV</i>
           <b>{ledgerFigure(book.current_nav, moneyPrecise)}</b>
         </div>
@@ -159,11 +185,11 @@ function BookKpis({ book }: { book: BookPerformance }) {
 }
 
 function BookTable({
-  book,
+  names,
   selectedId,
   onSelect,
 }: {
-  book: BookPerformance;
+  names: BookPerformance['names'];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
@@ -171,7 +197,7 @@ function BookTable({
     <table>
       <thead>
         <tr>
-          <th>Sym</th>
+          <th>Name</th>
           <th>Qty</th>
           <th>Avg cost</th>
           <th>Cost</th>
@@ -180,21 +206,24 @@ function BookTable({
         </tr>
       </thead>
       <tbody>
-        {book.names.map((row) => (
-          <tr
-            key={row.symbol}
-            className={selectedId === row.symbol ? 'sel' : ''}
-            onClick={() => onSelect(row.symbol === selectedId ? null : row.symbol)}
-          >
-            <td className="sym">{row.symbol}</td>
-            <td>{qty(row.quantity)}</td>
-            <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
-            <td>{ledgerFigure(row.cost, moneyPrecise)}</td>
-            <td>{row.mark === null ? row.note : moneyPrecise(row.mark)}</td>
-            <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : signedMoney(row.pnl)}</td>
-          </tr>
-        ))}
-        {!book.names.length && (
+        {names.map((row) => {
+          const id = lotKey(rowVenue(row), row.symbol);
+          return (
+            <tr
+              key={id}
+              className={selectedId === id || selectedId === row.symbol ? 'sel' : ''}
+              onClick={() => onSelect(id === selectedId || row.symbol === selectedId ? null : id)}
+            >
+              <td className="sym">{row.symbol} <VenueMark venue={rowVenue(row)} /></td>
+              <td>{qty(row.quantity)}</td>
+              <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
+              <td>{ledgerFigure(row.cost, moneyPrecise)}</td>
+              <td>{row.mark === null ? row.note : moneyPrecise(row.mark)}</td>
+              <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : signedMoney(row.pnl)}</td>
+            </tr>
+          );
+        })}
+        {!names.length && (
           <tr><td colSpan={6} className="empty">{NOT_IN_LEDGER}</td></tr>
         )}
       </tbody>
@@ -210,7 +239,7 @@ function FillLogTable({ rows }: { rows: FillLogRow[] }) {
     <>
       {rows.map((row) => (
         <div key={row.id} className="term-line">
-          <b className="sym">{row.symbol || NOT_IN_LEDGER}</b>
+          <b className="sym">{row.symbol || NOT_IN_LEDGER} <VenueMark venue={rowVenue(row)} /></b>
           <span>
             {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)} / {ledgerFigure(row.notional, moneyPrecise)}
           </span>
@@ -222,7 +251,8 @@ function FillLogTable({ rows }: { rows: FillLogRow[] }) {
   );
 }
 
-function ThesisSkin({ row }: { row: ThesisRow }) {
+function ThesisSkin({ row, venue }: { row: ThesisRow; venue: VenueFilter }) {
+  const lots = row.lots.filter((lot) => venue === 'all' || rowVenue(lot) === venue);
   return (
     <div className="term-thesis">
       <div className="term-thesis-head">
@@ -230,8 +260,8 @@ function ThesisSkin({ row }: { row: ThesisRow }) {
         <span className={toneForStatus(row.status)}>{row.status}</span>
         <i>{row.confidence} · {row.stance}</i>
       </div>
-      {row.lots.map((lot) => (
-        <LotBar key={`${row.id}-${lot.symbol}`} lot={lot} />
+      {lots.map((lot) => (
+        <LotBar key={`${row.id}-${rowVenue(lot)}-${lot.symbol}`} lot={lot} />
       ))}
     </div>
   );
@@ -242,7 +272,7 @@ function LotBar({ lot }: { lot: ThesisLot }) {
     <div className="term-skin">
       <div>
         <i>Position</i>
-        <b>{lot.symbol} · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
+        <b>{lot.symbol} <VenueMark venue={rowVenue(lot)} /> · {lot.side.toUpperCase()} · {qty(lot.quantity)}</b>
       </div>
       <div>
         <i>Invested</i>
@@ -252,6 +282,43 @@ function LotBar({ lot }: { lot: ThesisLot }) {
         <i>Current</i>
         <b className={pnlClass(lot.pnl)}>{currentCell(lot)}</b>
       </div>
+    </div>
+  );
+}
+
+function PredictionKpis({ desk, compact = false }: { desk: DeskPayload; compact?: boolean }) {
+  const pnl = latestPredictionPnl(predictionDesk(desk));
+  if (!pnl) {
+    return compact ? null : <p className="empty">ODDSBORNE book {NOT_IN_LEDGER}</p>;
+  }
+  return (
+    <div className={compact ? 'term-prose dim' : undefined}>
+      {!compact && (
+        <div className="term-kpis">
+          <div>
+            <i>PM equity</i>
+            <b>{ledgerFigure(pnl.equity, moneyPrecise)}</b>
+          </div>
+          <div>
+            <i>Cash</i>
+            <b>{ledgerFigure(pnl.cash, moneyPrecise)}</b>
+          </div>
+          <div>
+            <i>Realized</i>
+            <b className={pnlClass(pnl.realized)}>{signedMoney(pnl.realized)}</b>
+          </div>
+          <div>
+            <i>Unrealized</i>
+            <b className={pnlClass(pnl.unrealized)}>{signedMoney(pnl.unrealized)}</b>
+          </div>
+        </div>
+      )}
+      <p className="term-prose dim">
+        ODDSBORNE {nyStamp(pnl.as_of)}
+        {pnl.notes ? ` · ${pnl.notes}` : ''}
+        {compact ? ` · equity ${ledgerFigure(pnl.equity, moneyPrecise)}` : ''}
+        . Marks are ledger-only.
+      </p>
     </div>
   );
 }
