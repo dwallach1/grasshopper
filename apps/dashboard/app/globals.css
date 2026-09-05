@@ -3265,9 +3265,10 @@ a:focus-visible {
     align-items: center;
     justify-content: center;
     min-height: 48px;
+    padding: 0 4px;
     color: var(--text-2);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
   }
 
@@ -3315,9 +3316,13 @@ a:focus-visible {
   }
 
   .term-grid-backtests .term-panel > header {
-    flex-wrap: wrap;
-    align-items: baseline;
+    flex-direction: column;
+    align-items: flex-start;
     row-gap: 4px;
+  }
+
+  .term-grid-backtests .term-panel > header b {
+    overflow-wrap: anywhere;
   }
 
   .term-tests-table,
