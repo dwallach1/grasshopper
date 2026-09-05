@@ -31,7 +31,15 @@ import {
 
 const POLL_MS = 15_000;
 
-export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; operatorEmail: string }) {
+export function TerminalApp({
+  initial,
+  operatorEmail,
+  publicView = false,
+}: {
+  initial: DeskPayload;
+  operatorEmail: string;
+  publicView?: boolean;
+}) {
   const pathname = usePathname();
   const [desk, setDesk] = useState(initial);
   const [now, setNow] = useState<number | null>(null);
@@ -185,7 +193,7 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
           <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
           {desk.source} · {age(desk.generated_at, now)}
         </div>
-        <SessionControls email={operatorEmail} />
+        {!publicView && <SessionControls email={operatorEmail} />}
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
       <main className="term-main">
@@ -216,6 +224,18 @@ export function TerminalApp({ initial, operatorEmail }: { initial: DeskPayload; 
         <span>Q {desk.counts.open_research}</span>
         <span className="term-kbd">1-4 panels · g then letter · j/k thesis · r refresh · ? help</span>
       </footer>
+      <nav className="term-dock" aria-label="Desk tabs">
+        {DESK_TABS.map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            className={surface === item.id ? 'on' : ''}
+            onClick={(event) => onDeskClick(event, () => go(item.href))}
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
@@ -310,6 +330,7 @@ function ThesesPanel({
     <div className="term-grid term-grid-theses">
       <section className="term-panel">
         <header><b>THESES</b><span>j/k · enter · snapshot {asOf}</span></header>
+        <div className="term-scroll">
         <table>
           <thead><tr><th>Id</th><th>Status</th><th>C</th><th>Stance</th><th>Held</th><th>Candidates</th></tr></thead>
           <tbody>
@@ -328,6 +349,7 @@ function ThesesPanel({
             })}
           </tbody>
         </table>
+        </div>
       </section>
       <section className="term-panel">
         {selected ? (

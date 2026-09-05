@@ -3,8 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { refreshAuthCookies } from './lib/auth-session';
 import { publicPublishableKeyFromEnv, publicSupabaseUrlFromEnv } from './lib/auth-public';
+import { isPublicDesk } from './lib/desk-mode';
 
 export async function proxy(request: NextRequest) {
+  if (isPublicDesk()) return NextResponse.next({ request });
   let response = NextResponse.next({ request });
   try {
     const supabase = createServerClient(publicSupabaseUrlFromEnv(), publicPublishableKeyFromEnv(), {

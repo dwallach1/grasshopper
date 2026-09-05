@@ -26,6 +26,15 @@ describe('read-only operator desk', () => {
     expect(app).not.toMatch(/Status →/);
     expect(app).not.toContain('Append evidence');
     expect(app).not.toContain('Append a lesson');
+    const pub = await readDashboard('app/terminal/public-shell.tsx');
+    const client = await readDashboard('lib/desk-client.ts');
+    expect(pub).toContain('fetchDeskPayload');
+    expect(pub).not.toContain('/api/ledger');
+    expect(pub).not.toContain('createBrowserSupabase');
+    expect(client).toContain("isPublicDesk() ? '/api/desk' : '/api/ledger'");
+    expect(client).toContain('if (isPublicDesk()) return () => undefined');
+    expect(app).toContain('publicView');
+    expect(app).toContain('!publicView && <SessionControls');
   });
 
   test('ledger mutation routes are gone and do not post', async () => {

@@ -12,6 +12,7 @@
       "name": "@quantanamo/dashboard",
       "version": "0.1.0",
       "dependencies": {
+        "@quantanamo/contracts": "workspace:*",
         "@supabase/ssr": "^0.12.5",
         "@supabase/supabase-js": "^2.112.4",
         "next": "16.2.6",
@@ -71,6 +72,19 @@
         "agents": "0.20.0",
         "jose": "6.2.10",
         "zod": "^4",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "5.20260823.1",
+        "typescript": "5.9.3",
+        "wrangler": "4.125.0",
+      },
+    },
+    "workers/desk": {
+      "name": "@quantanamo/worker-desk",
+      "version": "0.0.0",
+      "dependencies": {
+        "@quantanamo/contracts": "workspace:*",
+        "@quantanamo/shared": "workspace:*",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "5.20260823.1",
@@ -436,6 +450,8 @@
     "@quantanamo/shared": ["@quantanamo/shared@workspace:packages/shared"],
 
     "@quantanamo/worker-broker": ["@quantanamo/worker-broker@workspace:workers/broker"],
+
+    "@quantanamo/worker-desk": ["@quantanamo/worker-desk@workspace:workers/desk"],
 
     "@quantanamo/worker-knowledge": ["@quantanamo/worker-knowledge@workspace:workers/knowledge"],
 

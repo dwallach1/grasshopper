@@ -49,11 +49,13 @@ export function BookPanel({
           <b>LOTS</b>
           <span>table is canonical · marks ledger-only</span>
         </header>
-        <BookTable
-          book={desk.book}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
+        <div className="term-scroll">
+          <BookTable
+            book={desk.book}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+        </div>
       </section>
       <BookDiagnostic
         desk={desk}

@@ -30,14 +30,12 @@ describe.skipIf(!supabaseReady)('local publication e2e', () => {
     expect(response.ok).toBe(false);
   });
 
-  test('rejects dashboard snapshot reads without the dashboard token', async () => {
+  test('anon cannot read dashboard_snapshots via PostgREST', async () => {
     const response = await fetch(
       `${LOCAL.supabaseUrl}/rest/v1/dashboard_snapshots?id=eq.current&select=payload`,
       { headers: { apikey: LOCAL.anonKey } },
     );
-    expect(response.status).toBe(200);
-    const rows = await response.json();
-    expect(rows).toEqual([]);
+    expect([401, 403]).toContain(response.status);
   });
 
   test('publishes dashboard_snapshots.current through the PostgREST RPC', async () => {

@@ -5,7 +5,11 @@
   "type": "module",
   "exports": {
     "./broker": "./src/broker.ts",
-    "./publication": "./src/publication.ts"
+    "./publication": "./src/publication.ts",
+    "./desk-snapshot": "./src/desk-snapshot.ts"
+  },
+  "scripts": {
+    "test": "bun test src"
   },
   "dependencies": {
     "zod": "^4"

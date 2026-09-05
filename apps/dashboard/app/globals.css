@@ -32,6 +32,8 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -3014,4 +3016,164 @@ a:focus-visible {
   border: 1px solid var(--line);
   background: var(--canvas);
   color: var(--text);
+}
+
+.term-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+.term-dock {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .term {
+    grid-template-rows: auto auto 1fr auto auto;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .term-top {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 44px;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
+  }
+
+  .term-brand {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .term-nav {
+    width: 100%;
+    order: 3;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .term-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .term-nav a {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+
+  .term-nav kbd {
+    display: none;
+  }
+
+  .term-chip,
+  .term-live,
+  .term-session {
+    max-width: 100%;
+  }
+
+  .term-session {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .term-session button,
+  .term-session form button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 12px;
+  }
+
+  .term-main {
+    padding: 8px 8px 12px;
+  }
+
+  .term-panel {
+    overflow: auto;
+  }
+
+  .term-panel td,
+  .term-line,
+  .term-thesis {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .term-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .term-kpis b {
+    font-size: 18px;
+    word-break: break-word;
+  }
+
+  .term-skin {
+    grid-template-columns: 1fr;
+  }
+
+  .term-status {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 8px 10px;
+  }
+
+  .term-kbd {
+    display: none;
+  }
+
+  .term-help {
+    left: 12px;
+    right: 12px;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: none;
+  }
+
+  .term-dock {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    border-top: 1px solid var(--line);
+    background: #0b0d10;
+    padding: 0 4px env(safe-area-inset-bottom, 0px);
+  }
+
+  .term-dock a {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    color: var(--text-2);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .term-dock a.on {
+    color: var(--amber);
+    background: rgba(255, 138, 0, 0.12);
+  }
+
+  .term-nav-windows button,
+  .term-lot-tile,
+  .term-actions button,
+  .term-form button,
+  .term-form select,
+  .term-form input {
+    min-height: 44px;
+  }
+
+  .term-nav-value {
+    font-size: 16px;
+  }
 }

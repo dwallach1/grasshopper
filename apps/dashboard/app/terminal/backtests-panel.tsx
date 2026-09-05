@@ -54,6 +54,7 @@ export function BacktestsPanel({
           <b>STRATEGY TESTS</b>
           <span>{desk.counts.tests_survived} survived / {desk.counts.tests_killed} killed</span>
         </header>
+        <div className="term-scroll">
         <table>
           <thead>
             <tr>
@@ -91,6 +92,7 @@ export function BacktestsPanel({
             )}
           </tbody>
         </table>
+        </div>
       </section>
       <section className="term-panel">
         {selected ? <BacktestDetail view={selected} /> : <p className="empty">No test selected</p>}

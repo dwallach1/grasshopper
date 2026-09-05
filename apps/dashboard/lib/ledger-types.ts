@@ -502,7 +502,9 @@ export type DeskCounts = {
 
 export type DeskPayload = {
   generated_at: string;
-  source: 'postgres' | 'postgrest';
+  source: 'postgres' | 'postgrest' | 'snapshot';
+  /** Reserved for GRASSHOPPER `pm_*` tables. Absent until a publisher includes them. */
+  prediction_markets?: { generated_at?: string; markets?: unknown[] };
   theses: ThesisRow[];
   evidence: ThesisEvidenceRow[];
   scores: ThesisScoreRow[];
