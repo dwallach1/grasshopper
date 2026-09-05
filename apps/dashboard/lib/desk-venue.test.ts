@@ -5,6 +5,7 @@ import {
   matchesVenueFilter,
   rowVenue,
   thesisMatchesVenue,
+  VENUE_FILTERS,
   venueLabel,
   venueShort,
 } from './desk-venue';
@@ -13,8 +14,10 @@ describe('desk venue chips', () => {
   test('labels stay one-desk language, not a second app', () => {
     expect(venueLabel('equity')).toBe('QUANTANAMO');
     expect(venueLabel('prediction')).toBe('ODDSBORNE');
-    expect(venueShort('equity')).toBe('EQ');
-    expect(venueShort('prediction')).toBe('PM');
+    expect(venueShort('equity')).toBe('STOCKS');
+    expect(venueShort('prediction')).toBe('PREDICTIONS');
+    expect(VENUE_FILTERS.map((item) => item.short)).toEqual(['All', 'STOCKS', 'PREDICTIONS']);
+    expect(VENUE_FILTERS.map((item) => item.label)).toEqual(['All', 'STOCKS', 'PREDICTIONS']);
     expect(lotKey('prediction', 'YES · sample')).toBe('prediction:YES · sample');
   });
 

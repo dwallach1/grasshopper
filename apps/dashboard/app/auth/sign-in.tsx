@@ -28,7 +28,7 @@ function GateFrame({ children }: { children: ReactNode }) {
   return (
     <main className="term-gate">
       <header className="term-top">
-        <span className="term-brand">QUANTANAMO</span>
+        <span className="term-brand">GRASSHOPPER</span>
         <span className="term-live">desk locked</span>
       </header>
       <section className="term-gate-card">{children}</section>
@@ -50,7 +50,7 @@ export function SignInScreen({
   return (
     <Suspense fallback={(
       <GateFrame>
-        <b>QUANTANAMO</b>
+        <b>GRASSHOPPER</b>
         <h1>Operator sign-in</h1>
       </GateFrame>
     )}
@@ -150,7 +150,7 @@ function SignInForm({
 
   return (
     <GateFrame>
-      <b>QUANTANAMO</b>
+      <b>GRASSHOPPER</b>
       <h1>Operator sign-in</h1>
       <p>
         Authenticate to read the live ledger. The publishable key stays in the browser; the secret

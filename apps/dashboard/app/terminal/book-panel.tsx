@@ -296,7 +296,7 @@ function PredictionKpis({ desk, compact = false }: { desk: DeskPayload; compact?
       {!compact && (
         <div className="term-kpis">
           <div>
-            <i>PM equity</i>
+            <i>Predictions equity</i>
             <b>{ledgerFigure(pnl.equity, moneyPrecise)}</b>
           </div>
           <div>

@@ -43,7 +43,7 @@ export function PublicTerminal() {
     return (
       <main className="data-unavailable">
         <section>
-          <b className="term-brand">QUANTANAMO</b>
+          <b className="term-brand">GRASSHOPPER</b>
           <h1>Desk</h1>
           <p>Loading the published snapshot. Marks stay blank until the ledger includes them.</p>
         </section>

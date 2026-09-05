@@ -35,6 +35,34 @@ describe('desk IA smoke', () => {
     expect(book).toContain('VenueFilterBar');
   });
 
+  test('product chrome is GRASSHOPPER; venue shorts are STOCKS / PREDICTIONS', async () => {
+    const app = await readDashboard('app/terminal/app.tsx');
+    const shell = await readDashboard('app/terminal/public-shell.tsx');
+    const signIn = await readDashboard('app/auth/sign-in.tsx');
+    const layout = await readDashboard('app/layout.tsx');
+    const venue = await readDashboard('lib/desk-venue.ts');
+    const chips = await readDashboard('app/terminal/venue-filter.tsx');
+    const tests = await readDashboard('app/terminal/backtests-panel.tsx');
+    expect(app).toMatch(/term-brand[\s\S]{0,180}GRASSHOPPER\s*<\/a>/);
+    expect(app).not.toMatch(/term-brand[\s\S]{0,180}QUANTANAMO/);
+    expect(app).toContain('no QUANTANAMO run');
+    expect(shell).toContain('>GRASSHOPPER<');
+    expect(signIn).toContain('>GRASSHOPPER<');
+    expect(layout).toContain("title: 'Grasshopper'");
+    expect(venue).toContain("short: 'STOCKS'");
+    expect(venue).toContain("short: 'PREDICTIONS'");
+    expect(venue).toContain("label: 'STOCKS'");
+    expect(venue).toContain("label: 'PREDICTIONS'");
+    expect(venue).toContain("? 'ODDSBORNE' : 'QUANTANAMO'");
+    expect(venue).toContain("? 'PREDICTIONS' : 'STOCKS'");
+    expect(chips).toContain('venueShort(venue)');
+    expect(chips).not.toContain("'EQ'");
+    expect(chips).not.toContain("'PM'");
+    expect(tests).toContain('term-tests-cards');
+    expect(tests).toContain('term-test-card');
+    expect(tests).toContain('term-test-trades-cards');
+  });
+
   test('Book diagnostic is table-first and not a spinning cluster', async () => {
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const app = await readDashboard('app/terminal/app.tsx');

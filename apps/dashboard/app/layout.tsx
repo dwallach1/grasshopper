@@ -7,21 +7,21 @@ const publicOrigin = publicDeskOrigin();
 
 export const metadata: Metadata = {
   metadataBase: new URL(publicOrigin || 'http://localhost:5173'),
-  title: 'Quantanamo',
+  title: 'Grasshopper',
   description: isPublicDesk()
-    ? 'Read-only Quantanamo desk. Published snapshot only — the site cannot write the ledger.'
-    : 'Local research/trading terminal over the Quantanamo ledger.',
+    ? 'Read-only Grasshopper desk. Published snapshot only — the site cannot write the ledger.'
+    : 'Local research/trading terminal over the Grasshopper ledger.',
   openGraph: {
-    title: 'Quantanamo',
+    title: 'Grasshopper',
     description: isPublicDesk()
       ? 'Read-only public desk over a published snapshot.'
       : 'Preregister. Break. Learn. Deploy.',
     type: 'website',
-    images: [{ url: '/og.png', width: 1672, height: 941, alt: 'Quantanamo' }],
+    images: [{ url: '/og.png', width: 1672, height: 941, alt: 'Grasshopper' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Quantanamo',
+    title: 'Grasshopper',
     description: isPublicDesk()
       ? 'Read-only public desk over a published snapshot.'
       : 'Preregister. Break. Learn. Deploy.',
