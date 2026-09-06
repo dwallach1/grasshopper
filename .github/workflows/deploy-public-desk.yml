@@ -1,0 +1,36 @@
+# Deploys Worker grasshopper-desk (same path as `bun run desk:deploy`).
+name: Deploy public desk
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Build public desk assets
+        run: bun run desk:build
+
+      - name: Deploy grasshopper-desk
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/desk
+          packageManager: bun
+          wranglerVersion: "4.125.0"
+          command: deploy

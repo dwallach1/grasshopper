@@ -221,7 +221,16 @@ bun --cwd workers/desk wrangler secret put DESK_PUBLISH_TOKEN
 bun run desk:deploy
 ```
 
-The Worker is `quantanamo-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787).
+Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs that same build + `wrangler deploy` from `workers/desk` after `bun run desk:build` writes `workers/desk/dist`. Required GitHub Actions secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Edit Cloudflare Workers** |
+| `CLOUDFLARE_ACCOUNT_ID` | `97af2e2312077d4689e9a012ef5dde75` |
+
+`DESK_PUBLISH_TOKEN` is already a Wrangler Worker secret (`wrangler secret put`). It is not a GitHub Actions secret and is not needed to deploy.
+
+The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787).
 
 ### Local operator vs public
 
