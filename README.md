@@ -149,16 +149,16 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Book | Book (`/book`). One book, three venues: QUANTANAMO stocks (Agentic last4 7638 NAV / cash / lots from `portfolio_exposure` + `account_snapshots`), ODDSBORNE predictions (`pm_positions` / `pm_pnl` when present), and BANDIT coins (`meme_positions` / `meme_pnl` when present). **All** rolls up USD books (Stocks NAV/cash + Predictions equity/cash) and keeps SOL as a separate native line — never converted, never shown as `$`. Lots / fills / intents are the union. STOCKS / PREDICTIONS / COINS chips keep their own units (COINS is SOL). Living diagnostic is the Agentic 7638 path (STOCKS chip only). Unmarked lots are muted, never a fake P/L color. |
-| 2 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
-| 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
-| 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
-| 5 | Team | Cards for every `desk_agents` row (today: GRASSHOPPER, QUANTANAMO, ODDSBORNE, BANDIT) with current `desk_domain_stewards` chips (`desk_domains`: Ledger / Stocks / Predictions / Meme coins). Soft stewardship — rotate a steward without renaming a domain. Heartbeat glow is ledger `heartbeat_at` only. Empty tables fall back to identity rows, never invented P/L. `/mates` redirects here. |
-| 6 | Board | Landing (`/`). Desk-sport leaderboard. `/leaderboard` redirects here. QUANTANAMO / ODDSBORNE / BANDIT ranked on **% return vs each book’s own start** in that book’s native unit (USD or SOL). Never converts SOL→USD. Missing start is **not ranked**, not 0%. Risk sits next to return (max drawdown from pnl/NAV history, else days live / open lots). GRASSHOPPER is ledger owner — a fourth row only if a real desk-level book exists. Venue chips stay on Book / Theses / Events. |
+| 1 | Board | Landing (`/`). Desk-sport % lines via [Liveline](https://benji.org/liveline). QUANTANAMO / ODDSBORNE / BANDIT compete on **% vs each book’s own start** in native units (USD or SOL). ALL is a multi-series of those % curves — the only shared axis. No SOL→USD. Missing start is **not ranked**, not 0%. `/leaderboard` redirects here. See [`docs/liveline-pnl.md`](docs/liveline-pnl.md). |
+| 2 | Book | `/book`. Liveline equity heroes in native units (USD vs SOL never share an axis). QUANTANAMO from Agentic `account_snapshots`, ODDSBORNE from `pm_pnl`, BANDIT from `meme_pnl`. Lots / fills stay ledger-only. STOCKS / PREDICTIONS / COINS chips keep their own units. |
+| 3 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
+| 4 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
+| 5 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
+| 6 | Team | Cards for every `desk_agents` row (today: GRASSHOPPER, QUANTANAMO, ODDSBORNE, BANDIT) with current `desk_domain_stewards` chips (`desk_domains`: Ledger / Stocks / Predictions / Meme coins). Soft stewardship — rotate a steward without renaming a domain. Heartbeat glow is ledger `heartbeat_at` only. Empty tables fall back to identity rows, never invented P/L. `/mates` redirects here. |
 
-Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/leaderboard` → `/`; `/risk` and `/runs` → `/book`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
+Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/leaderboard` and `/board` → `/`; `/risk` and `/runs` → `/book`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–6`, `g` then letter (`b/t/c/e/m/p`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Book, Theses, and Events — not a search box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–6`, `g` then letter (`p/b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Book, Theses, and Events — not a search box.
 
 Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist, plus BANDIT `meme_tokens` / `meme_positions` / `meme_orders` / `meme_fills` / `meme_pnl` / `meme_notes` when those relations exist, plus Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts` when those relations exist. Missing `pm_*`, `meme_*`, or `desk_*` tables yield an empty slice — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
@@ -198,7 +198,7 @@ workers/                 retired Cloudflare ingest — not the live brain
 
 ## Public phone desk
 
-The operator desk stays localhost-only (`bun run web:app`). The public site is the **same terminal chrome** (Book / Theses / Events / Tests / Team / Board) hosted on Cloudflare Workers static assets. It never talks to PostgREST.
+The operator desk stays localhost-only (`bun run web:app`). The public site is the same desk (Board / Book / Theses / Events / Tests / Team) hosted on Cloudflare Workers static assets. Board and Book are Liveline-first. It never talks to PostgREST.
 
 ```
 phone  →  Worker GET /api/desk  →  KV key `current`  (curated DeskPayload, source=snapshot)

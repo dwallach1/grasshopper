@@ -7,6 +7,8 @@ export default {
     const workerFirst = path.startsWith('/api/')
       || path.startsWith('/internal/')
       || path === '/leaderboard'
+      || path === '/board'
+      || path === '/ranks'
       || path === '/catalysts'
       || path === '/ontology'
       || path === '/risk'

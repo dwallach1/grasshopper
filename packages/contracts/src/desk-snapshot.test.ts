@@ -53,7 +53,7 @@ describe('public desk snapshot contract', () => {
 
   test('retired paths match the operator desk redirects', () => {
     expect(PUBLIC_DESK_REDIRECTS.map((row) => row.source)).toEqual([
-      '/leaderboard', '/catalysts', '/ontology', '/risk', '/runs', '/learnings', '/mates',
+      '/leaderboard', '/board', '/ranks', '/catalysts', '/ontology', '/risk', '/runs', '/learnings', '/mates',
     ]);
     expect(PUBLIC_DESK_REDIRECTS.find((row) => row.source === '/leaderboard')?.destination).toBe('/');
     expect(PUBLIC_DESK_REDIRECTS.find((row) => row.source === '/risk')?.destination).toBe('/book');

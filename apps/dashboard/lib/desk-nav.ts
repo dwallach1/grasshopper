@@ -1,22 +1,18 @@
 /**
  * Desk surfaces. Tab switches must not remount this shell or refetch the ledger.
  *
- * Investigated cause of multi-second lag: each tab was its own App Router page
- * (`app/page.tsx`, `app/book/page.tsx`, …) default-exporting `TerminalPage`,
- * which `await loadDesk()` (~30 PostgREST calls) and remounted `TerminalApp`.
- * `<Link>` / `router.push` therefore paid a full RSC + ledger waterfall per tab.
- * Chrome now lives in `app/(desk)/layout.tsx`; tab changes paint from in-memory
- * state and `history.pushState` without waiting on the server.
+ * Board (`/`) is home. Book lives at `/book`. Chrome stays mounted; tab changes
+ * paint from in-memory state and `history.pushState`.
  * Keep README.md "Local desk" in the same PR when this list changes.
  */
 
 export const DESK_SURFACES = [
+  'leaderboard',
   'book',
   'theses',
   'events',
   'backtests',
   'team',
-  'leaderboard',
 ] as const;
 
 export type DeskSurface = (typeof DESK_SURFACES)[number];
@@ -30,12 +26,12 @@ export type DeskTab = {
 };
 
 export const DESK_TABS: readonly DeskTab[] = [
-  { href: '/book', id: 'book', key: '1', label: 'Book', go: 'b' },
-  { href: '/theses', id: 'theses', key: '2', label: 'Theses', go: 't' },
-  { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
-  { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
-  { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
-  { href: '/', id: 'leaderboard', key: '6', label: 'Board', go: 'p' },
+  { href: '/', id: 'leaderboard', key: '1', label: 'Board', go: 'p' },
+  { href: '/book', id: 'book', key: '2', label: 'Book', go: 'b' },
+  { href: '/theses', id: 'theses', key: '3', label: 'Theses', go: 't' },
+  { href: '/events', id: 'events', key: '4', label: 'Events', go: 'c' },
+  { href: '/backtests', id: 'backtests', key: '5', label: 'Tests', go: 'e' },
+  { href: '/team', id: 'team', key: '6', label: 'Team', go: 'm' },
 ] as const;
 
 /** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
@@ -46,6 +42,8 @@ export type DeskPathRedirect = {
 
 export const DESK_PATH_REDIRECTS = [
   { source: '/leaderboard', destination: '/' },
+  { source: '/board', destination: '/' },
+  { source: '/ranks', destination: '/' },
   { source: '/catalysts', destination: '/events' },
   { source: '/ontology', destination: '/theses' },
   { source: '/risk', destination: '/book' },
@@ -60,9 +58,9 @@ function surfaceFromHead(head: string): DeskSurface {
     case 'leaderboard':
     case 'board':
     case 'ranks':
+    case 'home':
       return 'leaderboard';
     case 'book':
-    case 'home':
     case 'risk':
     case 'runs':
       return 'book';
@@ -108,6 +106,7 @@ export function surfaceFromGoLetter(letter: string): DeskSurface | null {
   if (direct) return direct.id;
   switch (letter) {
     case 'h':
+      return 'leaderboard';
     case 'i':
       return 'book';
     case 'k':

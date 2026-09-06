@@ -264,7 +264,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         from public.account_snapshots
         where account_label ilike '%agentic%'
         order by observed_at desc, id desc
-        limit 40
+        limit 200
       `,
       sql`
         select observed_at, account_label, total_value, equity_value, cash, buying_power, source
@@ -479,7 +479,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('backtest_artifacts?select=id,test_id,thesis_id,artifact_kind,title,mime_type,payload_json,storage_bucket,storage_path,source,created_at&order=created_at.desc,id.desc', accessToken),
     restRows('test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&order=tested_at.desc,id.desc', accessToken),
     restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', accessToken),
-    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=40', accessToken),
+    restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=200', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
     restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
     restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,last_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, accessToken),
@@ -581,7 +581,7 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
         select id, account_key, as_of, realized, unrealized, fees, cash, equity, notes
         from public.pm_pnl
         order by as_of desc
-        limit 20
+        limit 200
       `,
       sql`
         select id, market_id, thesis_id, note_type, title, body, created_at
@@ -714,7 +714,7 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
         select id, account_key, as_of, realized, unrealized, fees, cash_sol, equity_sol, notes
         from public.meme_pnl
         order by as_of desc
-        limit 20
+        limit 200
       `,
       sql`
         select id, token_id, thesis_id, note_type, title, body, created_at
@@ -747,7 +747,7 @@ async function loadMemeCoinsRest(accessToken: string): Promise<MemeCoinsPayload>
     restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
     restOptional('meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
     restOptional('meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200', accessToken),
-    restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=20', accessToken),
+    restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=200', accessToken),
     restOptional('meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', accessToken),
   ]);
   return mapMemeCoins({ tokens, positions, orders, fills, pnl, notes });
@@ -759,7 +759,7 @@ async function loadPredictionMarketsRest(accessToken: string): Promise<Predictio
     restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
     restOptional('pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
     restOptional('pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200', accessToken),
-    restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=20', accessToken),
+    restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=200', accessToken),
     restOptional('pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', accessToken),
   ]);
   return mapPredictionMarkets({ markets, positions, orders, fills, pnl, notes });

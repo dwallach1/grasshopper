@@ -184,14 +184,14 @@ export function TerminalApp({
   const rollup = assembleDeskBookRollup(desk);
 
   return (
-    <div className={publicView ? 'term term-public' : 'term'}>
+    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}`}>
       <header className="term-top">
         <a
           className="term-brand"
           href="/"
           onClick={(event) => onDeskClick(event, () => go('/'))}
         >
-          GRASSHOPPER
+          grasshopper
         </a>
         <nav className="term-nav" aria-label="Terminal">
           {DESK_TABS.map((item) => (
@@ -260,8 +260,8 @@ export function TerminalApp({
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 Book · 2 Theses · 3 Events · 4 Tests · 5 Team · 6 Board</p>
-          <p>g b book · g t theses · g c events · g e tests · g m team · g p board</p>
+          <p>1 Board · 2 Book · 3 Theses · 4 Events · 5 Tests · 6 Team</p>
+          <p>g p board · g b book · g t theses · g c events · g e tests · g m team</p>
           <p>j/k move thesis or test · Enter open theses · r reload ledger · Esc close</p>
         </aside>
       )}

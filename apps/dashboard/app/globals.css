@@ -15,7 +15,8 @@
   --down: #ff5c33;
   --warn: #ffb000;
   --amber: #ff8a00;
-  --font-ui: "IBM Plex Mono", ui-monospace, monospace;
+  --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --r-none: 0;
   --r-control: 2px;
@@ -2208,11 +2209,13 @@ a:focus-visible {
 }
 
 .term-brand {
-  color: var(--amber);
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.02em;
   text-decoration: none;
-  font-size: 12px;
+  font-size: 18px;
 }
 
 .term-nav {
@@ -3237,8 +3240,20 @@ a:focus-visible {
   }
 
   .term-public .term-brand {
-    letter-spacing: 0.16em;
-    font-size: 13px;
+    letter-spacing: -0.02em;
+    font-size: 17px;
+  }
+
+  .term-public .term-chip,
+  .term-public .term-live {
+    margin-left: 0;
+    max-width: none;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .term-public .term-chip {
+    margin-left: auto;
   }
 
   .term-public .term-status {
@@ -3281,16 +3296,21 @@ a:focus-visible {
   }
 
   .term-dock a {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
     min-height: 48px;
-    padding: 0 2px;
+    padding: 0 1px;
+    overflow: hidden;
     color: var(--text-2);
     text-decoration: none;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
+    letter-spacing: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .term-dock a.on {
@@ -3661,5 +3681,310 @@ a:focus-visible {
   .term-team-card {
     grid-template-columns: 72px minmax(0, 1fr);
     padding: 10px;
+  }
+}
+
+/* ——— Liveline desk ——— */
+
+.term.is-line .term-main {
+  padding: 0;
+  overflow: auto;
+}
+
+.term.is-line .term-status {
+  display: none;
+}
+
+.line-boot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 24px 16px 48px;
+  background: var(--canvas);
+}
+
+.line-boot .line-frame > div:has(canvas) {
+  height: min(56dvh, 420px);
+  min-height: 240px;
+}
+
+.line-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100dvh - 88px);
+  padding: 18px 16px 32px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.line-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.line-kicker {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.line-mast h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(42px, 12vw, 72px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+
+.line-lede {
+  margin: 0;
+  max-width: 36rem;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.line-foci {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.line-foci button {
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  padding: 6px 10px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.line-foci button.on,
+.line-foci button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.line-hero,
+.line-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+
+/* Liveline 0.0.7 puts showValue + window chips in flow, then a canvas
+   sibling sized to 100% of this frame — a fixed frame height overflows. */
+.line-frame > div:has(canvas) {
+  width: 100%;
+  height: min(58dvh, 520px);
+  min-height: 280px;
+  overflow: hidden;
+}
+
+.line-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.line-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.line-card header,
+.line-sheet header,
+.line-quiet header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.line-card .line-frame > div:has(canvas) {
+  height: 220px;
+  min-height: 220px;
+}
+
+.line-caption,
+.line-rules,
+.line-meta,
+.line-whisper {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+.line-standings {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.line-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.line-row.is-empty {
+  opacity: 0.55;
+}
+
+.line-row-hit {
+  display: grid;
+  grid-template-columns: 28px 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.line-place {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text-3);
+}
+
+.line-row.is-lead .line-place {
+  color: var(--text);
+}
+
+.line-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.line-who b {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.line-who i {
+  color: var(--text-3);
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.line-pct {
+  font-family: var(--font-mono);
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.line-meta a {
+  color: var(--text-2);
+}
+
+.line-sheet,
+.line-quiet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.line-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.line-sheet th {
+  color: var(--text-3);
+  font-weight: 500;
+  text-align: left;
+  padding: 4px 6px 8px 0;
+}
+
+.line-sheet td {
+  padding: 7px 6px 7px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 720px) {
+  .term.is-line .term-main {
+    padding: 0 0 calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .line-stage {
+    min-height: 0;
+    gap: 10px;
+    padding: 12px 12px 20px;
+  }
+
+  .line-mast h1 {
+    font-size: clamp(36px, 11vw, 56px);
+  }
+
+  .line-lede {
+    font-size: 14px;
+  }
+
+  .line-foci {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .line-foci button {
+    min-height: 40px;
+    padding: 8px 6px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+
+  .line-frame > div:has(canvas) {
+    height: min(42dvh, 340px);
+    min-height: 220px;
+  }
+
+  .line-card .line-frame > div:has(canvas) {
+    height: 168px;
+    min-height: 168px;
+  }
+
+  .line-sheet th:nth-child(2),
+  .line-sheet td:nth-child(2) {
+    display: none;
+  }
+
+  .term-nav kbd {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .line-stage {
+    padding-top: 28px;
+  }
+
+  .line-hero .line-frame > div:has(canvas) {
+    height: 560px;
   }
 }
