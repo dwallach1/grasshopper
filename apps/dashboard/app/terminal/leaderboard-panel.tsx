@@ -4,14 +4,12 @@ import type { CSSProperties, MouseEvent } from 'react';
 
 import {
   assembleLeaderboard,
-  LEADERBOARD_RULES,
-  LEADERBOARD_SUBTITLE,
   NOT_RANKED,
 } from '../../lib/desk-leaderboard';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
-import { TeamAvatar } from './team-avatars';
+import { StewardAvatar } from './steward-avatar';
 import { age, nyStamp, pct, pnlClass } from './format';
 
 export function LeaderboardPanel({
@@ -42,11 +40,11 @@ export function LeaderboardPanel({
               <div className="term-board-place" aria-label={row.place ? `place ${row.place}` : NOT_RANKED}>
                 {row.place ?? '—'}
               </div>
-              <TeamAvatar
-                shape={row.avatar_shape}
+              <StewardAvatar
+                slug={row.slug}
+                name={row.steward}
+                size="board"
                 accent={row.accent}
-                label={row.steward}
-                alive={false}
               />
               <div className="term-board-meta">
                 <div className="term-team-name">
