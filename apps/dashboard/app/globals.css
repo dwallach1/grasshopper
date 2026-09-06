@@ -3487,46 +3487,6 @@ a:focus-visible {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--team-accent, var(--green)) 18%, transparent);
 }
 
-.term-team-avatar {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 88px;
-  height: 88px;
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--team-accent, var(--green)) 10%, #0a0d10);
-  animation: team-breathe 4.8s var(--ease) infinite;
-}
-
-.term-team-avatar-ring {
-  position: absolute;
-  inset: 5px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
-  pointer-events: none;
-}
-
-.term-team-avatar.is-alive {
-  animation: team-breathe 3.2s var(--ease) infinite, team-glow 2.4s ease-in-out infinite;
-}
-
-.term-team-svg {
-  width: 58px;
-  height: 58px;
-}
-
-.term-team-token {
-  fill: var(--team-accent, var(--green));
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #0a0d10);
-  stroke-width: 1.2;
-  stroke-linejoin: round;
-}
-
-.term-team-token-inset {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 62%, #0a0d10);
-  stroke: none;
-}
-
 .term-team-meta {
   min-width: 0;
 }
@@ -3693,35 +3653,6 @@ a:focus-visible {
   color: var(--text-3);
 }
 
-.term-board-card .term-team-avatar {
-  width: 72px;
-  height: 72px;
-}
-
-.term-board-card .term-team-svg {
-  width: 48px;
-  height: 48px;
-}
-
-@keyframes team-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.035);
-  }
-}
-
-@keyframes team-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 28%, transparent);
-  }
-}
 
 @media (min-width: 720px) {
   .term-team-cards,
@@ -3747,36 +3678,9 @@ a:focus-visible {
     font-size: 24px;
   }
 
-  .term-board-card .term-team-avatar {
-    width: 56px;
-    height: 56px;
-  }
-
-  .term-board-card .term-team-svg {
-    width: 40px;
-    height: 40px;
-  }
-
   .term-team-card {
     grid-template-columns: 72px minmax(0, 1fr);
     padding: 10px;
-  }
-
-  .term-team-avatar {
-    width: 72px;
-    height: 72px;
-  }
-
-  .term-team-svg {
-    width: 54px;
-    height: 54px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .term-team-avatar,
-  .term-team-avatar.is-alive {
-    animation: none;
   }
 }
 
@@ -3948,7 +3852,7 @@ a:focus-visible {
 
 .line-row-hit {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 1fr) auto;
+  grid-template-columns: 28px 56px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -3991,16 +3895,6 @@ a:focus-visible {
   font-size: clamp(22px, 6vw, 34px);
   font-weight: 500;
   letter-spacing: -0.03em;
-}
-
-.line-row .term-team-avatar {
-  width: 40px;
-  height: 40px;
-}
-
-.line-row .term-team-svg {
-  width: 28px;
-  height: 28px;
 }
 
 .line-meta a {

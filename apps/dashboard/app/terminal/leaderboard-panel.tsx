@@ -15,8 +15,8 @@ import {
 import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
 import { DeskLiveline } from './desk-liveline';
+import { StewardAvatar } from './steward-avatar';
 import { age, nyStamp, pct, pnlClass } from './format';
-import { TeamAvatar } from './team-avatars';
 
 type BoardFocus = 'all' | LivelineBookId;
 
@@ -105,7 +105,7 @@ export function LeaderboardPanel({
           <li
             key={row.id}
             className={`line-row${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}${focus === row.id ? ' is-on' : ''}`}
-            // SAFETY: CSS custom property for the existing TeamAvatar accent token.
+            // SAFETY: CSS custom property for the shared steward accent token.
             style={{ '--team-accent': row.accent } as CSSProperties}
           >
             <button
@@ -114,11 +114,11 @@ export function LeaderboardPanel({
               onClick={() => setFocus(toFocus(row.id))}
             >
               <span className="line-place">{row.place ?? '—'}</span>
-              <TeamAvatar
-                shape={row.avatar_shape}
+              <StewardAvatar
+                slug={row.slug}
+                name={row.steward}
+                size="board"
                 accent={row.accent}
-                label={row.steward}
-                alive={false}
               />
               <span className="line-who">
                 <b>{row.steward}</b>

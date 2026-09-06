@@ -55,5 +55,7 @@ describe('public desk snapshot contract', () => {
     expect(PUBLIC_DESK_REDIRECTS.map((row) => row.source)).toEqual([
       '/leaderboard', '/board', '/ranks', '/catalysts', '/ontology', '/risk', '/runs', '/learnings', '/mates',
     ]);
+    expect(PUBLIC_DESK_REDIRECTS.find((row) => row.source === '/leaderboard')?.destination).toBe('/');
+    expect(PUBLIC_DESK_REDIRECTS.find((row) => row.source === '/risk')?.destination).toBe('/book');
   });
 });

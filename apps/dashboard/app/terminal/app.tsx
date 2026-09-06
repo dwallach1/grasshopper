@@ -115,10 +115,11 @@ export function TerminalApp({
   }, [pathname]);
 
   function go(href: string) {
-    const next = surfaceFromPath(href);
+    const canonical = canonicalDeskPath(href);
+    const next = surfaceFromPath(canonical);
     setSurface(next);
-    if (window.location.pathname !== href) {
-      window.history.pushState({ desk: next }, '', href);
+    if (window.location.pathname !== canonical) {
+      window.history.pushState({ desk: next }, '', canonical);
     }
   }
 

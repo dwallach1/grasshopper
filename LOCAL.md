@@ -74,7 +74,7 @@ bun run web:app
 
 Open `http://localhost:5173` (this is the printed Local URL, the Auth Site URL, and the passkey RP ID). `http://127.0.0.1:5173` works for email **if you start and finish on that IP** — passkeys still require `localhost`. Sign in. Header source should read `postgrest`.
 
-Tabs are spelled-out words: **Board, Book, Theses, Events, Tests, Team**. **Board** is the landing page at `/` — Liveline % curves in native units. **Book** is `/book`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-6` panels, `g` then letter (`p/b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab. See `docs/liveline-pnl.md`.
+Tabs are spelled-out words: **Board, Book, Theses, Events, Tests, Team**. **Board** is the landing page at `/` — Liveline % curves in native units (`/leaderboard` redirects here). **Book** is `/book`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-6` panels, `g` then letter (`p/b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab. See `docs/liveline-pnl.md`.
 
 ## Confirm you are on the real ledger
 

@@ -70,6 +70,9 @@ describe('desk nav labels', () => {
 
   test('/ is the Board surface; Book is /book; retired paths fold in', () => {
     expect(surfaceFromPath('/')).toBe('leaderboard');
+    expect(surfaceFromPath('/leaderboard')).toBe('leaderboard');
+    expect(surfaceFromPath('/board')).toBe('leaderboard');
+    expect(surfaceFromPath('/ranks')).toBe('leaderboard');
     expect(surfaceFromPath('/book')).toBe('book');
     expect(surfaceFromPath('/risk')).toBe('book');
     expect(surfaceFromPath('/runs')).toBe('book');
@@ -82,8 +85,6 @@ describe('desk nav labels', () => {
     expect(surfaceFromPath('/backtests')).toBe('backtests');
     expect(surfaceFromPath('/team')).toBe('team');
     expect(surfaceFromPath('/mates')).toBe('team');
-    expect(surfaceFromPath('/leaderboard')).toBe('leaderboard');
-    expect(surfaceFromPath('/board')).toBe('leaderboard');
     expect(canonicalDeskPath('/leaderboard')).toBe('/');
     expect(canonicalDeskPath('/book')).toBe('/book');
     expect(canonicalDeskPath('/catalysts')).toBe('/events');
