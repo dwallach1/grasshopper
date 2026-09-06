@@ -348,6 +348,8 @@ function clip(value: string, max: number): string {
   return `${trimmed.slice(0, max - 1)}…`;
 }
 
+// If the DB has meme_* rows but every array here is empty, publisher SELECT
+// RLS is missing (GRANT alone is not enough). desk:publish fails loud on that.
 export function mapMemeCoins(input: {
   tokens?: readonly LooseRow[];
   positions?: readonly LooseRow[];

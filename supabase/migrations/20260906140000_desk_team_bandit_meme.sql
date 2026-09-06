@@ -1,4 +1,9 @@
 -- BANDIT + Meme coins. Soft stewardship on desk_domain_stewards — no table rename.
+--
+-- Live `meme_ledger_v1` creates meme_* and GRANTs SELECT to quantanamo_worker.
+-- GRANT is not enough for desk:publish: every new domain lane also needs
+-- policy quantanamo_worker_select ... using (true) — see
+-- 20260906155358_meme_quantanamo_worker_select_rls.sql (same as pm_*).
 
 insert into public.desk_domains (slug, name, kind, description, accent, status, sort_order)
 values (

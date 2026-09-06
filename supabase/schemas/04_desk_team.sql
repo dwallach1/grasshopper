@@ -4,6 +4,8 @@
 -- Seeded agents today: grasshopper, quantanamo, oddsborne, bandit.
 -- Browser `anon` has no privileges. Local desk reads as `authenticated`.
 -- QUANTANAMO writes via the server connection. Public Worker never queries these.
+-- New domain ledgers (pm_*, meme_*, …) need publisher SELECT RLS for
+-- quantanamo_worker (`quantanamo_worker_select … using (true)`), not just GRANTs.
 
 create table if not exists public.desk_domains (
   id uuid primary key default gen_random_uuid(),

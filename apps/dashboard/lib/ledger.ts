@@ -677,6 +677,9 @@ async function loadTeamRest(accessToken: string): Promise<DeskTeamPayload> {
 
 async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
   try {
+    // Empty arrays with tables present usually means GRANT without
+    // quantanamo_worker_select RLS — the BANDIT desk:publish miss. Permission
+    // errors log as meme_ledger_skipped; silent empty is RLS.
     const present = await sql`select to_regclass('public.meme_tokens') is not null as ok`;
     if (!present[0]?.ok) return emptyMemeCoins();
     const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
