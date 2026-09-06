@@ -7,6 +7,7 @@ import {
   deskEvents,
   emptyPredictionMarkets,
   filterBookNames,
+  filterFillLog,
   mergeFillLog,
   predictionBookNames,
   type PredictionMarketsPayload,
@@ -130,8 +131,132 @@ describe('prediction book mapping', () => {
     } as unknown as DeskPayload;
     const all = deskBookNames(desk);
     expect(all.map((row) => row.symbol)).toEqual(['NVDA', 'YES · sample-labeled-fixture']);
+    expect(filterBookNames(all, 'all').map((row) => row.symbol)).toEqual(['NVDA', 'YES · sample-labeled-fixture']);
     expect(filterBookNames(all, 'equity').map((row) => row.symbol)).toEqual(['NVDA']);
     expect(filterBookNames(all, 'prediction')).toHaveLength(1);
+  });
+
+  test('ALL is the union of stocks, predictions, and coins — never equity-only', () => {
+    const equity: BookNameLine = {
+      symbol: 'NVDA',
+      quantity: 2,
+      average_cost: null,
+      cost: null,
+      mark: null,
+      pnl: null,
+      note: MARK_NOT_IN_LEDGER,
+      venue: 'equity',
+    };
+    const desk = {
+      book: { names: [equity] },
+      catalysts: [],
+      lessons: [],
+      prediction_markets: payload({
+        positions: [{
+          id: 'pos-all-pm',
+          market_id: sampleMarket.id,
+          account_key: 'oddsborne',
+          thesis_id: 'neocloud_compute',
+          outcome: 'yes',
+          status: 'open',
+          quantity: 1,
+          average_cost: null,
+          mark: null,
+          mark_at: null,
+          thesis_text: null,
+        }],
+      }),
+      meme_coins: {
+        desk: 'BANDIT',
+        venue: 'meme',
+        tokens: [{
+          id: 'tok-1',
+          venue: 'pumpfun',
+          mint: 'MintFixture000000000000000000000000001',
+          symbol: 'ZDOG',
+          name: 'Anonymous Dog',
+          status: 'watch',
+          bonding_curve_status: null,
+          graduated_at: null,
+          last_price_sol: null,
+          last_mcap_sol: null,
+          last_marked_at: null,
+          thesis_id: null,
+          kill_criteria: null,
+        }],
+        positions: [{
+          id: 'pos-all-meme',
+          token_id: 'tok-1',
+          account_key: 'solana-bandit-primary',
+          thesis_id: null,
+          status: 'open',
+          quantity: 10,
+          average_cost_sol: null,
+          mark_sol: null,
+          mark_at: null,
+          thesis_text: null,
+        }],
+        orders: [],
+        fills: [],
+        pnl: [],
+        notes: [],
+      },
+    } as unknown as DeskPayload;
+    const names = deskBookNames(desk);
+    expect(names.map((row) => row.venue)).toEqual(['equity', 'prediction', 'meme']);
+    expect(filterBookNames(names, 'all').map((row) => row.symbol)).toEqual([
+      'NVDA',
+      'YES · sample-labeled-fixture',
+      'ZDOG',
+    ]);
+    expect(filterBookNames(names, 'equity').map((row) => row.symbol)).toEqual(['NVDA']);
+    expect(filterBookNames(names, 'prediction').map((row) => row.symbol)).toEqual(['YES · sample-labeled-fixture']);
+    expect(filterBookNames(names, 'meme').map((row) => row.symbol)).toEqual(['ZDOG']);
+    expect(deskEvents(desk).map((row) => row.venue)).toEqual(['prediction', 'meme']);
+    const tape = [
+      {
+        id: 'eq-fill',
+        at: '2026-09-05T10:00:00.000Z',
+        symbol: 'NVDA',
+        side: 'buy',
+        quantity: 1,
+        price: 100,
+        notional: 100,
+        status: 'filled',
+        source: 'broker_fill' as const,
+        note: '',
+        venue: 'equity' as const,
+      },
+      {
+        id: 'pm-fill',
+        at: '2026-09-05T11:00:00.000Z',
+        symbol: 'YES · sample-labeled-fixture',
+        side: 'buy',
+        quantity: 1,
+        price: 0.4,
+        notional: 0.4,
+        status: 'filled',
+        source: 'prediction_fill' as const,
+        note: '',
+        venue: 'prediction' as const,
+      },
+      {
+        id: 'meme-fill',
+        at: '2026-09-05T12:00:00.000Z',
+        symbol: 'ZDOG',
+        side: 'buy',
+        quantity: 10,
+        price: 0.01,
+        notional: 0.1,
+        status: 'filled',
+        source: 'meme_fill' as const,
+        note: '',
+        venue: 'meme' as const,
+      },
+    ];
+    expect(filterFillLog(tape, 'all').map((row) => row.venue)).toEqual(['equity', 'prediction', 'meme']);
+    expect(filterFillLog(tape, 'equity').map((row) => row.symbol)).toEqual(['NVDA']);
+    expect(filterFillLog(tape, 'meme').map((row) => row.symbol)).toEqual(['ZDOG']);
   });
 
   test('fills and thesis lots use the same language', () => {

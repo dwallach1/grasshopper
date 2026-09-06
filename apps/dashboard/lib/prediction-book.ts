@@ -1,21 +1,26 @@
 /**
  * Map ODDSBORNE `pm_*` rows into the same Book / Theses / Events language
- * as QUANTANAMO equities. Never invent a mark or P/L.
+ * as QUANTANAMO equities and BANDIT coins. Never invent a mark or P/L.
  */
 import { MARK_NOT_IN_LEDGER, NOT_IN_LEDGER } from './book-performance';
 import type { DeskVenue } from './desk-venue';
-import { rowVenue, thesisMatchesVenue, venueShort, type VenueFilter } from './desk-venue';
+import { rowVenue, thesisMatchesVenue, thesisVenuesFor, venueShort, type VenueFilter } from './desk-venue';
 import type {
   BookNameLine,
   CatalystRow,
+  DeskLessonLine,
   DeskPayload,
+  DeskTapeEvent,
   FillLogRow,
   IntentRow,
   LessonRow,
   ThesisLot,
   ThesisRow,
 } from './ledger-types';
+import { emptyMemeCoins, memeBookNames, memeDesk, memeEvents, memeLessons, workingMemeOrders } from './meme-book';
 import { asFiniteNumber, asOptionalNumber, requireIso } from './numbers';
+
+export type { DeskLessonLine, DeskTapeEvent } from './ledger-types';
 
 export type PredictionMarketRow = {
   id: string;
@@ -105,27 +110,6 @@ export type PredictionMarketsPayload = {
   notes: PredictionNoteRow[];
 };
 
-export type DeskTapeEvent = {
-  key: string;
-  venue: DeskVenue;
-  name: string;
-  kind: string;
-  when: string | null;
-  thesis_id: string | null;
-  status: string;
-  summary: string;
-};
-
-export type DeskLessonLine = {
-  key: string;
-  venue: DeskVenue;
-  thesis_id: string | null;
-  kind: string;
-  regime: string | null;
-  pending: boolean;
-  summary: string;
-};
-
 const OPEN_POSITION = new Set(['open', 'active']);
 const DEAD_ORDER = new Set(['filled', 'canceled', 'cancelled', 'rejected', 'expired']);
 
@@ -194,7 +178,11 @@ export function predictionBookNames(
 
 export function deskBookNames(desk: DeskPayload): BookNameLine[] {
   const equity = desk.book.names.map((row) => ({ ...row, venue: rowVenue(row) }));
-  return [...equity, ...predictionBookNames(predictionDesk(desk))];
+  return [
+    ...equity,
+    ...predictionBookNames(predictionDesk(desk)),
+    ...memeBookNames(memeDesk(desk)),
+  ];
 }
 
 export function filterBookNames(names: readonly BookNameLine[], filter: VenueFilter): BookNameLine[] {
@@ -261,10 +249,12 @@ export function filterIntents(
   intents: readonly IntentRow[],
   payload: PredictionMarketsPayload,
   filter: VenueFilter,
+  meme = emptyMemeCoins(),
 ): Array<IntentRow & { venue: DeskVenue }> {
   const equity = intents.map((row) => ({ ...row, venue: 'equity' as const }));
   const prediction = workingPredictionOrders(payload).map((row) => ({ ...row, venue: 'prediction' as const }));
-  const rows = [...equity, ...prediction];
+  const coins = workingMemeOrders(meme).map((row) => ({ ...row, venue: 'meme' as const }));
+  const rows = [...equity, ...prediction, ...coins];
   return rows.filter((row) => filter === 'all' || row.venue === filter);
 }
 
@@ -311,10 +301,12 @@ export function attachPredictionThesisLots(
   return theses.map((thesis) => {
     const extra = byThesis.get(thesis.id) ?? [];
     const lots = [...thesis.lots.map((lot) => ({ ...lot, venue: lot.venue ?? 'equity' as const })), ...extra];
+    const linkedVenues: DeskVenue[] = linked.has(thesis.id) ? ['prediction'] : [];
+    if (thesis.venues?.includes('meme')) linkedVenues.push('meme');
     return {
       ...thesis,
       lots,
-      venues: thesisVenuesFor(thesis, lots, linked.has(thesis.id)),
+      venues: thesisVenuesFor(thesis, lots, linkedVenues),
     };
   });
 }
@@ -326,15 +318,6 @@ export function predictionThesisIds(payload: PredictionMarketsPayload): Set<stri
   for (const row of payload.orders) if (row.thesis_id) ids.add(row.thesis_id);
   for (const row of payload.notes) if (row.thesis_id) ids.add(row.thesis_id);
   return ids;
-}
-
-function thesisVenuesFor(thesis: ThesisRow, lots: ThesisLot[], linkedPrediction: boolean): DeskVenue[] {
-  const hasEquityLot = lots.some((lot) => rowVenue(lot) === 'equity');
-  const hasPredictionLot = lots.some((lot) => rowVenue(lot) === 'prediction') || linkedPrediction;
-  const venues: DeskVenue[] = [];
-  if (hasEquityLot || thesis.symbols.length > 0 || !hasPredictionLot) venues.push('equity');
-  if (hasPredictionLot) venues.push('prediction');
-  return venues;
 }
 
 export function filterTheses(theses: readonly ThesisRow[], filter: VenueFilter): ThesisRow[] {
@@ -362,7 +345,8 @@ export function deskEvents(desk: DeskPayload): DeskTapeEvent[] {
     status: row.status,
     summary: row.question,
   }));
-  return [...equity, ...prediction].sort((a, b) => (a.when || 'zzz').localeCompare(b.when || 'zzz'));
+  const meme = memeEvents(memeDesk(desk));
+  return [...equity, ...prediction, ...meme].sort((a, b) => (a.when || 'zzz').localeCompare(b.when || 'zzz'));
 }
 
 export function filterEvents(events: readonly DeskTapeEvent[], filter: VenueFilter): DeskTapeEvent[] {
@@ -392,7 +376,8 @@ export function deskLessons(desk: DeskPayload, thesisId?: string): DeskLessonLin
       pending: true,
       summary: row.body ? `${row.title} — ${row.body}` : row.title,
     }));
-  return [...equity, ...prediction];
+  const meme = memeLessons(memeDesk(desk), thesisId);
+  return [...equity, ...prediction, ...meme];
 }
 
 export function filterLessons(rows: readonly DeskLessonLine[], filter: VenueFilter): DeskLessonLine[] {

@@ -21,6 +21,7 @@ const sample = {
   routines: [{ id: 'market_scan', status: 'live' }],
   ontology_actions: [{ id: 1, actor_id: 'user-uuid', action: 'promote' }],
   prediction_markets: { markets: [] },
+  meme_coins: { tokens: [] },
   team: {
     agents: [{ slug: 'grasshopper', display_name: 'GRASSHOPPER', heartbeat_at: null }],
     domains: [{ slug: 'ledger', name: 'Ledger' }],
@@ -37,6 +38,7 @@ describe('public desk snapshot contract', () => {
     expect(published.source).toBe('snapshot');
     expect(published.ontology_actions).toEqual([]);
     expect(published.prediction_markets).toEqual({ markets: [] });
+    expect(published.meme_coins).toEqual({ tokens: [] });
     expect(published.team).toEqual(sample.team);
     expect(published.book.current_nav).toBeNull();
     expect(isPublicSnapshot(published)).toBe(true);

@@ -1,4 +1,5 @@
 import type { DeskVenue } from './desk-venue';
+import type { MemeCoinsPayload } from './meme-book';
 import type { PredictionMarketsPayload } from './prediction-book';
 import type { ParsedRunNotes } from './run-notes';
 import type { ThesisStatus } from './thesis-status';
@@ -418,9 +419,30 @@ export type FillLogRow = {
   price: number | null;
   notional: number | null;
   status: string;
-  source: 'broker_fill' | 'filled_intent' | 'prediction_fill';
+  source: 'broker_fill' | 'filled_intent' | 'prediction_fill' | 'meme_fill';
   note: string;
   venue?: DeskVenue;
+};
+
+export type DeskTapeEvent = {
+  key: string;
+  venue: DeskVenue;
+  name: string;
+  kind: string;
+  when: string | null;
+  thesis_id: string | null;
+  status: string;
+  summary: string;
+};
+
+export type DeskLessonLine = {
+  key: string;
+  venue: DeskVenue;
+  thesis_id: string | null;
+  kind: string;
+  regime: string | null;
+  pending: boolean;
+  summary: string;
 };
 
 export type InsightRow = {
@@ -565,6 +587,8 @@ export type DeskPayload = {
   source: 'postgres' | 'postgrest' | 'snapshot';
   /** ODDSBORNE `pm_*` snapshot. Empty object when those tables are missing. */
   prediction_markets?: PredictionMarketsPayload;
+  /** BANDIT `meme_*` snapshot. Empty object when those tables are missing. */
+  meme_coins?: MemeCoinsPayload;
   /** `desk_agents` / `desk_domains` roster. Empty object when those tables are missing. */
   team?: DeskTeamPayload;
   theses: ThesisRow[];

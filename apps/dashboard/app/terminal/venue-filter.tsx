@@ -1,6 +1,6 @@
 'use client';
 
-import { VENUE_FILTERS, venueShort, type VenueFilter } from '../../lib/desk-venue';
+import { VENUE_FILTERS, venueShort, type DeskVenue, type VenueFilter } from '../../lib/desk-venue';
 
 export function VenueFilterBar({
   value,
@@ -28,6 +28,6 @@ export function VenueFilterBar({
   );
 }
 
-export function VenueMark({ venue }: { venue: 'equity' | 'prediction' }) {
+export function VenueMark({ venue }: { venue: DeskVenue }) {
   return <i className={`term-venue-tag ${venue}`}>{venueShort(venue)}</i>;
 }

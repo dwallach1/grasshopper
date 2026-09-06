@@ -149,7 +149,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Book | Landing (`/`). One book, two venues: QUANTANAMO (Agentic last4 7638 NAV / cash / lots from `portfolio_exposure` + `account_snapshots`) and ODDSBORNE (`pm_positions` / `pm_pnl` when present). Venue chips filter the same lots / fills / intents table — not a second app. Fill tape. Next dated catalyst on held names. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic is the Agentic 7638 path (hidden on the ODDSBORNE-only chip). Unmarked lots are muted, never a fake P/L color. Equities and markets are **not** summed into one NAV. |
+| 1 | Book | Landing (`/`). One book, three venues: QUANTANAMO stocks (Agentic last4 7638 NAV / cash / lots from `portfolio_exposure` + `account_snapshots`), ODDSBORNE predictions (`pm_positions` / `pm_pnl` when present), and BANDIT coins (`meme_positions` / `meme_pnl` when present). **All** is the union of those lots / fills / intents — not the stocks chip. Venue chips filter the same table — not a second app. Fill tape. Next dated catalyst on held names in the active filter. Thesis lots with ledger P/L (or **not in ledger**). Living diagnostic is the Agentic 7638 path (hidden on Predictions-only and Coins-only). Unmarked lots are muted, never a fake P/L color. Venues are **not** summed into one NAV. |
 | 2 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
 | 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
@@ -157,9 +157,9 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–5`, `g` then letter (`b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / QUANTANAMO / ODDSBORNE) filter Book, Theses, and Events — not a search box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–5`, `g` then letter (`b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Book, Theses, and Events — not a search box.
 
-Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist, plus Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts` when those relations exist. Missing `pm_*` or `desk_*` tables yield an empty slice — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
+Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist, plus BANDIT `meme_tokens` / `meme_positions` / `meme_orders` / `meme_fills` / `meme_pnl` / `meme_notes` when those relations exist, plus Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts` when those relations exist. Missing `pm_*`, `meme_*`, or `desk_*` tables yield an empty slice — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
 ---
 
@@ -170,6 +170,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
 | Prediction | `pm_markets`, `pm_positions`, `pm_orders`, `pm_fills`, `pm_pnl`, `pm_notes` (ODDSBORNE / Polymarket; GRASSHOPPER) |
+| Coins | `meme_tokens`, `meme_positions`, `meme_orders`, `meme_fills`, `meme_pnl`, `meme_notes` (BANDIT / Solana; `solana-bandit-primary`) |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker reads the snapshot only) |
