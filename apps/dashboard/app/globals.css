@@ -2461,6 +2461,17 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.term-rollup-legs {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.term-rollup-legs .term-line {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 .term-main > * {
   animation: fade-in 280ms var(--ease);
 }
