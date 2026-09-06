@@ -16,6 +16,7 @@ export const DESK_SURFACES = [
   'events',
   'backtests',
   'team',
+  'leaderboard',
 ] as const;
 
 export type DeskSurface = (typeof DESK_SURFACES)[number];
@@ -34,6 +35,7 @@ export const DESK_TABS: readonly DeskTab[] = [
   { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
   { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
   { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
+  { href: '/leaderboard', id: 'leaderboard', key: '6', label: 'Board', go: 'p' },
 ] as const;
 
 /** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
@@ -73,6 +75,10 @@ function surfaceFromHead(head: string): DeskSurface {
     case 'team':
     case 'mates':
       return 'team';
+    case 'leaderboard':
+    case 'board':
+    case 'ranks':
+      return 'leaderboard';
     default:
       return 'book';
   }
@@ -111,6 +117,9 @@ export function surfaceFromGoLetter(letter: string): DeskSurface | null {
       return 'theses';
     case 'a':
       return 'team';
+    case 'd':
+    case 'n':
+      return 'leaderboard';
     default:
       return null;
   }

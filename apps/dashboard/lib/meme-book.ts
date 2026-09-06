@@ -326,6 +326,57 @@ export function latestMemePnl(payload: MemeCoinsPayload): MemePnlRow | null {
   return [...payload.pnl].sort((a, b) => b.as_of.localeCompare(a.as_of))[0] ?? null;
 }
 
+export const BANDIT_PRIMARY_ACCOUNT = 'solana-bandit-primary';
+export const BANDIT_BANKROLL_SOL_START = 2;
+
+export function earliestMemePnl(payload: MemeCoinsPayload): MemePnlRow | null {
+  if (!payload.pnl.length) return null;
+  return [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))[0] ?? null;
+}
+
+export type MemeStartEquity = {
+  equity_sol: number;
+  as_of: string | null;
+  source: 'pnl_equity' | 'bankroll';
+  account_key: string;
+};
+
+/**
+ * Start bankroll for BANDIT % return in SOL. Prefer the earliest `meme_pnl`
+ * equity_sol. If that mark is missing but the primary account has a current
+ * mark, use the documented 2 SOL seed — never invent a current equity.
+ */
+export function memeStartEquity(payload: MemeCoinsPayload): MemeStartEquity | null {
+  const latest = latestMemePnl(payload);
+  if (latest?.equity_sol === null || latest?.equity_sol === undefined) return null;
+  const account = latest.account_key || BANDIT_PRIMARY_ACCOUNT;
+  const earliest = earliestMemePnl(payload);
+  if (earliest?.equity_sol !== null && earliest?.equity_sol !== undefined) {
+    return {
+      equity_sol: earliest.equity_sol,
+      as_of: earliest.as_of,
+      source: 'pnl_equity',
+      account_key: earliest.account_key || account,
+    };
+  }
+  if (account !== BANDIT_PRIMARY_ACCOUNT) return null;
+  return {
+    equity_sol: BANDIT_BANKROLL_SOL_START,
+    as_of: earliest?.as_of ?? latest.as_of,
+    source: 'bankroll',
+    account_key: account,
+  };
+}
+
+export function memeEquitySeries(payload: MemeCoinsPayload): Array<{ as_of: string; equity_sol: number }> {
+  const series: Array<{ as_of: string; equity_sol: number }> = [];
+  for (const row of [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))) {
+    if (row.equity_sol === null) continue;
+    series.push({ as_of: row.as_of, equity_sol: row.equity_sol });
+  }
+  return series;
+}
+
 export function openMemeCount(payload: MemeCoinsPayload): number {
   return payload.positions.filter((row) => OPEN_POSITION.has(row.status.toLowerCase())).length;
 }
