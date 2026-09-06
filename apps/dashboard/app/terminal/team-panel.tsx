@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import { clipCharter, deskTeam, isHeartbeatFresh, teamCards } from '../../lib/desk-team';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
-import { TeamAvatar } from './team-avatars';
+import { StewardAvatar } from './steward-avatar';
 import { age, toneForStatus } from './format';
 
 export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null }) {
@@ -32,10 +32,11 @@ export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null
                 className={`term-team-card status-${card.status}${alive ? ' is-alive' : ''}`}
                 style={{ '--team-accent': card.accent } as CSSProperties}
               >
-                <TeamAvatar
-                  shape={card.avatar_shape}
+                <StewardAvatar
+                  slug={card.slug}
+                  name={card.display_name}
+                  size="team"
                   accent={card.accent}
-                  label={card.display_name}
                   alive={alive}
                 />
                 <div className="term-team-meta">

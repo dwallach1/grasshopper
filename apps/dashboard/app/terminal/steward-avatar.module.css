@@ -1,0 +1,86 @@
+.steward {
+  --steward-size: 72px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--steward-size);
+  height: var(--steward-size);
+  flex: 0 0 var(--steward-size);
+  border-radius: 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--team-accent, var(--green)) 10%, #0a0d10);
+  animation: steward-breathe 4.8s var(--ease, ease) infinite;
+}
+
+.team {
+  --steward-size: 72px;
+}
+
+.board {
+  --steward-size: 56px;
+  border-radius: 14px;
+}
+
+.alive {
+  animation:
+    steward-breathe 3.2s var(--ease, ease) infinite,
+    steward-glow 2.4s ease-in-out infinite;
+}
+
+.ring {
+  position: absolute;
+  inset: 4px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
+  pointer-events: none;
+}
+
+.face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 561px) {
+  .team {
+    --steward-size: 88px;
+  }
+
+  .board {
+    --steward-size: 72px;
+    border-radius: 16px;
+  }
+
+  .ring {
+    inset: 5px;
+    border-radius: 14px;
+  }
+}
+
+@keyframes steward-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes steward-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 28%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steward,
+  .alive {
+    animation: none;
+  }
+}

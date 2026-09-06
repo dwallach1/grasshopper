@@ -98,9 +98,12 @@ describe('public desk Worker API', () => {
   });
 
   test('retired desk paths redirect', () => {
-    expect(redirectFor('/book')).toBe('/');
+    expect(redirectFor('/leaderboard')).toBe('/');
+    expect(redirectFor('/book')).toBeNull();
     expect(redirectFor('/catalysts')).toBe('/events');
     expect(redirectFor('/ontology')).toBe('/theses');
     expect(redirectFor('/mates')).toBe('/team');
+    expect(redirectFor('/risk')).toBe('/book');
+    expect(redirectFor('/runs')).toBe('/book');
   });
 });

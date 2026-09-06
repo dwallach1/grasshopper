@@ -30,12 +30,12 @@ export type DeskTab = {
 };
 
 export const DESK_TABS: readonly DeskTab[] = [
-  { href: '/', id: 'book', key: '1', label: 'Book', go: 'b' },
+  { href: '/book', id: 'book', key: '1', label: 'Book', go: 'b' },
   { href: '/theses', id: 'theses', key: '2', label: 'Theses', go: 't' },
   { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
   { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
   { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
-  { href: '/leaderboard', id: 'leaderboard', key: '6', label: 'Board', go: 'p' },
+  { href: '/', id: 'leaderboard', key: '6', label: 'Board', go: 'p' },
 ] as const;
 
 /** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
@@ -45,11 +45,11 @@ export type DeskPathRedirect = {
 };
 
 export const DESK_PATH_REDIRECTS = [
-  { source: '/book', destination: '/' },
+  { source: '/leaderboard', destination: '/' },
   { source: '/catalysts', destination: '/events' },
   { source: '/ontology', destination: '/theses' },
-  { source: '/risk', destination: '/' },
-  { source: '/runs', destination: '/' },
+  { source: '/risk', destination: '/book' },
+  { source: '/runs', destination: '/book' },
   { source: '/learnings', destination: '/theses' },
   { source: '/mates', destination: '/team' },
 ] as const satisfies readonly DeskPathRedirect[];
@@ -57,6 +57,10 @@ export const DESK_PATH_REDIRECTS = [
 function surfaceFromHead(head: string): DeskSurface {
   switch (head) {
     case '':
+    case 'leaderboard':
+    case 'board':
+    case 'ranks':
+      return 'leaderboard';
     case 'book':
     case 'home':
     case 'risk':
@@ -75,12 +79,8 @@ function surfaceFromHead(head: string): DeskSurface {
     case 'team':
     case 'mates':
       return 'team';
-    case 'leaderboard':
-    case 'board':
-    case 'ranks':
-      return 'leaderboard';
     default:
-      return 'book';
+      return 'leaderboard';
   }
 }
 

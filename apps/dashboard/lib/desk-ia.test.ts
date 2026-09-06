@@ -9,7 +9,7 @@ async function readDashboard(relative: string): Promise<string> {
 }
 
 describe('desk IA smoke', () => {
-  test('chrome lands on Book; Home and Risk are gone as destinations', async () => {
+  test('chrome lands on Board; Home and Risk are gone as destinations', async () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const nav = await readDashboard('lib/desk-nav.ts');
@@ -32,10 +32,10 @@ describe('desk IA smoke', () => {
     expect(nav).toContain("id: 'team'");
     expect(nav).toContain("id: 'leaderboard'");
     expect(nav).toContain("href: '/team'");
-    expect(nav).toContain("href: '/leaderboard'");
+    expect(nav).toContain("href: '/book'");
+    expect(nav).toContain("href: '/', id: 'leaderboard'");
     expect(nav).toContain("go: 'm'");
     expect(nav).toContain("go: 'p'");
-    expect(nav).toContain("href: '/'");
     expect(nav).not.toMatch(/id: 'home'/);
     expect(nav).not.toMatch(/id: 'risk'/);
     expect(nav).not.toMatch(/label: 'Home'/);
@@ -85,21 +85,26 @@ describe('desk IA smoke', () => {
     expect(tests).toContain('term-test-card');
     expect(tests).toContain('term-test-trades-cards');
     const team = await readDashboard('app/terminal/team-panel.tsx');
-    const avatars = await readDashboard('app/terminal/team-avatars.tsx');
+    const avatars = await readDashboard('app/terminal/steward-avatar.tsx');
+    const avatarLib = await readDashboard('lib/desk-avatar.ts');
+    const avatarCss = await readDashboard('app/terminal/steward-avatar.module.css');
     const css = await readDashboard('app/globals.css');
     expect(team).toContain('desk_agents');
-    expect(team).toContain('TeamAvatar');
+    expect(team).toContain('StewardAvatar');
     expect(team).not.toContain('pnl');
-    expect(avatars).toContain('TabletMark');
-    expect(avatars).toContain('BlobMark');
-    expect(avatars).toContain('WedgeMark');
-    expect(avatars).toContain('PebbleMark');
+    expect(avatars).toContain('stewardAvatarDataUri');
+    expect(avatars).toContain('alt={label}');
+    expect(avatars).not.toContain('TabletMark');
+    expect(avatars).not.toContain('BlobMark');
     expect(avatars).not.toContain('GrasshopperMark');
     expect(avatars).not.toContain('antenna');
+    expect(avatarLib).toContain('@dicebear/lorelei');
+    expect(avatarLib).toContain("seed: 'quantanamo'");
     expect(team).toContain('cards.map');
     expect(avatars).not.toContain('from \'three\'');
     expect(css).toContain('prefers-reduced-motion');
-    expect(css).toContain('term-team-avatar');
+    expect(avatarCss).toContain('prefers-reduced-motion');
+    expect(avatarCss).toContain('.steward');
   });
 
   test('Book diagnostic is table-first and not a spinning cluster', async () => {
@@ -118,7 +123,8 @@ describe('desk IA smoke', () => {
     expect(app).toContain("from './leaderboard-panel'");
     const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
     expect(board).toContain('assembleLeaderboard');
-    expect(board).toContain('TeamAvatar');
+    expect(board).toContain('StewardAvatar');
+    expect(board).toContain('size="board"');
     expect(board).toContain('LEADERBOARD');
     expect(board).toContain('NOT_RANKED');
     expect(board).not.toContain('0.00%');
