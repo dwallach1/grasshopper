@@ -16,8 +16,9 @@ export function StewardBot({ kind }: { kind: StewardBotKind }) {
       <ellipse className={styles.ground} cx="32" cy="59" rx={kind === 'quantanamo' ? 18 : 13.5} ry="2.2" />
       <g className={styles.figure}>
         <BotBody kind={kind} />
-        <BotAccessory kind={kind} />
+        {kind === 'quantanamo' ? <BotAccessory kind={kind} /> : null}
         <BotFace kind={kind} />
+        {kind === 'quantanamo' ? null : <BotAccessory kind={kind} />}
       </g>
     </svg>
   );
@@ -61,16 +62,19 @@ function BotAccessory({ kind }: { kind: StewardBotKind }) {
   }
   if (kind === 'bandit') {
     return (
-      <rect
-        className={styles.mask}
-        x="11"
-        y="25"
-        width="42"
-        height="15"
-        rx="7.5"
-        transform="rotate(-9 32 32.5)"
-        data-accessory="mask-slash"
-      />
+      <g data-accessory="mask-slash">
+        <ellipse className={styles.mask} cx="14.2" cy="32.4" rx="6.2" ry="8.4" />
+        <ellipse className={styles.mask} cx="49.8" cy="31.2" rx="6.2" ry="8.4" />
+        <rect
+          className={styles.maskSlash}
+          x="16"
+          y="30.2"
+          width="32"
+          height="4.4"
+          rx="2.2"
+          transform="rotate(-10 32 32.4)"
+        />
+      </g>
     );
   }
   if (kind === 'grasshopper') {

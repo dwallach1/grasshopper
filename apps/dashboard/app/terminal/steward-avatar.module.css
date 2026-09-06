@@ -59,9 +59,14 @@
   opacity: 0.72;
 }
 
-.mask {
+.mask,
+.maskSlash {
   fill: #07090c;
-  opacity: 0.58;
+  opacity: 0.72;
+}
+
+.maskSlash {
+  opacity: 0.8;
 }
 
 .pinStem {
