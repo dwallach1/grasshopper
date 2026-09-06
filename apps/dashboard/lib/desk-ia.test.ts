@@ -116,6 +116,8 @@ describe('desk IA smoke', () => {
     expect(avatarCss).toContain('prefers-reduced-motion');
     expect(avatarCss).toContain('steward-blink');
     expect(avatarCss).toContain('steward-breathe');
+    expect(avatarCss).toContain('steward-glow');
+    expect(avatarCss).toContain('steward-bob');
     expect(avatarCss).toContain('.steward');
   });
 

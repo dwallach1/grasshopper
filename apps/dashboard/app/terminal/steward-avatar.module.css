@@ -10,7 +10,9 @@
   border-radius: 18px;
   overflow: hidden;
   background: color-mix(in srgb, var(--team-accent, var(--green)) 12%, #0a0d10);
-  animation: steward-breathe 3.1s var(--ease, ease) infinite;
+  animation:
+    steward-breathe 2.6s var(--ease, ease) infinite,
+    steward-glow 3.2s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -25,8 +27,8 @@
 
 .alive {
   animation:
-    steward-breathe 2.2s var(--ease, ease) infinite,
-    steward-glow 1.8s ease-in-out infinite;
+    steward-breathe 1.85s var(--ease, ease) infinite,
+    steward-glow 1.4s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -42,6 +44,8 @@
   width: 82%;
   height: 82%;
   overflow: visible;
+  animation: steward-bob 2.6s ease-in-out infinite;
+  animation-delay: var(--emote-delay);
 }
 
 .shell {
@@ -122,6 +126,8 @@
 
 .lens {
   fill: #eef3f7;
+  animation: steward-lens 2.8s ease-in-out infinite;
+  animation-delay: var(--emote-delay);
 }
 
 .iris {
@@ -144,11 +150,11 @@
 }
 
 .lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 38%, #1b2128);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #0a0d10);
   transform-box: fill-box;
-  transform-origin: center top;
-  transform: scaleY(0);
-  animation: steward-blink 3.3s ease-in-out infinite;
+  transform-origin: center;
+  opacity: 0;
+  animation: steward-blink 2.8s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -161,15 +167,20 @@
 }
 
 .alive .lid {
-  animation-duration: 2.3s;
+  animation-duration: 1.9s;
 }
 
 .alive .gaze {
-  animation-duration: 3.2s;
+  animation-duration: 2.6s;
+}
+
+.alive .bot {
+  animation-duration: 1.85s;
 }
 
 .alive .lens {
   fill: #f4f8fb;
+  animation-duration: 1.6s;
 }
 
 @media (min-width: 561px) {
@@ -194,7 +205,17 @@
     transform: scale(1) translateY(0);
   }
   50% {
-    transform: scale(1.08) translateY(-2px);
+    transform: scale(1.08) translateY(-3px);
+  }
+}
+
+@keyframes steward-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
   }
 }
 
@@ -204,24 +225,39 @@
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 30%, transparent);
+    box-shadow: 0 0 22px 3px color-mix(in srgb, var(--team-accent, var(--green)) 42%, transparent);
+  }
+}
+
+@keyframes steward-lens {
+  0%,
+  100% {
+    fill: #eef3f7;
+  }
+  50% {
+    fill: #ffffff;
   }
 }
 
 @keyframes steward-blink {
   0%,
-  78%,
+  68%,
   88%,
   100% {
-    transform: scaleY(0);
+    opacity: 0;
+    transform: scaleY(0.12);
   }
-  81% {
+  72%,
+  78% {
+    opacity: 1;
     transform: scaleY(1);
   }
-  84% {
-    transform: scaleY(0);
+  82% {
+    opacity: 0;
+    transform: scaleY(0.12);
   }
-  86% {
+  84% {
+    opacity: 1;
     transform: scaleY(1);
   }
 }
@@ -267,10 +303,12 @@
 @media (prefers-reduced-motion: reduce) {
   .steward,
   .alive,
+  .bot,
   .head,
   .lid,
   .gaze,
   .pupil,
+  .lens,
   .vent {
     animation: none;
   }
