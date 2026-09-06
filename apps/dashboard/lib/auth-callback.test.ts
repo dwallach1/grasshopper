@@ -46,6 +46,8 @@ describe('safeNextPath', () => {
     expect(safeNextPath('/runs?tab=test')).toBe('/');
     expect(safeNextPath('/catalysts')).toBe('/events');
     expect(safeNextPath('/theses')).toBe('/theses');
+    expect(safeNextPath('/team')).toBe('/team');
+    expect(safeNextPath('/mates')).toBe('/team');
   });
 });
 

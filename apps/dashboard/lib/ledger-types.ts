@@ -507,11 +507,66 @@ export type DeskCounts = {
   queued_tasks: number;
 };
 
+export type DeskDomainRow = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: string;
+  description: string;
+  accent: string;
+  status: string;
+  sort_order: number;
+  meta: JsonBag;
+};
+
+export type DeskAgentRow = {
+  id: string;
+  slug: string;
+  display_name: string;
+  role_title: string;
+  charter: string;
+  accent: string;
+  avatar_key: string;
+  status: string;
+  heartbeat_at: string | null;
+  sort_order: number;
+  meta: JsonBag;
+};
+
+export type DeskStewardRow = {
+  id: string;
+  domain_id: string;
+  agent_id: string;
+  is_primary: boolean;
+  assigned_at: string;
+  ended_at: string | null;
+  note: string | null;
+};
+
+export type DeskAccountCatalogRow = {
+  id: string;
+  domain_id: string;
+  account_key: string;
+  label: string;
+  currency: string;
+  status: string;
+};
+
+/** Domain-agnostic roster. Stewardship is soft — reassign, do not rename tables. */
+export type DeskTeamPayload = {
+  agents: DeskAgentRow[];
+  domains: DeskDomainRow[];
+  stewards: DeskStewardRow[];
+  accounts: DeskAccountCatalogRow[];
+};
+
 export type DeskPayload = {
   generated_at: string;
   source: 'postgres' | 'postgrest' | 'snapshot';
   /** ODDSBORNE `pm_*` snapshot. Empty object when those tables are missing. */
   prediction_markets?: PredictionMarketsPayload;
+  /** `desk_agents` / `desk_domains` roster. Empty object when those tables are missing. */
+  team?: DeskTeamPayload;
   theses: ThesisRow[];
   evidence: ThesisEvidenceRow[];
   scores: ThesisScoreRow[];

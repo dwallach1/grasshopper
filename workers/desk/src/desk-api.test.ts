@@ -101,5 +101,6 @@ describe('public desk Worker API', () => {
     expect(redirectFor('/book')).toBe('/');
     expect(redirectFor('/catalysts')).toBe('/events');
     expect(redirectFor('/ontology')).toBe('/theses');
+    expect(redirectFor('/mates')).toBe('/team');
   });
 });

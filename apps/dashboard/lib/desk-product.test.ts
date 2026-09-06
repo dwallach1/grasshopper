@@ -48,14 +48,14 @@ function exposure(
 }
 
 describe('desk nav labels', () => {
-  test('four operator tabs: Book landing, Theses, Events, Tests', () => {
+  test('five operator tabs: Book landing, Theses, Events, Tests, Team', () => {
     const labels = DESK_TABS.map((tab) => tab.label);
-    expect(labels).toEqual(['Book', 'Theses', 'Events', 'Tests']);
-    expect(DESK_TABS.map((tab) => tab.id)).toEqual(['book', 'theses', 'events', 'backtests']);
-    expect(DESK_TABS.map((tab) => tab.key)).toEqual(['1', '2', '3', '4']);
-    expect(DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/theses', '/events', '/backtests']);
-    expect(DESK_TABS.map((tab) => tab.go)).toEqual(['b', 't', 'c', 'e']);
-    expect(DESK_SURFACES).toEqual(['book', 'theses', 'events', 'backtests']);
+    expect(labels).toEqual(['Book', 'Theses', 'Events', 'Tests', 'Team']);
+    expect(DESK_TABS.map((tab) => tab.id)).toEqual(['book', 'theses', 'events', 'backtests', 'team']);
+    expect(DESK_TABS.map((tab) => tab.key)).toEqual(['1', '2', '3', '4', '5']);
+    expect(DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/theses', '/events', '/backtests', '/team']);
+    expect(DESK_TABS.map((tab) => tab.go)).toEqual(['b', 't', 'c', 'e', 'm']);
+    expect(DESK_SURFACES).toEqual(['book', 'theses', 'events', 'backtests', 'team']);
     expect(labels).not.toContain('Home');
     expect(labels).not.toContain('Risk');
     expect(labels).not.toContain('Ontology');
@@ -80,14 +80,17 @@ describe('desk nav labels', () => {
     expect(surfaceFromPath('/ontology')).toBe('theses');
     expect(surfaceFromPath('/learnings')).toBe('theses');
     expect(surfaceFromPath('/backtests')).toBe('backtests');
+    expect(surfaceFromPath('/team')).toBe('team');
+    expect(surfaceFromPath('/mates')).toBe('team');
     expect(canonicalDeskPath('/book')).toBe('/');
     expect(canonicalDeskPath('/catalysts')).toBe('/events');
     expect(canonicalDeskPath('/ontology')).toBe('/theses');
     expect(canonicalDeskPath('/risk')).toBe('/');
     expect(canonicalDeskPath('/runs')).toBe('/');
     expect(canonicalDeskPath('/learnings')).toBe('/theses');
+    expect(canonicalDeskPath('/mates')).toBe('/team');
     expect(DESK_PATH_REDIRECTS.map((row) => row.source)).toEqual([
-      '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings',
+      '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings', '/mates',
     ]);
     expect(PUBLIC_DESK_REDIRECTS).toEqual(DESK_PATH_REDIRECTS);
   });
@@ -97,6 +100,8 @@ describe('desk nav labels', () => {
     expect(surfaceFromGoLetter('t')).toBe('theses');
     expect(surfaceFromGoLetter('c')).toBe('events');
     expect(surfaceFromGoLetter('e')).toBe('backtests');
+    expect(surfaceFromGoLetter('m')).toBe('team');
+    expect(surfaceFromGoLetter('a')).toBe('team');
     expect(surfaceFromGoLetter('h')).toBe('book');
     expect(surfaceFromGoLetter('k')).toBe('backtests');
     expect(surfaceFromGoLetter('l')).toBe('theses');

@@ -21,6 +21,12 @@ const sample = {
   routines: [{ id: 'market_scan', status: 'live' }],
   ontology_actions: [{ id: 1, actor_id: 'user-uuid', action: 'promote' }],
   prediction_markets: { markets: [] },
+  team: {
+    agents: [{ slug: 'grasshopper', display_name: 'GRASSHOPPER', heartbeat_at: null }],
+    domains: [{ slug: 'ledger', name: 'Ledger' }],
+    stewards: [],
+    accounts: [],
+  },
 };
 
 describe('public desk snapshot contract', () => {
@@ -31,6 +37,7 @@ describe('public desk snapshot contract', () => {
     expect(published.source).toBe('snapshot');
     expect(published.ontology_actions).toEqual([]);
     expect(published.prediction_markets).toEqual({ markets: [] });
+    expect(published.team).toEqual(sample.team);
     expect(published.book.current_nav).toBeNull();
     expect(isPublicSnapshot(published)).toBe(true);
   });
@@ -44,7 +51,7 @@ describe('public desk snapshot contract', () => {
 
   test('retired paths match the operator desk redirects', () => {
     expect(PUBLIC_DESK_REDIRECTS.map((row) => row.source)).toEqual([
-      '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings',
+      '/book', '/catalysts', '/ontology', '/risk', '/runs', '/learnings', '/mates',
     ]);
   });
 });

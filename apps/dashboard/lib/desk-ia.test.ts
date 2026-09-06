@@ -15,7 +15,9 @@ describe('desk IA smoke', () => {
     const nav = await readDashboard('lib/desk-nav.ts');
     expect(app).toContain("surface === 'book'");
     expect(app).toContain("surface === 'events'");
+    expect(app).toContain("surface === 'team'");
     expect(app).toContain('<BookPanel');
+    expect(app).toContain('<TeamPanel');
     expect(app).toContain('LastRunChip');
     expect(app).not.toContain("surface === 'home'");
     expect(app).not.toContain("surface === 'risk'");
@@ -25,6 +27,9 @@ describe('desk IA smoke', () => {
     expect(app).not.toContain('3 buys');
     expect(app).not.toContain('20%');
     expect(nav).toContain("id: 'book'");
+    expect(nav).toContain("id: 'team'");
+    expect(nav).toContain("href: '/team'");
+    expect(nav).toContain("go: 'm'");
     expect(nav).toContain("href: '/'");
     expect(nav).not.toMatch(/id: 'home'/);
     expect(nav).not.toMatch(/id: 'risk'/);
@@ -61,6 +66,18 @@ describe('desk IA smoke', () => {
     expect(tests).toContain('term-tests-cards');
     expect(tests).toContain('term-test-card');
     expect(tests).toContain('term-test-trades-cards');
+    const team = await readDashboard('app/terminal/team-panel.tsx');
+    const avatars = await readDashboard('app/terminal/team-avatars.tsx');
+    const css = await readDashboard('app/globals.css');
+    expect(team).toContain('desk_agents');
+    expect(team).toContain('TeamAvatar');
+    expect(team).not.toContain('pnl');
+    expect(avatars).toContain('GrasshopperMark');
+    expect(avatars).toContain('QuantMark');
+    expect(avatars).toContain('OddsMark');
+    expect(avatars).not.toContain('from \'three\'');
+    expect(css).toContain('prefers-reduced-motion');
+    expect(css).toContain('term-team-avatar');
   });
 
   test('Book diagnostic is table-first and not a spinning cluster', async () => {
@@ -75,6 +92,7 @@ describe('desk IA smoke', () => {
     expect(book).not.toContain('cluster.rotation');
     expect(app).not.toContain('BookExploded');
     expect(app).not.toContain('from \'three\'');
+    expect(app).toContain("from './team-panel'");
     expect(ribbon).not.toContain('rotation.y');
     expect(ribbon).toContain('OrthographicCamera');
   });

@@ -2344,6 +2344,10 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.95fr);
 }
 
+.term-grid-team {
+  grid-template-columns: 1fr;
+}
+
 .term-panel {
   min-width: 0;
   border: 1px solid var(--line);
@@ -2893,7 +2897,8 @@ a:focus-visible {
   .term-grid-book,
   .term-grid-2,
   .term-grid-theses,
-  .term-grid-backtests {
+  .term-grid-backtests,
+  .term-grid-team {
     grid-template-columns: 1fr;
   }
 
@@ -3421,5 +3426,321 @@ a:focus-visible {
 
   .term-grid-backtests table {
     min-width: 0;
+  }
+}
+
+.term-team-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.term-team-card {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #0c1014;
+  min-width: 0;
+}
+
+.term-team-card.is-alive {
+  border-color: color-mix(in srgb, var(--team-accent, var(--green)) 45%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--team-accent, var(--green)) 18%, transparent);
+}
+
+.term-team-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--team-accent, var(--green)) 12%, #0a0d10);
+  animation: team-breathe 4.8s var(--ease) infinite;
+}
+
+.term-team-avatar-ring {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
+  pointer-events: none;
+}
+
+.term-team-avatar.is-alive {
+  animation: team-breathe 3.2s var(--ease) infinite, team-glow 2.4s ease-in-out infinite;
+}
+
+.term-team-svg {
+  width: 64px;
+  height: 64px;
+}
+
+.term-team-body,
+.term-team-head,
+.term-team-crystal {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #101318);
+  stroke: var(--team-accent, var(--green));
+  stroke-width: 1.6;
+}
+
+.term-team-eye,
+.term-team-pip {
+  fill: var(--team-accent, var(--green));
+}
+
+.term-team-antenna,
+.term-team-leg,
+.term-team-wing,
+.term-team-chart path,
+.term-team-sparkle {
+  stroke: var(--team-accent, var(--green));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.term-team-chart-line {
+  stroke-width: 1.8;
+}
+
+.term-team-avatar-grasshopper .term-team-antenna-a,
+.term-team-avatar-quant .term-team-antenna-a {
+  transform-origin: 46px 27px;
+  animation: team-antenna 2.8s ease-in-out infinite;
+}
+
+.term-team-avatar-grasshopper .term-team-antenna-b,
+.term-team-avatar-quant .term-team-antenna-b {
+  transform-origin: 36px 16px;
+  animation: team-antenna 3.4s ease-in-out infinite reverse;
+}
+
+.term-team-avatar-grasshopper .term-team-leg-hind {
+  transform-origin: 18px 36px;
+  animation: team-hop 3.6s ease-in-out infinite;
+}
+
+.term-team-avatar-quant .term-team-chart {
+  animation: team-chart 2.6s ease-in-out infinite;
+}
+
+.term-team-avatar-odds .term-team-dice {
+  transform-origin: 32px 40px;
+  animation: team-dice 5s ease-in-out infinite;
+}
+
+.term-team-avatar-odds .term-team-sparkle {
+  fill: color-mix(in srgb, var(--team-accent, #c084fc) 55%, white);
+  animation: team-sparkle 1.8s ease-in-out infinite;
+}
+
+.term-team-meta {
+  min-width: 0;
+}
+
+.term-team-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.term-team-name b {
+  letter-spacing: 0.04em;
+  font-size: 14px;
+}
+
+.term-team-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.term-team-pill.up {
+  color: var(--green);
+  border-color: rgba(61, 220, 132, 0.4);
+}
+
+.term-team-pill.warn {
+  color: var(--warn);
+  border-color: rgba(255, 176, 0, 0.4);
+}
+
+.term-team-pill.muted,
+.term-team-pill.down {
+  color: var(--text-3);
+}
+
+.term-team-role {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.term-team-charter {
+  margin: 6px 0 8px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.term-team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.term-team-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--team-chip, var(--line)) 50%, var(--line));
+  color: var(--team-chip, var(--text-2));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.term-team-chip.is-primary {
+  background: color-mix(in srgb, var(--team-chip, var(--amber)) 14%, transparent);
+}
+
+.term-team-chip.dim {
+  color: var(--text-3);
+  border-color: var(--line);
+}
+
+.term-team-beat {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+@keyframes team-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes team-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 28%, transparent);
+  }
+}
+
+@keyframes team-antenna {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes team-hop {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0deg);
+  }
+  80% {
+    transform: rotate(-8deg);
+  }
+}
+
+@keyframes team-chart {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes team-dice {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes team-sparkle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@media (min-width: 720px) {
+  .term-team-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .term-team-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .term-team-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .term-team-avatar {
+    width: 72px;
+    height: 72px;
+  }
+
+  .term-team-svg {
+    width: 54px;
+    height: 54px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-team-avatar,
+  .term-team-avatar.is-alive,
+  .term-team-antenna-a,
+  .term-team-antenna-b,
+  .term-team-leg-hind,
+  .term-team-chart,
+  .term-team-dice,
+  .term-team-sparkle {
+    animation: none;
   }
 }

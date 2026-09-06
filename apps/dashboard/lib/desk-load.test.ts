@@ -34,6 +34,10 @@ describe('desk load path', () => {
     expect(ledger).toContain('REST_FETCH_MS = 8_000');
     expect(ledger).toContain('loadPredictionMarkets');
     expect(ledger).toContain('pm_markets');
+    expect(ledger).toContain('loadTeam');
+    expect(ledger).toContain('desk_agents');
+    expect(ledger).toContain('desk_domain_stewards');
+    expect(ledger).toContain("ended_at is null");
     expect(ledger).toContain('to_regclass');
   });
 });

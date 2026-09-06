@@ -74,7 +74,7 @@ bun run web:app
 
 Open `http://localhost:5173` (this is the printed Local URL, the Auth Site URL, and the passkey RP ID). `http://127.0.0.1:5173` works for email **if you start and finish on that IP** — passkeys still require `localhost`. Sign in. Header source should read `postgrest`.
 
-Tabs are spelled-out words: **Book, Theses, Events, Tests**. Book is the landing page at `/`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-4` panels, `g` then letter (`b/t/c/e`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab.
+Tabs are spelled-out words: **Book, Theses, Events, Tests, Team**. Book is the landing page at `/`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-5` panels, `g` then letter (`b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab.
 
 ## Confirm you are on the real ledger
 
@@ -117,6 +117,6 @@ Auth gate checklist:
 2. Logged out: `/` is sign-in; `/api/ledger` is 401; HTML has no `neocloud_compute`.
 3. Sign in with the **email magic link** (or a social provider once it is enabled). First confirmed user is claimed via `claim_ledger_operator`. Later accounts need a `ledger_operators` row.
 4. Book / Theses / Events load live rows. Header shows your email. **Sign out** returns to the gate.
-5. Tab switches (1–4 or click) paint immediately from cached data; the filter box is gone.
+5. Tab switches (1–5 or click) paint immediately from cached data; the filter box is gone.
 6. **Passkey+** then sign out and **Passkey** sign-in.
 7. Theses have no write controls. Status, evidence, and lessons are ledger reads.
