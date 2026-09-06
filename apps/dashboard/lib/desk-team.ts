@@ -55,6 +55,7 @@ export function fallbackTeam(): DeskTeamPayload {
   const ledger = fallbackDomain('fallback-ledger', 'ledger', 'Ledger', 'ops', '#7dd3a7', 5, 'Schema, desk, public phone view, cross-domain integrity.');
   const equity = fallbackDomain('fallback-equity', 'equity', 'Stocks', 'trading', '#5b8def', 10, 'Equities / broker book. Domain stays even if the steward changes.');
   const prediction = fallbackDomain('fallback-prediction', 'prediction', 'Predictions', 'trading', '#c084fc', 20, 'Prediction markets. Steward is soft-assigned.');
+  const meme = fallbackDomain('fallback-meme', 'meme', 'Meme coins', 'trading', '#f59e0b', 30, 'Meme / pump-style venues. Steward soft-assigned — rotatable without migration.');
   const grasshopper = fallbackAgent(
     'fallback-grasshopper',
     'grasshopper',
@@ -88,13 +89,25 @@ export function fallbackTeam(): DeskTeamPayload {
     'watching',
     3,
   );
+  const bandit = fallbackAgent(
+    'fallback-bandit',
+    'bandit',
+    'BANDIT',
+    'Meme-coin trader',
+    'Owns meme-coin research and execution under Grasshopper. Domain: Meme coins. Never invent marks — write venue fills and marks into the ledger only.',
+    '#f59e0b',
+    'bandit',
+    'idle',
+    4,
+  );
   return {
-    agents: [grasshopper, quantanamo, oddsborne],
-    domains: [ledger, equity, prediction],
+    agents: [grasshopper, quantanamo, oddsborne, bandit],
+    domains: [ledger, equity, prediction, meme],
     stewards: [
       fallbackSteward('fallback-steward-ledger', ledger.id, grasshopper.id),
       fallbackSteward('fallback-steward-equity', equity.id, quantanamo.id),
       fallbackSteward('fallback-steward-prediction', prediction.id, oddsborne.id),
+      fallbackSteward('fallback-steward-meme', meme.id, bandit.id),
     ],
     accounts: [],
   };

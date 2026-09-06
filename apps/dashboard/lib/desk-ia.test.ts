@@ -75,6 +75,8 @@ describe('desk IA smoke', () => {
     expect(avatars).toContain('GrasshopperMark');
     expect(avatars).toContain('QuantMark');
     expect(avatars).toContain('OddsMark');
+    expect(avatars).toContain('BanditMark');
+    expect(team).toContain('cards.map');
     expect(avatars).not.toContain('from \'three\'');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('term-team-avatar');

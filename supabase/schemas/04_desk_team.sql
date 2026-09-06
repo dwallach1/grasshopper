@@ -1,5 +1,7 @@
 -- Domain-agnostic desk roster. Stewardship is a soft assignment:
 -- reassign `desk_domain_stewards`, do not rename tables or domains after a person.
+-- Seeded domains today: ledger, equity, prediction, meme.
+-- Seeded agents today: grasshopper, quantanamo, oddsborne, bandit.
 -- Browser `anon` has no privileges. Local desk reads as `authenticated`.
 -- QUANTANAMO writes via the server connection. Public Worker never queries these.
 

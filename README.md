@@ -153,7 +153,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 | 2 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
 | 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
-| 5 | Team | Agents from `desk_agents` with current `desk_domain_stewards` chips (`desk_domains`: Ledger / Stocks / Predictions). Soft stewardship — rotate a steward without renaming a domain. Heartbeat glow is ledger `heartbeat_at` only. Empty tables fall back to identity rows, never invented P/L. `/mates` redirects here. |
+| 5 | Team | Cards for every `desk_agents` row (today: GRASSHOPPER, QUANTANAMO, ODDSBORNE, BANDIT) with current `desk_domain_stewards` chips (`desk_domains`: Ledger / Stocks / Predictions / Meme coins). Soft stewardship — rotate a steward without renaming a domain. Heartbeat glow is ledger `heartbeat_at` only. Empty tables fall back to identity rows, never invented P/L. `/mates` redirects here. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 

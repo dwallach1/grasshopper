@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-const AVATAR_KEYS = new Set(['grasshopper', 'quant', 'odds']);
+const AVATAR_KEYS = new Set(['grasshopper', 'quant', 'odds', 'bandit']);
 
 export function TeamAvatar({
   avatarKey,
@@ -24,6 +24,7 @@ export function TeamAvatar({
       {key === 'grasshopper' && <GrasshopperMark />}
       {key === 'quant' && <QuantMark />}
       {key === 'odds' && <OddsMark />}
+      {key === 'bandit' && <BanditMark />}
       {key === 'spark' && <SparkMark />}
       <span className="term-team-avatar-ring" />
     </span>
@@ -78,6 +79,21 @@ function OddsMark() {
         <circle className="term-team-pip" cx="38" cy="46" r="2" />
       </g>
       <path className="term-team-sparkle" d="M50 18l2 4 4 2-4 2-2 4-2-4-4-2 4-2z" />
+    </svg>
+  );
+}
+
+function BanditMark() {
+  return (
+    <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
+      <path className="term-team-ear term-team-ear-a" d="M18 24l-6-12 14 6" />
+      <path className="term-team-ear term-team-ear-b" d="M46 24l6-12-14 6" />
+      <ellipse className="term-team-body" cx="32" cy="36" rx="16" ry="14" />
+      <path className="term-team-mask" d="M16 32c4-6 12-8 16-8s12 2 16 8c-4 5-10 7-16 7s-12-2-16-7z" />
+      <circle className="term-team-eye" cx="26" cy="33" r="1.6" />
+      <circle className="term-team-eye" cx="38" cy="33" r="1.6" />
+      <ellipse className="term-team-nose" cx="32" cy="40" rx="2.2" ry="1.6" />
+      <path className="term-team-tail" d="M16 44c-8 2-10 10-6 14 4-2 8-4 10-8" />
     </svg>
   );
 }

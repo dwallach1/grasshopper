@@ -3539,6 +3539,45 @@ a:focus-visible {
   animation: team-sparkle 1.8s ease-in-out infinite;
 }
 
+.term-team-mask,
+.term-team-ear,
+.term-team-tail {
+  stroke: var(--team-accent, #f59e0b);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.term-team-mask {
+  fill: color-mix(in srgb, var(--team-accent, #f59e0b) 42%, #101318);
+}
+
+.term-team-ear {
+  fill: color-mix(in srgb, var(--team-accent, #f59e0b) 22%, #101318);
+}
+
+.term-team-nose {
+  fill: var(--team-accent, #f59e0b);
+}
+
+.term-team-tail {
+  fill: none;
+}
+
+.term-team-avatar-bandit .term-team-ear-a {
+  transform-origin: 20px 22px;
+  animation: team-antenna 2.6s ease-in-out infinite;
+}
+
+.term-team-avatar-bandit .term-team-ear-b {
+  transform-origin: 44px 22px;
+  animation: team-antenna 3.1s ease-in-out infinite reverse;
+}
+
+.term-team-avatar-bandit .term-team-mask {
+  animation: team-chart 2.8s ease-in-out infinite;
+}
+
 .term-team-meta {
   min-width: 0;
 }
@@ -3705,13 +3744,7 @@ a:focus-visible {
 
 @media (min-width: 720px) {
   .term-team-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1100px) {
-  .term-team-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 }
 
@@ -3740,7 +3773,10 @@ a:focus-visible {
   .term-team-leg-hind,
   .term-team-chart,
   .term-team-dice,
-  .term-team-sparkle {
+  .term-team-sparkle,
+  .term-team-ear-a,
+  .term-team-ear-b,
+  .term-team-mask {
     animation: none;
   }
 }
