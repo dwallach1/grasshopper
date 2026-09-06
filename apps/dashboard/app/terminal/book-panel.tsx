@@ -87,6 +87,7 @@ export function BookPanel({
                 <span>{book.unit}</span>
               </header>
               <DeskLiveline
+                key={book.id}
                 points={book.equity}
                 value={book.now}
                 unit={book.unit}

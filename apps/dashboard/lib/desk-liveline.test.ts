@@ -257,15 +257,24 @@ describe('assembleLiveline', () => {
 
   test('windows cover history-to-now; degen only on big native % swings', () => {
     const first = isoToLivelineTime('2026-08-23T20:26:25.000Z');
-    const now = isoToLivelineTime('2026-09-06T15:58:03.496Z');
+    const last = isoToLivelineTime('2026-09-04T20:06:00.000Z');
+    const now = isoToLivelineTime('2026-09-06T19:32:00.000Z');
     expect(first).not.toBeNull();
+    expect(last).not.toBeNull();
     expect(now).not.toBeNull();
-    const points = [{ time: first!, value: 5000 }, { time: now!, value: 6020 }];
+    const points = [{ time: first!, value: 5000 }, { time: last!, value: 6020 }];
     const span = seriesSpanSecs(points, now!);
     const windows = livelineWindows(points, now!);
-    expect(windows[windows.length - 1]?.label).toBe('all');
-    expect(windows[windows.length - 1]?.secs).toBe(span);
-    expect(windows.some((row) => row.label === '1d')).toBe(true);
+    expect(windows[0]?.label).toBe('all');
+    expect(windows[0]?.secs).toBe(span);
+    expect(windows.some((row) => row.label === '1d')).toBe(false);
+    expect(windows.some((row) => row.label === '7d')).toBe(true);
+    const fresh = livelineWindows(
+      [{ time: now! - 20 * 86_400, value: 1 }, { time: now!, value: 2 }],
+      now!,
+    );
+    expect(fresh[0]?.label).toBe('all');
+    expect(fresh.some((row) => row.label === '1d')).toBe(true);
     expect(livelineDegen(20.4)).toBe(true);
     expect(livelineDegen(1.7)).toBe(false);
     expect(livelineDegen(null)).toBe(false);

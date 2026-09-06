@@ -175,14 +175,18 @@ export function livelineWindows(
   nowSecs: number,
 ): LivelineWindowOpt[] {
   const span = seriesSpanSecs(points, nowSecs);
+  const last = points[points.length - 1];
+  const lastAge = last ? Math.max(0, nowSecs - last.time) : 0;
   const all = { label: 'all', secs: span };
-  const candidates: LivelineWindowOpt[] = [
+  const lookbacks: LivelineWindowOpt[] = [
     { label: '1d', secs: DAY_SECS },
     { label: '7d', secs: 7 * DAY_SECS },
     { label: '30d', secs: 30 * DAY_SECS },
   ];
-  const shown = candidates.filter((row) => row.secs < span);
-  return [...shown, all];
+  // Liveline uses windows[0] as the initial view. Keep `all` first so a
+  // sparse book whose last mark is older than 1d is not an empty canvas.
+  const shown = lookbacks.filter((row) => row.secs > lastAge + 60 && row.secs < span);
+  return [all, ...shown];
 }
 
 export function livelineDegen(returnPct: number | null): boolean {

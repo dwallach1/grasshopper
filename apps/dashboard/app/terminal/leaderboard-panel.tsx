@@ -72,6 +72,7 @@ export function LeaderboardPanel({
       <section className="line-hero" aria-label="Desk sport line">
         {focus === 'all' ? (
           <DeskLiveline
+            key="all"
             series={line.all_pct}
             unit="PCT"
             color="#e8edf2"
@@ -80,6 +81,7 @@ export function LeaderboardPanel({
           />
         ) : (
           <DeskLiveline
+            key={focus}
             points={curve?.equity ?? []}
             value={curve?.now ?? null}
             unit={curve?.unit ?? 'USD'}
