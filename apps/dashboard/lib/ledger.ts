@@ -36,7 +36,8 @@ import {
   mapThesisSymbolLinks,
   type JsonObjectRow,
 } from './ledger-map';
-import type { DeskPayload } from './ledger-types';
+import { assembleTeam, emptyTeam } from './desk-team';
+import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import {
   hasDatabaseUrl,
@@ -369,7 +370,10 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const prediction = await loadPredictionMarkets(sql);
+    const [prediction, team] = await Promise.all([
+      loadPredictionMarkets(sql),
+      loadTeam(sql),
+    ]);
     return assembleDesk('postgres', decorateDesk(theses, symbols, {
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
@@ -408,7 +412,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }, prediction));
+    }, prediction, team));
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -485,7 +489,10 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
 
   const mappedTests = mapTests(tests);
   const mappedArtifacts = mapBacktestArtifacts(artifacts);
-  const prediction = await loadPredictionMarketsRest(accessToken);
+  const [prediction, team] = await Promise.all([
+    loadPredictionMarketsRest(accessToken),
+    loadTeamRest(accessToken),
+  ]);
   return assembleDesk('postgrest', decorateDesk(theses, symbols, {
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),
@@ -526,7 +533,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }, prediction));
+  }, prediction, team));
 }
 
 async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload> {
@@ -597,12 +604,66 @@ async function restOptional(path: string, accessToken: string): Promise<JsonObje
     return await restRows(path, accessToken);
   } catch (error) {
     console.error(JSON.stringify({
-      event: 'prediction_rest_skipped',
+      event: 'ledger_rest_skipped',
       path,
       error: error instanceof Error ? error.message : 'unknown',
     }));
     return [];
   }
+}
+
+async function loadTeam(sql: Sql): Promise<DeskTeamPayload> {
+  try {
+    const present = await sql`select to_regclass('public.desk_agents') is not null as ok`;
+    if (!present[0]?.ok) return assembleTeam(emptyTeam());
+    const [agents, domains, stewards, accounts] = await Promise.all([
+      sql`
+        select id, slug, display_name, role_title, charter, accent, avatar_key,
+               status, heartbeat_at, sort_order, meta
+        from public.desk_agents
+        order by sort_order, slug
+      `,
+      sql`
+        select id, slug, name, kind, description, accent, status, sort_order, meta
+        from public.desk_domains
+        order by sort_order, slug
+      `,
+      sql`
+        select id, domain_id, agent_id, is_primary, assigned_at, ended_at, note
+        from public.desk_domain_stewards
+        where ended_at is null
+        order by assigned_at, id
+      `,
+      sql`
+        select id, domain_id, account_key, label, currency, status
+        from public.desk_accounts
+        order by account_key
+      `,
+    ]);
+    return assembleTeam({
+      agents: agents as unknown as Record<string, unknown>[],
+      domains: domains as unknown as Record<string, unknown>[],
+      stewards: stewards as unknown as Record<string, unknown>[],
+      accounts: accounts as unknown as Record<string, unknown>[],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (isPostgresPermissionDenied(message) || isPostgresUndefinedRelation(message)) {
+      console.error(JSON.stringify({ event: 'team_ledger_skipped', error: message }));
+      return assembleTeam(emptyTeam());
+    }
+    throw error;
+  }
+}
+
+async function loadTeamRest(accessToken: string): Promise<DeskTeamPayload> {
+  const [agents, domains, stewards, accounts] = await Promise.all([
+    restOptional('desk_agents?select=id,slug,display_name,role_title,charter,accent,avatar_key,status,heartbeat_at,sort_order,meta&order=sort_order.asc,slug.asc', accessToken),
+    restOptional('desk_domains?select=id,slug,name,kind,description,accent,status,sort_order,meta&order=sort_order.asc,slug.asc', accessToken),
+    restOptional('desk_domain_stewards?select=id,domain_id,agent_id,is_primary,assigned_at,ended_at,note&ended_at=is.null&order=assigned_at.asc,id.asc', accessToken),
+    restOptional('desk_accounts?select=id,domain_id,account_key,label,currency,status&order=account_key.asc', accessToken),
+  ]);
+  return assembleTeam({ agents, domains, stewards, accounts });
 }
 
 async function loadPredictionMarketsRest(accessToken: string): Promise<PredictionMarketsPayload> {
@@ -646,8 +707,9 @@ function bookFields(
 function decorateDesk(
   thesisRows: JsonObjectRow[],
   symbolRows: JsonObjectRow[],
-  body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines' | 'theses' | 'fill_log'>,
+  body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines' | 'theses' | 'fill_log' | 'team'>,
   prediction: PredictionMarketsPayload = emptyPredictionMarkets(),
+  team: DeskTeamPayload = emptyTeam(),
 ): Omit<DeskPayload, 'generated_at' | 'source' | 'routines'> {
   const theses = attachThesisLots(mapTheses(thesisRows, symbolRows), {
     links: mapThesisSymbolLinks(symbolRows),
@@ -657,6 +719,7 @@ function decorateDesk(
   const fillLog = assembleFillLog({ fills: body.fills, intents: body.intents });
   return {
     ...body,
+    team,
     ...hydratePredictionDesk(theses, fillLog, prediction),
   };
 }

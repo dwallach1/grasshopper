@@ -15,6 +15,7 @@ export const DESK_SURFACES = [
   'theses',
   'events',
   'backtests',
+  'team',
 ] as const;
 
 export type DeskSurface = (typeof DESK_SURFACES)[number];
@@ -32,6 +33,7 @@ export const DESK_TABS: readonly DeskTab[] = [
   { href: '/theses', id: 'theses', key: '2', label: 'Theses', go: 't' },
   { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
   { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
+  { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
 ] as const;
 
 /** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
@@ -47,6 +49,7 @@ export const DESK_PATH_REDIRECTS = [
   { source: '/risk', destination: '/' },
   { source: '/runs', destination: '/' },
   { source: '/learnings', destination: '/theses' },
+  { source: '/mates', destination: '/team' },
 ] as const satisfies readonly DeskPathRedirect[];
 
 function surfaceFromHead(head: string): DeskSurface {
@@ -67,6 +70,9 @@ function surfaceFromHead(head: string): DeskSurface {
     case 'backtests':
     case 'tests':
       return 'backtests';
+    case 'team':
+    case 'mates':
+      return 'team';
     default:
       return 'book';
   }
@@ -103,6 +109,8 @@ export function surfaceFromGoLetter(letter: string): DeskSurface | null {
     case 'l':
     case 'o':
       return 'theses';
+    case 'a':
+      return 'team';
     default:
       return null;
   }

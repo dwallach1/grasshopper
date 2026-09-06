@@ -33,6 +33,7 @@ export const PUBLIC_DESK_REDIRECTS = [
   { source: '/risk', destination: '/' },
   { source: '/runs', destination: '/' },
   { source: '/learnings', destination: '/theses' },
+  { source: '/mates', destination: '/team' },
 ] as const;
 
 export function parseDeskWire(value: unknown): DeskWire {
@@ -61,7 +62,8 @@ export function publicDeskJsonError(message = PUBLIC_DESK_UNAVAILABLE): { error:
 
 /**
  * Mark a live desk payload as the public snapshot. Drops operator-only audit
- * rows. `prediction_markets` (ODDSBORNE `pm_*`) passes through when present.
+ * rows. `prediction_markets` (ODDSBORNE `pm_*`) and `team` (desk_agents)
+ * pass through when present. Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const {

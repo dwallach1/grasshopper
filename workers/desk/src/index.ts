@@ -11,7 +11,8 @@ export default {
       || path === '/ontology'
       || path === '/risk'
       || path === '/runs'
-      || path === '/learnings';
+      || path === '/learnings'
+      || path === '/mates';
 
     if (!workerFirst) {
       return env.ASSETS.fetch(request);

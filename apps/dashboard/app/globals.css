@@ -2344,6 +2344,10 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.95fr);
 }
 
+.term-grid-team {
+  grid-template-columns: 1fr;
+}
+
 .term-panel {
   min-width: 0;
   border: 1px solid var(--line);
@@ -2893,7 +2897,8 @@ a:focus-visible {
   .term-grid-book,
   .term-grid-2,
   .term-grid-theses,
-  .term-grid-backtests {
+  .term-grid-backtests,
+  .term-grid-team {
     grid-template-columns: 1fr;
   }
 
@@ -3421,5 +3426,208 @@ a:focus-visible {
 
   .term-grid-backtests table {
     min-width: 0;
+  }
+}
+
+.term-team-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.term-team-card {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #0c1014;
+  min-width: 0;
+}
+
+.term-team-card.is-alive {
+  border-color: color-mix(in srgb, var(--team-accent, var(--green)) 45%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--team-accent, var(--green)) 18%, transparent);
+}
+
+.term-team-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--team-accent, var(--green)) 10%, #0a0d10);
+  animation: team-breathe 4.8s var(--ease) infinite;
+}
+
+.term-team-avatar-ring {
+  position: absolute;
+  inset: 5px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
+  pointer-events: none;
+}
+
+.term-team-avatar.is-alive {
+  animation: team-breathe 3.2s var(--ease) infinite, team-glow 2.4s ease-in-out infinite;
+}
+
+.term-team-svg {
+  width: 58px;
+  height: 58px;
+}
+
+.term-team-token {
+  fill: var(--team-accent, var(--green));
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #0a0d10);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.term-team-token-inset {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 62%, #0a0d10);
+  stroke: none;
+}
+
+.term-team-meta {
+  min-width: 0;
+}
+
+.term-team-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.term-team-name b {
+  letter-spacing: 0.04em;
+  font-size: 14px;
+}
+
+.term-team-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.term-team-pill.up {
+  color: var(--green);
+  border-color: rgba(61, 220, 132, 0.4);
+}
+
+.term-team-pill.warn {
+  color: var(--warn);
+  border-color: rgba(255, 176, 0, 0.4);
+}
+
+.term-team-pill.muted,
+.term-team-pill.down {
+  color: var(--text-3);
+}
+
+.term-team-role {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.term-team-charter {
+  margin: 6px 0 8px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.term-team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.term-team-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--team-chip, var(--line)) 50%, var(--line));
+  color: var(--team-chip, var(--text-2));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.term-team-chip.is-primary {
+  background: color-mix(in srgb, var(--team-chip, var(--amber)) 14%, transparent);
+}
+
+.term-team-chip.dim {
+  color: var(--text-3);
+  border-color: var(--line);
+}
+
+.term-team-beat {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+@keyframes team-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes team-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 28%, transparent);
+  }
+}
+
+@media (min-width: 720px) {
+  .term-team-cards {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .term-team-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .term-team-avatar {
+    width: 72px;
+    height: 72px;
+  }
+
+  .term-team-svg {
+    width: 54px;
+    height: 54px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .term-team-avatar,
+  .term-team-avatar.is-alive {
+    animation: none;
   }
 }
