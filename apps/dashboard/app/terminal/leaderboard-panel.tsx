@@ -1,18 +1,31 @@
 'use client';
 
-import type { CSSProperties, MouseEvent } from 'react';
+import { useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 
 import {
   assembleLeaderboard,
-  LEADERBOARD_RULES,
-  LEADERBOARD_SUBTITLE,
   NOT_RANKED,
+  type LeaderboardCompetitorId,
 } from '../../lib/desk-leaderboard';
-import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import {
+  assembleLiveline,
+  bookCurve,
+  type LivelineBookId,
+} from '../../lib/desk-liveline';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
-import { TeamAvatar } from './team-avatars';
+import { DeskLiveline } from './desk-liveline';
 import { age, nyStamp, pct, pnlClass } from './format';
+import { TeamAvatar } from './team-avatars';
+
+type BoardFocus = 'all' | LivelineBookId;
+
+const FOCI: Array<{ id: BoardFocus; label: string }> = [
+  { id: 'all', label: 'ALL' },
+  { id: 'quantanamo', label: 'QUANTANAMO' },
+  { id: 'oddsborne', label: 'ODDSBORNE' },
+  { id: 'bandit', label: 'BANDIT' },
+];
 
 export function LeaderboardPanel({
   desk,
@@ -23,70 +36,123 @@ export function LeaderboardPanel({
   now: number | null;
   onOpenTeam?: () => void;
 }) {
-  const board = assembleLeaderboard(desk);
+  const [focus, setFocus] = useState<BoardFocus>('all');
+  const board = useMemo(() => assembleLeaderboard(desk), [desk]);
+  const line = useMemo(() => assembleLiveline(desk), [desk]);
+  const curve = focus === 'all' ? null : bookCurve(line, focus);
+  const ranked = board.rows.filter((row) => row.ranked);
+  const lead = ranked[0];
+
   return (
-    <div className="term-grid term-grid-team">
-      <section className="term-panel term-panel-span">
-        <header>
-          <b>LEADERBOARD</b>
-          <span>{board.subtitle}</span>
-        </header>
-        <p className="term-board-rules">{board.rules}</p>
-        <div className="term-board-cards">
-          {board.rows.map((row) => (
-            <article
-              key={row.id}
-              className={`term-board-card${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}`}
-              style={{ '--team-accent': row.accent } as CSSProperties}
+    <div className="line-stage">
+      <header className="line-mast">
+        <p className="line-kicker">the line</p>
+        <h1>Board</h1>
+        <p className="line-lede">
+          One living % curve per book, native units. SOL is not dollars.
+          Missing start is not ranked.
+        </p>
+      </header>
+
+      <div className="line-foci" role="tablist" aria-label="Steward line">
+        {FOCI.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={focus === item.id}
+            className={focus === item.id ? 'on' : ''}
+            onClick={() => setFocus(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <section className="line-hero" aria-label="Desk sport line">
+        {focus === 'all' ? (
+          <DeskLiveline
+            series={line.all_pct}
+            unit="PCT"
+            color="#e8edf2"
+            emptyText="no ranked book in ledger"
+            showValue={false}
+          />
+        ) : (
+          <DeskLiveline
+            points={curve?.equity ?? []}
+            value={curve?.now ?? null}
+            unit={curve?.unit ?? 'USD'}
+            color={curve?.color}
+            emptyText={curve?.empty_text}
+            returnPct={curve?.return_pct ?? null}
+            degen
+          />
+        )}
+      </section>
+
+      <p className="line-caption">
+        {focus === 'all'
+          ? 'ALL is % vs each book’s own start — the only shared axis. No FX.'
+          : curve?.source}
+        {lead ? ` · lead ${lead.steward} ${pct(lead.return_pct, 2)}` : ''}
+      </p>
+
+      <ol className="line-standings">
+        {board.rows.map((row) => (
+          <li
+            key={row.id}
+            className={`line-row${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}${focus === row.id ? ' is-on' : ''}`}
+            // SAFETY: CSS custom property for the existing TeamAvatar accent token.
+            style={{ '--team-accent': row.accent } as CSSProperties}
+          >
+            <button
+              type="button"
+              className="line-row-hit"
+              onClick={() => setFocus(toFocus(row.id))}
             >
-              <div className="term-board-place" aria-label={row.place ? `place ${row.place}` : NOT_RANKED}>
-                {row.place ?? '—'}
-              </div>
+              <span className="line-place">{row.place ?? '—'}</span>
               <TeamAvatar
                 shape={row.avatar_shape}
                 accent={row.accent}
                 label={row.steward}
                 alive={false}
               />
-              <div className="term-board-meta">
-                <div className="term-team-name">
-                  {onOpenTeam ? (
-                    <a
-                      href="/team"
-                      className="term-board-name"
-                      onClick={(event) => onDeskClick(event, onOpenTeam)}
-                    >
-                      {row.steward}
-                    </a>
-                  ) : (
-                    <b>{row.steward}</b>
-                  )}
-                  <i className="term-team-chip is-primary" style={{ '--team-chip': row.accent } as CSSProperties}>
-                    {row.venue_label}
-                  </i>
-                </div>
-                <p className="term-team-role">{row.role_title}</p>
-                <p className={`term-board-return ${row.ranked ? pnlClass(row.return_pct) : 'muted'}`}>
-                  {row.ranked ? pct(row.return_pct, 2) : NOT_RANKED}
-                </p>
-                <p className="term-board-equity">
-                  {row.unit
-                    ? `${ledgerAmount(row.start, row.unit)} → ${ledgerAmount(row.now, row.unit)}`
-                    : NOT_IN_LEDGER}
-                </p>
-                <p className="term-board-risk">{row.risk_note}</p>
-                <p className="term-team-beat">
-                  {row.last_marked
-                    ? `last marked ${nyStamp(row.last_marked)} · ${age(row.last_marked, now)}`
-                    : 'last marked not in ledger'}
-                </p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+              <span className="line-who">
+                <b>{row.steward}</b>
+                <i>{row.venue_label} · {row.unit ?? '—'}</i>
+              </span>
+              <span className={`line-pct ${row.ranked ? pnlClass(row.return_pct) : 'muted'}`}>
+                {row.ranked ? pct(row.return_pct, 2) : NOT_RANKED}
+              </span>
+            </button>
+            <p className="line-meta">
+              {row.unit
+                ? `${ledgerAmount(row.start, row.unit)} → ${ledgerAmount(row.now, row.unit)}`
+                : 'not in ledger'}
+              {' · '}
+              {row.risk_note}
+              {onOpenTeam ? (
+                <>
+                  {' · '}
+                  <a href="/team" onClick={(event) => onDeskClick(event, onOpenTeam)}>team</a>
+                </>
+              ) : null}
+              {row.last_marked
+                ? ` · ${nyStamp(row.last_marked)} · ${age(row.last_marked, now)}`
+                : ''}
+            </p>
+          </li>
+        ))}
+      </ol>
+      <p className="line-rules">{board.rules}</p>
     </div>
   );
+}
+
+function toFocus(id: LeaderboardCompetitorId): BoardFocus {
+  if (id === 'quantanamo' || id === 'oddsborne' || id === 'bandit') return id;
+  return 'all';
 }
 
 function onDeskClick(event: MouseEvent<HTMLAnchorElement>, navigate: () => void) {

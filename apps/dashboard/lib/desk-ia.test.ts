@@ -9,7 +9,7 @@ async function readDashboard(relative: string): Promise<string> {
 }
 
 describe('desk IA smoke', () => {
-  test('chrome lands on Book; Home and Risk are gone as destinations', async () => {
+  test('chrome lands on Board; Book is /book; Home and Risk are gone as destinations', async () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const nav = await readDashboard('lib/desk-nav.ts');
@@ -32,7 +32,7 @@ describe('desk IA smoke', () => {
     expect(nav).toContain("id: 'team'");
     expect(nav).toContain("id: 'leaderboard'");
     expect(nav).toContain("href: '/team'");
-    expect(nav).toContain("href: '/leaderboard'");
+    expect(nav).toContain("href: '/book'");
     expect(nav).toContain("go: 'm'");
     expect(nav).toContain("go: 'p'");
     expect(nav).toContain("href: '/'");
@@ -45,7 +45,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('VenueFilterBar');
   });
 
-  test('product chrome is GRASSHOPPER; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
+  test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const shell = await readDashboard('app/terminal/public-shell.tsx');
     const signIn = await readDashboard('app/auth/sign-in.tsx');
@@ -54,10 +54,10 @@ describe('desk IA smoke', () => {
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const chips = await readDashboard('app/terminal/venue-filter.tsx');
     const tests = await readDashboard('app/terminal/backtests-panel.tsx');
-    expect(app).toMatch(/term-brand[\s\S]{0,180}GRASSHOPPER\s*<\/a>/);
+    expect(app).toMatch(/term-brand[\s\S]{0,180}grasshopper\s*<\/a>/);
     expect(app).not.toMatch(/term-brand[\s\S]{0,180}QUANTANAMO/);
     expect(app).toContain('no QUANTANAMO run');
-    expect(shell).toContain('>GRASSHOPPER<');
+    expect(shell).toContain('grasshopper');
     expect(signIn).toContain('>GRASSHOPPER<');
     expect(layout).toContain("title: 'Grasshopper'");
     expect(venue).toContain("short: 'STOCKS'");
@@ -70,10 +70,8 @@ describe('desk IA smoke', () => {
     expect(venue).toContain("return 'BANDIT'");
     expect(venue).toContain("return 'PREDICTIONS'");
     expect(venue).toContain("return 'COINS'");
-    expect(book).toContain('CoinKpis');
-    expect(book).toContain('AllKpis');
+    expect(book).toContain('CoinNote');
     expect(book).toContain('assembleDeskBookRollup');
-    expect(book).toContain('three venues');
     expect(book).toContain("venue === 'all'");
     expect(book).toContain("venue === 'meme'");
     expect(book).toContain("ledgerAmount(pnl.cash_sol, 'SOL')");
@@ -102,27 +100,32 @@ describe('desk IA smoke', () => {
     expect(css).toContain('term-team-avatar');
   });
 
-  test('Book diagnostic is table-first and not a spinning cluster', async () => {
+  test('Board and Book are Liveline-first, not a Rive tape', async () => {
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const app = await readDashboard('app/terminal/app.tsx');
-    const ribbon = await readDashboard('app/terminal/book-nav-ribbon.tsx');
+    const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
+    const wrap = await readDashboard('app/terminal/desk-liveline.tsx');
+    const map = await readDashboard('lib/desk-liveline.ts');
+    expect(book).toContain('<DeskLiveline');
     expect(book).toContain('<BookTable');
-    expect(book).toContain('<BookDiagnostic');
-    expect(book.indexOf('<BookTable')).toBeLessThan(book.indexOf('<BookDiagnostic'));
-    expect(book).toContain('table is canonical');
     expect(book).not.toContain('BookExploded');
     expect(book).not.toContain('cluster.rotation');
+    expect(book).not.toContain('@rive-app');
+    expect(book).not.toContain('skills.riv');
     expect(app).not.toContain('BookExploded');
     expect(app).not.toContain('from \'three\'');
     expect(app).toContain("from './team-panel'");
     expect(app).toContain("from './leaderboard-panel'");
-    const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
     expect(board).toContain('assembleLeaderboard');
+    expect(board).toContain('assembleLiveline');
     expect(board).toContain('TeamAvatar');
-    expect(board).toContain('LEADERBOARD');
+    expect(board).toContain('DeskLiveline');
     expect(board).toContain('NOT_RANKED');
     expect(board).not.toContain('0.00%');
-    expect(ribbon).not.toContain('rotation.y');
-    expect(ribbon).toContain('OrthographicCamera');
+    expect(board).not.toContain('@rive-app');
+    expect(wrap).toContain("from 'liveline'");
+    expect(wrap).toContain('theme="dark"');
+    expect(map).toContain('unix seconds');
+    expect(map).toContain('never SOL→USD');
   });
 });

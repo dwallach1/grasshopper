@@ -27,11 +27,13 @@ export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 
 /** Old desk URLs the public Worker 302s so phones do not land on empty chrome. */
 export const PUBLIC_DESK_REDIRECTS = [
-  { source: '/book', destination: '/' },
+  { source: '/leaderboard', destination: '/' },
+  { source: '/board', destination: '/' },
+  { source: '/ranks', destination: '/' },
   { source: '/catalysts', destination: '/events' },
   { source: '/ontology', destination: '/theses' },
-  { source: '/risk', destination: '/' },
-  { source: '/runs', destination: '/' },
+  { source: '/risk', destination: '/book' },
+  { source: '/runs', destination: '/book' },
   { source: '/learnings', destination: '/theses' },
   { source: '/mates', destination: '/team' },
 ] as const;

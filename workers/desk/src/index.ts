@@ -6,7 +6,9 @@ export default {
     const path = url.pathname;
     const workerFirst = path.startsWith('/api/')
       || path.startsWith('/internal/')
-      || path === '/book'
+      || path === '/leaderboard'
+      || path === '/board'
+      || path === '/ranks'
       || path === '/catalysts'
       || path === '/ontology'
       || path === '/risk'

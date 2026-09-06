@@ -37,6 +37,8 @@ describe('desk load path', () => {
     expect(ledger).toContain('loadMemeCoins');
     expect(ledger).toContain('meme_tokens');
     expect(ledger).toContain('meme_positions');
+    expect(ledger).toContain('limit 200');
+    expect(ledger).toContain('limit=200');
     expect(ledger).toContain('loadTeam');
     expect(ledger).toContain('desk_agents');
     expect(ledger).toContain('desk_domain_stewards');

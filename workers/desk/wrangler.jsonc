@@ -13,12 +13,15 @@
     "run_worker_first": [
       "/api/*",
       "/internal/*",
-      "/book",
+      "/leaderboard",
+      "/board",
+      "/ranks",
       "/catalysts",
       "/ontology",
       "/risk",
       "/runs",
-      "/learnings"
+      "/learnings",
+      "/mates"
     ]
   },
   "kv_namespaces": [
