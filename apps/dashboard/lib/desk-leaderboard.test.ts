@@ -242,6 +242,8 @@ describe('desk leaderboard', () => {
     expect(stocks?.start).toBe(5000);
     expect(stocks?.now).toBeCloseTo(6020.0632);
     expect(stocks?.max_drawdown_pct).toBeCloseTo(5.448208);
+    expect(stocks?.days_live).toBe(11);
+    expect(stocks?.start_as_of).toBe('2026-08-23T20:26:25.000Z');
     expect(stocks?.risk_note).toMatch(/max DD/);
     expect(stocks?.last_marked).toBe('2026-09-04T20:06:00.000Z');
 

@@ -314,5 +314,18 @@ function stewardIdentity(
 
 function agenticNavSeries(desk: DeskPayload): Array<{ as_of: string; value: number }> {
   const rows = agenticSnapshots(desk.snapshots ?? []).slice().sort((a, b) => a.observed_at.localeCompare(b.observed_at));
-  return rows.map((row) => ({ as_of: row.observed_at, value: row.total_value }));
+  const series = rows.map((row) => ({ as_of: row.observed_at, value: row.total_value }));
+  const startAt = startTimestamp(desk.book.vs_start_note);
+  const startNav = desk.book.starting_nav;
+  const first = series[0];
+  if (startAt && startNav !== null && (!first || first.as_of > startAt)) {
+    series.unshift({ as_of: startAt, value: startNav });
+  }
+  return series;
+}
+
+function startTimestamp(note: string | null | undefined): string | null {
+  if (!note) return null;
+  const match = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/.exec(note);
+  return match?.[0] ?? null;
 }
