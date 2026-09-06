@@ -3240,8 +3240,20 @@ a:focus-visible {
   }
 
   .term-public .term-brand {
-    letter-spacing: 0.16em;
-    font-size: 13px;
+    letter-spacing: -0.02em;
+    font-size: 17px;
+  }
+
+  .term-public .term-chip,
+  .term-public .term-live {
+    margin-left: 0;
+    max-width: none;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .term-public .term-chip {
+    margin-left: auto;
   }
 
   .term-public .term-status {
@@ -3284,16 +3296,21 @@ a:focus-visible {
   }
 
   .term-dock a {
-    flex: 1;
+    flex: 1 1 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
     min-height: 48px;
-    padding: 0 2px;
+    padding: 0 1px;
+    overflow: hidden;
     color: var(--text-2);
     text-decoration: none;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
+    letter-spacing: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .term-dock a.on {
@@ -4007,13 +4024,45 @@ a:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .term.is-line .term-main {
+    padding: 0 0 calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .line-stage {
+    min-height: 0;
+    gap: 10px;
+    padding: 12px 12px 20px;
+  }
+
+  .line-mast h1 {
+    font-size: clamp(36px, 11vw, 56px);
+  }
+
+  .line-lede {
+    font-size: 14px;
+  }
+
+  .line-foci {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .line-foci button {
+    min-height: 40px;
+    padding: 8px 6px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+
   .line-hero {
-    height: min(52dvh, 440px);
+    height: min(46dvh, 380px);
   }
 
   .line-card .line-frame {
-    height: 180px;
-    min-height: 180px;
+    height: 148px;
+    min-height: 148px;
   }
 
   .line-sheet th:nth-child(2),

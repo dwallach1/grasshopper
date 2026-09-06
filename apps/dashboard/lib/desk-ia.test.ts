@@ -98,6 +98,8 @@ describe('desk IA smoke', () => {
     expect(avatars).not.toContain('from \'three\'');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('term-team-avatar');
+    expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(css).not.toMatch(/\.term-public \.term-brand \{[^}]*letter-spacing: 0\.16em/);
   });
 
   test('Board and Book are Liveline-first, not a Rive tape', async () => {

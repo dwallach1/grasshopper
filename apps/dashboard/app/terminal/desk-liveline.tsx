@@ -75,6 +75,7 @@ export function DeskLiveline({
         window={windowSecs}
         windows={windows}
         windowStyle="text"
+        seriesToggleCompact={motion.coarse}
         grid
         badge={false}
         momentum={!motion.reduce}
@@ -90,7 +91,12 @@ export function DeskLiveline({
         emptyText={empty ? emptyText : LIVELINE_EMPTY}
         formatValue={(v) => formatLivelineValue(v, unit)}
         formatTime={(t) => formatLivelineTime(t, span)}
-        padding={{ top: showValue ? 52 : 16, right: 16, bottom: 28, left: 12 }}
+        padding={{
+          top: showValue ? 52 : 16,
+          right: multi.length > 1 ? 88 : 16,
+          bottom: 28,
+          left: 12,
+        }}
       />
     </div>
   );
