@@ -100,6 +100,15 @@ describe('desk IA smoke', () => {
     expect(avatars).not.toContain('from \'three\'');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('term-team-avatar');
+    expect(css).toContain('term-tape');
+    const replay = await readDashboard('app/terminal/trade-replay.tsx');
+    const rive = await readDashboard('app/terminal/desk-rive.tsx');
+    expect(replay).toContain('replayFills');
+    expect(replay).toContain("import('./desk-rive')");
+    expect(replay).not.toContain('@rive-app/react-canvas');
+    expect(rive).toContain("from '@rive-app/react-canvas'");
+    expect(rive).toContain('shouldUseIntersectionObserver');
+    expect(replay).toContain('prefers-reduced-motion');
   });
 
   test('Book diagnostic is table-first and not a spinning cluster', async () => {
@@ -107,6 +116,7 @@ describe('desk IA smoke', () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const ribbon = await readDashboard('app/terminal/book-nav-ribbon.tsx');
     expect(book).toContain('<BookTable');
+    expect(book).toContain('<TradeReplay');
     expect(book).toContain('<BookDiagnostic');
     expect(book.indexOf('<BookTable')).toBeLessThan(book.indexOf('<BookDiagnostic'));
     expect(book).toContain('table is canonical');

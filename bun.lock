@@ -13,6 +13,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@quantanamo/contracts": "workspace:*",
+        "@rive-app/react-canvas": "^4.34.1",
         "@supabase/ssr": "^0.12.5",
         "@supabase/supabase-js": "^2.112.4",
         "next": "16.2.6",
@@ -456,6 +457,10 @@
     "@quantanamo/worker-knowledge": ["@quantanamo/worker-knowledge@workspace:workers/knowledge"],
 
     "@quantanamo/worker-research": ["@quantanamo/worker-research@workspace:workers/research"],
+
+    "@rive-app/canvas": ["@rive-app/canvas@2.42.0", "", {}, "sha512-ByXG7i8PZGFhPDUA9tkjEbB/C1cjs775IxFdPrWiQDN/WYMU6MirI2x0kGjHHwdfUKuG2HSkWEUI5SBeZm/hEA=="],
+
+    "@rive-app/react-canvas": ["@rive-app/react-canvas@4.34.1", "", { "dependencies": { "@rive-app/canvas": "2.42.0" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0" } }, "sha512-1eDiD1ECxf0+wxEWyT98/6BjRvyMPsn5pNeNdw7AJq2S+uQiduKOZLD00PcWlu2RS+VU0I9DXGPES5icUgBaaA=="],
 
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.0.1", "", { "os": "android", "cpu": "arm64" }, "sha512-fJI3I0r3C3Oj/zdBCpaCmBRZYf07xpaq4yCfDDoSFm+beWNzbIl26puW8RraUdugoJw/95zerNOn6jasAhzSmg=="],
 

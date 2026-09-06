@@ -10,7 +10,7 @@ const publicExport = isPublicDesk() && process.env.DESK_PUBLIC_EXPORT === '1';
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
-  transpilePackages: ['three', '@quantanamo/contracts'],
+  transpilePackages: ['three', '@quantanamo/contracts', '@rive-app/react-canvas'],
 };
 
 if (publicExport) {

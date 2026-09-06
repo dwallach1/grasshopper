@@ -19,6 +19,7 @@ import {
 } from '../../lib/prediction-book';
 import { fillLogCaption, NO_POSITION } from '../../lib/thesis-book';
 import { BookDiagnostic } from './book-diagnostic';
+import { TradeReplay } from './trade-replay';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   ledgerFigure,
@@ -110,6 +111,7 @@ export function BookPanel({
           <b>FILLS</b>
           <span>{fillLogCaption(fillLog)} · tape time per row</span>
         </header>
+        <TradeReplay rows={fillLog} />
         <FillLogTable rows={fillLog} />
         <header>
           <b>INTENTS</b>
