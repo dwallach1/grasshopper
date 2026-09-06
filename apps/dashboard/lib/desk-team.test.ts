@@ -2,12 +2,14 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   assembleTeam,
+  AVATAR_COLORS,
   clipCharter,
   deskTeam,
   emptyTeam,
   fallbackTeam,
   HEARTBEAT_FRESH_MS,
   isHeartbeatFresh,
+  resolveAvatarChip,
   teamCards,
 } from './desk-team';
 
@@ -101,7 +103,11 @@ describe('desk team mapping', () => {
     expect(cards.find((row) => row.slug === 'oddsborne')?.domains.map((row) => row.name)).toEqual(['Predictions']);
     expect(cards.find((row) => row.slug === 'bandit')?.domains.map((row) => row.name)).toEqual(['Meme coins']);
     expect(cards.find((row) => row.slug === 'bandit')?.avatar_key).toBe('bandit');
-    expect(cards.find((row) => row.slug === 'bandit')?.accent).toBe('#f59e0b');
+    expect(cards.find((row) => row.slug === 'bandit')?.avatar_shape).toBe('pebble');
+    expect(cards.find((row) => row.slug === 'bandit')?.accent).toBe(AVATAR_COLORS.red);
+    expect(cards.find((row) => row.slug === 'grasshopper')?.avatar_shape).toBe('tablet');
+    expect(cards.find((row) => row.slug === 'quantanamo')?.avatar_shape).toBe('blob');
+    expect(cards.find((row) => row.slug === 'oddsborne')?.avatar_shape).toBe('wedge');
     for (const card of cards) {
       expect(card).not.toHaveProperty('mark');
       expect(card).not.toHaveProperty('pnl');
@@ -117,6 +123,24 @@ describe('desk team mapping', () => {
     expect(empty.agents.every((row) => row.meta.source === 'fallback')).toBe(true);
     expect(deskTeam({}).agents).toHaveLength(4);
     expect(fallbackTeam().domains.map((row) => row.name)).toEqual(['Ledger', 'Stocks', 'Predictions', 'Meme coins']);
+    expect(fallbackTeam().agents.map((row) => row.accent)).toEqual([
+      AVATAR_COLORS.brown,
+      AVATAR_COLORS.green,
+      AVATAR_COLORS.blue,
+      AVATAR_COLORS.red,
+    ]);
+  });
+
+  test('maps avatar_key and ledger meta to Grok Bot chip shapes', () => {
+    expect(resolveAvatarChip({ avatar_key: 'grasshopper' })).toEqual({ shape: 'tablet', color: AVATAR_COLORS.brown });
+    expect(resolveAvatarChip({ avatar_key: 'quant' })).toEqual({ shape: 'blob', color: AVATAR_COLORS.green });
+    expect(resolveAvatarChip({ avatar_key: 'odds' })).toEqual({ shape: 'wedge', color: AVATAR_COLORS.blue });
+    expect(resolveAvatarChip({ avatar_key: 'bandit' })).toEqual({ shape: 'pebble', color: AVATAR_COLORS.red });
+    expect(resolveAvatarChip({
+      avatar_key: 'spark',
+      accent: '#94a3b8',
+      meta: { avatar_shape: 'wedge', avatar_color: 'blue' },
+    })).toEqual({ shape: 'wedge', color: AVATAR_COLORS.blue });
   });
 
   test('paints every desk_agents row — no three-agent cap', () => {
@@ -139,8 +163,10 @@ describe('desk team mapping', () => {
     const cards = teamCards(extra);
     expect(cards).toHaveLength(5);
     expect(cards.map((row) => row.slug)).toEqual(['grasshopper', 'quantanamo', 'oddsborne', 'bandit', 'newcomer']);
+    expect(cards.map((row) => row.avatar_shape)).toEqual(['tablet', 'blob', 'wedge', 'pebble', 'spark']);
     expect(cards[3]?.domains[0]?.name).toBe('Meme coins');
     expect(cards[4]?.domains).toEqual([]);
+    expect(cards[4]?.accent).toBe('#94a3b8');
   });
 
   test('heartbeat glow is only for a recent ledger timestamp', () => {

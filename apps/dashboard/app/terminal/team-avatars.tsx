@@ -1,99 +1,71 @@
 import type { CSSProperties } from 'react';
 
-const AVATAR_KEYS = new Set(['grasshopper', 'quant', 'odds', 'bandit']);
+import { type AvatarShape } from '../../lib/desk-team';
 
 export function TeamAvatar({
-  avatarKey,
+  shape,
   accent,
   label,
   alive,
 }: {
-  avatarKey: string;
+  shape: AvatarShape;
   accent: string;
   label: string;
   alive: boolean;
 }) {
-  const key = AVATAR_KEYS.has(avatarKey) ? avatarKey : 'spark';
   return (
     <span
-      className={`term-team-avatar term-team-avatar-${key}${alive ? ' is-alive' : ''}`}
+      className={`term-team-avatar term-team-avatar-${shape}${alive ? ' is-alive' : ''}`}
       style={{ '--team-accent': accent } as CSSProperties}
+      data-shape={shape}
       aria-hidden
       title={label}
     >
-      {key === 'grasshopper' && <GrasshopperMark />}
-      {key === 'quant' && <QuantMark />}
-      {key === 'odds' && <OddsMark />}
-      {key === 'bandit' && <BanditMark />}
-      {key === 'spark' && <SparkMark />}
+      {shape === 'tablet' && <TabletMark />}
+      {shape === 'blob' && <BlobMark />}
+      {shape === 'wedge' && <WedgeMark />}
+      {shape === 'pebble' && <PebbleMark />}
+      {shape === 'spark' && <SparkMark />}
       <span className="term-team-avatar-ring" />
     </span>
   );
 }
 
-function GrasshopperMark() {
+function TabletMark() {
   return (
     <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
-      <ellipse className="term-team-body" cx="30" cy="36" rx="16" ry="9" />
-      <ellipse className="term-team-head" cx="44" cy="32" rx="7" ry="6" />
-      <circle className="term-team-eye" cx="47" cy="31" r="1.4" />
-      <path className="term-team-antenna term-team-antenna-a" d="M47 27c3-6 8-8 11-7" />
-      <path className="term-team-antenna term-team-antenna-b" d="M45 26c1-6 5-9 9-9" />
-      <path className="term-team-leg" d="M22 40c-8 2-12 10-10 14" />
-      <path className="term-team-leg term-team-leg-hind" d="M18 36c-11-1-16 8-12 16" />
-      <path className="term-team-wing" d="M20 32c6-10 18-12 24-6" />
+      <rect className="term-team-token" x="18" y="10" width="28" height="44" rx="8" />
+      <rect className="term-team-token-inset" x="22" y="16" width="20" height="32" rx="5" />
     </svg>
   );
 }
 
-function QuantMark() {
+function BlobMark() {
   return (
     <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
-      <ellipse className="term-team-body" cx="32" cy="38" rx="15" ry="11" />
-      <circle className="term-team-head" cx="32" cy="22" r="8" />
-      <circle className="term-team-eye" cx="29" cy="21" r="1.3" />
-      <circle className="term-team-eye" cx="35" cy="21" r="1.3" />
-      <path className="term-team-antenna term-team-antenna-a" d="M27 16c-3-6-8-8-12-6" />
-      <path className="term-team-antenna term-team-antenna-b" d="M37 16c3-6 8-8 12-6" />
-      <g className="term-team-chart">
-        <path d="M22 44V36" />
-        <path d="M28 44V32" />
-        <path d="M34 44V38" />
-        <path d="M40 44V30" />
-        <path className="term-team-chart-line" d="M21 40h5l4-7 6 4 6-10" />
-      </g>
+      <path
+        className="term-team-token"
+        d="M22 36c-5-9 1-18 13-18 6-9 20-6 22 6 9 1 12 12 5 18-1 11-14 14-23 9-8 5-19-1-17-15z"
+      />
     </svg>
   );
 }
 
-function OddsMark() {
+function WedgeMark() {
   return (
     <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
-      <g className="term-team-dice">
-        <path className="term-team-crystal" d="M32 10l10 14H22z" />
-        <rect className="term-team-body" x="18" y="26" width="28" height="28" rx="4" />
-        <circle className="term-team-pip" cx="26" cy="34" r="2" />
-        <circle className="term-team-pip" cx="38" cy="34" r="2" />
-        <circle className="term-team-pip" cx="32" cy="40" r="2" />
-        <circle className="term-team-pip" cx="26" cy="46" r="2" />
-        <circle className="term-team-pip" cx="38" cy="46" r="2" />
-      </g>
-      <path className="term-team-sparkle" d="M50 18l2 4 4 2-4 2-2 4-2-4-4-2 4-2z" />
+      <path
+        className="term-team-token"
+        d="M16 14c-2 10-2 26 0 36 10-6 22-12 34-18C38 26 26 20 16 14z"
+      />
     </svg>
   );
 }
 
-function BanditMark() {
+function PebbleMark() {
   return (
     <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
-      <path className="term-team-ear term-team-ear-a" d="M18 24l-6-12 14 6" />
-      <path className="term-team-ear term-team-ear-b" d="M46 24l6-12-14 6" />
-      <ellipse className="term-team-body" cx="32" cy="36" rx="16" ry="14" />
-      <path className="term-team-mask" d="M16 32c4-6 12-8 16-8s12 2 16 8c-4 5-10 7-16 7s-12-2-16-7z" />
-      <circle className="term-team-eye" cx="26" cy="33" r="1.6" />
-      <circle className="term-team-eye" cx="38" cy="33" r="1.6" />
-      <ellipse className="term-team-nose" cx="32" cy="40" rx="2.2" ry="1.6" />
-      <path className="term-team-tail" d="M16 44c-8 2-10 10-6 14 4-2 8-4 10-8" />
+      <ellipse className="term-team-token" cx="32" cy="34" rx="20" ry="13" transform="rotate(-26 32 34)" />
     </svg>
   );
 }
@@ -101,7 +73,7 @@ function BanditMark() {
 function SparkMark() {
   return (
     <svg className="term-team-svg" viewBox="0 0 64 64" fill="none">
-      <path className="term-team-body" d="M32 10l4 16 16 4-16 4-4 16-4-16-16-4 16-4z" />
+      <path className="term-team-token" d="M32 10l5 17 17 5-17 5-5 17-5-17-17-5 17-5z" />
     </svg>
   );
 }

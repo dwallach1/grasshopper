@@ -3457,15 +3457,15 @@ a:focus-visible {
   place-items: center;
   width: 88px;
   height: 88px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--team-accent, var(--green)) 12%, #0a0d10);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--team-accent, var(--green)) 10%, #0a0d10);
   animation: team-breathe 4.8s var(--ease) infinite;
 }
 
 .term-team-avatar-ring {
   position: absolute;
-  inset: 6px;
-  border-radius: 50%;
+  inset: 5px;
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
   pointer-events: none;
 }
@@ -3475,107 +3475,20 @@ a:focus-visible {
 }
 
 .term-team-svg {
-  width: 64px;
-  height: 64px;
+  width: 58px;
+  height: 58px;
 }
 
-.term-team-body,
-.term-team-head,
-.term-team-crystal {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #101318);
-  stroke: var(--team-accent, var(--green));
-  stroke-width: 1.6;
-}
-
-.term-team-eye,
-.term-team-pip {
+.term-team-token {
   fill: var(--team-accent, var(--green));
-}
-
-.term-team-antenna,
-.term-team-leg,
-.term-team-wing,
-.term-team-chart path,
-.term-team-sparkle {
-  stroke: var(--team-accent, var(--green));
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-}
-
-.term-team-chart-line {
-  stroke-width: 1.8;
-}
-
-.term-team-avatar-grasshopper .term-team-antenna-a,
-.term-team-avatar-quant .term-team-antenna-a {
-  transform-origin: 46px 27px;
-  animation: team-antenna 2.8s ease-in-out infinite;
-}
-
-.term-team-avatar-grasshopper .term-team-antenna-b,
-.term-team-avatar-quant .term-team-antenna-b {
-  transform-origin: 36px 16px;
-  animation: team-antenna 3.4s ease-in-out infinite reverse;
-}
-
-.term-team-avatar-grasshopper .term-team-leg-hind {
-  transform-origin: 18px 36px;
-  animation: team-hop 3.6s ease-in-out infinite;
-}
-
-.term-team-avatar-quant .term-team-chart {
-  animation: team-chart 2.6s ease-in-out infinite;
-}
-
-.term-team-avatar-odds .term-team-dice {
-  transform-origin: 32px 40px;
-  animation: team-dice 5s ease-in-out infinite;
-}
-
-.term-team-avatar-odds .term-team-sparkle {
-  fill: color-mix(in srgb, var(--team-accent, #c084fc) 55%, white);
-  animation: team-sparkle 1.8s ease-in-out infinite;
-}
-
-.term-team-mask,
-.term-team-ear,
-.term-team-tail {
-  stroke: var(--team-accent, #f59e0b);
-  stroke-width: 1.6;
-  stroke-linecap: round;
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #0a0d10);
+  stroke-width: 1.2;
   stroke-linejoin: round;
 }
 
-.term-team-mask {
-  fill: color-mix(in srgb, var(--team-accent, #f59e0b) 42%, #101318);
-}
-
-.term-team-ear {
-  fill: color-mix(in srgb, var(--team-accent, #f59e0b) 22%, #101318);
-}
-
-.term-team-nose {
-  fill: var(--team-accent, #f59e0b);
-}
-
-.term-team-tail {
-  fill: none;
-}
-
-.term-team-avatar-bandit .term-team-ear-a {
-  transform-origin: 20px 22px;
-  animation: team-antenna 2.6s ease-in-out infinite;
-}
-
-.term-team-avatar-bandit .term-team-ear-b {
-  transform-origin: 44px 22px;
-  animation: team-antenna 3.1s ease-in-out infinite reverse;
-}
-
-.term-team-avatar-bandit .term-team-mask {
-  animation: team-chart 2.8s ease-in-out infinite;
+.term-team-token-inset {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 62%, #0a0d10);
+  stroke: none;
 }
 
 .term-team-meta {
@@ -3689,59 +3602,6 @@ a:focus-visible {
   }
 }
 
-@keyframes team-antenna {
-  0%,
-  100% {
-    transform: rotate(-4deg);
-  }
-  50% {
-    transform: rotate(8deg);
-  }
-}
-
-@keyframes team-hop {
-  0%,
-  70%,
-  100% {
-    transform: rotate(0deg);
-  }
-  80% {
-    transform: rotate(-8deg);
-  }
-}
-
-@keyframes team-chart {
-  0%,
-  100% {
-    opacity: 0.75;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes team-dice {
-  0%,
-  100% {
-    transform: rotate(-2deg);
-  }
-  50% {
-    transform: rotate(3deg);
-  }
-}
-
-@keyframes team-sparkle {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-}
-
 @media (min-width: 720px) {
   .term-team-cards {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -3767,16 +3627,7 @@ a:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .term-team-avatar,
-  .term-team-avatar.is-alive,
-  .term-team-antenna-a,
-  .term-team-antenna-b,
-  .term-team-leg-hind,
-  .term-team-chart,
-  .term-team-dice,
-  .term-team-sparkle,
-  .term-team-ear-a,
-  .term-team-ear-b,
-  .term-team-mask {
+  .term-team-avatar.is-alive {
     animation: none;
   }
 }

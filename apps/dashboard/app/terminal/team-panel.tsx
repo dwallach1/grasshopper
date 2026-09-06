@@ -33,7 +33,7 @@ export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null
                 style={{ '--team-accent': card.accent } as CSSProperties}
               >
                 <TeamAvatar
-                  avatarKey={card.avatar_key}
+                  shape={card.avatar_shape}
                   accent={card.accent}
                   label={card.display_name}
                   alive={alive}

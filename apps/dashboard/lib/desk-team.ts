@@ -29,6 +29,33 @@ export type DeskTeamDomainChip = {
   }>;
 };
 
+export const AVATAR_SHAPES = ['tablet', 'blob', 'wedge', 'pebble', 'spark'] as const;
+export type AvatarShape = (typeof AVATAR_SHAPES)[number];
+
+export const AVATAR_COLORS = {
+  brown: '#8B6914',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  red: '#ef4444',
+} as const;
+
+export type AvatarColorName = keyof typeof AVATAR_COLORS;
+
+const KEY_TO_SHAPE: Record<string, AvatarShape> = {
+  grasshopper: 'tablet',
+  quant: 'blob',
+  odds: 'wedge',
+  bandit: 'pebble',
+  spark: 'spark',
+};
+
+const KEY_TO_COLOR: Record<string, AvatarColorName> = {
+  grasshopper: 'brown',
+  quant: 'green',
+  odds: 'blue',
+  bandit: 'red',
+};
+
 export type DeskTeamCard = {
   slug: string;
   display_name: string;
@@ -36,10 +63,29 @@ export type DeskTeamCard = {
   charter: string;
   accent: string;
   avatar_key: string;
+  avatar_shape: AvatarShape;
   status: string;
   heartbeat_at: string | null;
   domains: DeskTeamDomainChip[];
 };
+
+export function resolveAvatarChip(agent: {
+  avatar_key?: string;
+  accent?: string;
+  meta?: JsonBag;
+}): { shape: AvatarShape; color: string } {
+  const key = agent.avatar_key || 'spark';
+  const metaShape = typeof agent.meta?.avatar_shape === 'string' ? agent.meta.avatar_shape : '';
+  const metaColor = typeof agent.meta?.avatar_color === 'string' ? agent.meta.avatar_color : '';
+  const shape = AVATAR_SHAPES.includes(metaShape as AvatarShape)
+    ? (metaShape as AvatarShape)
+    : (KEY_TO_SHAPE[key] ?? 'spark');
+  const named = metaColor in AVATAR_COLORS
+    ? (metaColor as AvatarColorName)
+    : KEY_TO_COLOR[key];
+  const color = named ? AVATAR_COLORS[named] : (agent.accent || AVATAR_COLORS.green);
+  return { shape, color };
+}
 
 export function emptyTeam(): DeskTeamPayload {
   return {
@@ -62,10 +108,11 @@ export function fallbackTeam(): DeskTeamPayload {
     'GRASSHOPPER',
     'Ledger steward',
     'Owns the shared ledger schema, desk UX, and public phone view. Keeps domains and stewards consistent — not the trader for a book.',
-    '#7dd3a7',
+    AVATAR_COLORS.brown,
     'grasshopper',
     'active',
     1,
+    { avatar_shape: 'tablet', avatar_color: 'brown' },
   );
   const quantanamo = fallbackAgent(
     'fallback-quantanamo',
@@ -73,10 +120,11 @@ export function fallbackTeam(): DeskTeamPayload {
     'QUANTANAMO',
     'Equities trader',
     'Research, theses, and live trades on the equity book (Robinhood). Domain: Stocks.',
-    '#5b8def',
+    AVATAR_COLORS.green,
     'quant',
     'active',
     2,
+    { avatar_shape: 'blob', avatar_color: 'green' },
   );
   const oddsborne = fallbackAgent(
     'fallback-oddsborne',
@@ -84,10 +132,11 @@ export function fallbackTeam(): DeskTeamPayload {
     'ODDSBORNE',
     'Prediction markets trader',
     'Polymarket US and future prediction venues. Domain: Predictions — steward can rotate without a migration.',
-    '#c084fc',
+    AVATAR_COLORS.blue,
     'odds',
     'watching',
     3,
+    { avatar_shape: 'wedge', avatar_color: 'blue' },
   );
   const bandit = fallbackAgent(
     'fallback-bandit',
@@ -95,10 +144,11 @@ export function fallbackTeam(): DeskTeamPayload {
     'BANDIT',
     'Meme-coin trader',
     'Owns meme-coin research and execution under Grasshopper. Domain: Meme coins. Never invent marks — write venue fills and marks into the ledger only.',
-    '#f59e0b',
+    AVATAR_COLORS.red,
     'bandit',
     'idle',
     4,
+    { avatar_shape: 'pebble', avatar_color: 'red' },
   );
   return {
     agents: [grasshopper, quantanamo, oddsborne, bandit],
@@ -177,13 +227,15 @@ export function teamCards(team: DeskTeamPayload): DeskTeamCard[] {
         })
         .filter((row): row is DeskTeamDomainChip => row !== null)
         .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.name.localeCompare(b.name));
+      const chip = resolveAvatarChip(agent);
       return {
         slug: agent.slug,
         display_name: agent.display_name,
         role_title: agent.role_title,
         charter: agent.charter,
-        accent: agent.accent,
+        accent: chip.color,
         avatar_key: agent.avatar_key,
+        avatar_shape: chip.shape,
         status: agent.status,
         heartbeat_at: agent.heartbeat_at,
         domains: chips,
@@ -289,6 +341,7 @@ function fallbackAgent(
   avatar_key: string,
   status: string,
   sort_order: number,
+  avatar: { avatar_shape: AvatarShape; avatar_color: AvatarColorName },
 ): DeskAgentRow {
   return {
     id,
@@ -301,7 +354,7 @@ function fallbackAgent(
     status,
     heartbeat_at: null,
     sort_order,
-    meta: { source: 'fallback' },
+    meta: { source: 'fallback', ...avatar },
   };
 }
 
