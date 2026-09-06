@@ -66,9 +66,13 @@ describe('desk IA smoke', () => {
     expect(venue).toContain("return 'PREDICTIONS'");
     expect(venue).toContain("return 'COINS'");
     expect(book).toContain('CoinKpis');
+    expect(book).toContain('AllKpis');
+    expect(book).toContain('assembleDeskBookRollup');
     expect(book).toContain('three venues');
-    expect(book).toContain("matchesVenueFilter('meme', venue)");
-    expect(book).toContain("matchesVenueFilter('equity', venue)");
+    expect(book).toContain("venue === 'all'");
+    expect(book).toContain("venue === 'meme'");
+    expect(book).toContain("ledgerAmount(pnl.cash_sol, 'SOL')");
+    expect(book).not.toContain('compact={venue === \'all\'}');
     expect(chips).toContain('venueShort(venue)');
     expect(chips).not.toContain("'EQ'");
     expect(chips).not.toContain("'PM'");

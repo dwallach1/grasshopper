@@ -12,19 +12,19 @@ import {
   surfaceFromPath,
   type DeskSurface,
 } from '../../lib/desk-nav';
+import { assembleDeskBookRollup } from '../../lib/desk-book-rollup';
 import { heldAndCandidateSymbols } from '../../lib/held-catalyst';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
 import type { VenueFilter } from '../../lib/desk-venue';
 import { rowVenue } from '../../lib/desk-venue';
+import { ledgerAmount, ledgerAmountFor } from '../../lib/money-units';
 import {
   deskEvents,
   deskLessons,
   filterEvents,
   filterLessons,
   filterTheses,
-  latestPredictionPnl,
-  predictionDesk,
   venueChipLabel,
 } from '../../lib/prediction-book';
 import { BacktestsPanel } from './backtests-panel';
@@ -33,9 +33,6 @@ import { TeamPanel } from './team-panel';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   age,
-  ledgerFigure,
-  money,
-  moneyPrecise,
   nyStamp,
   pnlClass,
   qty,
@@ -182,7 +179,7 @@ export function TerminalApp({
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
   const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
-  const pmPnl = latestPredictionPnl(predictionDesk(desk));
+  const rollup = assembleDeskBookRollup(desk);
 
   return (
     <div className={publicView ? 'term term-public' : 'term'}>
@@ -235,14 +232,10 @@ export function TerminalApp({
         {surface === 'team' && <TeamPanel desk={desk} now={now} />}
       </main>
       <footer className="term-status">
-        <span>NAV {ledgerFigure(desk.book.current_nav, moneyPrecise)}</span>
-        <span>CASH {ledgerFigure(desk.book.cash, money)}</span>
-        <span>BP {ledgerFigure(desk.book.buying_power, money)}</span>
-        <span>DEPLOYED {ledgerFigure(desk.book.deployed, money)}</span>
-        <span>POS {desk.counts.open_positions}</span>
-        {pmPnl && (
-          <span>PREDICTIONS {ledgerFigure(pmPnl.equity, moneyPrecise)}</span>
-        )}
+        <span>USD NAV {ledgerAmount(rollup.usd_nav, 'USD')}</span>
+        <span>USD CASH {ledgerAmount(rollup.usd_cash, 'USD')}</span>
+        <span>SOL {ledgerAmount(rollup.sol_equity, 'SOL')}</span>
+        <span>POS {rollup.open_lots}</span>
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
         <span className="term-kbd">1-5 panels · g then letter · j/k thesis · r refresh · ? help</span>
@@ -401,12 +394,12 @@ function ThesesPanel({
                 </div>
                 <div>
                   <i>Invested</i>
-                  <b>{ledgerFigure(lot.invested, moneyPrecise)}</b>
+                  <b>{ledgerAmountFor(lot, lot.invested)}</b>
                 </div>
                 <div>
                   <i>Current</i>
                   <b className={pnlClass(lot.pnl)}>
-                    {lot.mark === null ? (lot.note || 'mark not in ledger') : moneyPrecise(lot.mark)}
+                    {lot.mark === null ? (lot.note || 'mark not in ledger') : ledgerAmountFor(lot, lot.mark)}
                   </b>
                 </div>
               </div>

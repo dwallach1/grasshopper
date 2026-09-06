@@ -3,10 +3,12 @@
 import { useMemo, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import { lotKey, matchesVenueFilter, rowVenue, type VenueFilter } from '../../lib/desk-venue';
+import { assembleDeskBookRollup, type DeskBookRollup } from '../../lib/desk-book-rollup';
+import { lotKey, rowVenue, type VenueFilter } from '../../lib/desk-venue';
 import { nextHeldCatalyst } from '../../lib/held-catalyst';
 import type { BookPerformance, DeskPayload, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
 import { latestMemePnl, memeDesk } from '../../lib/meme-book';
+import { ledgerAmount, ledgerAmountFor } from '../../lib/money-units';
 import {
   deskBookNames,
   filterBookNames,
@@ -49,6 +51,7 @@ export function BookPanel({
   );
   const fillLog = filterFillLog(desk.fill_log, venue);
   const intents = filterIntents(desk.intents, prediction, venue, coins);
+  const rollup = useMemo(() => assembleDeskBookRollup(desk), [desk]);
 
   return (
     <div className="term-grid term-grid-book">
@@ -61,13 +64,10 @@ export function BookPanel({
           </span>
         </header>
         <VenueFilterBar value={venue} onChange={setVenue} />
-        {matchesVenueFilter('equity', venue) && <BookKpis book={desk.book} />}
-        {matchesVenueFilter('prediction', venue) && (
-          <PredictionKpis desk={desk} compact={venue === 'all'} />
-        )}
-        {matchesVenueFilter('meme', venue) && (
-          <CoinKpis desk={desk} compact={venue === 'all'} />
-        )}
+        {venue === 'all' && <AllKpis rollup={rollup} />}
+        {venue === 'equity' && <BookKpis book={desk.book} />}
+        {venue === 'prediction' && <PredictionKpis desk={desk} />}
+        {venue === 'meme' && <CoinKpis desk={desk} />}
       </section>
       <section className="term-panel term-book-table">
         <header>
@@ -82,7 +82,7 @@ export function BookPanel({
           />
         </div>
       </section>
-      {matchesVenueFilter('equity', venue) && (
+      {venue === 'equity' && (
         <BookDiagnostic
           desk={desk}
           selectedId={selectedId}
@@ -121,7 +121,7 @@ export function BookPanel({
         }).slice(0, 8).map((row) => (
           <div key={`${row.venue}-${row.id}`} className="term-line">
             <b className="sym">{row.symbol} <VenueMark venue={row.venue} /></b>
-            <span>{row.side} {row.mode} {row.notional === null ? NOT_IN_LEDGER : moneyPrecise(row.notional)} · {qty(row.quantity)}</span>
+            <span>{row.side} {row.mode} {row.notional === null ? NOT_IN_LEDGER : ledgerAmountFor(row, row.notional)} · {qty(row.quantity)}</span>
             <i className={toneForStatus(row.status)}>{row.status}</i>
             <p>{row.order_type} {row.broker_order_id || ''}</p>
           </div>
@@ -141,6 +141,51 @@ export function BookPanel({
         {!skinned.length && <p className="empty">{NO_POSITION}</p>}
       </section>
     </div>
+  );
+}
+
+function AllKpis({ rollup }: { rollup: DeskBookRollup }) {
+  return (
+    <>
+      <div className="term-kpis">
+        <div className="term-kpi-hero">
+          <i>USD NAV</i>
+          <b>{ledgerAmount(rollup.usd_nav, 'USD')}</b>
+        </div>
+        <div>
+          <i>USD cash</i>
+          <b>{ledgerAmount(rollup.usd_cash, 'USD')}</b>
+        </div>
+        <div>
+          <i>SOL equity</i>
+          <b>{ledgerAmount(rollup.sol_equity, 'SOL')}</b>
+        </div>
+        <div>
+          <i>SOL cash</i>
+          <b>{ledgerAmount(rollup.sol_cash, 'SOL')}</b>
+        </div>
+        <div>
+          <i>Open lots</i>
+          <b>{rollup.open_lots}</b>
+        </div>
+      </div>
+      <div className="term-rollup-legs">
+        {rollup.legs.map((leg) => (
+          <div key={leg.venue} className="term-line">
+            <b className="sym">{leg.label} <VenueMark venue={leg.venue} /></b>
+            <span>
+              {leg.unit === 'SOL' ? 'equity' : 'NAV'} {ledgerAmount(leg.equity, leg.unit)}
+              {' · cash '}
+              {ledgerAmount(leg.cash, leg.unit)}
+              {' · '}
+              {leg.lots} {leg.lots === 1 ? 'lot' : 'lots'}
+            </span>
+            <i>{leg.as_of ? nyStamp(leg.as_of) : NOT_IN_LEDGER}</i>
+          </div>
+        ))}
+      </div>
+      <p className="term-prose dim">{rollup.note}</p>
+    </>
   );
 }
 
@@ -219,10 +264,10 @@ function BookTable({
             >
               <td className="sym">{row.symbol} <VenueMark venue={rowVenue(row)} /></td>
               <td>{qty(row.quantity)}</td>
-              <td>{ledgerFigure(row.average_cost, moneyPrecise)}</td>
-              <td>{ledgerFigure(row.cost, moneyPrecise)}</td>
-              <td>{row.mark === null ? row.note : moneyPrecise(row.mark)}</td>
-              <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : signedMoney(row.pnl)}</td>
+              <td>{ledgerAmountFor(row, row.average_cost)}</td>
+              <td>{ledgerAmountFor(row, row.cost)}</td>
+              <td>{row.mark === null ? row.note : ledgerAmountFor(row, row.mark)}</td>
+              <td className={pnlClass(row.pnl)}>{row.pnl === null ? row.note : ledgerAmountFor(row, row.pnl, true)}</td>
             </tr>
           );
         })}
@@ -244,7 +289,7 @@ function FillLogTable({ rows }: { rows: FillLogRow[] }) {
         <div key={row.id} className="term-line">
           <b className="sym">{row.symbol || NOT_IN_LEDGER} <VenueMark venue={rowVenue(row)} /></b>
           <span>
-            {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : moneyPrecise(row.price)} / {ledgerFigure(row.notional, moneyPrecise)}
+            {row.side || NOT_IN_LEDGER} {qty(row.quantity)} · {row.price === null ? (row.note || NOT_IN_LEDGER) : ledgerAmountFor(row, row.price)} / {ledgerAmountFor(row, row.notional)}
           </span>
           <i className={toneForStatus(row.status)}>{row.status}</i>
           <p>{nyStamp(row.at)}</p>
@@ -279,7 +324,7 @@ function LotBar({ lot }: { lot: ThesisLot }) {
       </div>
       <div>
         <i>Invested</i>
-        <b>{ledgerFigure(lot.invested, moneyPrecise)}</b>
+        <b>{ledgerAmountFor(lot, lot.invested)}</b>
       </div>
       <div>
         <i>Current</i>
@@ -289,82 +334,76 @@ function LotBar({ lot }: { lot: ThesisLot }) {
   );
 }
 
-function PredictionKpis({ desk, compact = false }: { desk: DeskPayload; compact?: boolean }) {
+function PredictionKpis({ desk }: { desk: DeskPayload }) {
   const pnl = latestPredictionPnl(predictionDesk(desk));
   if (!pnl) {
-    return compact ? null : <p className="empty">ODDSBORNE book {NOT_IN_LEDGER}</p>;
+    return <p className="empty">ODDSBORNE book {NOT_IN_LEDGER}</p>;
   }
   return (
-    <div className={compact ? 'term-prose dim' : undefined}>
-      {!compact && (
-        <div className="term-kpis">
-          <div>
-            <i>Predictions equity</i>
-            <b>{ledgerFigure(pnl.equity, moneyPrecise)}</b>
-          </div>
-          <div>
-            <i>Cash</i>
-            <b>{ledgerFigure(pnl.cash, moneyPrecise)}</b>
-          </div>
-          <div>
-            <i>Realized</i>
-            <b className={pnlClass(pnl.realized)}>{signedMoney(pnl.realized)}</b>
-          </div>
-          <div>
-            <i>Unrealized</i>
-            <b className={pnlClass(pnl.unrealized)}>{signedMoney(pnl.unrealized)}</b>
-          </div>
+    <>
+      <div className="term-kpis">
+        <div>
+          <i>Predictions equity</i>
+          <b>{ledgerAmount(pnl.equity, 'USD')}</b>
         </div>
-      )}
+        <div>
+          <i>Cash</i>
+          <b>{ledgerAmount(pnl.cash, 'USD')}</b>
+        </div>
+        <div>
+          <i>Realized</i>
+          <b className={pnlClass(pnl.realized)}>{ledgerAmount(pnl.realized, 'USD', true)}</b>
+        </div>
+        <div>
+          <i>Unrealized</i>
+          <b className={pnlClass(pnl.unrealized)}>{ledgerAmount(pnl.unrealized, 'USD', true)}</b>
+        </div>
+      </div>
       <p className="term-prose dim">
         ODDSBORNE {nyStamp(pnl.as_of)}
         {pnl.notes ? ` · ${pnl.notes}` : ''}
-        {compact ? ` · equity ${ledgerFigure(pnl.equity, moneyPrecise)}` : ''}
         . Marks are ledger-only.
       </p>
-    </div>
+    </>
   );
 }
 
-function CoinKpis({ desk, compact = false }: { desk: DeskPayload; compact?: boolean }) {
+function CoinKpis({ desk }: { desk: DeskPayload }) {
   const pnl = latestMemePnl(memeDesk(desk));
   if (!pnl) {
-    return compact ? null : <p className="empty">BANDIT book {NOT_IN_LEDGER}</p>;
+    return <p className="empty">BANDIT book {NOT_IN_LEDGER}</p>;
   }
   return (
-    <div className={compact ? 'term-prose dim' : undefined}>
-      {!compact && (
-        <div className="term-kpis">
-          <div>
-            <i>Coins equity</i>
-            <b>{ledgerFigure(pnl.equity_sol, moneyPrecise)}</b>
-          </div>
-          <div>
-            <i>Cash</i>
-            <b>{ledgerFigure(pnl.cash_sol, moneyPrecise)}</b>
-          </div>
-          <div>
-            <i>Realized</i>
-            <b className={pnlClass(pnl.realized)}>{signedMoney(pnl.realized)}</b>
-          </div>
-          <div>
-            <i>Unrealized</i>
-            <b className={pnlClass(pnl.unrealized)}>{signedMoney(pnl.unrealized)}</b>
-          </div>
+    <>
+      <div className="term-kpis">
+        <div>
+          <i>Coins equity</i>
+          <b>{ledgerAmount(pnl.equity_sol, 'SOL')}</b>
         </div>
-      )}
+        <div>
+          <i>Cash</i>
+          <b>{ledgerAmount(pnl.cash_sol, 'SOL')}</b>
+        </div>
+        <div>
+          <i>Realized</i>
+          <b className={pnlClass(pnl.realized)}>{ledgerAmount(pnl.realized, 'SOL', true)}</b>
+        </div>
+        <div>
+          <i>Unrealized</i>
+          <b className={pnlClass(pnl.unrealized)}>{ledgerAmount(pnl.unrealized, 'SOL', true)}</b>
+        </div>
+      </div>
       <p className="term-prose dim">
-        BANDIT {nyStamp(pnl.as_of)}
+        BANDIT {nyStamp(pnl.as_of)} · SOL native — not USD
         {pnl.notes ? ` · ${pnl.notes}` : ''}
-        {compact ? ` · equity ${ledgerFigure(pnl.equity_sol, moneyPrecise)}` : ''}
         . Marks are ledger-only.
       </p>
-    </div>
+    </>
   );
 }
 
 function currentCell(lot: ThesisLot): string {
   if (lot.mark === null) return lot.note || 'mark not in ledger';
-  if (lot.pnl === null) return moneyPrecise(lot.mark);
-  return `${moneyPrecise(lot.mark)} ${signedMoney(lot.pnl)}`;
+  if (lot.pnl === null) return ledgerAmountFor(lot, lot.mark);
+  return `${ledgerAmountFor(lot, lot.mark)} ${ledgerAmountFor(lot, lot.pnl, true)}`;
 }
