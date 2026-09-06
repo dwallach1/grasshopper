@@ -3800,8 +3800,9 @@ a:focus-visible {
   background: var(--canvas);
 }
 
-.line-boot .line-frame {
+.line-boot .line-frame > div:has(canvas) {
   height: min(56dvh, 420px);
+  min-height: 240px;
 }
 
 .line-stage {
@@ -3867,14 +3868,21 @@ a:focus-visible {
 }
 
 .line-hero,
-.line-frame,
-.line-card .line-frame {
+.line-frame {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: 280px;
+  height: auto;
+  min-height: 0;
 }
 
-.line-hero {
+/* Liveline 0.0.7 puts showValue + window chips in flow, then a canvas
+   sibling sized to 100% of this frame — a fixed frame height overflows. */
+.line-frame > div:has(canvas) {
+  width: 100%;
   height: min(58dvh, 520px);
+  min-height: 280px;
+  overflow: hidden;
 }
 
 .line-stack {
@@ -3901,7 +3909,7 @@ a:focus-visible {
   text-transform: uppercase;
 }
 
-.line-card .line-frame {
+.line-card .line-frame > div:has(canvas) {
   height: 220px;
   min-height: 220px;
 }
@@ -3914,6 +3922,7 @@ a:focus-visible {
   color: var(--text-3);
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: break-word;
 }
 
 .line-standings {
@@ -4056,13 +4065,14 @@ a:focus-visible {
     text-align: center;
   }
 
-  .line-hero {
-    height: min(46dvh, 380px);
+  .line-frame > div:has(canvas) {
+    height: min(42dvh, 340px);
+    min-height: 220px;
   }
 
-  .line-card .line-frame {
-    height: 148px;
-    min-height: 148px;
+  .line-card .line-frame > div:has(canvas) {
+    height: 168px;
+    min-height: 168px;
   }
 
   .line-sheet th:nth-child(2),
@@ -4080,7 +4090,7 @@ a:focus-visible {
     padding-top: 28px;
   }
 
-  .line-hero {
+  .line-hero .line-frame > div:has(canvas) {
     height: 560px;
   }
 }

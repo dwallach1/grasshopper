@@ -99,6 +99,7 @@ describe('desk IA smoke', () => {
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('term-team-avatar');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(css).toContain('.line-frame > div:has(canvas)');
     expect(css).not.toMatch(/\.term-public \.term-brand \{[^}]*letter-spacing: 0\.16em/);
   });
 
