@@ -170,7 +170,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Research | `theses`, `thesis_evidence`, `thesis_scores`, `catalysts`, `research_queue`, `research_lessons` |
 | Book | `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `broker_fills` |
 | Prediction | `pm_markets`, `pm_positions`, `pm_orders`, `pm_fills`, `pm_pnl`, `pm_notes` (ODDSBORNE / Polymarket; GRASSHOPPER) |
-| Coins | `meme_tokens`, `meme_positions`, `meme_orders`, `meme_fills`, `meme_pnl`, `meme_notes` (BANDIT / Solana; `solana-bandit-primary`) |
+| Coins | `meme_tokens`, `meme_positions`, `meme_orders`, `meme_fills`, `meme_pnl`, `meme_notes` (BANDIT / Solana; `solana-bandit-primary`). Publisher role needs `quantanamo_worker_select` RLS, not just `GRANT SELECT` — same as `pm_*`. |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker reads the snapshot only) |
@@ -213,7 +213,7 @@ operator machine / QUANTANAMO  →  bun run desk:publish  →  file + optional P
 
 `anon` cannot read `dashboard_snapshots` (or live tables) through PostgREST. Do not put `service_role`, `QUANTANAMO_DATABASE_URL`, or a publishable/anon key in the public client. Ignore retired 410 stubs `dashboard-publication` and `cloud-control` — they are not this path.
 
-`pm_*` rows (now live on Supabase) map into the **same** Book / Theses / Events language as equities. The public Worker does not query them — the publisher folds `prediction_markets` into the snapshot. Empty tables stay empty; no invented P/L.
+`pm_*` and `meme_*` rows (now live on Supabase) map into the **same** Book / Theses / Events language as equities. The public Worker does not query them — the publisher folds `prediction_markets` and `meme_coins` into the snapshot. Empty tables stay empty; no invented P/L. New domain lanes need `quantanamo_worker_select` RLS (`using (true)`), not just `GRANT SELECT` — otherwise `desk:publish` writes empty arrays with no Postgres error.
 
 ### Deploy
 

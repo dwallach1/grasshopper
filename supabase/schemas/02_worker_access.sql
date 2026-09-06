@@ -944,6 +944,10 @@ for each row execute function private.attach_worker_observability();
 grant connect on database postgres to quantanamo_worker;
 grant usage on schema public to quantanamo_worker;
 
+-- Domain lanes created outside this list (pm_*, meme_*) must GRANT SELECT to
+-- quantanamo_worker AND add policy quantanamo_worker_select using (true).
+-- GRANT alone yields empty desk:publish arrays under RLS — no Postgres error.
+
 do $$
 declare
   target_table text;
