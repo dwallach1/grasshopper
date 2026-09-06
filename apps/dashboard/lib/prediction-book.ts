@@ -389,6 +389,44 @@ export function latestPredictionPnl(payload: PredictionMarketsPayload): Predicti
   return [...payload.pnl].sort((a, b) => b.as_of.localeCompare(a.as_of))[0] ?? null;
 }
 
+export function earliestPredictionPnl(payload: PredictionMarketsPayload): PredictionPnlRow | null {
+  if (!payload.pnl.length) return null;
+  return [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))[0] ?? null;
+}
+
+export type PredictionStartEquity = {
+  equity: number;
+  as_of: string;
+  source: 'pnl_equity' | 'pnl_cash';
+};
+
+/**
+ * Start baseline for ODDSBORNE % return. Oldest `pm_pnl` equity, else cash
+ * (account seed rows often land as cash=equity when flat). Missing start is
+ * null — never 0 — so the desk can show "not ranked".
+ */
+export function predictionStartEquity(payload: PredictionMarketsPayload): PredictionStartEquity | null {
+  const rows = [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of));
+  for (const row of rows) {
+    if (row.equity !== null) {
+      return { equity: row.equity, as_of: row.as_of, source: 'pnl_equity' };
+    }
+    if (row.cash !== null) {
+      return { equity: row.cash, as_of: row.as_of, source: 'pnl_cash' };
+    }
+  }
+  return null;
+}
+
+export function predictionEquitySeries(payload: PredictionMarketsPayload): Array<{ as_of: string; equity: number }> {
+  const series: Array<{ as_of: string; equity: number }> = [];
+  for (const row of [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))) {
+    if (row.equity === null) continue;
+    series.push({ as_of: row.as_of, equity: row.equity });
+  }
+  return series;
+}
+
 export function openPredictionCount(payload: PredictionMarketsPayload): number {
   return payload.positions.filter((row) => OPEN_POSITION.has(row.status.toLowerCase())).length;
 }

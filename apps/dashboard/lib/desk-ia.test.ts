@@ -16,8 +16,10 @@ describe('desk IA smoke', () => {
     expect(app).toContain("surface === 'book'");
     expect(app).toContain("surface === 'events'");
     expect(app).toContain("surface === 'team'");
+    expect(app).toContain("surface === 'leaderboard'");
     expect(app).toContain('<BookPanel');
     expect(app).toContain('<TeamPanel');
+    expect(app).toContain('<LeaderboardPanel');
     expect(app).toContain('LastRunChip');
     expect(app).not.toContain("surface === 'home'");
     expect(app).not.toContain("surface === 'risk'");
@@ -28,8 +30,11 @@ describe('desk IA smoke', () => {
     expect(app).not.toContain('20%');
     expect(nav).toContain("id: 'book'");
     expect(nav).toContain("id: 'team'");
+    expect(nav).toContain("id: 'leaderboard'");
     expect(nav).toContain("href: '/team'");
+    expect(nav).toContain("href: '/leaderboard'");
     expect(nav).toContain("go: 'm'");
+    expect(nav).toContain("go: 'p'");
     expect(nav).toContain("href: '/'");
     expect(nav).not.toMatch(/id: 'home'/);
     expect(nav).not.toMatch(/id: 'risk'/);
@@ -110,6 +115,13 @@ describe('desk IA smoke', () => {
     expect(app).not.toContain('BookExploded');
     expect(app).not.toContain('from \'three\'');
     expect(app).toContain("from './team-panel'");
+    expect(app).toContain("from './leaderboard-panel'");
+    const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
+    expect(board).toContain('assembleLeaderboard');
+    expect(board).toContain('TeamAvatar');
+    expect(board).toContain('LEADERBOARD');
+    expect(board).toContain('NOT_RANKED');
+    expect(board).not.toContain('0.00%');
     expect(ribbon).not.toContain('rotation.y');
     expect(ribbon).toContain('OrthographicCamera');
   });

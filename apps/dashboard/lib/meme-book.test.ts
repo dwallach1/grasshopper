@@ -3,10 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import {
   attachMemeThesisLots,
+  BANDIT_BANKROLL_SOL_START,
+  BANDIT_PRIMARY_ACCOUNT,
   emptyMemeCoins,
   mapMemeCoins,
   memeBookNames,
   memeFillLog,
+  memeStartEquity,
   type MemeCoinsPayload,
 } from './meme-book';
 import type { ThesisRow } from './ledger-types';
@@ -168,6 +171,79 @@ describe('meme book mapping', () => {
     expect(theses[0]?.venues).toEqual(['meme']);
     expect(theses[0]?.lots[0]?.venue).toBe('meme');
     expect(theses[0]?.lots[0]?.pnl).toBeNull();
+  });
+
+  test('start equity prefers earliest pnl; bankroll 2 SOL only when current exists', () => {
+    expect(memeStartEquity(payload())).toBeNull();
+    expect(memeStartEquity(payload({
+      pnl: [{
+        id: 'seed',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: BANDIT_BANKROLL_SOL_START,
+        notes: 'initial venue balance snapshot',
+      }, {
+        id: 'now',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T15:48:20.740Z',
+        realized: 0,
+        unrealized: 0.02,
+        fees: 0,
+        cash_sol: 1.97,
+        equity_sol: 2.03,
+        notes: 'mark',
+      }],
+    }))).toEqual({
+      equity_sol: 2,
+      as_of: '2026-09-06T14:23:40.405Z',
+      source: 'pnl_equity',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+    });
+    expect(memeStartEquity(payload({
+      pnl: [{
+        id: 'now-only',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T15:48:20.740Z',
+        realized: 0,
+        unrealized: null,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: null,
+        notes: 'current cash only',
+      }],
+    }))).toBeNull();
+    expect(memeStartEquity(payload({
+      pnl: [{
+        id: 'now-unmarked-start',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: null,
+        notes: 'seed cash',
+      }, {
+        id: 'now',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T15:48:20.740Z',
+        realized: 0,
+        unrealized: 0.03,
+        fees: 0,
+        cash_sol: 1.97,
+        equity_sol: 2.03,
+        notes: 'mark',
+      }],
+    }))).toEqual({
+      equity_sol: BANDIT_BANKROLL_SOL_START,
+      as_of: '2026-09-06T14:23:40.405Z',
+      source: 'bankroll',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+    });
   });
 
   test('mapper reads meme_* SOL columns without inventing marks', () => {

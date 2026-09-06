@@ -3286,10 +3286,10 @@ a:focus-visible {
     align-items: center;
     justify-content: center;
     min-height: 48px;
-    padding: 0 4px;
+    padding: 0 2px;
     color: var(--text-2);
     text-decoration: none;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
   }
 
@@ -3598,6 +3598,91 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.term-board-rules {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.term-board-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.term-board-card {
+  display: grid;
+  grid-template-columns: 36px 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #0c1014;
+  min-width: 0;
+}
+
+.term-board-card.is-lead {
+  border-color: color-mix(in srgb, var(--team-accent, var(--amber)) 40%, var(--line));
+}
+
+.term-board-card.is-empty {
+  opacity: 0.88;
+}
+
+.term-board-place {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  color: var(--amber);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.term-board-name {
+  color: inherit;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.term-board-name:hover {
+  color: var(--amber);
+}
+
+.term-board-return {
+  margin: 8px 0 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.term-board-equity,
+.term-board-risk {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.term-board-risk {
+  color: var(--text-3);
+}
+
+.term-board-card .term-team-avatar {
+  width: 72px;
+  height: 72px;
+}
+
+.term-board-card .term-team-svg {
+  width: 48px;
+  height: 48px;
+}
+
 @keyframes team-breathe {
   0%,
   100% {
@@ -3619,12 +3704,39 @@ a:focus-visible {
 }
 
 @media (min-width: 720px) {
-  .term-team-cards {
+  .term-team-cards,
+  .term-board-cards {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 }
 
 @media (max-width: 560px) {
+  .term-board-card {
+    grid-template-columns: 28px 56px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .term-board-place {
+    width: 28px;
+    height: 28px;
+    margin-top: 14px;
+    font-size: 13px;
+  }
+
+  .term-board-return {
+    font-size: 24px;
+  }
+
+  .term-board-card .term-team-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .term-board-card .term-team-svg {
+    width: 40px;
+    height: 40px;
+  }
+
   .term-team-card {
     grid-template-columns: 72px minmax(0, 1fr);
     padding: 10px;

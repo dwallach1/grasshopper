@@ -10,6 +10,7 @@ import {
   filterFillLog,
   mergeFillLog,
   predictionBookNames,
+  predictionStartEquity,
   type PredictionMarketsPayload,
 } from './prediction-book';
 import type { BookNameLine, DeskPayload, ThesisRow } from './ledger-types';
@@ -325,6 +326,50 @@ describe('prediction book mapping', () => {
     expect(theses[0]?.venues).toEqual(['equity', 'prediction']);
     expect(theses[0]?.lots[0]?.venue).toBe('prediction');
     expect(theses[0]?.lots[0]?.pnl).toBeNull();
+  });
+
+  test('start equity is oldest pnl mark — missing start is null, not 0', () => {
+    expect(predictionStartEquity(payload())).toBeNull();
+    expect(predictionStartEquity(payload({
+      pnl: [{
+        id: 'later',
+        account_key: 'oddsborne',
+        as_of: '2026-09-06T13:43:43.294Z',
+        realized: 0,
+        unrealized: -1.9,
+        fees: 1.93,
+        cash: 358.58,
+        equity: 424.07,
+        notes: 'later',
+      }, {
+        id: 'seed',
+        account_key: 'oddsborne',
+        as_of: '2026-09-06T13:10:47.142Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: 426,
+        equity: 426,
+        notes: 'Seeded by GRASSHOPPER',
+      }],
+    }))).toEqual({
+      equity: 426,
+      as_of: '2026-09-06T13:10:47.142Z',
+      source: 'pnl_equity',
+    });
+    expect(predictionStartEquity(payload({
+      pnl: [{
+        id: 'cash-only',
+        account_key: 'oddsborne',
+        as_of: '2026-09-06T13:10:47.142Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: 400,
+        equity: null,
+        notes: 'seed cash',
+      }],
+    }))?.source).toBe('pnl_cash');
   });
 
   test('events include market close without inventing a date', () => {

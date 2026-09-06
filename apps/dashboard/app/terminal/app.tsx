@@ -29,6 +29,7 @@ import {
 } from '../../lib/prediction-book';
 import { BacktestsPanel } from './backtests-panel';
 import { BookPanel } from './book-panel';
+import { LeaderboardPanel } from './leaderboard-panel';
 import { TeamPanel } from './team-panel';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
@@ -230,6 +231,9 @@ export function TerminalApp({
         )}
         {surface === 'events' && <EventsPanel desk={desk} />}
         {surface === 'team' && <TeamPanel desk={desk} now={now} />}
+        {surface === 'leaderboard' && (
+          <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />
+        )}
       </main>
       <footer className="term-status">
         <span>USD NAV {ledgerAmount(rollup.usd_nav, 'USD')}</span>
@@ -238,7 +242,7 @@ export function TerminalApp({
         <span>POS {rollup.open_lots}</span>
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
-        <span className="term-kbd">1-5 panels · g then letter · j/k thesis · r refresh · ? help</span>
+        <span className="term-kbd">1-6 panels · g then letter · j/k thesis · r refresh · ? help</span>
       </footer>
       <nav className="term-dock" aria-label="Desk tabs">
         {DESK_TABS.map((item) => (
@@ -255,8 +259,8 @@ export function TerminalApp({
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 Book · 2 Theses · 3 Events · 4 Tests · 5 Team</p>
-          <p>g b book · g t theses · g c events · g e tests · g m team</p>
+          <p>1 Book · 2 Theses · 3 Events · 4 Tests · 5 Team · 6 Board</p>
+          <p>g b book · g t theses · g c events · g e tests · g m team · g p board</p>
           <p>j/k move thesis or test · Enter open theses · r reload ledger · Esc close</p>
         </aside>
       )}

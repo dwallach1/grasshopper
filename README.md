@@ -154,10 +154,11 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 | 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 | 5 | Team | Cards for every `desk_agents` row (today: GRASSHOPPER, QUANTANAMO, ODDSBORNE, BANDIT) with current `desk_domain_stewards` chips (`desk_domains`: Ledger / Stocks / Predictions / Meme coins). Soft stewardship — rotate a steward without renaming a domain. Heartbeat glow is ledger `heartbeat_at` only. Empty tables fall back to identity rows, never invented P/L. `/mates` redirects here. |
+| 6 | Board | Desk-sport leaderboard at `/leaderboard`. QUANTANAMO / ODDSBORNE / BANDIT ranked on **% return vs each book’s own start** in that book’s native unit (USD or SOL). Never converts SOL→USD. Missing start is **not ranked**, not 0%. Risk sits next to return (max drawdown from pnl/NAV history, else days live / open lots). GRASSHOPPER is ledger owner — a fourth row only if a real desk-level book exists. Venue chips stay on Book / Theses / Events. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/book` and `/risk` and `/runs` → `/`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–5`, `g` then letter (`b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Book, Theses, and Events — not a search box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. Keyboard: `1–6`, `g` then letter (`b/t/c/e/m/p`), `j/k` thesis, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Book, Theses, and Events — not a search box.
 
 Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist, plus BANDIT `meme_tokens` / `meme_positions` / `meme_orders` / `meme_fills` / `meme_pnl` / `meme_notes` when those relations exist, plus Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts` when those relations exist. Missing `pm_*`, `meme_*`, or `desk_*` tables yield an empty slice — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
@@ -197,7 +198,7 @@ workers/                 retired Cloudflare ingest — not the live brain
 
 ## Public phone desk
 
-The operator desk stays localhost-only (`bun run web:app`). The public site is the **same terminal chrome** (Book / Theses / Events / Tests / Team) hosted on Cloudflare Workers static assets. It never talks to PostgREST.
+The operator desk stays localhost-only (`bun run web:app`). The public site is the **same terminal chrome** (Book / Theses / Events / Tests / Team / Board) hosted on Cloudflare Workers static assets. It never talks to PostgREST.
 
 ```
 phone  →  Worker GET /api/desk  →  KV key `current`  (curated DeskPayload, source=snapshot)
