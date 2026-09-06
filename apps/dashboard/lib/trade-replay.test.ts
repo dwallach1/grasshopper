@@ -8,6 +8,7 @@ import {
   replayIntensity,
   replayProgress,
   tapeCaption,
+  tapeIdentity,
 } from './trade-replay';
 
 function fill(partial: Partial<FillLogRow> & Pick<FillLogRow, 'id' | 'at' | 'symbol'>): FillLogRow {
@@ -75,5 +76,16 @@ describe('trade replay tape', () => {
     expect(replayIntensity(rows[0], max)).toBe(52);
     expect(replayIntensity(rows[2], max)).toBe(0);
     expect(maxAbsNotional([rows[2]])).toBe(0);
+  });
+
+  test('tape identity ignores array wrapping so a poll refresh is not a new story', () => {
+    const rows = [
+      fill({ id: 'early', at: '2026-08-28T13:46:18.317Z', symbol: 'IREN' }),
+      fill({ id: 'later', at: '2026-09-03T17:21:54.583Z', symbol: 'AOUT' }),
+    ];
+    expect(tapeIdentity(replayFills(rows))).toBe(tapeIdentity(replayFills([...rows])));
+    expect(tapeIdentity(replayFills(rows))).not.toBe(
+      tapeIdentity(replayFills(rows.filter((row) => row.venue === 'equity' && row.symbol === 'IREN'))),
+    );
   });
 });

@@ -50,7 +50,7 @@ export function BookPanel({
   const skinned = desk.theses.filter((row) =>
     row.lots.some((lot) => venue === 'all' || rowVenue(lot) === venue),
   );
-  const fillLog = filterFillLog(desk.fill_log, venue);
+  const fillLog = useMemo(() => filterFillLog(desk.fill_log, venue), [desk.fill_log, venue]);
   const intents = filterIntents(desk.intents, prediction, venue, coins);
   const rollup = useMemo(() => assembleDeskBookRollup(desk), [desk]);
 

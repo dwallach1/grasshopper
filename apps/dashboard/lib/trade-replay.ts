@@ -50,3 +50,8 @@ export function tapeCaption(rows: readonly FillLogRow[]): string {
   if (rows.length === 0) return NOT_IN_LEDGER;
   return `${rows.length} ledger fill${rows.length === 1 ? '' : 's'} · tap to replay`;
 }
+
+/** Stable id of a tape so poll refreshes do not reset the cursor. */
+export function tapeIdentity(rows: readonly FillLogRow[]): string {
+  return rows.map((row) => row.id).join('\0');
+}

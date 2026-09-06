@@ -2391,6 +2391,11 @@ a:focus-visible {
   color: var(--amber);
 }
 
+.term-tape-controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .term-tape-scrub {
   flex: 1;
   min-width: 0;

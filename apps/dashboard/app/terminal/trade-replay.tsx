@@ -17,6 +17,7 @@ import {
   TAPE_RIVE_STATE_MACHINE,
   TAPE_STEP_MS,
   tapeCaption,
+  tapeIdentity,
 } from '../../lib/trade-replay';
 import { nyStamp, qty, toneForStatus } from './format';
 import { VenueMark } from './venue-filter';
@@ -27,6 +28,7 @@ const DeskRive = dynamic(() => import('./desk-rive').then((mod) => mod.DeskRive)
 
 export function TradeReplay({ rows }: { rows: readonly FillLogRow[] }) {
   const tape = useMemo(() => replayFills(rows), [rows]);
+  const tapeKey = useMemo(() => tapeIdentity(tape), [tape]);
   const peak = useMemo(() => maxAbsNotional(tape), [tape]);
   const last = Math.max(0, tape.length - 1);
   const [index, setIndex] = useState(last);
@@ -37,7 +39,7 @@ export function TradeReplay({ rows }: { rows: readonly FillLogRow[] }) {
   useEffect(() => {
     setIndex(Math.max(0, tape.length - 1));
     setPlaying(false);
-  }, [tape]);
+  }, [tapeKey, tape.length]);
 
   useEffect(() => {
     if (!playing || tape.length === 0) return undefined;
@@ -99,6 +101,26 @@ export function TradeReplay({ rows }: { rows: readonly FillLogRow[] }) {
       <div className="term-tape-controls">
         <button type="button" className={playing ? 'on' : ''} onClick={toggle}>
           {playing ? 'Pause' : index >= last && armed ? 'Replay' : 'Play'}
+        </button>
+        <button
+          type="button"
+          disabled={index <= 0}
+          onClick={() => {
+            setPlaying(false);
+            setIndex((current) => Math.max(0, current - 1));
+          }}
+        >
+          Prev
+        </button>
+        <button
+          type="button"
+          disabled={index >= last}
+          onClick={() => {
+            setPlaying(false);
+            setIndex((current) => Math.min(last, current + 1));
+          }}
+        >
+          Next
         </button>
         <label className="term-tape-scrub">
           <span className="sr-only">Scrub ledger fills</span>
