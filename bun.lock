@@ -12,8 +12,6 @@
       "name": "@quantanamo/dashboard",
       "version": "0.1.0",
       "dependencies": {
-        "@dicebear/core": "9.2.4",
-        "@dicebear/lorelei": "9.2.4",
         "@quantanamo/contracts": "workspace:*",
         "@supabase/ssr": "^0.12.5",
         "@supabase/supabase-js": "^2.112.4",
@@ -202,10 +200,6 @@
     "@cloudflare/workers-types": ["@cloudflare/workers-types@5.20260823.1", "", {}, "sha512-HdBVDR/gecQ5QwB+DZ9kB5yjNZLS85fe8bMB2K/k0xmCvaoMlAFrQQGLaCBYR00j+i9aTkQzwfrPInVZwlMPwQ=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
-
-    "@dicebear/core": ["@dicebear/core@9.2.4", "", { "dependencies": { "@types/json-schema": "^7.0.11" } }, "sha512-hz6zArEcUwkZzGOSJkWICrvqnEZY7BKeiq9rqKzVJIc1tRVv0MkR0FGvIxSvXiK9TTIgKwu656xCWAGAl6oh+w=="],
-
-    "@dicebear/lorelei": ["@dicebear/lorelei@9.2.4", "", { "peerDependencies": { "@dicebear/core": "^9.0.0" } }, "sha512-eS4mPYUgDpo89HvyFAx/kgqSSKh8W4zlUA8QJeIUCWTB0WpQmeqkSgIyUJjGDYSrIujWi+zEhhckksM5EwW0Dg=="],
 
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 

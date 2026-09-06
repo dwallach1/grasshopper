@@ -18,8 +18,6 @@
     "typecheck": "bun --bun tsc --project tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@dicebear/core": "9.2.4",
-    "@dicebear/lorelei": "9.2.4",
     "@quantanamo/contracts": "workspace:*",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
