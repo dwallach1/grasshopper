@@ -101,13 +101,22 @@ describe('desk IA smoke', () => {
     expect(avatarLib).not.toContain('@dicebear');
     expect(avatarLib).toContain('StewardBotKind');
     expect(avatarLib).toContain("case 'quantanamo'");
+    expect(avatarLib).toContain('Grok Bot faces');
     const bots = await readDashboard('app/terminal/steward-bots.tsx');
     expect(bots).toContain('data-part="eye"');
-    expect(bots).toContain('QuantanamoBot');
-    expect(bots).toContain('OddsborneBot');
-    expect(bots).toContain('BanditBot');
-    expect(bots).toContain('GrasshopperBot');
+    expect(bots).toContain('data-part="body"');
+    expect(bots).toContain('data-accessory="base-shadow"');
+    expect(bots).toContain('data-accessory="hat-pin"');
+    expect(bots).toContain('data-accessory="mask-slash"');
+    expect(bots).toContain('data-accessory="tablet-bar"');
+    expect(bots).toContain('BotBody');
+    expect(bots).toContain('BotFace');
+    expect(bots).not.toContain('QuantanamoBot');
     expect(bots).not.toContain('lorelei');
+    expect(bots).not.toContain('treadTooth');
+    expect(bots).not.toContain('styles.rivet');
+    expect(bots).not.toContain('styles.neck');
+    expect(bots).not.toContain('styles.vent');
     expect(team).toContain('cards.map');
     expect(avatars).not.toContain('from \'three\'');
     expect(css).toContain('prefers-reduced-motion');
@@ -119,7 +128,15 @@ describe('desk IA smoke', () => {
     expect(avatarCss).toContain('steward-breathe');
     expect(avatarCss).toContain('steward-glow');
     expect(avatarCss).toContain('steward-bob');
+    expect(avatarCss).toContain('steward-pulse');
+    expect(avatarCss).toContain('steward-glance');
     expect(avatarCss).toContain('.steward');
+    expect(avatarCss).toContain('.alive');
+    expect(avatarCss).not.toContain('.rivet');
+    expect(avatarCss).not.toContain('.treadTooth');
+    expect(avatarCss).not.toContain('.vent');
+    expect(avatarCss).not.toContain('steward-nod');
+    expect(avatarCss).not.toContain('steward-beep');
   });
 
   test('Board and Book are Liveline-first, not a Rive tape', async () => {

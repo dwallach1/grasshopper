@@ -1,5 +1,5 @@
 /**
- * Steward identity for Team + Board robot mascots.
+ * Steward identity for Team + Board Grok Bot faces.
  * Presentation only — slug/name/accent from the ledger. No invented marks.
  */
 import { AVATAR_COLORS } from './desk-team';
