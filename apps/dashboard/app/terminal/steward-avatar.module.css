@@ -7,11 +7,8 @@
   width: var(--steward-size);
   height: var(--steward-size);
   flex: 0 0 var(--steward-size);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--team-accent, var(--green)) 14%, #0a0d10);
-  animation:
-    steward-breathe 3.2s var(--ease, ease) infinite,
-    steward-glow 4s ease-in-out infinite;
+  background: transparent;
+  animation: steward-breathe 3.4s var(--ease, ease) infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -25,24 +22,16 @@
 
 .alive {
   animation:
-    steward-breathe 1.7s var(--ease, ease) infinite,
+    steward-breathe 1.65s var(--ease, ease) infinite,
     steward-glow 1.35s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
-.ring {
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 28%, transparent);
-  pointer-events: none;
-}
-
 .bot {
-  width: 92%;
-  height: 92%;
+  width: 100%;
+  height: 100%;
   overflow: visible;
-  animation: steward-bob 3.2s ease-in-out infinite;
+  animation: steward-bob 3.4s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -52,66 +41,68 @@
 }
 
 .skin {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 78%, #1a222c);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
 }
 
 .shine {
   fill: #ffffff;
-  opacity: 0.2;
+  opacity: 0.22;
 }
 
 .ground {
   fill: #000000;
-  opacity: 0.28;
+  opacity: 0.3;
 }
 
 .baseShadow {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #0a0d10);
-  opacity: 0.55;
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #07090c);
+  opacity: 0.72;
 }
 
 .mask {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 18%, #0a0d10);
-  opacity: 0.82;
+  fill: #07090c;
+  opacity: 0.58;
 }
 
 .pinStem {
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #e8edf2);
-  stroke-width: 1.4;
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 55%, #d7dee6);
+  stroke-width: 1.6;
   stroke-linecap: round;
 }
 
 .pinDish {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 88%, #f2f6fa);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #f4f7fa);
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 88%, #0a0d10);
+  stroke-width: 1.1;
 }
 
 .pinWell {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 36%, #0a0d10);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 30%, #0a0d10);
 }
 
-.tabletBar {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 40%, #0a0d10);
+.tabletNotch {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #0a0d10);
 }
 
 .lens {
-  fill: #f4f7fa;
-  animation: steward-lens 3.4s ease-in-out infinite;
+  fill: #f6f8fb;
+  animation: steward-lens 3.6s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .iris {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 42%, #1c222a);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 38%, #1a2028);
 }
 
 .gaze {
   transform-box: fill-box;
   transform-origin: center;
-  animation: steward-glance 6.2s ease-in-out infinite;
+  animation: steward-glance 6.4s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .pupil {
-  fill: #12161c;
+  fill: #10141a;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -121,33 +112,33 @@
 }
 
 .lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 78%, #1a222c);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0;
-  animation: steward-blink 3.6s ease-in-out infinite;
+  animation: steward-blink 3.8s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .alive .lid {
-  animation-duration: 1.9s;
+  animation-duration: 1.85s;
 }
 
 .alive .gaze {
-  animation-duration: 2.5s;
+  animation-duration: 2.4s;
 }
 
 .alive .bot {
-  animation-duration: 1.7s;
+  animation-duration: 1.65s;
 }
 
 .alive .lens {
-  fill: #fbfcfe;
-  animation-duration: 1.5s;
+  fill: #fcfdff;
+  animation-duration: 1.45s;
 }
 
 .alive .pupil {
-  animation: steward-pulse 1.4s ease-in-out infinite;
+  animation: steward-pulse 1.35s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -167,7 +158,7 @@
     transform: scale(1) translateY(0);
   }
   50% {
-    transform: scale(1.045) translateY(-2px);
+    transform: scale(1.03) translateY(-1.5px);
   }
 }
 
@@ -177,24 +168,24 @@
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-1.5px);
+    transform: translateY(-1.2px);
   }
 }
 
 @keyframes steward-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent));
   }
   50% {
-    box-shadow: 0 0 18px 2px color-mix(in srgb, var(--team-accent, var(--green)) 36%, transparent);
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--team-accent, var(--green)) 55%, transparent));
   }
 }
 
 @keyframes steward-lens {
   0%,
   100% {
-    fill: #f4f7fa;
+    fill: #f6f8fb;
   }
   50% {
     fill: #ffffff;
@@ -203,22 +194,22 @@
 
 @keyframes steward-blink {
   0%,
-  70%,
-  90%,
+  72%,
+  91%,
   100% {
     opacity: 0;
     transform: scaleY(0.1);
   }
-  74%,
-  80% {
+  76%,
+  81% {
     opacity: 1;
     transform: scaleY(1);
   }
-  84% {
+  85% {
     opacity: 0;
     transform: scaleY(0.1);
   }
-  86% {
+  87% {
     opacity: 1;
     transform: scaleY(1);
   }
@@ -231,10 +222,10 @@
     transform: translate(0, 0);
   }
   40% {
-    transform: translate(2px, 0.4px);
+    transform: translate(2.1px, 0.35px);
   }
-  62% {
-    transform: translate(-1.8px, 0.3px);
+  64% {
+    transform: translate(-1.7px, 0.25px);
   }
 }
 
@@ -244,7 +235,7 @@
     transform: scale(1);
   }
   50% {
-    transform: scale(1.14);
+    transform: scale(1.16);
   }
 }
 

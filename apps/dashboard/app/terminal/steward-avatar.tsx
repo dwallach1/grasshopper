@@ -51,7 +51,6 @@ export function StewardAvatar({
       aria-label={label}
     >
       <StewardBot kind={kind} />
-      <span className={styles.ring} aria-hidden="true" />
     </span>
   );
 }

@@ -13,7 +13,7 @@ import styles from './steward-avatar.module.css';
 export function StewardBot({ kind }: { kind: StewardBotKind }) {
   return (
     <svg className={styles.bot} viewBox="0 0 64 64" fill="none" aria-hidden="true" data-kind={kind}>
-      <ellipse className={styles.ground} cx="32" cy="58.5" rx={kind === 'quantanamo' ? 17 : 14} ry="2.4" />
+      <ellipse className={styles.ground} cx="32" cy="59" rx={kind === 'quantanamo' ? 18 : 13.5} ry="2.2" />
       <g className={styles.figure}>
         <BotBody kind={kind} />
         <BotAccessory kind={kind} />
@@ -27,18 +27,18 @@ function BotBody({ kind }: { kind: StewardBotKind }) {
   return (
     <g className={styles.body} data-part="body">
       {kind === 'grasshopper' ? (
-        <rect className={styles.skin} x="15" y="11" width="34" height="42" rx="13" />
+        <rect className={styles.skin} x="16" y="10" width="32" height="42" rx="12" />
       ) : kind === 'quantanamo' ? (
-        <ellipse className={styles.skin} cx="32" cy="34" rx="23" ry="18.5" />
+        <ellipse className={styles.skin} cx="32" cy="33" rx="24" ry="17.5" />
       ) : (
-        <ellipse className={styles.skin} cx="32" cy="34.5" rx="20" ry="19" />
+        <ellipse className={styles.skin} cx="32" cy="34" rx="19.5" ry="18.5" />
       )}
       <ellipse
         className={styles.shine}
-        cx={kind === 'grasshopper' ? 26 : 25}
-        cy={kind === 'grasshopper' ? 22 : 24}
-        rx={kind === 'grasshopper' ? 9 : 10}
-        ry={kind === 'grasshopper' ? 5 : 6.5}
+        cx={kind === 'grasshopper' ? 26 : 24}
+        cy={kind === 'grasshopper' ? 20 : 23}
+        rx={kind === 'grasshopper' ? 8 : 9}
+        ry={kind === 'grasshopper' ? 4.5 : 5.5}
       />
     </g>
   );
@@ -47,15 +47,15 @@ function BotBody({ kind }: { kind: StewardBotKind }) {
 function BotAccessory({ kind }: { kind: StewardBotKind }) {
   if (kind === 'quantanamo') {
     return (
-      <ellipse className={styles.baseShadow} cx="32" cy="49.5" rx="16" ry="4.2" data-accessory="base-shadow" />
+      <ellipse className={styles.baseShadow} cx="32" cy="47.5" rx="17" ry="5" data-accessory="base-shadow" />
     );
   }
   if (kind === 'oddsborne') {
     return (
       <g className={styles.pin} data-accessory="hat-pin">
-        <path className={styles.pinStem} d="M43.2 16.5 L45.6 10.2" />
-        <circle className={styles.pinDish} cx="46.4" cy="8.4" r="3.6" />
-        <circle className={styles.pinWell} cx="46.4" cy="8.4" r="1.7" />
+        <path className={styles.pinStem} d="M44.2 18.4 L40.6 22.2" />
+        <circle className={styles.pinDish} cx="46" cy="16.2" r="4.1" />
+        <circle className={styles.pinWell} cx="46" cy="16.2" r="1.8" />
       </g>
     );
   }
@@ -63,18 +63,18 @@ function BotAccessory({ kind }: { kind: StewardBotKind }) {
     return (
       <rect
         className={styles.mask}
-        x="12"
-        y="26.5"
-        width="40"
-        height="13"
-        rx="6.5"
-        transform="rotate(-8 32 33)"
+        x="11"
+        y="25"
+        width="42"
+        height="15"
+        rx="7.5"
+        transform="rotate(-9 32 32.5)"
         data-accessory="mask-slash"
       />
     );
   }
   if (kind === 'grasshopper') {
-    return <rect className={styles.tabletBar} x="27" y="47.2" width="10" height="2.2" rx="1.1" data-accessory="tablet-bar" />;
+    return <circle className={styles.tabletNotch} cx="32" cy="14.4" r="1.35" data-accessory="tablet-bar" />;
   }
   return null;
 }
@@ -91,15 +91,15 @@ function BotFace({ kind }: { kind: StewardBotKind }) {
 
 function faceLayout(kind: StewardBotKind) {
   if (kind === 'grasshopper') {
-    return { left: 24, right: 40, cy: 29, rx: 7.4, ry: 8.2 };
+    return { left: 24.2, right: 39.8, cy: 28.5, rx: 8, ry: 8.8 };
   }
   if (kind === 'quantanamo') {
-    return { left: 22.5, right: 41.5, cy: 31.5, rx: 7.6, ry: 8.4 };
+    return { left: 22, right: 42, cy: 30.5, rx: 8.2, ry: 9 };
   }
   if (kind === 'bandit') {
-    return { left: 23.5, right: 40.5, cy: 32.2, rx: 7.2, ry: 7.8 };
+    return { left: 23.4, right: 40.6, cy: 32, rx: 7.6, ry: 8.2 };
   }
-  return { left: 23.5, right: 40.5, cy: 32, rx: 7.4, ry: 8.1 };
+  return { left: 23.6, right: 40.4, cy: 31.5, rx: 8, ry: 8.6 };
 }
 
 function BotEye({
@@ -124,9 +124,9 @@ function BotEye({
         <ellipse rx={rx} ry={ry} />
       </clipPath>
       <g className={styles.gaze} clipPath={`url(#${clip})`}>
-        <circle className={styles.iris} cy={1.1} r={rx * 0.58} />
-        <circle className={styles.pupil} cy={1.3} r={rx * 0.38} />
-        <circle className={styles.glint} cx={-rx * 0.22} cy={-ry * 0.18} r={rx * 0.16} />
+        <circle className={styles.iris} cy={1.15} r={rx * 0.56} />
+        <circle className={styles.pupil} cy={1.35} r={rx * 0.36} />
+        <circle className={styles.glint} cx={-rx * 0.22} cy={-ry * 0.16} r={rx * 0.15} />
       </g>
       <rect className={styles.lid} x={-rx} y={-ry} width={rx * 2} height={ry * 2} rx={rx * 0.55} />
     </g>
