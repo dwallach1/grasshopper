@@ -38,6 +38,13 @@ import {
 } from './ledger-map';
 import { assembleTeam, emptyTeam } from './desk-team';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
+import {
+  emptyMemeCoins,
+  hydrateMemeDesk,
+  mapMemeCoins,
+  openMemeCount,
+  type MemeCoinsPayload,
+} from './meme-book';
 import { publicSupabaseUrl, userRestHeaders } from './auth-env';
 import {
   hasDatabaseUrl,
@@ -370,8 +377,9 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const [prediction, team] = await Promise.all([
+    const [prediction, meme, team] = await Promise.all([
       loadPredictionMarkets(sql),
+      loadMemeCoins(sql),
       loadTeam(sql),
     ]);
     return assembleDesk('postgres', decorateDesk(theses, symbols, {
@@ -412,7 +420,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }, prediction, team));
+    }, prediction, meme, team));
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -489,8 +497,9 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
 
   const mappedTests = mapTests(tests);
   const mappedArtifacts = mapBacktestArtifacts(artifacts);
-  const [prediction, team] = await Promise.all([
+  const [prediction, meme, team] = await Promise.all([
     loadPredictionMarketsRest(accessToken),
+    loadMemeCoinsRest(accessToken),
     loadTeamRest(accessToken),
   ]);
   return assembleDesk('postgrest', decorateDesk(theses, symbols, {
@@ -533,7 +542,7 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }, prediction, team));
+  }, prediction, meme, team));
 }
 
 async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload> {
@@ -666,6 +675,81 @@ async function loadTeamRest(accessToken: string): Promise<DeskTeamPayload> {
   return assembleTeam({ agents, domains, stewards, accounts });
 }
 
+async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
+  try {
+    const present = await sql`select to_regclass('public.meme_tokens') is not null as ok`;
+    if (!present[0]?.ok) return emptyMemeCoins();
+    const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
+      sql`
+        select id, venue, mint, symbol, name, status, bonding_curve_status, graduated_at,
+               last_price_sol, last_mcap_sol, last_marked_at, thesis_id, kill_criteria
+        from public.meme_tokens
+        order by updated_at desc
+        limit 200
+      `,
+      sql`
+        select id, token_id, account_key, thesis_id, status, quantity,
+               average_cost_sol, mark_sol, mark_at, thesis_text
+        from public.meme_positions
+        order by updated_at desc
+        limit 200
+      `,
+      sql`
+        select id, token_id, account_key, thesis_id, side, order_type, size_sol, size_tokens,
+               price_sol, status, mode, venue_order_id, submitted_at, created_at
+        from public.meme_orders
+        order by created_at desc
+        limit 200
+      `,
+      sql`
+        select id, order_id, position_id, account_key, side, quantity, price_sol, fee_sol, executed_at
+        from public.meme_fills
+        order by executed_at desc
+        limit 200
+      `,
+      sql`
+        select id, account_key, as_of, realized, unrealized, fees, cash_sol, equity_sol, notes
+        from public.meme_pnl
+        order by as_of desc
+        limit 20
+      `,
+      sql`
+        select id, token_id, thesis_id, note_type, title, body, created_at
+        from public.meme_notes
+        order by created_at desc
+        limit 80
+      `,
+    ]);
+    return mapMemeCoins({
+      tokens: tokens as unknown as Record<string, unknown>[],
+      positions: positions as unknown as Record<string, unknown>[],
+      orders: orders as unknown as Record<string, unknown>[],
+      fills: fills as unknown as Record<string, unknown>[],
+      pnl: pnl as unknown as Record<string, unknown>[],
+      notes: notes as unknown as Record<string, unknown>[],
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (isPostgresPermissionDenied(message) || isPostgresUndefinedRelation(message)) {
+      console.error(JSON.stringify({ event: 'meme_ledger_skipped', error: message }));
+      return emptyMemeCoins();
+    }
+    throw error;
+  }
+}
+
+async function loadMemeCoinsRest(accessToken: string): Promise<MemeCoinsPayload> {
+  const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
+    restOptional('meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id,kill_criteria&order=updated_at.desc&limit=200', accessToken),
+    restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
+    restOptional('meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
+    restOptional('meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200', accessToken),
+    restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=20', accessToken),
+    restOptional('meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', accessToken),
+  ]);
+  return mapMemeCoins({ tokens, positions, orders, fills, pnl, notes });
+}
+
 async function loadPredictionMarketsRest(accessToken: string): Promise<PredictionMarketsPayload> {
   const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
     restOptional('pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200', accessToken),
@@ -709,6 +793,7 @@ function decorateDesk(
   symbolRows: JsonObjectRow[],
   body: Omit<DeskPayload, 'generated_at' | 'source' | 'routines' | 'theses' | 'fill_log' | 'team'>,
   prediction: PredictionMarketsPayload = emptyPredictionMarkets(),
+  meme: MemeCoinsPayload = emptyMemeCoins(),
   team: DeskTeamPayload = emptyTeam(),
 ): Omit<DeskPayload, 'generated_at' | 'source' | 'routines'> {
   const theses = attachThesisLots(mapTheses(thesisRows, symbolRows), {
@@ -717,10 +802,12 @@ function decorateDesk(
     exposures: body.exposures,
   });
   const fillLog = assembleFillLog({ fills: body.fills, intents: body.intents });
+  const withPrediction = hydratePredictionDesk(theses, fillLog, prediction);
   return {
     ...body,
     team,
-    ...hydratePredictionDesk(theses, fillLog, prediction),
+    ...hydrateMemeDesk(withPrediction.theses, withPrediction.fill_log, meme),
+    prediction_markets: withPrediction.prediction_markets,
   };
 }
 
@@ -739,7 +826,9 @@ function assembleDesk(
     }),
     counts: {
       ...body.counts,
-      open_positions: body.exposures.length + openPredictionCount(body.prediction_markets ?? emptyPredictionMarkets()),
+      open_positions: body.exposures.length
+        + openPredictionCount(body.prediction_markets ?? emptyPredictionMarkets())
+        + openMemeCount(body.meme_coins ?? emptyMemeCoins()),
     },
   };
 }

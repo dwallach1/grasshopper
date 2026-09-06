@@ -60,7 +60,7 @@ export function isPostgresPermissionDenied(message: string): boolean {
   return /permission denied for (table|relation)/i.test(message);
 }
 
-/** Local / older ledgers may not have GRASSHOPPER `pm_*` tables yet (`42P01`). */
+/** Local / older ledgers may not have GRASSHOPPER `pm_*` or `meme_*` tables yet (`42P01`). */
 export function isPostgresUndefinedRelation(message: string): boolean {
   return /relation .+ does not exist/i.test(message);
 }

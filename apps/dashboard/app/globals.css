@@ -3057,7 +3057,7 @@ a:focus-visible {
 .term-venues {
   display: inline-flex;
   width: 100%;
-  max-width: 420px;
+  max-width: 560px;
   margin: 4px 0 12px;
   padding: 3px;
   gap: 2px;
@@ -3104,6 +3104,11 @@ a:focus-visible {
 .term-venue-tag.prediction {
   color: var(--warn);
   border-color: rgba(255, 176, 0, 0.45);
+}
+
+.term-venue-tag.meme {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.5);
 }
 
 .term-dock {

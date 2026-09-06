@@ -62,8 +62,8 @@ export function publicDeskJsonError(message = PUBLIC_DESK_UNAVAILABLE): { error:
 
 /**
  * Mark a live desk payload as the public snapshot. Drops operator-only audit
- * rows. `prediction_markets` (ODDSBORNE `pm_*`) and `team` (desk_agents)
- * pass through when present. Never invent marks.
+ * rows. `prediction_markets` (ODDSBORNE `pm_*`), `meme_coins` (BANDIT `meme_*`),
+ * and `team` (desk_agents) pass through when present. Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const {

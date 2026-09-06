@@ -2,7 +2,7 @@
 
 The webapp is a localhost Bloomberg-style desk over the **live Quantanamo ledger** in Supabase (`xqungxapqicdmboniezz`). It does not serve a mock dataset and it does not run ingestion, research, or broker jobs.
 
-**QUANTANAMO (Grok Bot) is the only live automation.** It reads X through the X connector and trades through Robinhood, then writes canonical tables (`runs`, `account_snapshots`, `theses`, `position_episodes`, …). ODDSBORNE `pm_*` rows (Polymarket) land on the same Book / Theses / Events chrome via venue chips when present. The public phone desk (`bun run desk:deploy`) is a read-only snapshot — see the README Public phone desk section. Cloudflare ingest workers and the old ThesisForge / Codex pipeline are retired from this desk: do not reconnect X OAuth here, do not press Run on a knowledge worker, and do not treat Cloudflare cron as due.
+**QUANTANAMO (Grok Bot) is the only live automation.** It reads X through the X connector and trades through Robinhood, then writes canonical tables (`runs`, `account_snapshots`, `theses`, `position_episodes`, …). ODDSBORNE `pm_*` rows (Polymarket) and BANDIT `meme_*` rows (coins) land on the same Book / Theses / Events chrome via venue chips when present. The public phone desk (`bun run desk:deploy`) is a read-only snapshot — see the README Public phone desk section. Cloudflare ingest workers and the old ThesisForge / Codex pipeline are retired from this desk: do not reconnect X OAuth here, do not press Run on a knowledge worker, and do not treat Cloudflare cron as due.
 
 ## Requirements
 

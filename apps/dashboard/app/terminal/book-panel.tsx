@@ -3,9 +3,10 @@
 import { useMemo, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import { lotKey, rowVenue, type VenueFilter } from '../../lib/desk-venue';
+import { lotKey, matchesVenueFilter, rowVenue, type VenueFilter } from '../../lib/desk-venue';
 import { nextHeldCatalyst } from '../../lib/held-catalyst';
 import type { BookPerformance, DeskPayload, FillLogRow, ThesisLot, ThesisRow } from '../../lib/ledger-types';
+import { latestMemePnl, memeDesk } from '../../lib/meme-book';
 import {
   deskBookNames,
   filterBookNames,
@@ -38,15 +39,16 @@ export function BookPanel({
   const [venue, setVenue] = useState<VenueFilter>('all');
   const names = useMemo(() => filterBookNames(deskBookNames(desk), venue), [desk, venue]);
   const prediction = useMemo(() => predictionDesk(desk), [desk]);
+  const coins = useMemo(() => memeDesk(desk), [desk]);
   const catalyst = useMemo(
-    () => nextHeldCatalyst(desk.catalysts, desk.book.names, nowIso),
-    [desk.book.names, desk.catalysts, nowIso],
+    () => nextHeldCatalyst(desk.catalysts, names, nowIso),
+    [desk.catalysts, names, nowIso],
   );
   const skinned = desk.theses.filter((row) =>
     row.lots.some((lot) => venue === 'all' || rowVenue(lot) === venue),
   );
   const fillLog = filterFillLog(desk.fill_log, venue);
-  const intents = filterIntents(desk.intents, prediction, venue);
+  const intents = filterIntents(desk.intents, prediction, venue, coins);
 
   return (
     <div className="term-grid term-grid-book">
@@ -54,17 +56,18 @@ export function BookPanel({
         <header>
           <b>BOOK</b>
           <span>
-            one desk · two venues
+            one desk · three venues
             {desk.book.observed_at ? ` · ${nyStamp(desk.book.observed_at)}` : ''}
           </span>
         </header>
         <VenueFilterBar value={venue} onChange={setVenue} />
-        {venue === 'prediction' ? (
-          <PredictionKpis desk={desk} />
-        ) : (
-          <BookKpis book={desk.book} />
+        {matchesVenueFilter('equity', venue) && <BookKpis book={desk.book} />}
+        {matchesVenueFilter('prediction', venue) && (
+          <PredictionKpis desk={desk} compact={venue === 'all'} />
         )}
-        {venue === 'all' && <PredictionKpis desk={desk} compact />}
+        {matchesVenueFilter('meme', venue) && (
+          <CoinKpis desk={desk} compact={venue === 'all'} />
+        )}
       </section>
       <section className="term-panel term-book-table">
         <header>
@@ -79,7 +82,7 @@ export function BookPanel({
           />
         </div>
       </section>
-      {venue !== 'prediction' && (
+      {matchesVenueFilter('equity', venue) && (
         <BookDiagnostic
           desk={desk}
           selectedId={selectedId}
@@ -317,6 +320,43 @@ function PredictionKpis({ desk, compact = false }: { desk: DeskPayload; compact?
         ODDSBORNE {nyStamp(pnl.as_of)}
         {pnl.notes ? ` · ${pnl.notes}` : ''}
         {compact ? ` · equity ${ledgerFigure(pnl.equity, moneyPrecise)}` : ''}
+        . Marks are ledger-only.
+      </p>
+    </div>
+  );
+}
+
+function CoinKpis({ desk, compact = false }: { desk: DeskPayload; compact?: boolean }) {
+  const pnl = latestMemePnl(memeDesk(desk));
+  if (!pnl) {
+    return compact ? null : <p className="empty">BANDIT book {NOT_IN_LEDGER}</p>;
+  }
+  return (
+    <div className={compact ? 'term-prose dim' : undefined}>
+      {!compact && (
+        <div className="term-kpis">
+          <div>
+            <i>Coins equity</i>
+            <b>{ledgerFigure(pnl.equity_sol, moneyPrecise)}</b>
+          </div>
+          <div>
+            <i>Cash</i>
+            <b>{ledgerFigure(pnl.cash_sol, moneyPrecise)}</b>
+          </div>
+          <div>
+            <i>Realized</i>
+            <b className={pnlClass(pnl.realized)}>{signedMoney(pnl.realized)}</b>
+          </div>
+          <div>
+            <i>Unrealized</i>
+            <b className={pnlClass(pnl.unrealized)}>{signedMoney(pnl.unrealized)}</b>
+          </div>
+        </div>
+      )}
+      <p className="term-prose dim">
+        BANDIT {nyStamp(pnl.as_of)}
+        {pnl.notes ? ` · ${pnl.notes}` : ''}
+        {compact ? ` · equity ${ledgerFigure(pnl.equity_sol, moneyPrecise)}` : ''}
         . Marks are ledger-only.
       </p>
     </div>

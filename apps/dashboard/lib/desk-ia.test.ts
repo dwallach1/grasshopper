@@ -40,12 +40,13 @@ describe('desk IA smoke', () => {
     expect(book).toContain('VenueFilterBar');
   });
 
-  test('product chrome is GRASSHOPPER; venue shorts are STOCKS / PREDICTIONS', async () => {
+  test('product chrome is GRASSHOPPER; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const shell = await readDashboard('app/terminal/public-shell.tsx');
     const signIn = await readDashboard('app/auth/sign-in.tsx');
     const layout = await readDashboard('app/layout.tsx');
     const venue = await readDashboard('lib/desk-venue.ts');
+    const book = await readDashboard('app/terminal/book-panel.tsx');
     const chips = await readDashboard('app/terminal/venue-filter.tsx');
     const tests = await readDashboard('app/terminal/backtests-panel.tsx');
     expect(app).toMatch(/term-brand[\s\S]{0,180}GRASSHOPPER\s*<\/a>/);
@@ -56,10 +57,18 @@ describe('desk IA smoke', () => {
     expect(layout).toContain("title: 'Grasshopper'");
     expect(venue).toContain("short: 'STOCKS'");
     expect(venue).toContain("short: 'PREDICTIONS'");
+    expect(venue).toContain("short: 'COINS'");
     expect(venue).toContain("label: 'STOCKS'");
     expect(venue).toContain("label: 'PREDICTIONS'");
-    expect(venue).toContain("? 'ODDSBORNE' : 'QUANTANAMO'");
-    expect(venue).toContain("? 'PREDICTIONS' : 'STOCKS'");
+    expect(venue).toContain("label: 'COINS'");
+    expect(venue).toContain("return 'ODDSBORNE'");
+    expect(venue).toContain("return 'BANDIT'");
+    expect(venue).toContain("return 'PREDICTIONS'");
+    expect(venue).toContain("return 'COINS'");
+    expect(book).toContain('CoinKpis');
+    expect(book).toContain('three venues');
+    expect(book).toContain("matchesVenueFilter('meme', venue)");
+    expect(book).toContain("matchesVenueFilter('equity', venue)");
     expect(chips).toContain('venueShort(venue)');
     expect(chips).not.toContain("'EQ'");
     expect(chips).not.toContain("'PM'");

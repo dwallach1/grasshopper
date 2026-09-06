@@ -34,6 +34,9 @@ describe('desk load path', () => {
     expect(ledger).toContain('REST_FETCH_MS = 8_000');
     expect(ledger).toContain('loadPredictionMarkets');
     expect(ledger).toContain('pm_markets');
+    expect(ledger).toContain('loadMemeCoins');
+    expect(ledger).toContain('meme_tokens');
+    expect(ledger).toContain('meme_positions');
     expect(ledger).toContain('loadTeam');
     expect(ledger).toContain('desk_agents');
     expect(ledger).toContain('desk_domain_stewards');
