@@ -1,24 +1,17 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import {
   stewardAvatarLabel,
   stewardBotKind,
   stewardBotPalette,
   stewardEmoteDelayMs,
-  stewardFurTone,
   type StewardAvatarSize,
   type StewardMood,
 } from '../../lib/desk-avatar';
-import { StewardBot } from './steward-bots';
+import { StewardLivingIcon } from './steward-living';
 import styles from './steward-avatar.module.css';
-
-const StewardRiveFace = dynamic(
-  () => import('./steward-rive').then((mod) => mod.StewardRiveFace),
-  { ssr: false },
-);
 
 export function StewardAvatar({
   slug,
@@ -27,6 +20,7 @@ export function StewardAvatar({
   accent,
   alive = false,
   mood = 'idle',
+  thinking = false,
 }: {
   slug: string;
   name: string;
@@ -34,16 +28,13 @@ export function StewardAvatar({
   accent?: string;
   alive?: boolean;
   mood?: StewardMood;
+  thinking?: boolean;
 }) {
   const label = stewardAvatarLabel(name);
   const palette = stewardBotPalette({ slug, name, accent });
   const kind = stewardBotKind(slug, name);
-  const fur = stewardFurTone(kind);
   const delayMs = stewardEmoteDelayMs(slug, name);
   const reducedMotion = usePrefersReducedMotion();
-  const [runtime, setRuntime] = useState<'rive' | 'svg'>('rive');
-  const onReady = useCallback(() => setRuntime('rive'), []);
-  const onFailed = useCallback(() => setRuntime('svg'), []);
   const className = [
     styles.steward,
     size === 'board' ? styles.board : styles.team,
@@ -55,10 +46,6 @@ export function StewardAvatar({
   const accentStyle = {
     '--team-accent': palette.accent,
     '--emote-delay': `${delayMs}ms`,
-    '--fur': fur.base,
-    '--fur-deep': fur.deep,
-    '--fur-lit': fur.lit,
-    '--fur-pad': fur.pad,
   } as CSSProperties;
 
   return (
@@ -68,24 +55,19 @@ export function StewardAvatar({
       data-steward={slug}
       data-kind={kind}
       data-mood={mood}
-      data-runtime={runtime}
+      data-thinking={thinking ? '1' : '0'}
+      data-runtime="icon"
       role="img"
       aria-label={label}
     >
-      {runtime === 'svg' ? (
-        <StewardBot kind={kind} alive={alive} delayMs={delayMs} mood={mood} />
-      ) : (
-        <StewardRiveFace
-          key={`${kind}-${mood}-${alive ? '1' : '0'}-${reducedMotion ? 'still' : 'motion'}`}
-          kind={kind}
-          mood={mood}
-          alive={alive}
-          reducedMotion={reducedMotion}
-          delayMs={delayMs}
-          onReady={onReady}
-          onFailed={onFailed}
-        />
-      )}
+      <StewardLivingIcon
+        kind={kind}
+        mood={mood}
+        alive={alive}
+        thinking={thinking}
+        reducedMotion={reducedMotion}
+        delayMs={delayMs}
+      />
     </span>
   );
 }
