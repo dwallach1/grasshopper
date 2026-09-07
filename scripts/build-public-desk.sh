@@ -34,7 +34,6 @@ unset NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || true
 unset NEXT_PUBLIC_SUPABASE_ANON_KEY || true
 
 cd "$dashboard"
-bun run generate:stewards
 bun --bun next build
 
 rm -rf "$dist"

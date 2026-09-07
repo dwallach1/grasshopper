@@ -7,10 +7,9 @@ import {
   stewardBotKind,
   stewardBotPalette,
   stewardEmoteDelayMs,
-  stewardFaceLayout,
-  stewardFurTone,
   stewardMood,
-  stewardSilhouette,
+  stewardSpecies,
+  stewardThinking,
   type StewardBotKind,
 } from './desk-avatar';
 
@@ -22,7 +21,7 @@ describe('desk steward avatars', () => {
     expect(stewardAvatarSeed('', '')).toBe('spark');
   });
 
-  test('known stewards map to distinct blob kinds and desk palettes', () => {
+  test('known stewards map to distinct kinds and desk palettes', () => {
     expect(stewardBotKind('quantanamo', 'QUANTANAMO')).toBe('quantanamo');
     expect(stewardBotKind('oddsborne', 'ODDSBORNE')).toBe('oddsborne');
     expect(stewardBotKind('bandit', 'BANDIT')).toBe('bandit');
@@ -53,42 +52,23 @@ describe('desk steward avatars', () => {
     expect(stewardAvatarLabel('')).toBe('Desk steward');
   });
 
-  test('fur tones stay in one pastel family and stay distinct per steward', () => {
-    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
-    const tones = kinds.map(stewardFurTone);
-    expect(new Set(tones.map((tone) => tone.base)).size).toBe(3);
-    expect(new Set(tones.map((tone) => tone.seed)).size).toBe(3);
-    for (const tone of tones) {
-      expect(tone.base).not.toBe(AVATAR_COLORS.green);
-      expect(tone.base).not.toBe(AVATAR_COLORS.blue);
-      expect(tone.base).not.toBe(AVATAR_COLORS.red);
-      const [r, g, b] = hexRgb(tone.base);
+  test('species fills stay soft, distinct, and off the book P/L colors', () => {
+    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit', 'grasshopper'];
+    const faces = kinds.map(stewardSpecies);
+    expect(new Set(faces.map((face) => face.fill)).size).toBe(4);
+    expect(new Set(faces.map((face) => face.gap.toFixed(2))).size).toBe(4);
+    for (const face of faces) {
+      expect(face.fill).not.toBe(AVATAR_COLORS.green);
+      expect(face.fill).not.toBe(AVATAR_COLORS.blue);
+      expect(face.fill).not.toBe(AVATAR_COLORS.red);
+      expect(face.fill).not.toBe('#000000');
+      expect(face.fill).not.toBe('#111111');
+      const [r, g, b] = hexRgb(face.fill);
       expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(80);
       expect(Math.min(r, g, b)).toBeGreaterThan(140);
       expect(Math.max(r, g, b)).toBeLessThanOrEqual(220);
     }
-  });
-
-  test('sleepy faces differ by eye spacing and lid tilt, not chrome', () => {
-    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
-    const faces = kinds.map(stewardFaceLayout);
-    expect(new Set(faces.map((face) => Number((face.right - face.left).toFixed(2)))).size).toBe(3);
-    expect(new Set(faces.map((face) => `${face.lidTiltL},${face.lidTiltR}`)).size).toBe(3);
-    expect(faces.every((face) => face.lidCover >= 0.45 && face.lidCover <= 0.65)).toBe(true);
-    expect(stewardFaceLayout('oddsborne').lidCover).toBeGreaterThan(stewardFaceLayout('quantanamo').lidCover);
-  });
-
-  test('vector mounds stay one species and stay distinct per steward', () => {
-    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
-    const mounds = kinds.map(stewardSilhouette);
-    expect(new Set(mounds.map((mound) => mound.peak.toFixed(2))).size).toBe(3);
-    expect(new Set(mounds.map((mound) => mound.girth.toFixed(2))).size).toBe(3);
-    expect(new Set(mounds.map((mound) => mound.path)).size).toBe(3);
-    expect(stewardSilhouette('oddsborne').peak).toBeGreaterThan(stewardSilhouette('quantanamo').peak);
-    expect(stewardSilhouette('quantanamo').girth).toBeGreaterThan(stewardSilhouette('oddsborne').girth);
-    expect(stewardFaceLayout('quantanamo').right - stewardFaceLayout('quantanamo').left).toBeGreaterThan(
-      stewardFaceLayout('oddsborne').right - stewardFaceLayout('oddsborne').left,
-    );
+    expect(stewardSpecies('quantanamo').gap).toBeGreaterThan(stewardSpecies('oddsborne').gap);
   });
 
   test('board mood follows ranked return: up / down / idle', () => {
@@ -98,6 +78,13 @@ describe('desk steward avatars', () => {
     expect(stewardMood(null)).toBe('idle');
     expect(stewardMood(undefined)).toBe('idle');
     expect(stewardMood(Number.NaN)).toBe('idle');
+  });
+
+  test('watching status is the thinking dwell, not a guessed mood', () => {
+    expect(stewardThinking('watching')).toBe(true);
+    expect(stewardThinking('WATCHING')).toBe(true);
+    expect(stewardThinking('active')).toBe(false);
+    expect(stewardThinking('idle')).toBe(false);
   });
 });
 

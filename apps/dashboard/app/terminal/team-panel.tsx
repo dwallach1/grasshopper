@@ -3,6 +3,7 @@
 import type { CSSProperties } from 'react';
 
 import { clipCharter, deskTeam, isHeartbeatFresh, teamCards } from '../../lib/desk-team';
+import { stewardThinking } from '../../lib/desk-avatar';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { StewardAvatar } from './steward-avatar';
@@ -30,6 +31,7 @@ export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null
               <article
                 key={card.slug}
                 className={`term-team-card status-${card.status}${alive ? ' is-alive' : ''}`}
+                // SAFETY: CSS custom property for the shared steward accent token.
                 style={{ '--team-accent': card.accent } as CSSProperties}
               >
                 <StewardAvatar
@@ -38,6 +40,7 @@ export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null
                   size="team"
                   accent={card.accent}
                   alive={alive}
+                  thinking={stewardThinking(card.status)}
                 />
                 <div className="term-team-meta">
                   <div className="term-team-name">
@@ -51,6 +54,7 @@ export function TeamPanel({ desk, now }: { desk: DeskPayload; now: number | null
                       <span
                         key={domain.slug}
                         className={`term-team-chip${domain.is_primary ? ' is-primary' : ''}`}
+                        // SAFETY: CSS custom property for the domain chip accent token.
                         style={{ '--team-chip': domain.accent } as CSSProperties}
                         title={domain.accounts.map((account) => account.label).join(' · ') || domain.kind}
                       >
