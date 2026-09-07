@@ -1,15 +1,22 @@
 .steward {
   --steward-size: 72px;
   --emote-delay: 0ms;
+  --fur: #a8a9d0;
+  --fur-deep: #7b7da8;
+  --fur-lit: #dddef0;
+  --fur-pad: #e4e5f2;
+  --lid-rest: 1;
+  --bounce-y: -4.5px;
+  --bounce-xs: 1.055;
+  --bounce-ys: 0.945;
   position: relative;
   display: grid;
   place-items: center;
   width: var(--steward-size);
   height: var(--steward-size);
   flex: 0 0 var(--steward-size);
+  overflow: visible;
   background: transparent;
-  animation: steward-breathe 3.4s var(--ease, ease) infinite;
-  animation-delay: var(--emote-delay);
 }
 
 .team {
@@ -21,161 +28,74 @@
 }
 
 .alive {
-  animation:
-    steward-breathe 1.65s var(--ease, ease) infinite,
-    steward-glow 1.35s ease-in-out infinite;
+  animation: steward-glow 2s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .bot {
   width: 100%;
   height: 100%;
+  display: block;
   overflow: visible;
-  animation: steward-bob 3.4s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
+}
+
+.bot[data-mood='up'] {
+  --lid-rest: 0.78;
+  --bounce-y: -6px;
+  --bounce-xs: 1.07;
+  --bounce-ys: 0.93;
+}
+
+.bot[data-mood='down'] {
+  --lid-rest: 1.22;
+  --bounce-y: -2.4px;
+  --bounce-xs: 1.03;
+  --bounce-ys: 0.97;
+}
+
+.pad {
+  pointer-events: none;
 }
 
 .figure {
   transform-box: fill-box;
-  transform-origin: center;
-}
-
-.skin {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #ffe9a3);
-}
-
-.belly {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #fff4c4);
-  opacity: 0.62;
-}
-
-.shine {
-  fill: #fffdf4;
-  opacity: 0.55;
-}
-
-.ground {
-  fill: #000000;
-  opacity: 0.28;
-}
-
-.strap,
-.maskStrap {
-  fill: #3a3224;
-  opacity: 0.55;
-}
-
-.maskStrap {
-  fill: #101318;
-}
-
-.bridge {
-  stroke: #2a2f36;
-  stroke-width: 2.4;
-  stroke-linecap: round;
-}
-
-.rim {
-  fill: none;
-  stroke: #1d2228;
-  stroke-width: 2.35;
-}
-
-.baseShadow {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #1a1408);
-  opacity: 0.55;
-}
-
-.mask,
-.maskSlash {
-  fill: #0d1014;
-  opacity: 0.82;
-}
-
-.maskSlash {
-  opacity: 0.88;
-}
-
-.pinStem,
-.nubStem {
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 40%, #3a2c14);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-
-.pinDish,
-.nub {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 62%, #fff1b0);
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 78%, #1a1408);
-  stroke-width: 1;
-}
-
-.pinWell {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #1a1408);
-}
-
-.mouth {
-  fill: none;
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #5a3d28);
-  stroke-width: 1.45;
-  stroke-linecap: round;
-}
-
-.lens {
-  fill: #f7fbff;
-  animation: steward-lens 3.6s ease-in-out infinite;
+  transform-origin: 50% 92%;
+  animation: steward-bounce 2.8s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
-.iris {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #243040);
+.bot[data-mood='up'] .figure {
+  animation-duration: 2.2s;
 }
 
-.gaze {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: steward-glance 6.4s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
+.bot[data-mood='down'] .figure {
+  animation-duration: 3.6s;
+}
+
+.bot[data-alive='1'] .figure {
+  animation-duration: 2s;
+}
+
+.shadow {
+  fill: rgba(20, 18, 28, 0.18);
+}
+
+.sclera {
+  fill: #fffdf8;
 }
 
 .pupil {
-  fill: #10141a;
+  fill: #16141c;
   transform-box: fill-box;
   transform-origin: center;
-}
-
-.glint {
-  fill: #ffffff;
-}
-
-.lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #ffe9a3);
-  transform-box: fill-box;
-  transform-origin: center;
-  opacity: 0;
-  animation: steward-blink 3.8s ease-in-out infinite;
+  animation: steward-glance 7.2s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
-.alive .lid {
-  animation-duration: 1.85s;
-}
-
-.alive .gaze {
-  animation-duration: 2.4s;
-}
-
-.alive .bot {
-  animation-duration: 1.65s;
-}
-
-.alive .lens {
-  fill: #fcfdff;
-  animation-duration: 1.45s;
-}
-
-.alive .pupil {
-  animation: steward-pulse 1.35s ease-in-out infinite;
+.lid {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: steward-blink 3.2s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -189,23 +109,46 @@
   }
 }
 
-@keyframes steward-breathe {
+@keyframes steward-bounce {
   0%,
   100% {
-    transform: scale(1) translateY(0);
+    transform: translateY(0) scale(1, 1);
   }
   50% {
-    transform: scale(1.03) translateY(-1.5px);
+    transform: translateY(var(--bounce-y)) scale(var(--bounce-xs), var(--bounce-ys));
   }
 }
 
-@keyframes steward-bob {
+@keyframes steward-blink {
   0%,
+  71%,
+  83%,
+  91%,
   100% {
-    transform: translateY(0);
+    transform: scaleY(var(--lid-rest));
   }
-  50% {
-    transform: translateY(-1.2px);
+  76%,
+  78% {
+    transform: scaleY(1.78);
+  }
+  86%,
+  88% {
+    transform: scaleY(1.72);
+  }
+}
+
+@keyframes steward-glance {
+  0%,
+  28%,
+  76%,
+  100% {
+    transform: translate(0, 0);
+  }
+  40% {
+    transform: translate(1.8px, 0);
+  }
+  64% {
+    transform: translate(-1.4px, 0);
   }
 }
 
@@ -215,75 +158,16 @@
     filter: drop-shadow(0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent));
   }
   50% {
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--team-accent, var(--green)) 55%, transparent));
-  }
-}
-
-@keyframes steward-lens {
-  0%,
-  100% {
-    fill: #f7fbff;
-  }
-  50% {
-    fill: #ffffff;
-  }
-}
-
-@keyframes steward-blink {
-  0%,
-  72%,
-  91%,
-  100% {
-    opacity: 0;
-    transform: scaleY(0.1);
-  }
-  76%,
-  81% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-  85% {
-    opacity: 0;
-    transform: scaleY(0.1);
-  }
-  87% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-}
-
-@keyframes steward-glance {
-  0%,
-  28%,
-  100% {
-    transform: translate(0, 0);
-  }
-  40% {
-    transform: translate(2.1px, 0.35px);
-  }
-  64% {
-    transform: translate(-1.7px, 0.25px);
-  }
-}
-
-@keyframes steward-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.16);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fur, var(--team-accent)) 42%, transparent));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .steward,
   .alive,
-  .bot,
-  .lid,
-  .gaze,
+  .figure,
   .pupil,
-  .lens {
+  .lid {
     animation: none;
   }
 }

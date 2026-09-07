@@ -15,6 +15,7 @@ import {
 import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
 import { DeskLiveline } from './desk-liveline';
+import { stewardMood } from '../../lib/desk-avatar';
 import { StewardAvatar } from './steward-avatar';
 import { age, nyStamp, pct, pnlClass } from './format';
 
@@ -112,6 +113,7 @@ export function LeaderboardPanel({
                 name={row.steward}
                 size="board"
                 accent={row.accent}
+                mood={stewardMood(row.return_pct)}
               />
               <span className="line-who">
                 <b>{row.steward}</b>

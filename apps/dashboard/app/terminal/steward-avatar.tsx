@@ -7,7 +7,9 @@ import {
   stewardBotKind,
   stewardBotPalette,
   stewardEmoteDelayMs,
+  stewardFurTone,
   type StewardAvatarSize,
+  type StewardMood,
 } from '../../lib/desk-avatar';
 import { StewardBot } from './steward-bots';
 import styles from './steward-avatar.module.css';
@@ -18,16 +20,19 @@ export function StewardAvatar({
   size = 'team',
   accent,
   alive = false,
+  mood = 'idle',
 }: {
   slug: string;
   name: string;
   size?: StewardAvatarSize;
   accent?: string;
   alive?: boolean;
+  mood?: StewardMood;
 }) {
   const label = stewardAvatarLabel(name);
   const palette = stewardBotPalette({ slug, name, accent });
   const kind = stewardBotKind(slug, name);
+  const fur = stewardFurTone(kind);
   const className = [
     styles.steward,
     size === 'board' ? styles.board : styles.team,
@@ -39,6 +44,10 @@ export function StewardAvatar({
   const accentStyle = {
     '--team-accent': palette.accent,
     '--emote-delay': `${stewardEmoteDelayMs(slug, name)}ms`,
+    '--fur': fur.base,
+    '--fur-deep': fur.deep,
+    '--fur-lit': fur.lit,
+    '--fur-pad': fur.pad,
   } as CSSProperties;
 
   return (
@@ -47,10 +56,16 @@ export function StewardAvatar({
       style={accentStyle}
       data-steward={slug}
       data-kind={kind}
+      data-mood={mood}
       role="img"
       aria-label={label}
     >
-      <StewardBot kind={kind} />
+      <StewardBot
+        kind={kind}
+        alive={alive}
+        delayMs={stewardEmoteDelayMs(slug, name)}
+        mood={mood}
+      />
     </span>
   );
 }

@@ -2,196 +2,139 @@
 
 import { useId } from 'react';
 
-import type { StewardBotKind } from '../../lib/desk-avatar';
+import {
+  stewardFaceLayout,
+  stewardFurTone,
+  stewardSilhouette,
+  type StewardBotKind,
+  type StewardMood,
+} from '../../lib/desk-avatar';
 import styles from './steward-avatar.module.css';
 
 /**
- * One capsule family: a soft bean, oversized goggles, one tiny accessory.
- * Original desk characters — not industrial pebbles, not a licensed mascot.
+ * Flat vector fluff family: sleepy mound, half-lids, no limbs or mouth.
+ * SVG artboard with padding — not WebGL, not a bitmap, not a licensed mascot.
  */
-export function StewardBot({ kind }: { kind: StewardBotKind }) {
+export function StewardBot({
+  kind,
+  alive = false,
+  delayMs = 0,
+  mood = 'idle',
+}: {
+  kind: StewardBotKind;
+  alive?: boolean;
+  delayMs?: number;
+  mood?: StewardMood;
+}) {
+  const uid = useId().replace(/:/g, '');
+  const fur = stewardFurTone(kind);
+  const face = stewardFaceLayout(kind);
+  const body = stewardSilhouette(kind);
+  const fillId = `fur-${kind}-${uid}`;
+
   return (
-    <svg className={styles.bot} viewBox="0 0 64 64" fill="none" aria-hidden="true" data-kind={kind}>
-      <ellipse className={styles.ground} cx="32" cy="59.4" rx={kind === 'quantanamo' ? 20 : 14} ry="2.1" />
-      <g className={styles.figure}>
-        <BotBody kind={kind} />
-        {kind === 'quantanamo' ? <BotAccessory kind={kind} /> : null}
-        <BotStrap kind={kind} />
-        <BotFace kind={kind} />
-        <BotMouth kind={kind} />
-        {kind === 'quantanamo' ? null : <BotAccessory kind={kind} />}
+    <svg
+      className={styles.bot}
+      viewBox="0 0 80 80"
+      overflow="visible"
+      data-kind={kind}
+      data-part="body"
+      data-runtime="svg"
+      data-mood={mood}
+      data-alive={alive ? '1' : '0'}
+      data-artboard="padded"
+      data-eye="vector"
+      data-lid-runtime="vector"
+      data-mound="path"
+      aria-hidden="true"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <defs>
+        <linearGradient id={fillId} x1="22" y1="12" x2="48" y2="58" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={fur.base} />
+          <stop offset="1" stopColor={fur.deep} />
+        </linearGradient>
+      </defs>
+      <rect
+        className={styles.pad}
+        x="3"
+        y="3"
+        width="74"
+        height="74"
+        rx="20"
+        fill={fur.pad}
+      />
+      <g className={styles.figure} style={{ animationDelay: `${delayMs}ms` }}>
+        <g transform="translate(8 7)">
+          <ellipse className={styles.shadow} cx="32" cy="61.4" rx={kind === 'quantanamo' ? 20 : kind === 'oddsborne' ? 13 : 16} ry="2.2" />
+          <path className={styles.body} d={body.path} fill={`url(#${fillId})`} />
+          <StewardEye
+            side="left"
+            cx={face.left}
+            cy={face.cy}
+            r={face.r}
+            tilt={face.lidTiltL}
+            cover={face.lidCover}
+            fur={fur.base}
+            delayMs={delayMs}
+          />
+          <StewardEye
+            side="right"
+            cx={face.right}
+            cy={face.cy}
+            r={face.r}
+            tilt={face.lidTiltR}
+            cover={face.lidCover}
+            fur={fur.base}
+            delayMs={delayMs}
+          />
+        </g>
       </g>
     </svg>
   );
 }
 
-function BotBody({ kind }: { kind: StewardBotKind }) {
-  return (
-    <g className={styles.body} data-part="body">
-      {kind === 'grasshopper' ? (
-        <rect className={styles.skin} x="17.5" y="5.5" width="29" height="50.5" rx="14.5" />
-      ) : kind === 'quantanamo' ? (
-        <ellipse className={styles.skin} cx="32" cy="33.5" rx="24.5" ry="18.2" />
-      ) : kind === 'spark' ? (
-        <ellipse className={styles.skin} cx="32" cy="33.8" rx="18.2" ry="17.6" />
-      ) : (
-        <rect className={styles.skin} x="15.5" y="8" width="33" height="47" rx="16.5" />
-      )}
-      <ellipse
-        className={styles.belly}
-        cx="32"
-        cy={kind === 'grasshopper' ? 43 : 42}
-        rx={kind === 'quantanamo' ? 13 : 10}
-        ry={kind === 'quantanamo' ? 7.5 : 8.2}
-      />
-      <ellipse
-        className={styles.shine}
-        cx={kind === 'quantanamo' ? 23 : 25}
-        cy={kind === 'grasshopper' ? 15 : 18}
-        rx={kind === 'quantanamo' ? 9 : 7.5}
-        ry={kind === 'grasshopper' ? 4.2 : 5}
-      />
-    </g>
-  );
-}
-
-function BotStrap({ kind }: { kind: StewardBotKind }) {
-  if (kind === 'quantanamo') {
-    return <rect className={styles.strap} x="8.2" y="24.6" width="47.6" height="5.6" rx="2.8" />;
-  }
-  if (kind === 'grasshopper') {
-    return <rect className={styles.strap} x="17.5" y="22.4" width="29" height="5.2" rx="2.6" />;
-  }
-  if (kind === 'spark') {
-    return <rect className={styles.strap} x="14.4" y="25.2" width="35.2" height="5.2" rx="2.6" />;
-  }
-  return (
-    <rect
-      className={kind === 'bandit' ? styles.maskStrap : styles.strap}
-      x="15.5"
-      y="23.8"
-      width="33"
-      height={kind === 'bandit' ? 6.2 : 5.2}
-      rx="2.6"
-    />
-  );
-}
-
-function BotAccessory({ kind }: { kind: StewardBotKind }) {
-  if (kind === 'quantanamo') {
-    return (
-      <ellipse className={styles.baseShadow} cx="32" cy="48.6" rx="17.5" ry="4.6" data-accessory="base-shadow" />
-    );
-  }
-  if (kind === 'oddsborne') {
-    return (
-      <g className={styles.pin} data-accessory="hat-pin">
-        <path className={styles.pinStem} d="M44.4 16.8 L41.2 20.4" />
-        <circle className={styles.pinDish} cx="46.2" cy="14.8" r="4.2" />
-        <circle className={styles.pinWell} cx="46.2" cy="14.8" r="1.7" />
-      </g>
-    );
-  }
-  if (kind === 'bandit') {
-    return (
-      <g data-accessory="mask-slash">
-        <ellipse className={styles.mask} cx="13.6" cy="27.2" rx="5.4" ry="7.2" />
-        <ellipse className={styles.mask} cx="50.4" cy="26.6" rx="5.4" ry="7.2" />
-        <rect
-          className={styles.maskSlash}
-          x="17"
-          y="25.4"
-          width="30"
-          height="3.6"
-          rx="1.8"
-          transform="rotate(-8 32 27.2)"
-        />
-      </g>
-    );
-  }
-  if (kind === 'grasshopper') {
-    return (
-      <g data-accessory="tablet-bar">
-        <path className={styles.nubStem} d="M26.2 8.2 L24.4 2.6" />
-        <path className={styles.nubStem} d="M37.8 8.2 L39.6 2.6" />
-        <circle className={styles.nub} cx="23.8" cy="2.2" r="1.55" />
-        <circle className={styles.nub} cx="40.2" cy="2.2" r="1.55" />
-      </g>
-    );
-  }
-  return null;
-}
-
-function BotFace({ kind }: { kind: StewardBotKind }) {
-  const layout = faceLayout(kind);
-  return (
-    <g className={styles.face}>
-      <path
-        className={styles.bridge}
-        d={`M${layout.left + layout.rx - 1.2} ${layout.cy - 1.1} H${layout.right - layout.rx + 1.2}`}
-        data-part="goggle"
-      />
-      <BotEye side="l" cx={layout.left} cy={layout.cy} rx={layout.rx} ry={layout.ry} />
-      <BotEye side="r" cx={layout.right} cy={layout.cy} rx={layout.rx} ry={layout.ry} />
-    </g>
-  );
-}
-
-function BotMouth({ kind }: { kind: StewardBotKind }) {
-  const y = kind === 'grasshopper' ? 42.4 : kind === 'quantanamo' ? 41.6 : 43.2;
-  return (
-    <path
-      className={styles.mouth}
-      d={`M27.2 ${y} Q32 ${y + 3.4} 36.8 ${y}`}
-    />
-  );
-}
-
-function faceLayout(kind: StewardBotKind) {
-  if (kind === 'grasshopper') {
-    return { left: 24.8, right: 39.2, cy: 24.8, rx: 7.2, ry: 7.6 };
-  }
-  if (kind === 'quantanamo') {
-    return { left: 22.4, right: 41.6, cy: 27.2, rx: 7.8, ry: 8.1 };
-  }
-  if (kind === 'bandit') {
-    return { left: 24.2, right: 39.8, cy: 26.2, rx: 7.0, ry: 7.4 };
-  }
-  if (kind === 'spark') {
-    return { left: 24.6, right: 39.4, cy: 27.4, rx: 6.8, ry: 7.2 };
-  }
-  return { left: 24.4, right: 39.6, cy: 26.0, rx: 7.1, ry: 7.5 };
-}
-
-function BotEye({
+function StewardEye({
   side,
   cx,
   cy,
-  rx,
-  ry,
+  r,
+  tilt,
+  cover,
+  fur,
+  delayMs,
 }: {
-  side: 'l' | 'r';
+  side: 'left' | 'right';
   cx: number;
   cy: number;
-  rx: number;
-  ry: number;
+  r: number;
+  tilt: number;
+  cover: number;
+  fur: string;
+  delayMs: number;
 }) {
-  const reactId = useId().replace(/:/g, '');
-  const clip = `steward-eye-${reactId}-${side}`;
-  const rim = Math.max(rx, ry) + 0.45;
+  const lidH = r * 2 * cover;
   return (
-    <g className={styles.eye} transform={`translate(${cx} ${cy})`} data-part="eye">
-      <circle className={styles.rim} r={rim} />
-      <ellipse className={styles.lens} rx={rx} ry={ry} />
-      <clipPath id={clip}>
-        <ellipse rx={rx} ry={ry} />
-      </clipPath>
-      <g className={styles.gaze} clipPath={`url(#${clip})`}>
-        <circle className={styles.iris} cy={1.2} r={rx * 0.58} />
-        <circle className={styles.pupil} cy={1.4} r={rx * 0.34} />
-        <circle className={styles.glint} cx={-rx * 0.24} cy={-ry * 0.2} r={rx * 0.16} />
-      </g>
-      <rect className={styles.lid} x={-rx} y={-ry} width={rx * 2} height={ry * 2} rx={rx * 0.55} />
+    <g data-eye={side} transform={`translate(${cx} ${cy}) rotate(${tilt})`}>
+      <ellipse className={styles.sclera} rx={r} ry={r * 0.94} />
+      <circle
+        className={styles.pupil}
+        data-part="pupil"
+        r={r * 0.28}
+        cy={r * 0.16}
+        style={{ animationDelay: `${delayMs}ms` }}
+      />
+      <rect
+        className={styles.lid}
+        data-lid={side}
+        x={-r - 0.35}
+        y={-r - 0.35}
+        width={r * 2 + 0.7}
+        height={lidH + 0.45}
+        rx={r * 0.42}
+        fill={fur}
+        style={{ animationDelay: `${delayMs}ms` }}
+      />
     </g>
   );
 }
