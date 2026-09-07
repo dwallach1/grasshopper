@@ -45,7 +45,7 @@
 
 .halo {
   fill: var(--fur-lit);
-  opacity: 0.42;
+  opacity: 0.55;
 }
 
 .skin {
@@ -54,14 +54,20 @@
 
 .fur {
   fill: var(--fur-lit);
-  opacity: 0.55;
+  opacity: 0.72;
   mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.shade {
+  fill: var(--fur-deep);
+  opacity: 0.28;
   pointer-events: none;
 }
 
 .shine {
   fill: #ffffff;
-  opacity: 0.28;
+  opacity: 0.34;
 }
 
 .ground {
@@ -94,7 +100,7 @@
 }
 
 .lidRest {
-  fill: var(--fur);
+  fill: color-mix(in srgb, var(--fur) 62%, var(--fur-deep));
 }
 
 .lidEdge {

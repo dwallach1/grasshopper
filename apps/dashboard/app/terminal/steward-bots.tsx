@@ -30,35 +30,35 @@ export function StewardBot({ kind }: { kind: StewardBotKind }) {
           <stop offset="48%" stopColor="var(--fur)" />
           <stop offset="100%" stopColor="var(--fur-deep)" />
         </radialGradient>
-        <filter id={feltId} x="-16%" y="-16%" width="132%" height="132%" colorInterpolationFilters="sRGB">
+        <filter id={feltId} x="-18%" y="-18%" width="136%" height="136%" colorInterpolationFilters="sRGB">
           <feTurbulence
             type="fractalNoise"
-            baseFrequency="0.78"
-            numOctaves="2"
+            baseFrequency="0.46"
+            numOctaves="3"
             seed={tone.seed}
             result="n"
           />
           <feDisplacementMap
             in="SourceGraphic"
             in2="n"
-            scale="1.3"
+            scale="2.05"
             xChannelSelector="R"
             yChannelSelector="G"
             result="fuzz"
           />
-          <feGaussianBlur in="fuzz" stdDeviation="0.22" />
+          <feGaussianBlur in="fuzz" stdDeviation="0.18" />
         </filter>
         <filter id={napId} x="0%" y="0%" width="100%" height="100%" colorInterpolationFilters="sRGB">
           <feTurbulence
             type="fractalNoise"
-            baseFrequency="1.12"
+            baseFrequency="0.62"
             numOctaves="2"
             seed={tone.seed + 4}
             result="n"
           />
           <feColorMatrix
             type="matrix"
-            values="0 0 0 0 0.96  0 0 0 0 0.96  0 0 0 0 0.98  0 0 0 0.2 0"
+            values="0 0 0 0 0.93  0 0 0 0 0.93  0 0 0 0 0.96  0 0 0 0.38 0"
             result="grain"
           />
           <feComposite in="grain" in2="SourceGraphic" operator="in" />
@@ -103,6 +103,7 @@ function BotBody({
         data-part="mound"
       />
       <path className={styles.fur} d={d} filter={`url(#${napId})`} />
+      <ellipse className={styles.shade} cx="34" cy="50" rx={kind === 'quantanamo' ? 16 : 12} ry="6.2" />
       <ellipse className={styles.shine} cx={shine.cx} cy={shine.cy} rx={shine.rx} ry={shine.ry} />
     </g>
   );
@@ -184,13 +185,13 @@ function BotEye({
 
 function moundPath(kind: StewardBotKind): string {
   if (kind === 'quantanamo') {
-    return 'M 4.8 51.2 C 4.2 43 8.4 27.5 16.6 19.2 C 22.4 13.4 28.2 12 33.2 12.4 C 43.2 13.2 53.2 20.6 57.8 33.4 C 60.8 42.2 59.2 51.2 53.8 55.6 C 47.2 60.2 38.2 60.8 32 60.8 C 21.6 60.8 8.8 58.6 4.8 51.2 Z';
+    return 'M 3.6 50.4 C 2.8 41.2 7.2 26 14.4 18.4 C 18.6 13.6 24.8 14.8 28.4 17.6 C 32.2 12.2 38.6 11 44.8 16.2 C 52.8 23.2 58.8 34.6 59.4 45.2 C 59.8 52.6 53.6 58.4 42.8 60.2 C 32.4 61.6 12.8 59.8 3.6 50.4 Z';
   }
   if (kind === 'oddsborne') {
-    return 'M 12.2 52.8 C 10.6 41.4 14.4 21.2 23.6 10.6 C 27.4 6.2 32.2 4.4 36.8 7.6 C 43.8 13 51.2 25.6 53.6 39.6 C 55.4 48.8 52.8 55.8 44.8 58.4 C 37.6 60.6 24.2 60.6 16.4 56.8 C 13.2 55.2 12.2 54 12.2 52.8 Z';
+    return 'M 13.4 53.2 C 11.2 42 15.6 20.4 26.2 8.6 C 29.6 4.4 33.8 2.8 36.4 6.2 C 38.2 8.6 37.6 11.4 40.8 13.6 C 47.8 19.2 52.8 31.2 54.2 42.6 C 55.2 51.2 51.4 57.8 42.6 59.4 C 34.8 60.8 22.6 60.4 16.2 56.6 C 14 55.2 13.4 54.2 13.4 53.2 Z';
   }
   if (kind === 'bandit') {
-    return 'M 9.2 51.6 C 8 40.4 12.4 23.8 21.4 16 C 27.2 11.2 34.2 11.6 41.2 16.4 C 50.2 23.2 56.8 33.8 58.6 43.6 C 60 51 55.2 57 44.6 58.8 C 34.2 60.6 18.2 59.8 11.2 54.8 C 9.4 53.4 9.2 52.4 9.2 51.6 Z';
+    return 'M 10.2 53 C 9 41.2 14.2 22.6 24.4 14.4 C 30.2 9.4 36.6 10.2 40.4 15.2 C 44.2 20.2 45.4 28.4 53.6 36.2 C 59.4 42.2 59.8 51.6 50.6 57.2 C 41.2 61.4 22.4 60.6 13.4 56.2 C 11 54.8 10.2 53.8 10.2 53 Z';
   }
   if (kind === 'grasshopper') {
     return 'M 7.2 53 C 6.2 43.6 10.4 25.8 20.2 18.2 C 26.2 14.2 38.2 14.2 44.2 18.2 C 54 25.8 57.8 43.6 56.8 53 C 55.8 58.8 43.8 60.6 32 60.6 C 20.2 60.6 8.2 58.8 7.2 53 Z';
