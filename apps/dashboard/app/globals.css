@@ -4136,7 +4136,7 @@ a:focus-visible {
 
 .crt-boot.is-out {
   opacity: 0;
-  transition: opacity 0.42s var(--ease);
+  transition: opacity 0.64s var(--ease);
 }
 
 .crt-tape {

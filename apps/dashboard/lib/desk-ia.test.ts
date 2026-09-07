@@ -59,8 +59,8 @@ describe('desk IA smoke', () => {
     expect(app).toContain('no QUANTANAMO run');
     expect(shell).toContain('GRASSHOPPER');
     expect(shell).toContain('CrtBoot');
-    expect(shell).toContain('takeCrtBootSlot');
     expect(shell).toContain("prefers-reduced-motion: reduce");
+    expect(shell).toContain('setBoot');
     expect(signIn).toContain('>GRASSHOPPER<');
     expect(layout).toContain("title: 'Grasshopper'");
     expect(venue).toContain("short: 'STOCKS'");

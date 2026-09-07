@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-import { takeCrtBootSlot } from '../../lib/desk-crt-boot';
 import { fetchDeskPayload } from '../../lib/desk-client';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { TerminalApp } from './app';
@@ -13,12 +12,12 @@ export function PublicTerminal() {
   const [desk, setDesk] = useState<DeskPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [boot, setBoot] = useState(false);
+  const [boot, setBoot] = useState(true);
 
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setReduceMotion(reduce);
-    if (!reduce && takeCrtBootSlot()) setBoot(true);
+    if (reduce) setBoot(false);
   }, []);
 
   useEffect(() => {

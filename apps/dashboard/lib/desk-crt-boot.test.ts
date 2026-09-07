@@ -9,8 +9,6 @@ import {
   CRT_BOOT_HOLD_MS,
   CRT_BOOT_STEP_MS,
   padCrtDots,
-  resetCrtBootSlot,
-  takeCrtBootSlot,
 } from './desk-crt-boot';
 import { fallbackTeam } from './desk-team';
 import type { BookNameLine, DeskPayload } from './ledger-types';
@@ -164,12 +162,7 @@ describe('CRT boot stages', () => {
     expect(padCrtDots('GRASSHOPPER', 'READY', 24)).toBe('GRASSHOPPER ...... READY');
   });
 
-  test('boot slot plays once per load and duration stays short', () => {
-    resetCrtBootSlot();
-    expect(takeCrtBootSlot()).toBe(true);
-    expect(takeCrtBootSlot()).toBe(false);
-    resetCrtBootSlot();
-    expect(takeCrtBootSlot()).toBe(true);
+  test('boot duration stays short', () => {
     expect(crtBootDurationMs(4)).toBe(
       CRT_BOOT_FIRST_MS + 3 * CRT_BOOT_STEP_MS + CRT_BOOT_HOLD_MS + CRT_BOOT_FADE_MS,
     );

@@ -11,8 +11,8 @@ function bootPct(value: number): string {
 }
 
 export const CRT_BOOT_STEP_MS = 420;
-export const CRT_BOOT_HOLD_MS = 560;
-export const CRT_BOOT_FADE_MS = 420;
+export const CRT_BOOT_HOLD_MS = 700;
+export const CRT_BOOT_FADE_MS = 640;
 export const CRT_BOOT_FIRST_MS = 160;
 
 export type CrtBootLine = {
@@ -50,14 +50,3 @@ export function crtBootDurationMs(lineCount: number): number {
   return steps + CRT_BOOT_HOLD_MS + CRT_BOOT_FADE_MS;
 }
 
-let playedThisLoad = false;
-
-export function takeCrtBootSlot(): boolean {
-  if (playedThisLoad) return false;
-  playedThisLoad = true;
-  return true;
-}
-
-export function resetCrtBootSlot(): void {
-  playedThisLoad = false;
-}
