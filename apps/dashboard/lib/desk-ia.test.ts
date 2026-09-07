@@ -123,8 +123,12 @@ describe('desk IA smoke', () => {
     expect(gl).toContain('WebGLRenderer');
     expect(gl).toContain('MeshPhysicalMaterial');
     expect(gl).toContain('sheen');
+    expect(gl).toContain('attachFlatCanvas');
     expect(gl).not.toContain('@rive-app');
     expect(gl).not.toContain('.png');
+    const flat = await readDashboard('app/terminal/steward-flat.ts');
+    expect(flat).toContain('createRadialGradient');
+    expect(flat).not.toContain('feTurbulence');
     expect(motion).toContain('stewardBlinkCover');
     expect(motion).toContain('stewardBreathe');
     expect(motion).toContain('stewardGlanceX');

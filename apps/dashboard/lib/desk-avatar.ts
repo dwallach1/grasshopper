@@ -62,11 +62,11 @@ const KNOWN_ACCENTS = {
 
 /** Felt pastels in one periwinkle family. Hue-shift only — not book greens/reds. */
 const FUR_TONES = {
-  quantanamo: { base: '#9BB8C4', deep: '#6F8E9A', lit: '#D4E4EA', seed: 11 },
-  oddsborne: { base: '#A8A9D0', deep: '#7B7DA8', lit: '#DDDEF0', seed: 23 },
-  bandit: { base: '#C4A4B0', deep: '#947784', lit: '#E8D4DC', seed: 37 },
-  grasshopper: { base: '#B5A89E', deep: '#8A7E74', lit: '#E2D8D0', seed: 5 },
-  spark: { base: '#A4AEB8', deep: '#78828C', lit: '#D8DEE4', seed: 17 },
+  quantanamo: { base: '#B3D1DB', deep: '#7FA0AB', lit: '#E7F3F6', seed: 11 },
+  oddsborne: { base: '#B8BAD8', deep: '#8A8CB8', lit: '#EEF0FA', seed: 23 },
+  bandit: { base: '#D6B6C2', deep: '#A38490', lit: '#F4E4EA', seed: 37 },
+  grasshopper: { base: '#C8BDB4', deep: '#97897F', lit: '#F0E8E2', seed: 5 },
+  spark: { base: '#B7C2CC', deep: '#87929C', lit: '#E8EEF2', seed: 17 },
 } as const satisfies Record<StewardBotKind, StewardFurTone>;
 
 const FACE_LAYOUTS = {
@@ -136,7 +136,7 @@ export function stewardMeshSpec(kind: StewardBotKind): StewardMeshSpec {
     ...mound,
     eyeSpread: (face.right - face.left) / 64,
     eyeY: (32 - face.cy) / 36,
-    eyeZ: 0.66,
+    eyeZ: 0.84,
     eyeR: face.r / 36,
     lidCover: face.lidCover,
     lidTiltL: (face.lidTiltL * Math.PI) / 180,

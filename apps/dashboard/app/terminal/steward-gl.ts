@@ -17,6 +17,14 @@ import {
   stewardGlanceX,
   stewardPulse,
 } from '../../lib/steward-motion';
+import { attachFlatCanvas } from './steward-flat';
+
+type EyeRig = {
+  group: THREE.Group;
+  lid: THREE.Mesh;
+  pupil: THREE.Mesh;
+  tilt: number;
+};
 
 type Slot = {
   canvas: HTMLCanvasElement;
@@ -26,8 +34,8 @@ type Slot = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   figure: THREE.Group;
-  leftEye: THREE.Mesh;
-  rightEye: THREE.Mesh;
+  leftEye: EyeRig;
+  rightEye: EyeRig;
   key: THREE.DirectionalLight;
   visible: boolean;
 };
@@ -35,45 +43,14 @@ type Slot = {
 const slots = new Set<Slot>();
 const bodyGeo = new Map<StewardBotKind, THREE.BufferGeometry>();
 let renderer: THREE.WebGLRenderer | null = null;
+let glBlocked = false;
 let raf = 0;
 let originMs = 0;
 
 const MAX_DPR = 2;
-const EYE_VERT = `
-varying vec3 vObjN;
-void main() {
-  vObjN = normalize(position);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-const EYE_FRAG = `
-varying vec3 vObjN;
-uniform vec3 uFur;
-uniform vec3 uFurDeep;
-uniform float uLid;
-uniform float uTilt;
-uniform vec2 uGlance;
-uniform float uPulse;
-void main() {
-  vec3 N = normalize(vObjN);
-  vec3 lidDir = normalize(vec3(sin(uTilt), cos(uTilt), 0.12));
-  float thresh = mix(1.0, -0.96, clamp(uLid, 0.0, 1.0));
-  if (dot(N, lidDir) > thresh) {
-    float wrap = N.y * 0.45 + 0.55;
-    gl_FragColor = vec4(mix(uFurDeep, uFur, wrap), 1.0);
-    return;
-  }
-  vec2 pc = vec2(uGlance.x, -0.16 + uGlance.y);
-  float pupil = length(N.xy - pc) * (1.2 - max(N.z, 0.0));
-  if (N.z > 0.18 && pupil < 0.3 * uPulse) {
-    gl_FragColor = vec4(0.09, 0.08, 0.11, 1.0);
-    return;
-  }
-  float glint = step(length(N.xy - vec2(-0.16, 0.04)), 0.07) * step(0.35, N.z);
-  vec3 white = mix(vec3(0.93, 0.91, 0.88), vec3(1.0), pow(max(N.z, 0.0), 5.0));
-  gl_FragColor = vec4(mix(white, vec3(1.0), glint), 1.0);
-}
-`;
+const LID_GEO = new THREE.SphereGeometry(1.05, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.58);
+const EYE_GEO = new THREE.SphereGeometry(1, 32, 24);
+const PUPIL_GEO = new THREE.SphereGeometry(0.34, 20, 16);
 
 export function attachStewardCanvas(
   canvas: HTMLCanvasElement,
@@ -81,6 +58,14 @@ export function attachStewardCanvas(
   alive: boolean,
   delayMs: number,
 ): () => void {
+  try {
+    ensureLoop();
+  } catch {
+    glBlocked = true;
+  }
+  if (glBlocked || !renderer) {
+    return attachFlatCanvas(canvas, kind, alive, delayMs);
+  }
   const slot = buildSlot(canvas, kind, alive, delayMs);
   slots.add(slot);
   const observer = new IntersectionObserver((entries) => {
@@ -91,7 +76,7 @@ export function attachStewardCanvas(
     if (slot.visible) paintSlot(slot, performance.now() - originMs, reducedMotion());
   });
   resize.observe(canvas);
-  ensureLoop();
+  canvas.dataset.runtime = 'three';
   paintSlot(slot, 0, reducedMotion());
 
   return () => {
@@ -150,17 +135,17 @@ function buildSlot(
   shadow.scale.set(spec.girth * 0.72, 0.38, 1);
   scene.add(shadow);
 
-  const leftEye = eyeMesh(fur.base, fur.deep);
-  const rightEye = eyeMesh(fur.base, fur.deep);
-  placeEye(leftEye, -spec.eyeSpread, spec);
-  placeEye(rightEye, spec.eyeSpread, spec);
-  figure.add(leftEye);
-  figure.add(rightEye);
+  const leftEye = eyeRig(fur.base, fur.deep, spec.lidTiltL);
+  const rightEye = eyeRig(fur.base, fur.deep, spec.lidTiltR);
+  placeEye(leftEye.group, -spec.eyeSpread, spec);
+  placeEye(rightEye.group, spec.eyeSpread, spec);
+  figure.add(leftEye.group);
+  figure.add(rightEye.group);
 
-  const hemi = new THREE.HemisphereLight(fur.lit, fur.deep, 0.9);
-  const key = new THREE.DirectionalLight(0xfff6ea, 0.72);
+  const hemi = new THREE.HemisphereLight(fur.lit, fur.deep, 1.15);
+  const key = new THREE.DirectionalLight(0xfff8f0, 1.05);
   key.position.set(-1.15, 1.55, 1.45);
-  const fill = new THREE.DirectionalLight(fur.deep, 0.28);
+  const fill = new THREE.DirectionalLight(fur.deep, 0.22);
   fill.position.set(1.35, 0.15, 0.7);
   scene.add(hemi);
   scene.add(key);
@@ -182,41 +167,50 @@ function buildSlot(
   };
 }
 
-function placeEye(mesh: THREE.Mesh, x: number, spec: ReturnType<typeof stewardMeshSpec>) {
-  mesh.position.set(x * 1.55, spec.eyeY, spec.eyeZ);
-  mesh.scale.setScalar(spec.eyeR * 1.15);
+function placeEye(group: THREE.Group, x: number, spec: ReturnType<typeof stewardMeshSpec>) {
+  group.position.set(x * 1.55, spec.eyeY, spec.eyeZ);
+  group.scale.setScalar(spec.eyeR * 1.22);
 }
 
-function eyeMesh(fur: string, deep: string): THREE.Mesh {
-  const uniforms = {
-    uFur: { value: new THREE.Color(fur) },
-    uFurDeep: { value: new THREE.Color(deep) },
-    uLid: { value: 0.5 },
-    uTilt: { value: 0 },
-    uGlance: { value: new THREE.Vector2(0, 0) },
-    uPulse: { value: 1 },
-  };
-  const material = new THREE.ShaderMaterial({
-    uniforms,
-    vertexShader: EYE_VERT,
-    fragmentShader: EYE_FRAG,
-    toneMapped: false,
-  });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), material);
-  mesh.name = 'eye';
-  return mesh;
+function eyeRig(fur: string, deep: string, tilt: number): EyeRig {
+  const group = new THREE.Group();
+  const white = new THREE.Mesh(
+    EYE_GEO,
+    new THREE.MeshPhysicalMaterial({
+      color: 0xf7f2ea,
+      roughness: 0.28,
+      metalness: 0,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.35,
+    }),
+  );
+  white.name = 'eye';
+  const pupil = new THREE.Mesh(
+    PUPIL_GEO,
+    new THREE.MeshStandardMaterial({ color: 0x16141c, roughness: 0.45 }),
+  );
+  pupil.position.set(0, -0.12, 0.78);
+  const lid = new THREE.Mesh(LID_GEO, plushMaterial(deep, fur));
+  lid.name = 'lid';
+  lid.rotation.z = tilt;
+  group.add(white);
+  group.add(pupil);
+  group.add(lid);
+  return { group, lid, pupil, tilt };
 }
 
 function plushMaterial(base: string, lit: string): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial({
     color: base,
-    roughness: 0.86,
+    roughness: 0.72,
     metalness: 0,
+    emissive: new THREE.Color(base),
+    emissiveIntensity: 0.12,
     sheen: 1,
-    sheenRoughness: 0.52,
+    sheenRoughness: 0.4,
     sheenColor: new THREE.Color(lit),
-    clearcoat: 0.05,
-    clearcoatRoughness: 0.78,
+    clearcoat: 0.08,
+    clearcoatRoughness: 0.7,
   });
 }
 
@@ -224,7 +218,7 @@ function bodyGeometry(kind: StewardBotKind): THREE.BufferGeometry {
   const hit = bodyGeo.get(kind);
   if (hit) return hit;
   const spec = stewardMeshSpec(kind);
-  const geo = new THREE.IcosahedronGeometry(1, 3);
+  const geo = new THREE.SphereGeometry(1, 48, 36);
   const pos = geo.getAttribute('position');
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i += 1) {
@@ -250,12 +244,19 @@ function bodyGeometry(kind: StewardBotKind): THREE.BufferGeometry {
 }
 
 function ensureLoop() {
-  if (renderer) return;
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    powerPreference: 'low-power',
-  });
+  if (renderer || glBlocked) return;
+  try {
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'low-power',
+      failIfMajorPerformanceCaveat: false,
+    });
+  } catch {
+    glBlocked = true;
+    renderer = null;
+    return;
+  }
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
@@ -289,9 +290,9 @@ function paintSlot(slot: Slot, elapsed: number, still: boolean) {
   const pulse = still ? 1 : stewardPulse(elapsed, slot.delayMs, slot.alive);
   slot.figure.scale.set(1 - breathe * 0.012, 1 + breathe * 0.03, 1 - breathe * 0.01);
   slot.figure.position.y = breathe * 0.03;
-  slot.key.intensity = slot.alive ? 0.68 + breathe * 0.22 : 0.72;
-  writeEye(slot.leftEye, blink, spec.lidTiltL, glance, pulse);
-  writeEye(slot.rightEye, blink, spec.lidTiltR, glance, pulse);
+  slot.key.intensity = slot.alive ? 0.95 + breathe * 0.2 : 1.05;
+  writeEye(slot.leftEye, blink, spec.lidCover, glance, pulse);
+  writeEye(slot.rightEye, blink, spec.lidCover, glance, pulse);
 
   const css = slot.canvas.clientWidth || slot.canvas.offsetWidth || 72;
   const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
@@ -303,33 +304,35 @@ function paintSlot(slot: Slot, elapsed: number, still: boolean) {
   }
   slot.camera.aspect = 1;
   slot.camera.updateProjectionMatrix();
+  const ss = 2;
   gl.setPixelRatio(1);
-  gl.setSize(bw, bh, false);
+  gl.setSize(bw * ss, bh * ss, false);
   gl.render(slot.scene, slot.camera);
   const ctx = slot.canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.clearRect(0, 0, bw, bh);
   ctx.drawImage(gl.domElement, 0, 0, bw, bh);
 }
 
 function writeEye(
-  mesh: THREE.Mesh,
+  rig: EyeRig,
   lid: number,
-  tilt: number,
+  rest: number,
   glance: number,
   pulse: number,
 ) {
-  const material = mesh.material;
-  if (!(material instanceof THREE.ShaderMaterial)) return;
-  material.uniforms.uLid.value = lid;
-  material.uniforms.uTilt.value = tilt;
-  material.uniforms.uGlance.value.set(glance, 0);
-  material.uniforms.uPulse.value = pulse;
+  const close = rest >= 1 ? 1 : Math.max(0, (lid - rest) / (1 - rest));
+  rig.lid.rotation.z = rig.tilt;
+  rig.lid.rotation.x = close * 1.15;
+  rig.pupil.position.set(glance * 0.28, -0.12, 0.78);
+  rig.pupil.scale.setScalar(pulse);
 }
 
 function disposeScene(scene: THREE.Scene) {
-  const shared = new Set(bodyGeo.values());
+  const shared = new Set<THREE.BufferGeometry>([...bodyGeo.values(), LID_GEO, EYE_GEO, PUPIL_GEO]);
   scene.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
     if (!shared.has(obj.geometry)) obj.geometry.dispose();

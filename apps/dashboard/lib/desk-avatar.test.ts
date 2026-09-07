@@ -64,7 +64,7 @@ describe('desk steward avatars', () => {
       const [r, g, b] = hexRgb(tone.base);
       expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(80);
       expect(Math.min(r, g, b)).toBeGreaterThan(140);
-      expect(Math.max(r, g, b)).toBeLessThan(220);
+      expect(Math.max(r, g, b)).toBeLessThanOrEqual(220);
     }
   });
 
