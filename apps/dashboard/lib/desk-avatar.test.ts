@@ -17,7 +17,7 @@ describe('desk steward avatars', () => {
     expect(stewardAvatarSeed('', '')).toBe('spark');
   });
 
-  test('known stewards map to distinct Grok Bot kinds and desk palettes', () => {
+  test('known stewards map to distinct capsule kinds and desk palettes', () => {
     expect(stewardBotKind('quantanamo', 'QUANTANAMO')).toBe('quantanamo');
     expect(stewardBotKind('oddsborne', 'ODDSBORNE')).toBe('oddsborne');
     expect(stewardBotKind('bandit', 'BANDIT')).toBe('bandit');

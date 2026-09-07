@@ -30,7 +30,7 @@ export function PublicTerminal() {
   if (error) {
     return (
       <main className="line-boot">
-        <p className="line-kicker">grasshopper</p>
+        <p className="term-brand">GRASSHOPPER</p>
         <DeskLiveline
           unit="USD"
           loading={false}
@@ -45,7 +45,7 @@ export function PublicTerminal() {
   if (!desk) {
     return (
       <main className="line-boot">
-        <p className="line-kicker">grasshopper</p>
+        <p className="term-brand">GRASSHOPPER</p>
         <DeskLiveline unit="USD" loading emptyText="waiting for published snapshot" showValue={false} />
       </main>
     );

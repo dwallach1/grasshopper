@@ -191,7 +191,7 @@ export function TerminalApp({
           href="/"
           onClick={(event) => onDeskClick(event, () => go('/'))}
         >
-          grasshopper
+          GRASSHOPPER
         </a>
         <nav className="term-nav" aria-label="Terminal">
           {DESK_TABS.map((item) => (

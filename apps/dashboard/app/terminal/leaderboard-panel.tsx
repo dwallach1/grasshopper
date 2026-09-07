@@ -44,15 +44,8 @@ export function LeaderboardPanel({
   const lead = ranked[0];
 
   return (
-    <div className="line-stage">
-      <header className="line-mast">
-        <p className="line-kicker">the line</p>
-        <h1>Board</h1>
-        <p className="line-lede">
-          One living % curve per book, native units. SOL is not dollars.
-          Missing start is not ranked.
-        </p>
-      </header>
+    <div className="line-stage line-board">
+      <h1 className="visually-hidden">Board</h1>
 
       <div className="line-foci" role="tablist" aria-label="Steward line">
         {FOCI.map((item) => (
@@ -95,7 +88,7 @@ export function LeaderboardPanel({
 
       <p className="line-caption">
         {focus === 'all'
-          ? 'ALL is % vs each book’s own start — the only shared axis. No FX.'
+          ? 'ALL is % vs each book’s own start — the only shared axis. No FX. Missing start is not ranked.'
           : curve?.source}
         {lead ? ` · lead ${lead.steward} ${pct(lead.return_pct, 2)}` : ''}
       </p>

@@ -16,6 +16,7 @@
   --warn: #ffb000;
   --amber: #ff8a00;
   --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-brand: "Special Elite", "Courier Prime", "IBM Plex Mono", ui-monospace, "Courier New", monospace;
   --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --r-none: 0;
@@ -2210,12 +2211,13 @@ a:focus-visible {
 
 .term-brand {
   color: var(--text);
-  font-family: var(--font-display);
+  font-family: var(--font-brand);
   font-weight: 400;
-  font-style: italic;
-  letter-spacing: -0.02em;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-decoration: none;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .term-nav {
@@ -3240,8 +3242,8 @@ a:focus-visible {
   }
 
   .term-public .term-brand {
-    letter-spacing: -0.02em;
-    font-size: 17px;
+    letter-spacing: 0.09em;
+    font-size: 15px;
   }
 
   .term-public .term-chip,
@@ -3719,6 +3721,32 @@ a:focus-visible {
   margin: 0 auto;
 }
 
+.line-board {
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.line-board .line-frame > div:has(canvas) {
+  height: min(64dvh, 560px);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.line-boot .term-brand {
+  display: block;
+  margin: 0 0 10px;
+}
+
 .line-mast {
   display: flex;
   flex-direction: column;
@@ -3935,6 +3963,14 @@ a:focus-visible {
     min-height: 0;
     gap: 10px;
     padding: 12px 12px 20px;
+  }
+
+  .line-board {
+    padding-top: 8px;
+  }
+
+  .line-board .line-frame > div:has(canvas) {
+    height: min(48dvh, 380px);
   }
 
   .line-mast h1 {
