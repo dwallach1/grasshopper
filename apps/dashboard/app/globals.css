@@ -2250,6 +2250,18 @@ a:focus-visible {
   font-size: 10px;
 }
 
+.term-fresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.term-fresh .term-chip {
+  margin-left: 0;
+}
+
 .term-live {
   display: flex;
   align-items: center;
@@ -3246,6 +3258,10 @@ a:focus-visible {
     font-size: 15px;
   }
 
+  .term-public .term-fresh {
+    margin-left: auto;
+  }
+
   .term-public .term-chip,
   .term-public .term-live {
     margin-left: 0;
@@ -3254,8 +3270,8 @@ a:focus-visible {
     font-size: 10px;
   }
 
-  .term-public .term-chip {
-    margin-left: auto;
+  .term-public .term-fresh .term-chip {
+    margin-left: 0;
   }
 
   .term-public .term-status {

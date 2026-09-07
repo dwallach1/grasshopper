@@ -13,9 +13,10 @@ import {
   type DeskSurface,
 } from '../../lib/desk-nav';
 import { assembleDeskBookRollup } from '../../lib/desk-book-rollup';
+import { assembleDeskFreshness, freshnessTone } from '../../lib/desk-freshness';
 import { heldAndCandidateSymbols } from '../../lib/held-catalyst';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import type { DeskPayload, DeskRoutine, ThesisRow } from '../../lib/ledger-types';
+import type { DeskPayload, ThesisRow } from '../../lib/ledger-types';
 import type { VenueFilter } from '../../lib/desk-venue';
 import { rowVenue } from '../../lib/desk-venue';
 import { ledgerAmount, ledgerAmountFor } from '../../lib/money-units';
@@ -179,7 +180,7 @@ export function TerminalApp({
   }, [desk.tests, desk.theses, goArmed, selectedTestId, selectedThesisId, surface]);
 
   const selectedThesis = desk.theses.find((row) => row.id === selectedThesisId) ?? desk.theses[0];
-  const lastLive = desk.routines.find((row) => row.status === 'live' && row.last_run_at);
+  const freshness = assembleDeskFreshness(desk);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
   const rollup = assembleDeskBookRollup(desk);
 
@@ -206,11 +207,7 @@ export function TerminalApp({
             </a>
           ))}
         </nav>
-        <LastRunChip routine={lastLive} now={now} />
-        <div className="term-live">
-          <i className={age(desk.generated_at, now) === 'n/a' ? 'stale' : 'live'} />
-          {desk.source} · {age(desk.generated_at, now)}
-        </div>
+        <FreshnessChips freshness={freshness} now={now} />
         {chrome}
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
@@ -269,31 +266,24 @@ export function TerminalApp({
   );
 }
 
-function LastRunChip({ routine, now }: { routine?: DeskRoutine; now: number | null }) {
-  if (!routine) {
-    return (
-      <div className="term-chip" title="No live QUANTANAMO run in public.runs">
-        <i className="stale" />
-        no QUANTANAMO run
-      </div>
-    );
-  }
-  const outcome = routine.last_outcome ?? '';
+function FreshnessChips({
+  freshness,
+  now,
+}: {
+  freshness: ReturnType<typeof assembleDeskFreshness>;
+  now: number | null;
+}) {
+  const clock = now === null ? null : new Date(now);
   return (
-    <div
-      className="term-chip"
-      title={routine.last_summary || `${routine.name} · ${routine.cadence}`}
-    >
-      <i className={outcome ? toneForStatus(outcome) : 'live'} />
-      {shortRoutine(routine.name)} {age(routine.last_run_at ?? undefined, now)}
+    <div className="term-fresh" aria-label="Desk freshness">
+      {freshness.chips.map((chip) => (
+        <div key={chip.id} className="term-chip" title={chip.title}>
+          <i className={clock ? freshnessTone(chip.at, clock) : 'stale'} />
+          {chip.label} · {age(chip.at ?? undefined, now)}
+        </div>
+      ))}
     </div>
   );
-}
-
-function shortRoutine(name: string): string {
-  if (/market scan/i.test(name)) return 'scan';
-  if (/autopsy/i.test(name)) return 'autopsy';
-  return name.replace(/^QUANTANAMO\s+/i, '');
 }
 
 function onDeskClick(event: MouseEvent<HTMLAnchorElement>, navigate: () => void) {

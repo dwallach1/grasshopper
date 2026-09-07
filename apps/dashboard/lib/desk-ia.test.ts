@@ -20,7 +20,10 @@ describe('desk IA smoke', () => {
     expect(app).toContain('<BookPanel');
     expect(app).toContain('<TeamPanel');
     expect(app).toContain('<LeaderboardPanel');
-    expect(app).toContain('LastRunChip');
+    expect(app).toContain('assembleDeskFreshness');
+    expect(app).toContain('FreshnessChips');
+    expect(app).not.toContain('LastRunChip');
+    expect(app).not.toContain('shortRoutine');
     expect(app).not.toContain("surface === 'home'");
     expect(app).not.toContain("surface === 'risk'");
     expect(app).not.toContain('RiskPanel');
@@ -57,7 +60,9 @@ describe('desk IA smoke', () => {
     const tests = await readDashboard('app/terminal/backtests-panel.tsx');
     expect(app).toMatch(/term-brand[\s\S]{0,180}GRASSHOPPER\s*<\/a>/);
     expect(app).not.toMatch(/term-brand[\s\S]{0,180}QUANTANAMO/);
-    expect(app).toContain('no QUANTANAMO run');
+    expect(app).not.toContain('no QUANTANAMO run');
+    expect(app).not.toContain("label: 'scan'");
+    expect(app).toContain("chip.label} · {age");
     expect(shell).toContain('GRASSHOPPER');
     expect(shell).toContain('CrtBoot');
     expect(shell).toContain("prefers-reduced-motion: reduce");
@@ -225,6 +230,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('BOOK // EDGE');
     expect(css).toContain('.crt-book');
     expect(css).toContain('crt-book-sweep');
+    expect(css).toContain('.term-fresh');
     expect(wrap).toContain("from 'liveline'");
     expect(wrap).toContain('theme="dark"');
     expect(map).toContain('unix seconds');
