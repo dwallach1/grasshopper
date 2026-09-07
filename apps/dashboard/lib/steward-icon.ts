@@ -81,8 +81,9 @@ export function composeStewardPose(species: StewardSpecies, motion: StewardMotio
   const breathe = motion.breathe;
   const pulse = motion.pulse;
 
-  const bodyRx = (0.42 + down * 0.022 - up * 0.014 + (0.5 - breathe) * 0.014) * pulse;
-  const bodyRy = (0.42 + up * 0.02 - down * 0.024 + (breathe - 0.5) * 0.018) * pulse;
+  const swell = 0.42 * pulse;
+  const bodyRx = swell + (0.5 - breathe) * 0.006;
+  const bodyRy = swell + (breathe - 0.5) * 0.006;
 
   const lookX = motion.glanceX * (1 - think * 0.35) + up * 0.16 - listen * 0.03 + down * -0.06;
   const lookY = motion.glanceY - up * 0.22 + down * 0.18 - listen * 0.07 + think * 0.05;

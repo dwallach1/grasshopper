@@ -64,7 +64,8 @@ describe('living steward icon', () => {
     expect(up.lookY).toBeLessThan(idle.lookY);
     expect(down.lookY).toBeGreaterThan(idle.lookY);
     expect(Math.abs(listen.lookX)).toBeLessThan(0.1);
-    expect(up.bodyRy).toBeGreaterThan(down.bodyRy);
+    expect(Math.abs(up.bodyRx - up.bodyRy)).toBeLessThan(0.02);
+    expect(Math.abs(down.bodyRx - down.bodyRy)).toBeLessThan(0.02);
   });
 
   test('lerpPose is a continuous blend between any two poses', () => {
