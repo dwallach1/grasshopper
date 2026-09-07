@@ -43,6 +43,8 @@ export type MemePositionRow = {
   average_cost_sol: number | null;
   mark_sol: number | null;
   mark_at: string | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
   thesis_text: string | null;
 };
 
@@ -437,6 +439,8 @@ export function mapMemeCoins(input: {
       average_cost_sol: asOptionalNumber(row.average_cost_sol as string | number | null, 'meme_positions.average_cost_sol'),
       mark_sol: asOptionalNumber(row.mark_sol as string | number | null, 'meme_positions.mark_sol'),
       mark_at: row.mark_at == null ? null : requireIso(row.mark_at as string | Date, 'meme_positions.mark_at'),
+      opened_at: row.opened_at == null ? null : requireIso(row.opened_at as string | Date, 'meme_positions.opened_at'),
+      closed_at: row.closed_at == null ? null : requireIso(row.closed_at as string | Date, 'meme_positions.closed_at'),
       thesis_text: optionalText(row, 'thesis_text'),
     })),
     orders: (input.orders ?? []).map((row) => ({

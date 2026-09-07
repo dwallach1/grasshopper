@@ -363,6 +363,7 @@ export type PositionRow = {
   quantity: number;
   average_cost: number | null;
   opened_at: string | null;
+  closed_at: string | null;
   next_review_at: string | null;
 };
 

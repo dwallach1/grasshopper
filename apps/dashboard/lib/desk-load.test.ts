@@ -37,6 +37,8 @@ describe('desk load path', () => {
     expect(ledger).toContain('loadMemeCoins');
     expect(ledger).toContain('meme_tokens');
     expect(ledger).toContain('meme_positions');
+    expect(ledger).toContain('closed_at');
+    expect(ledger).toContain("status in ('proposed', 'open', 'closing', 'closed')");
     expect(ledger).toContain('limit 200');
     expect(ledger).toContain('limit=200');
     expect(ledger).toContain('loadTeam');
@@ -44,5 +46,6 @@ describe('desk load path', () => {
     expect(ledger).toContain('desk_domain_stewards');
     expect(ledger).toContain("ended_at is null");
     expect(ledger).toContain('to_regclass');
+    expect(ledger).toContain('opened_at, closed_at');
   });
 });
