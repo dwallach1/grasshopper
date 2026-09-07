@@ -55,7 +55,7 @@ export function StewardAvatar({
       role="img"
       aria-label={label}
     >
-      <StewardBot kind={kind} />
+      <StewardBot kind={kind} alive={alive} delayMs={stewardEmoteDelayMs(slug, name)} />
     </span>
   );
 }

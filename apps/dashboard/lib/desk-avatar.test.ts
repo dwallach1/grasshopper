@@ -9,6 +9,7 @@ import {
   stewardEmoteDelayMs,
   stewardFaceLayout,
   stewardFurTone,
+  stewardMeshSpec,
   type StewardBotKind,
 } from './desk-avatar';
 
@@ -74,6 +75,17 @@ describe('desk steward avatars', () => {
     expect(new Set(faces.map((face) => `${face.lidTiltL},${face.lidTiltR}`)).size).toBe(3);
     expect(faces.every((face) => face.lidCover >= 0.45 && face.lidCover <= 0.65)).toBe(true);
     expect(stewardFaceLayout('oddsborne').lidCover).toBeGreaterThan(stewardFaceLayout('quantanamo').lidCover);
+  });
+
+  test('GPU mounds stay one species and stay distinct per steward', () => {
+    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
+    const meshes = kinds.map(stewardMeshSpec);
+    expect(new Set(meshes.map((mesh) => mesh.peak.toFixed(2))).size).toBe(3);
+    expect(new Set(meshes.map((mesh) => mesh.girth.toFixed(2))).size).toBe(3);
+    expect(new Set(meshes.map((mesh) => `${mesh.bumpX},${mesh.bumpGain}`)).size).toBe(3);
+    expect(stewardMeshSpec('oddsborne').peak).toBeGreaterThan(stewardMeshSpec('quantanamo').peak);
+    expect(stewardMeshSpec('quantanamo').girth).toBeGreaterThan(stewardMeshSpec('oddsborne').girth);
+    expect(stewardMeshSpec('quantanamo').eyeSpread).toBeGreaterThan(stewardMeshSpec('oddsborne').eyeSpread);
   });
 });
 

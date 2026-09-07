@@ -11,8 +11,6 @@
   height: var(--steward-size);
   flex: 0 0 var(--steward-size);
   background: transparent;
-  animation: steward-breathe 4.2s var(--ease, ease) infinite;
-  animation-delay: var(--emote-delay);
 }
 
 .team {
@@ -24,122 +22,14 @@
 }
 
 .alive {
-  animation:
-    steward-breathe 2.2s var(--ease, ease) infinite,
-    steward-glow 2s ease-in-out infinite;
+  animation: steward-glow 2s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .bot {
   width: 100%;
   height: 100%;
-  overflow: visible;
-  animation: steward-bob 4.2s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
-}
-
-.figure {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.halo {
-  fill: var(--fur-lit);
-  opacity: 0.55;
-}
-
-.skin {
-  fill: var(--fur);
-}
-
-.fur {
-  fill: var(--fur-lit);
-  opacity: 0.72;
-  mix-blend-mode: soft-light;
-  pointer-events: none;
-}
-
-.shade {
-  fill: var(--fur-deep);
-  opacity: 0.28;
-  pointer-events: none;
-}
-
-.shine {
-  fill: #ffffff;
-  opacity: 0.34;
-}
-
-.ground {
-  fill: #000000;
-  opacity: 0.28;
-}
-
-.lens {
-  fill: #f7f4ee;
-  animation: steward-lens 4.6s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
-}
-
-.gaze {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: steward-glance 7.2s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
-}
-
-.pupil {
-  fill: #16141c;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.glint {
-  fill: #ffffff;
-  opacity: 0.85;
-}
-
-.lidRest {
-  fill: color-mix(in srgb, var(--fur) 62%, var(--fur-deep));
-}
-
-.lidEdge {
-  fill: none;
-  stroke: var(--fur-deep);
-  stroke-width: 0.7;
-  stroke-linecap: round;
-  opacity: 0.45;
-}
-
-.lid {
-  fill: var(--fur);
-  transform-box: fill-box;
-  transform-origin: 50% 0%;
-  opacity: 0;
-  animation: steward-blink 4.6s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
-}
-
-.alive .lid {
-  animation-duration: 2.4s;
-}
-
-.alive .gaze {
-  animation-duration: 3.2s;
-}
-
-.alive .bot {
-  animation-duration: 2.2s;
-}
-
-.alive .lens {
-  fill: #fffdf8;
-  animation-duration: 2s;
-}
-
-.alive .pupil {
-  animation: steward-pulse 1.8s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
+  display: block;
 }
 
 @media (min-width: 561px) {
@@ -149,26 +39,6 @@
 
   .board {
     --steward-size: 72px;
-  }
-}
-
-@keyframes steward-breathe {
-  0%,
-  100% {
-    transform: scale(1) translateY(0);
-  }
-  50% {
-    transform: scale(1.018) translateY(-1px);
-  }
-}
-
-@keyframes steward-bob {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-0.8px);
   }
 }
 
@@ -182,71 +52,9 @@
   }
 }
 
-@keyframes steward-lens {
-  0%,
-  100% {
-    fill: #f7f4ee;
-  }
-  50% {
-    fill: #fffdf8;
-  }
-}
-
-@keyframes steward-blink {
-  0%,
-  72%,
-  91%,
-  100% {
-    opacity: 0;
-    transform: scaleY(0.12);
-  }
-  76%,
-  81% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-  85% {
-    opacity: 0;
-    transform: scaleY(0.12);
-  }
-  87% {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-}
-
-@keyframes steward-glance {
-  0%,
-  28%,
-  100% {
-    transform: translate(0, 0);
-  }
-  40% {
-    transform: translate(1.2px, 0.2px);
-  }
-  64% {
-    transform: translate(-1px, 0.15px);
-  }
-}
-
-@keyframes steward-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.08);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .steward,
-  .alive,
-  .bot,
-  .lid,
-  .gaze,
-  .pupil,
-  .lens {
+  .alive {
     animation: none;
   }
 }
