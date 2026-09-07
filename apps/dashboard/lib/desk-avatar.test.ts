@@ -7,6 +7,9 @@ import {
   stewardBotKind,
   stewardBotPalette,
   stewardEmoteDelayMs,
+  stewardFaceLayout,
+  stewardFurTone,
+  type StewardBotKind,
 } from './desk-avatar';
 
 describe('desk steward avatars', () => {
@@ -17,7 +20,7 @@ describe('desk steward avatars', () => {
     expect(stewardAvatarSeed('', '')).toBe('spark');
   });
 
-  test('known stewards map to distinct capsule kinds and desk palettes', () => {
+  test('known stewards map to distinct blob kinds and desk palettes', () => {
     expect(stewardBotKind('quantanamo', 'QUANTANAMO')).toBe('quantanamo');
     expect(stewardBotKind('oddsborne', 'ODDSBORNE')).toBe('oddsborne');
     expect(stewardBotKind('bandit', 'BANDIT')).toBe('bandit');
@@ -47,4 +50,38 @@ describe('desk steward avatars', () => {
     expect(stewardAvatarLabel('  BANDIT  ')).toBe('BANDIT');
     expect(stewardAvatarLabel('')).toBe('Desk steward');
   });
+
+  test('fur tones stay in one pastel family and stay distinct per steward', () => {
+    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
+    const tones = kinds.map(stewardFurTone);
+    expect(new Set(tones.map((tone) => tone.base)).size).toBe(3);
+    expect(new Set(tones.map((tone) => tone.seed)).size).toBe(3);
+    for (const tone of tones) {
+      expect(tone.base).not.toBe(AVATAR_COLORS.green);
+      expect(tone.base).not.toBe(AVATAR_COLORS.blue);
+      expect(tone.base).not.toBe(AVATAR_COLORS.red);
+      const [r, g, b] = hexRgb(tone.base);
+      expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(80);
+      expect(Math.min(r, g, b)).toBeGreaterThan(140);
+      expect(Math.max(r, g, b)).toBeLessThan(220);
+    }
+  });
+
+  test('sleepy faces differ by eye spacing and lid tilt, not chrome', () => {
+    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
+    const faces = kinds.map(stewardFaceLayout);
+    expect(new Set(faces.map((face) => Number((face.right - face.left).toFixed(2)))).size).toBe(3);
+    expect(new Set(faces.map((face) => `${face.lidTiltL},${face.lidTiltR}`)).size).toBe(3);
+    expect(faces.every((face) => face.lidCover >= 0.45 && face.lidCover <= 0.65)).toBe(true);
+    expect(stewardFaceLayout('oddsborne').lidCover).toBeGreaterThan(stewardFaceLayout('quantanamo').lidCover);
+  });
 });
+
+function hexRgb(hex: string): [number, number, number] {
+  const raw = hex.replace('#', '');
+  return [
+    Number.parseInt(raw.slice(0, 2), 16),
+    Number.parseInt(raw.slice(2, 4), 16),
+    Number.parseInt(raw.slice(4, 6), 16),
+  ];
+}

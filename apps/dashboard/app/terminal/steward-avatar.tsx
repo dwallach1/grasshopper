@@ -7,6 +7,7 @@ import {
   stewardBotKind,
   stewardBotPalette,
   stewardEmoteDelayMs,
+  stewardFurTone,
   type StewardAvatarSize,
 } from '../../lib/desk-avatar';
 import { StewardBot } from './steward-bots';
@@ -28,6 +29,7 @@ export function StewardAvatar({
   const label = stewardAvatarLabel(name);
   const palette = stewardBotPalette({ slug, name, accent });
   const kind = stewardBotKind(slug, name);
+  const fur = stewardFurTone(kind);
   const className = [
     styles.steward,
     size === 'board' ? styles.board : styles.team,
@@ -39,6 +41,9 @@ export function StewardAvatar({
   const accentStyle = {
     '--team-accent': palette.accent,
     '--emote-delay': `${stewardEmoteDelayMs(slug, name)}ms`,
+    '--fur': fur.base,
+    '--fur-deep': fur.deep,
+    '--fur-lit': fur.lit,
   } as CSSProperties;
 
   return (
