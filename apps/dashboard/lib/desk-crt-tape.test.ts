@@ -9,6 +9,7 @@ import {
   crtFillGlyph,
   crtFillStatus,
   crtStewardCode,
+  crtTapeGlyphStream,
   crtTapeScrollText,
   formatCrtFillLabel,
 } from './desk-crt-tape';
@@ -274,6 +275,7 @@ describe('assembleCrtTape', () => {
     expect(tape.some((row) => row.label === 'SCAN' && row.status === 'OK')).toBe(true);
     expect(crtTapeScrollText(tape)).toContain('ZDOG');
     expect(crtTapeScrollText(tape)).toContain('SNAP LEDGER');
+    expect(crtTapeGlyphStream(tape)).toMatch(/[>#*:]/);
   });
 
   test('empty books still emit a snapshot line and do not invent fills', () => {

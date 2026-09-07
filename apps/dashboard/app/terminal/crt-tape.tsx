@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-import { assembleCrtTape, crtTapeScrollText } from '../../lib/desk-crt-tape';
+import {
+  assembleCrtTape,
+  crtTapeGlyphStream,
+  crtTapeScrollText,
+  formatCrtTapeLine,
+} from '../../lib/desk-crt-tape';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { age } from './format';
 
@@ -17,6 +22,7 @@ export function CrtTape({
   const reduced = usePrefersReducedMotion();
   const scroll = crtTapeScrollText(lines);
   const newest = lines[0];
+  const glyphs = crtTapeGlyphStream(lines);
 
   return (
     <section className="crt-tape" aria-label="Desk fill tape">
@@ -25,6 +31,8 @@ export function CrtTape({
         <span>{lines.length}</span>
         {newest ? <i>{age(newest.at, now)}</i> : null}
       </header>
+      <p className="crt-tape-glyphs" aria-hidden="true">{glyphs}</p>
+      {newest ? <p className="crt-tape-head">{formatCrtTapeLine(newest)}</p> : null}
       <div className="crt-tape-viewport">
         {reduced ? (
           <p className="crt-tape-static">{scroll}</p>

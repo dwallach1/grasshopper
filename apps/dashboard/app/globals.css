@@ -4183,6 +4183,25 @@ a:focus-visible {
   color: var(--crt);
 }
 
+.crt-tape-glyphs {
+  margin: 2px 8px 0;
+  color: rgba(125, 255, 179, 0.55);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+}
+
+.crt-tape-head {
+  margin: 2px 8px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 6px rgba(125, 255, 179, 0.4);
+}
+
 .crt-tape-viewport {
   overflow: hidden;
   mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);

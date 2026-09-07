@@ -185,9 +185,16 @@ export function assembleCrtTape(desk: DeskPayload): CrtTapeLine[] {
   return rows.sort(compareTape).slice(0, CRT_TAPE_MAX);
 }
 
+export function formatCrtTapeLine(row: CrtTapeLine): string {
+  return `${row.glyph} ${row.steward} ${row.label} ${row.status}`;
+}
+
+export function crtTapeGlyphStream(lines: readonly CrtTapeLine[]): string {
+  if (lines.length === 0) return '#';
+  return lines.map((row) => row.glyph).join(' ');
+}
+
 export function crtTapeScrollText(lines: readonly CrtTapeLine[]): string {
   if (lines.length === 0) return 'SNAP LEDGER · not in ledger';
-  return lines
-    .map((row) => `${row.glyph} ${row.steward} ${row.label} ${row.status}`)
-    .join('  ·  ');
+  return lines.map(formatCrtTapeLine).join('  ·  ');
 }
