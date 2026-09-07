@@ -2,14 +2,24 @@
 
 import { useEffect, useState } from 'react';
 
+import { takeCrtBootSlot } from '../../lib/desk-crt-boot';
 import { fetchDeskPayload } from '../../lib/desk-client';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { TerminalApp } from './app';
+import { CrtBoot } from './crt-boot';
 import { DeskLiveline } from './desk-liveline';
 
 export function PublicTerminal() {
   const [desk, setDesk] = useState<DeskPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [boot, setBoot] = useState(false);
+
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setReduceMotion(reduce);
+    if (!reduce && takeCrtBootSlot()) setBoot(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,13 +53,21 @@ export function PublicTerminal() {
   }
 
   if (!desk) {
-    return (
-      <main className="line-boot">
-        <p className="term-brand">GRASSHOPPER</p>
-        <DeskLiveline unit="USD" loading emptyText="waiting for published snapshot" showValue={false} />
-      </main>
-    );
+    if (reduceMotion) {
+      return (
+        <main className="line-boot">
+          <p className="term-brand">GRASSHOPPER</p>
+          <DeskLiveline unit="USD" loading emptyText="waiting for published snapshot" showValue={false} />
+        </main>
+      );
+    }
+    return <CrtBoot desk={null} onDone={() => undefined} />;
   }
 
-  return <TerminalApp initial={desk} publicView />;
+  return (
+    <>
+      {boot && <CrtBoot desk={desk} onDone={() => setBoot(false)} />}
+      <TerminalApp initial={desk} publicView />
+    </>
+  );
 }

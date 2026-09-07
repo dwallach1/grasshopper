@@ -14,6 +14,7 @@ import {
 } from '../../lib/desk-liveline';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
+import { CrtTape } from './crt-tape';
 import { DeskLiveline } from './desk-liveline';
 import { stewardMood } from '../../lib/desk-avatar';
 import { StewardAvatar } from './steward-avatar';
@@ -62,6 +63,8 @@ export function LeaderboardPanel({
           </button>
         ))}
       </div>
+
+      <CrtTape desk={desk} now={now} />
 
       <section className="line-hero" aria-label="Desk sport line">
         {focus === 'all' ? (

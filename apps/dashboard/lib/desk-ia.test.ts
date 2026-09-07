@@ -58,6 +58,9 @@ describe('desk IA smoke', () => {
     expect(app).not.toMatch(/term-brand[\s\S]{0,180}QUANTANAMO/);
     expect(app).toContain('no QUANTANAMO run');
     expect(shell).toContain('GRASSHOPPER');
+    expect(shell).toContain('CrtBoot');
+    expect(shell).toContain('takeCrtBootSlot');
+    expect(shell).toContain("prefers-reduced-motion: reduce");
     expect(signIn).toContain('>GRASSHOPPER<');
     expect(layout).toContain("title: 'Grasshopper'");
     expect(venue).toContain("short: 'STOCKS'");
@@ -174,6 +177,9 @@ describe('desk IA smoke', () => {
     expect(avatarCss).not.toContain('steward-beep');
     expect(css).toContain('--font-brand');
     expect(css).toContain('Special Elite');
+    expect(css).toContain('.crt-boot');
+    expect(css).toContain('.crt-tape');
+    expect(css).toContain('.crt-scan');
     expect(layout).toContain('Special+Elite');
   });
 
@@ -199,6 +205,7 @@ describe('desk IA smoke', () => {
     expect(board).toContain('size="board"');
     expect(board).toContain('stewardMood');
     expect(board).toContain('DeskLiveline');
+    expect(board).toContain('CrtTape');
     expect(board).not.toContain('TeamAvatar');
     expect(board).toContain('NOT_RANKED');
     expect(board).not.toContain('0.00%');
@@ -207,6 +214,9 @@ describe('desk IA smoke', () => {
     expect(board).not.toContain('line-mast');
     expect(board).not.toContain('<h1>Board</h1>');
     expect(board).toContain('visually-hidden');
+    expect(board).not.toContain('TradeReplay');
+    expect(board).not.toContain('threeui');
+    expect(board).not.toContain('ascii-magic');
     expect(book).toContain('line-mast');
     expect(book).toContain('<h1>Book</h1>');
     expect(wrap).toContain("from 'liveline'");
