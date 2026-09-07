@@ -90,9 +90,11 @@ describe('desk IA smoke', () => {
     expect(team).toContain('desk_agents');
     expect(team).toContain('StewardAvatar');
     expect(team).not.toContain('pnl');
+    expect(avatars).toContain('StewardRiveFace');
     expect(avatars).toContain('StewardBot');
     expect(avatars).toContain('aria-label={label}');
     expect(avatars).toContain('role="img"');
+    expect(avatars).toContain("data-runtime={runtime}");
     expect(avatars).not.toContain('TabletMark');
     expect(avatars).not.toContain('BlobMark');
     expect(avatars).not.toContain('GrasshopperMark');
@@ -107,6 +109,8 @@ describe('desk IA smoke', () => {
     expect(avatarLib).not.toContain('stewardMeshSpec');
     expect(avatarLib).not.toContain('from \'three\'');
     const bots = await readDashboard('app/terminal/steward-bots.tsx');
+    const riveFace = await readDashboard('app/terminal/steward-rive.tsx');
+    const riveLib = await readDashboard('lib/steward-rive.ts');
     const motion = await readDashboard('lib/steward-motion.ts');
     expect(bots).toContain('data-part="body"');
     expect(bots).toContain('data-runtime="svg"');
@@ -136,6 +140,12 @@ describe('desk IA smoke', () => {
     expect(team).toContain('cards.map');
     expect(avatars).not.toContain('from \'three\'');
     expect(avatars).toContain('mood=');
+    expect(riveFace).toContain("from '@rive-app/react-canvas'");
+    expect(riveFace).toContain('useRive');
+    expect(riveFace).toContain('RuntimeLoader.setWasmUrl');
+    expect(riveFace).toContain('data-runtime="rive"');
+    expect(riveLib).toContain("STEWARD_RIV_SRC = '/stewards/stewards.riv'");
+    expect(riveLib).toContain('stewardRiveArtboard');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');
@@ -150,6 +160,8 @@ describe('desk IA smoke', () => {
     expect(avatarCss).toContain('overflow: visible');
     expect(avatarCss).toContain('.steward');
     expect(avatarCss).toContain('.alive');
+    expect(avatarCss).toContain('.stage');
+    expect(avatarCss).toContain('.riv');
     expect(avatarCss).not.toContain('feTurbulence');
     expect(avatarCss).not.toContain('.strap');
     expect(avatarCss).not.toContain('.lidRest');

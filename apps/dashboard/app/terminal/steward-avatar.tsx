@@ -1,6 +1,7 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import dynamic from 'next/dynamic';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 
 import {
   stewardAvatarLabel,
@@ -13,6 +14,11 @@ import {
 } from '../../lib/desk-avatar';
 import { StewardBot } from './steward-bots';
 import styles from './steward-avatar.module.css';
+
+const StewardRiveFace = dynamic(
+  () => import('./steward-rive').then((mod) => mod.StewardRiveFace),
+  { ssr: false },
+);
 
 export function StewardAvatar({
   slug,
@@ -33,6 +39,11 @@ export function StewardAvatar({
   const palette = stewardBotPalette({ slug, name, accent });
   const kind = stewardBotKind(slug, name);
   const fur = stewardFurTone(kind);
+  const delayMs = stewardEmoteDelayMs(slug, name);
+  const reducedMotion = usePrefersReducedMotion();
+  const [runtime, setRuntime] = useState<'rive' | 'svg'>('rive');
+  const onReady = useCallback(() => setRuntime('rive'), []);
+  const onFailed = useCallback(() => setRuntime('svg'), []);
   const className = [
     styles.steward,
     size === 'board' ? styles.board : styles.team,
@@ -43,7 +54,7 @@ export function StewardAvatar({
   // SAFETY: CSS custom properties are not in CSSProperties.
   const accentStyle = {
     '--team-accent': palette.accent,
-    '--emote-delay': `${stewardEmoteDelayMs(slug, name)}ms`,
+    '--emote-delay': `${delayMs}ms`,
     '--fur': fur.base,
     '--fur-deep': fur.deep,
     '--fur-lit': fur.lit,
@@ -57,15 +68,36 @@ export function StewardAvatar({
       data-steward={slug}
       data-kind={kind}
       data-mood={mood}
+      data-runtime={runtime}
       role="img"
       aria-label={label}
     >
-      <StewardBot
-        kind={kind}
-        alive={alive}
-        delayMs={stewardEmoteDelayMs(slug, name)}
-        mood={mood}
-      />
+      {runtime === 'svg' ? (
+        <StewardBot kind={kind} alive={alive} delayMs={delayMs} mood={mood} />
+      ) : (
+        <StewardRiveFace
+          key={`${kind}-${mood}-${alive ? '1' : '0'}-${reducedMotion ? 'still' : 'motion'}`}
+          kind={kind}
+          mood={mood}
+          alive={alive}
+          reducedMotion={reducedMotion}
+          delayMs={delayMs}
+          onReady={onReady}
+          onFailed={onFailed}
+        />
+      )}
     </span>
   );
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduced(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  return reduced;
 }
