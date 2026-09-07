@@ -127,8 +127,10 @@ describe('desk IA smoke', () => {
     expect(living).not.toContain('WebGLRenderer');
     expect(icon).toContain('composeStewardPose');
     expect(icon).toContain('paintStewardIcon');
-    expect(icon).toContain('ellipse');
+    expect(icon).toContain('sphereWrap');
+    expect(icon).toContain('arc');
     expect(icon).toContain('roundRect');
+    expect(icon).not.toContain('shadowBlur');
     expect(icon).not.toContain('feTurbulence');
     expect(icon).not.toContain('BotMouth');
     expect(icon).not.toContain('Minion');
@@ -137,6 +139,8 @@ describe('desk IA smoke', () => {
     expect(motion).toContain('stewardGlanceX');
     expect(motion).toContain('stewardPulse');
     expect(motion).toContain('stewardThinkAmount');
+    expect(motion).toContain('pinchThenForm');
+    expect(motion).toContain('stewardBangAmount');
     expect(motion).toContain('approachParam');
     expect(team).toContain('cards.map');
     expect(avatars).not.toContain('from \'three\'');

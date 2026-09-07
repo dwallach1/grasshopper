@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { stewardSpecies } from './desk-avatar';
-import { composeStewardPose, lerpPose, stewardDrawMarks, type StewardPose } from './steward-icon';
+import { composeStewardPose, lerpPose, sphereWrap, stewardDrawMarks, type StewardPose } from './steward-icon';
 import type { StewardMotion } from './steward-motion';
 
 function motion(partial: Partial<StewardMotion> = {}): StewardMotion {
@@ -15,6 +15,9 @@ function motion(partial: Partial<StewardMotion> = {}): StewardMotion {
     glanceY: 0,
     breathe: 0.5,
     pulse: 1,
+    surprise: 0,
+    bang: 0,
+    toggle: 0,
     ...partial,
   };
 }
@@ -24,58 +27,75 @@ function marksFor(partial: Partial<StewardMotion> = {}) {
   return stewardDrawMarks(species, composeStewardPose(species, motion(partial)), 64);
 }
 
+function eyesOf(marks: ReturnType<typeof marksFor>) {
+  const left = marks.find((mark) => mark.part === 'eye' && mark.side === 'left');
+  const right = marks.find((mark) => mark.part === 'eye' && mark.side === 'right');
+  if (left?.part !== 'eye' || right?.part !== 'eye') throw new Error('expected two eyes');
+  return { left, right };
+}
+
 describe('living steward icon', () => {
-  test('every pose is one body ellipse and two eye marks', () => {
-    for (const partial of [{}, { blink: 1 }, { think: 1 }, { up: 1 }, { down: 1 }, { listen: 1 }]) {
+  test('every pose is one circle body and two pill eyes', () => {
+    for (const partial of [{}, { blink: 1 }, { toggle: 1 }, { bang: 1 }, { up: 1 }, { down: 1 }]) {
       const marks = marksFor(partial);
       expect(marks.map((mark) => mark.part)).toEqual(['body', 'eye', 'eye']);
       const body = marks[0];
       if (body?.part !== 'body') throw new Error('expected body');
-      expect(body.rx).toBeGreaterThan(20);
-      expect(body.ry).toBeGreaterThan(20);
-      expect(Math.abs(body.rx - body.ry)).toBeLessThan(8);
+      expect(body.r).toBeGreaterThan(20);
     }
   });
 
-  test('blink squashes both eyes; think makes them asymmetric tick + dash', () => {
-    const idle = marksFor();
-    const blink = marksFor({ blink: 1 });
-    const think = marksFor({ think: 1 });
-    const idleEyes = idle.filter((mark) => mark.part === 'eye');
-    const blinkEyes = blink.filter((mark) => mark.part === 'eye');
-    const thinkEyes = think.filter((mark) => mark.part === 'eye');
-    expect(blinkEyes[0] && blinkEyes[0].part === 'eye' && blinkEyes[0].h).toBeLessThan(
-      idleEyes[0] && idleEyes[0].part === 'eye' ? idleEyes[0].h : 99,
-    );
-    expect(blinkEyes[1] && blinkEyes[1].part === 'eye' && blinkEyes[1].h).toBeLessThan(4);
-    const left = thinkEyes[0];
-    const right = thinkEyes[1];
-    if (left?.part !== 'eye' || right?.part !== 'eye') throw new Error('expected eyes');
-    expect(left.h).toBeGreaterThan(left.w * 2);
-    expect(right.w).toBeGreaterThan(right.h * 2);
+  test('blink flattens both pills to slits; surprise expands them', () => {
+    const idle = eyesOf(marksFor());
+    const blink = eyesOf(marksFor({ blink: 1 }));
+    const surprise = eyesOf(marksFor({ surprise: 1 }));
+    expect(blink.left.h).toBeLessThan(idle.left.h * 0.35);
+    expect(blink.right.h).toBeLessThan(4);
+    expect(blink.left.w).toBeGreaterThan(idle.left.w);
+    expect(surprise.left.h).toBeGreaterThan(idle.left.h);
+    expect(surprise.right.w).toBeGreaterThan(idle.right.w);
   });
 
-  test('up looks higher than down; listen sits nearer center', () => {
+  test('bang is a stem plus a dot; toggle is a track plus a knob', () => {
+    const bang = eyesOf(marksFor({ bang: 1 }));
+    const toggle = eyesOf(marksFor({ toggle: 1 }));
+    expect(bang.left.h).toBeGreaterThan(bang.left.w * 2.4);
+    expect(Math.abs(bang.right.w - bang.right.h)).toBeLessThan(2);
+    expect(toggle.left.w).toBeGreaterThan(toggle.left.h * 2);
+    expect(Math.abs(toggle.right.w - toggle.right.h)).toBeLessThan(2);
+  });
+
+  test('up looks higher than down; rim gaze foreshortens more than center', () => {
     const species = stewardSpecies('bandit');
-    const up = composeStewardPose(species, motion({ up: 1 }));
+    const up = composeStewardPose(species, motion({ up: 1, surprise: 1, glanceX: 0.5, glanceY: -0.4 }));
     const down = composeStewardPose(species, motion({ down: 1 }));
-    const listen = composeStewardPose(species, motion({ listen: 1 }));
     const idle = composeStewardPose(species, motion());
     expect(up.lookY).toBeLessThan(idle.lookY);
     expect(down.lookY).toBeGreaterThan(idle.lookY);
-    expect(Math.abs(listen.lookX)).toBeLessThan(0.1);
-    expect(Math.abs(up.bodyRx - up.bodyRy)).toBeLessThan(0.02);
-    expect(Math.abs(down.bodyRx - down.bodyRy)).toBeLessThan(0.02);
+    const rim = stewardDrawMarks(species, up, 100);
+    const center = stewardDrawMarks(species, idle, 100);
+    const rimEye = rim.find((mark) => mark.part === 'eye' && mark.side === 'right');
+    const centerEye = center.find((mark) => mark.part === 'eye' && mark.side === 'right');
+    if (rimEye?.part !== 'eye' || centerEye?.part !== 'eye') throw new Error('eyes');
+    expect(rimEye.wrap).toBeLessThan(centerEye.wrap);
+  });
+
+  test('sphere wrap compresses toward the rim and keeps a radial', () => {
+    const center = sphereWrap(0, 0, 40);
+    const rim = sphereWrap(32, 8, 40);
+    expect(center.wrap).toBe(1);
+    expect(rim.wrap).toBeLessThan(0.75);
+    expect(rim.radial).not.toBe(0);
   });
 
   test('lerpPose is a continuous blend between any two poses', () => {
     const species = stewardSpecies('oddsborne');
-    const from = composeStewardPose(species, motion({ up: 1 }));
-    const to = composeStewardPose(species, motion({ think: 1 }));
+    const from = composeStewardPose(species, motion({ surprise: 1, up: 1 }));
+    const to = composeStewardPose(species, motion({ toggle: 1 }));
     const mid = lerpPose(from, to, 0.5);
     expect(mid.lookY).toBeCloseTo((from.lookY + to.lookY) / 2, 5);
     expect(mid.left.w).toBeCloseTo((from.left.w + to.left.w) / 2, 5);
-    expect(mid.right.h).toBeCloseTo((from.right.h + to.right.h) / 2, 5);
+    expect(mid.right.oy).toBeCloseTo((from.right.oy + to.right.oy) / 2, 5);
     const still: StewardPose = lerpPose(from, from, 0.8);
     expect(still.lookX).toBe(from.lookX);
   });
@@ -91,13 +111,9 @@ describe('living steward icon', () => {
       composeStewardPose(stewardSpecies('oddsborne'), motion()),
       100,
     );
-    const qEyes = q.filter((mark) => mark.part === 'eye');
-    const oEyes = o.filter((mark) => mark.part === 'eye');
-    if (qEyes[0]?.part !== 'eye' || qEyes[1]?.part !== 'eye') throw new Error('q eyes');
-    if (oEyes[0]?.part !== 'eye' || oEyes[1]?.part !== 'eye') throw new Error('o eyes');
-    const qGap = qEyes[1].cx - qEyes[0].cx;
-    const oGap = oEyes[1].cx - oEyes[0].cx;
-    expect(qGap).toBeGreaterThan(oGap + 4);
+    const qEyes = eyesOf(q);
+    const oEyes = eyesOf(o);
+    expect(qEyes.right.cx - qEyes.left.cx).toBeGreaterThan(oEyes.right.cx - oEyes.left.cx + 4);
     expect(q[0]?.part === 'body' && q[0].fill).toBe(stewardSpecies('quantanamo').fill);
     expect(o[0]?.part === 'body' && o[0].fill).toBe(stewardSpecies('oddsborne').fill);
   });

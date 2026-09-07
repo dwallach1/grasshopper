@@ -29,7 +29,7 @@ export function StewardLivingIcon({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const species = stewardSpecies(kind);
-    const eased = { up: 0, down: 0, listen: 0, think: 0 };
+    const eased = { up: 0, down: 0, listen: 0, surprise: 0 };
     let frame = 0;
     const born = performance.now();
     let last = born;
@@ -51,19 +51,19 @@ export function StewardLivingIcon({
         eased.up = clock.up;
         eased.down = clock.down;
         eased.listen = clock.listen;
-        eased.think = clock.think;
+        eased.surprise = clock.surprise;
       } else {
         eased.up = approachParam(eased.up, clock.up, dt);
         eased.down = approachParam(eased.down, clock.down, dt);
         eased.listen = approachParam(eased.listen, clock.listen, dt);
-        eased.think = approachParam(eased.think, clock.think, dt);
+        eased.surprise = approachParam(eased.surprise, clock.surprise, dt);
       }
       const pose = composeStewardPose(species, {
         ...clock,
         up: eased.up,
         down: eased.down,
         listen: eased.listen,
-        think: eased.think,
+        surprise: eased.surprise,
       });
       const ratio = window.devicePixelRatio || 1;
       const css = canvas.clientWidth || 64;
