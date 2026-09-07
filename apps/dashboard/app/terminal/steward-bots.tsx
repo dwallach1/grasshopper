@@ -44,7 +44,7 @@ export function StewardBot({
       data-alive={alive ? '1' : '0'}
       data-artboard="padded"
       data-eye="vector"
-      data-lid="vector"
+      data-lid-runtime="vector"
       data-mound="path"
       aria-hidden="true"
       style={{ animationDelay: `${delayMs}ms` }}

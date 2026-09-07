@@ -6,9 +6,9 @@
   --fur-lit: #dddef0;
   --fur-pad: #e4e5f2;
   --lid-rest: 1;
-  --bounce-y: -2.2px;
-  --bounce-xs: 1.03;
-  --bounce-ys: 0.97;
+  --bounce-y: -4.5px;
+  --bounce-xs: 1.055;
+  --bounce-ys: 0.945;
   position: relative;
   display: grid;
   place-items: center;
@@ -41,16 +41,16 @@
 
 .bot[data-mood='up'] {
   --lid-rest: 0.78;
-  --bounce-y: -3.4px;
-  --bounce-xs: 1.045;
-  --bounce-ys: 0.955;
+  --bounce-y: -6px;
+  --bounce-xs: 1.07;
+  --bounce-ys: 0.93;
 }
 
 .bot[data-mood='down'] {
   --lid-rest: 1.22;
-  --bounce-y: -1.1px;
-  --bounce-xs: 1.015;
-  --bounce-ys: 0.985;
+  --bounce-y: -2.4px;
+  --bounce-xs: 1.03;
+  --bounce-ys: 0.97;
 }
 
 .pad {
