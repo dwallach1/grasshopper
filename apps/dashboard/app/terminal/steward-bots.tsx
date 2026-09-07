@@ -31,7 +31,6 @@ export function StewardBot({
   const face = stewardFaceLayout(kind);
   const body = stewardSilhouette(kind);
   const fillId = `fur-${kind}-${uid}`;
-  const padId = `pad-${kind}-${uid}`;
 
   return (
     <svg
@@ -51,13 +50,8 @@ export function StewardBot({
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <defs>
-        <linearGradient id={padId} x1="18" y1="8" x2="64" y2="74" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={fur.lit} />
-          <stop offset="1" stopColor={fur.pad} />
-        </linearGradient>
-        <linearGradient id={fillId} x1="22" y1="10" x2="54" y2="58" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={fur.lit} />
-          <stop offset="0.48" stopColor={fur.base} />
+        <linearGradient id={fillId} x1="22" y1="12" x2="48" y2="58" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={fur.base} />
           <stop offset="1" stopColor={fur.deep} />
         </linearGradient>
       </defs>
@@ -68,7 +62,7 @@ export function StewardBot({
         width="74"
         height="74"
         rx="20"
-        fill={`url(#${padId})`}
+        fill={fur.pad}
       />
       <g className={styles.figure} style={{ animationDelay: `${delayMs}ms` }}>
         <g transform="translate(8 7)">

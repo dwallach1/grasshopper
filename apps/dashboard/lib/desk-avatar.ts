@@ -64,11 +64,11 @@ const FUR_TONES = {
 } as const satisfies Record<StewardBotKind, StewardFurTone>;
 
 const FACE_LAYOUTS = {
-  quantanamo: { left: 21.6, right: 42.0, cy: 29.2, r: 8.7, lidTiltL: 0, lidTiltR: -4, lidCover: 0.5 },
-  oddsborne: { left: 25.0, right: 38.8, cy: 26.4, r: 8.3, lidTiltL: -10, lidTiltR: -12, lidCover: 0.6 },
-  bandit: { left: 23.8, right: 40.0, cy: 28.0, r: 8.1, lidTiltL: -6, lidTiltR: -16, lidCover: 0.54 },
-  grasshopper: { left: 23.2, right: 40.8, cy: 27.6, r: 8.4, lidTiltL: -8, lidTiltR: -8, lidCover: 0.52 },
-  spark: { left: 24.4, right: 39.6, cy: 28.4, r: 7.8, lidTiltL: -7, lidTiltR: -7, lidCover: 0.5 },
+  quantanamo: { left: 21.2, right: 42.4, cy: 29.0, r: 9.4, lidTiltL: 0, lidTiltR: -4, lidCover: 0.5 },
+  oddsborne: { left: 24.6, right: 39.2, cy: 26.2, r: 9.0, lidTiltL: -10, lidTiltR: -12, lidCover: 0.6 },
+  bandit: { left: 23.4, right: 40.4, cy: 27.8, r: 8.8, lidTiltL: -6, lidTiltR: -16, lidCover: 0.54 },
+  grasshopper: { left: 22.8, right: 41.2, cy: 27.4, r: 9.1, lidTiltL: -8, lidTiltR: -8, lidCover: 0.52 },
+  spark: { left: 24.2, right: 39.8, cy: 28.2, r: 8.4, lidTiltL: -7, lidTiltR: -7, lidCover: 0.5 },
 } as const satisfies Record<StewardBotKind, StewardFaceLayout>;
 
 const SILHOUETTES = {
