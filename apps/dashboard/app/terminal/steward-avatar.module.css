@@ -41,62 +41,93 @@
 }
 
 .skin {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 56%, #f6e39a);
+}
+
+.belly {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #fff4c4);
+  opacity: 0.62;
 }
 
 .shine {
-  fill: #ffffff;
-  opacity: 0.22;
+  fill: #fffdf4;
+  opacity: 0.55;
 }
 
 .ground {
   fill: #000000;
-  opacity: 0.3;
+  opacity: 0.28;
+}
+
+.strap,
+.maskStrap {
+  fill: #171b21;
+}
+
+.maskStrap {
+  fill: #101318;
+}
+
+.bridge {
+  stroke: #12161b;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.rim {
+  fill: #14181e;
+  stroke: #2c333c;
+  stroke-width: 0.7;
 }
 
 .baseShadow {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #07090c);
-  opacity: 0.72;
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #1a1408);
+  opacity: 0.55;
 }
 
 .mask,
 .maskSlash {
-  fill: #07090c;
-  opacity: 0.72;
+  fill: #0d1014;
+  opacity: 0.82;
 }
 
 .maskSlash {
-  opacity: 0.8;
+  opacity: 0.88;
 }
 
-.pinStem {
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 55%, #d7dee6);
-  stroke-width: 1.6;
+.pinStem,
+.nubStem {
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 40%, #3a2c14);
+  stroke-width: 1.5;
   stroke-linecap: round;
 }
 
-.pinDish {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #f4f7fa);
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 88%, #0a0d10);
-  stroke-width: 1.1;
+.pinDish,
+.nub {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 62%, #fff1b0);
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 78%, #1a1408);
+  stroke-width: 1;
 }
 
 .pinWell {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 30%, #0a0d10);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #1a1408);
 }
 
-.tabletNotch {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #0a0d10);
+.mouth {
+  fill: none;
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #5a3d28);
+  stroke-width: 1.45;
+  stroke-linecap: round;
 }
 
 .lens {
-  fill: #f6f8fb;
+  fill: #f7fbff;
   animation: steward-lens 3.6s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .iris {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 38%, #1a2028);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #243040);
 }
 
 .gaze {
@@ -117,7 +148,7 @@
 }
 
 .lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 56%, #f6e39a);
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0;
@@ -190,7 +221,7 @@
 @keyframes steward-lens {
   0%,
   100% {
-    fill: #f6f8fb;
+    fill: #f7fbff;
   }
   50% {
     fill: #ffffff;
