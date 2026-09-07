@@ -288,8 +288,8 @@ function paintSlot(slot: Slot, elapsed: number, still: boolean) {
   const blink = still ? rest : stewardBlinkCover(elapsed, slot.delayMs, rest);
   const glance = still ? 0 : stewardGlanceX(elapsed, slot.delayMs);
   const pulse = still ? 1 : stewardPulse(elapsed, slot.delayMs, slot.alive);
-  slot.figure.scale.set(1 - breathe * 0.012, 1 + breathe * 0.03, 1 - breathe * 0.01);
-  slot.figure.position.y = breathe * 0.03;
+  slot.figure.scale.set(1 - breathe * 0.03, 1 + breathe * 0.06, 1 - breathe * 0.02);
+  slot.figure.position.y = breathe * 0.07;
   slot.key.intensity = slot.alive ? 0.95 + breathe * 0.2 : 1.05;
   writeEye(slot.leftEye, blink, spec.lidCover, glance, pulse);
   writeEye(slot.rightEye, blink, spec.lidCover, glance, pulse);

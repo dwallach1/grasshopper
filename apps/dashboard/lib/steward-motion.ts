@@ -3,8 +3,8 @@
  * Double-blink + staggered glance so the desk does not pulse in lockstep.
  */
 
-const BLINK_CYCLE_MS = 4600;
-const BREATHE_CYCLE_MS = 4200;
+const BLINK_CYCLE_MS = 3200;
+const BREATHE_CYCLE_MS = 2800;
 const GLANCE_CYCLE_MS = 7200;
 const PULSE_CYCLE_MS = 1800;
 

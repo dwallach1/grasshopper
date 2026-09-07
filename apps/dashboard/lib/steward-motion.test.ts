@@ -10,9 +10,9 @@ import {
 describe('steward motion curves', () => {
   test('blink stays at rest cover except during the close windows', () => {
     expect(stewardBlinkCover(0, 0, 0.5)).toBe(0.5);
-    expect(stewardBlinkCover(4600 * 0.4, 0, 0.5)).toBe(0.5);
-    expect(stewardBlinkCover(4600 * 0.765, 0, 0.5)).toBeGreaterThan(0.85);
-    expect(stewardBlinkCover(4600 * 0.87, 0, 0.5)).toBeGreaterThan(0.85);
+    expect(stewardBlinkCover(3200 * 0.4, 0, 0.5)).toBe(0.5);
+    expect(stewardBlinkCover(3200 * 0.765, 0, 0.5)).toBeGreaterThan(0.85);
+    expect(stewardBlinkCover(3200 * 0.87, 0, 0.5)).toBeGreaterThan(0.85);
   });
 
   test('breathe is bounded and faster when alive', () => {
