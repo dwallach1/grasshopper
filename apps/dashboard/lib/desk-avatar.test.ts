@@ -10,14 +10,14 @@ import {
 } from './desk-avatar';
 
 describe('desk steward avatars', () => {
-  test('seed prefers slug so Team and Board render the same robot', () => {
+  test('seed prefers slug so Team and Board render the same face', () => {
     expect(stewardAvatarSeed('quantanamo', 'OTHER NAME')).toBe('quantanamo');
     expect(stewardAvatarSeed('  ODDSBORNE  ', 'odds')).toBe('oddsborne');
     expect(stewardAvatarSeed('', 'BANDIT')).toBe('bandit');
     expect(stewardAvatarSeed('', '')).toBe('spark');
   });
 
-  test('known stewards map to distinct WALL-E kinds and desk palettes', () => {
+  test('known stewards map to distinct Grok Bot kinds and desk palettes', () => {
     expect(stewardBotKind('quantanamo', 'QUANTANAMO')).toBe('quantanamo');
     expect(stewardBotKind('oddsborne', 'ODDSBORNE')).toBe('oddsborne');
     expect(stewardBotKind('bandit', 'BANDIT')).toBe('bandit');

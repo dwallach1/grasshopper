@@ -1,3 +1,5 @@
+'use client';
+
 import type { CSSProperties } from 'react';
 
 import {
@@ -48,8 +50,7 @@ export function StewardAvatar({
       role="img"
       aria-label={label}
     >
-      <StewardBot slug={slug} kind={kind} />
-      <span className={styles.ring} aria-hidden="true" />
+      <StewardBot kind={kind} />
     </span>
   );
 }

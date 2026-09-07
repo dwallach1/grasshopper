@@ -7,12 +7,8 @@
   width: var(--steward-size);
   height: var(--steward-size);
   flex: 0 0 var(--steward-size);
-  border-radius: 18px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--team-accent, var(--green)) 12%, #0a0d10);
-  animation:
-    steward-breathe 2.6s var(--ease, ease) infinite,
-    steward-glow 3.2s ease-in-out infinite;
+  background: transparent;
+  animation: steward-breathe 3.4s var(--ease, ease) infinite;
   animation-delay: var(--emote-delay);
 }
 
@@ -22,127 +18,98 @@
 
 .board {
   --steward-size: 56px;
-  border-radius: 14px;
 }
 
 .alive {
   animation:
-    steward-breathe 1.85s var(--ease, ease) infinite,
-    steward-glow 1.4s ease-in-out infinite;
+    steward-breathe 1.65s var(--ease, ease) infinite,
+    steward-glow 1.35s ease-in-out infinite;
   animation-delay: var(--emote-delay);
-}
-
-.ring {
-  position: absolute;
-  inset: 4px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--team-accent, var(--green)) 35%, transparent);
-  pointer-events: none;
 }
 
 .bot {
-  width: 82%;
-  height: 82%;
+  width: 100%;
+  height: 100%;
   overflow: visible;
-  animation: steward-bob 2.6s ease-in-out infinite;
+  animation: steward-bob 3.4s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
-.shell {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #1b2128);
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 78%, #0a0d10);
-  stroke-width: 1.15;
+.figure {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
-.shellDark,
-.neck {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 20%, #0c1014);
+.skin {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
 }
 
-.highlight {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #f2f6fa);
-  opacity: 0.28;
+.shine {
+  fill: #ffffff;
+  opacity: 0.22;
 }
 
-.panel {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 14%, #0a0d10);
-}
-
-.rivet {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #e8edf2);
-}
-
-.shadow {
+.ground {
   fill: #000000;
-  opacity: 0.35;
+  opacity: 0.3;
 }
 
-.accent {
-  fill: var(--team-accent, var(--green));
+.baseShadow {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #07090c);
+  opacity: 0.72;
 }
 
-.tread,
-.treadTooth {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #0a0d10);
-}
-
-.treadTooth {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 40%, #161b22);
-}
-
-.bridge,
 .mask,
-.visor {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 16%, #0a0d10);
+.maskSlash {
+  fill: #07090c;
+  opacity: 0.72;
 }
 
-.visor {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 24%, #101820);
+.maskSlash {
+  opacity: 0.8;
 }
 
-.head {
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  animation: steward-nod 3.6s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
+.pinStem {
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 55%, #d7dee6);
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 
-.body {
-  transform-box: fill-box;
-  transform-origin: center top;
+.pinDish {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #f4f7fa);
+  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 88%, #0a0d10);
+  stroke-width: 1.1;
 }
 
-.eyeRim {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 58%, #2a313c);
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 85%, #e8edf2);
-  stroke-width: 1.3;
+.pinWell {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 30%, #0a0d10);
 }
 
-.eyeRing {
-  fill: none;
-  stroke: color-mix(in srgb, var(--team-accent, var(--green)) 45%, #8b98a8);
-  stroke-width: 1;
+.tabletNotch {
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 28%, #0a0d10);
 }
 
 .lens {
-  fill: #eef3f7;
-  animation: steward-lens 2.8s ease-in-out infinite;
+  fill: #f6f8fb;
+  animation: steward-lens 3.6s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .iris {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 55%, #3a4450);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 38%, #1a2028);
 }
 
 .gaze {
   transform-box: fill-box;
   transform-origin: center;
-  animation: steward-glance 4.4s ease-in-out infinite;
+  animation: steward-glance 6.4s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .pupil {
-  fill: #101318;
+  fill: #10141a;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .glint {
@@ -150,37 +117,34 @@
 }
 
 .lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 22%, #0a0d10);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 86%, #24303a);
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0;
-  animation: steward-blink 2.8s ease-in-out infinite;
-  animation-delay: var(--emote-delay);
-}
-
-.vent {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 70%, #0a0d10);
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: steward-beep 4.8s ease-in-out infinite;
+  animation: steward-blink 3.8s ease-in-out infinite;
   animation-delay: var(--emote-delay);
 }
 
 .alive .lid {
-  animation-duration: 1.9s;
-}
-
-.alive .gaze {
-  animation-duration: 2.6s;
-}
-
-.alive .bot {
   animation-duration: 1.85s;
 }
 
+.alive .gaze {
+  animation-duration: 2.4s;
+}
+
+.alive .bot {
+  animation-duration: 1.65s;
+}
+
 .alive .lens {
-  fill: #f4f8fb;
-  animation-duration: 1.6s;
+  fill: #fcfdff;
+  animation-duration: 1.45s;
+}
+
+.alive .pupil {
+  animation: steward-pulse 1.35s ease-in-out infinite;
+  animation-delay: var(--emote-delay);
 }
 
 @media (min-width: 561px) {
@@ -189,13 +153,7 @@
   }
 
   .board {
-    --steward-size: 72px;
-    border-radius: 16px;
-  }
-
-  .ring {
-    inset: 5px;
-    border-radius: 14px;
+    --steward-size: 64px;
   }
 }
 
@@ -205,7 +163,7 @@
     transform: scale(1) translateY(0);
   }
   50% {
-    transform: scale(1.08) translateY(-3px);
+    transform: scale(1.03) translateY(-1.5px);
   }
 }
 
@@ -215,24 +173,24 @@
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-2px);
+    transform: translateY(-1.2px);
   }
 }
 
 @keyframes steward-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent);
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--team-accent, var(--green)) 0%, transparent));
   }
   50% {
-    box-shadow: 0 0 22px 3px color-mix(in srgb, var(--team-accent, var(--green)) 42%, transparent);
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--team-accent, var(--green)) 55%, transparent));
   }
 }
 
 @keyframes steward-lens {
   0%,
   100% {
-    fill: #eef3f7;
+    fill: #f6f8fb;
   }
   50% {
     fill: #ffffff;
@@ -241,22 +199,22 @@
 
 @keyframes steward-blink {
   0%,
-  68%,
-  88%,
+  72%,
+  91%,
   100% {
     opacity: 0;
-    transform: scaleY(0.12);
+    transform: scaleY(0.1);
   }
-  72%,
-  78% {
+  76%,
+  81% {
     opacity: 1;
     transform: scaleY(1);
   }
-  82% {
+  85% {
     opacity: 0;
-    transform: scaleY(0.12);
+    transform: scaleY(0.1);
   }
-  84% {
+  87% {
     opacity: 1;
     transform: scaleY(1);
   }
@@ -264,39 +222,25 @@
 
 @keyframes steward-glance {
   0%,
-  30%,
+  28%,
   100% {
     transform: translate(0, 0);
   }
-  42% {
-    transform: translate(2.2px, 0.5px);
+  40% {
+    transform: translate(2.1px, 0.35px);
   }
-  62% {
-    transform: translate(-2px, 0.4px);
+  64% {
+    transform: translate(-1.7px, 0.25px);
   }
 }
 
-@keyframes steward-nod {
+@keyframes steward-pulse {
   0%,
   100% {
-    transform: rotate(0deg);
+    transform: scale(1);
   }
   50% {
-    transform: rotate(-4deg);
-  }
-}
-
-@keyframes steward-beep {
-  0%,
-  62%,
-  100% {
-    transform: scaleY(1);
-  }
-  70% {
-    transform: scaleY(1.85);
-  }
-  78% {
-    transform: scaleY(0.55);
+    transform: scale(1.16);
   }
 }
 
@@ -304,12 +248,10 @@
   .steward,
   .alive,
   .bot,
-  .head,
   .lid,
   .gaze,
   .pupil,
-  .lens,
-  .vent {
+  .lens {
     animation: none;
   }
 }

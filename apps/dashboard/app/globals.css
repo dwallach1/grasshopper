@@ -3852,7 +3852,7 @@ a:focus-visible {
 
 .line-row-hit {
   display: grid;
-  grid-template-columns: 28px 56px minmax(0, 1fr) auto;
+  grid-template-columns: 28px auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
