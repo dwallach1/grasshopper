@@ -4,8 +4,9 @@
  * no cornerRadius, dummy shape first, gradient shapes last (we use solids).
  *
  * Animation names do not survive @rive-app/canvas, so each steward×play is
- * its own artboard with one default linear clip. The official runtime picks
- * the artboard by name and autoplays that clip.
+ * its own artboard with one default linear clip. KeyedObject.objectId must
+ * be artboard-relative (`targetId - artboardId`); file-absolute IDs load
+ * but never apply in the official runtime.
  */
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -22,6 +23,7 @@ import {
 import {
   STEWARD_RIVE_KINDS,
   STEWARD_RIVE_PLAYS,
+  riveKeyedObjectId,
   stewardRiveArtboard,
   type StewardRivePlay,
 } from '../lib/steward-rive';
@@ -49,10 +51,10 @@ type PlayMotion = {
 
 const PLAY_MOTION = {
   still: { duration: 2, bounceY: 0, scaleX: 1, scaleY: 1, lidMul: 1, loop: 'oneShot' },
-  idle: { duration: 150, bounceY: -9, scaleX: 1.12, scaleY: 0.88, lidMul: 1, loop: 'loop' },
-  up: { duration: 108, bounceY: -12, scaleX: 1.16, scaleY: 0.84, lidMul: 0.78, loop: 'loop' },
-  down: { duration: 192, bounceY: -5, scaleX: 1.07, scaleY: 0.93, lidMul: 1.22, loop: 'loop' },
-  alive: { duration: 96, bounceY: -11, scaleX: 1.14, scaleY: 0.86, lidMul: 0.9, loop: 'loop' },
+  idle: { duration: 90, bounceY: -14, scaleX: 1.2, scaleY: 0.8, lidMul: 1, loop: 'loop' },
+  up: { duration: 72, bounceY: -18, scaleX: 1.26, scaleY: 0.74, lidMul: 0.78, loop: 'loop' },
+  down: { duration: 120, bounceY: -8, scaleX: 1.12, scaleY: 0.9, lidMul: 1.22, loop: 'loop' },
+  alive: { duration: 66, bounceY: -16, scaleX: 1.22, scaleY: 0.78, lidMul: 0.9, loop: 'loop' },
 } satisfies Record<StewardRivePlay, PlayMotion>;
 
 function toFigure(pathPoint: Pt): Pt {
@@ -114,11 +116,12 @@ function pairFrame(frame: number, value: number): [number, number] {
 function keyDoubles(
   riv: RiveFile,
   animation: number,
+  artboard: number,
   target: number,
   property: number,
   frames: Array<[number, number]>,
 ): void {
-  const keyed = riv.addKeyedObject(animation, target);
+  const keyed = riv.addKeyedObject(animation, riveKeyedObjectId(artboard, target));
   const prop = riv.addKeyedProperty(keyed, property);
   for (const [frame, value] of frames) {
     riv.addKeyFrameDouble(prop, { frame, value, interpolation: 'cubic' });
@@ -148,9 +151,9 @@ function glanceWindows(duration: number): Array<[number, number]> {
   return [
     [0, 0],
     [Math.round(duration * 0.28), 0],
-    [Math.round(duration * 0.4), 2.1],
+    [Math.round(duration * 0.4), 3.6],
     [Math.round(duration * 0.52), 0],
-    [Math.round(duration * 0.64), -1.6],
+    [Math.round(duration * 0.64), -2.8],
     [Math.round(duration * 0.76), 0],
     [duration, 0],
   ];
@@ -226,17 +229,17 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
   });
 
   const mid = Math.max(1, Math.round(motion.duration / 2));
-  keyDoubles(riv, anim, figure, PropertyKey.y, [
+  keyDoubles(riv, anim, artboard, figure, PropertyKey.y, [
     [0, FIGURE_Y],
     [mid, FIGURE_Y + motion.bounceY],
     [motion.duration, FIGURE_Y],
   ]);
-  keyDoubles(riv, anim, figure, PropertyKey.scaleX, [
+  keyDoubles(riv, anim, artboard, figure, PropertyKey.scaleX, [
     [0, 1],
     [mid, motion.scaleX],
     [motion.duration, 1],
   ]);
-  keyDoubles(riv, anim, figure, PropertyKey.scaleY, [
+  keyDoubles(riv, anim, artboard, figure, PropertyKey.scaleY, [
     [0, 1],
     [mid, motion.scaleY],
     [motion.duration, 1],
@@ -248,6 +251,7 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
     keyDoubles(
       riv,
       anim,
+      artboard,
       lid.id,
       PropertyKey.y,
       blink.map(([frame, amount]) => pairFrame(frame, lid.y + amount * lid.travel)),
@@ -257,6 +261,7 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
     keyDoubles(
       riv,
       anim,
+      artboard,
       pupil.id,
       PropertyKey.x,
       glance.map(([frame, dx]) => pairFrame(frame, pupil.x + dx)),

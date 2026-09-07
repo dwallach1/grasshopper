@@ -68,3 +68,51 @@ export function expectedStewardArtboards(): string[] {
     STEWARD_RIVE_PLAYS.map((play) => stewardRiveArtboard(kind, play)),
   );
 }
+
+export type StewardFigureSample = {
+  artboard: string;
+  durationSec: number;
+  y0: number;
+  yMid: number;
+  scaleX0: number;
+  scaleXMid: number;
+};
+
+/** Apply the first clip in the official runtime and sample the Figure node. */
+export async function sampleStewardFigure(
+  kind: StewardBotKind,
+  play: StewardRivePlay,
+): Promise<StewardFigureSample> {
+  installRiveDomHarness();
+  const { RuntimeLoader } = await import('@rive-app/canvas');
+  const runtime = await RuntimeLoader.awaitInstance();
+  const path = join(STEWARD_RIV_DIR, `${kind}_${play}.riv`);
+  const bytes = await readFile(path);
+  const file = await runtime.load(new Uint8Array(bytes));
+  const artboard = file.defaultArtboard();
+  const anim = artboard.animationByIndex(0);
+  const timed = anim as typeof anim & { duration: number; fps: number };
+  const clip = new runtime.LinearAnimationInstance(anim, artboard);
+  const figure = artboard.node('Figure');
+  if (!figure) throw new Error(`missing Figure on ${artboard.name}`);
+  const durationSec = timed.duration / timed.fps;
+  clip.time = 0;
+  clip.apply(1);
+  artboard.advance(0);
+  const y0 = figure.y;
+  const scaleX0 = figure.scaleX;
+  clip.advance(durationSec / 2);
+  clip.apply(1);
+  artboard.advance(0);
+  const sampled = {
+    artboard: artboard.name,
+    durationSec,
+    y0,
+    yMid: figure.y,
+    scaleX0,
+    scaleXMid: figure.scaleX,
+  };
+  clip.delete();
+  artboard.delete();
+  return sampled;
+}

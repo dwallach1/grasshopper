@@ -147,6 +147,7 @@ describe('desk IA smoke', () => {
     expect(riveFace).toContain('data-runtime="rive"');
     expect(riveLib).toContain('stewardRiveSrc');
     expect(riveLib).toContain('stewardRiveArtboard');
+    expect(riveLib).toContain('riveKeyedObjectId');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');

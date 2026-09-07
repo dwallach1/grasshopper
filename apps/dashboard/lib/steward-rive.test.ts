@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { stewardRiveArtboard, stewardRiveArtboards, stewardRivePlay, stewardRiveSrc } from './steward-rive';
-import { decodeAllStewardRivs, expectedStewardArtboards } from './steward-rive-decode';
+import { riveKeyedObjectId, stewardRiveArtboard, stewardRiveArtboards, stewardRivePlay, stewardRiveSrc } from './steward-rive';
+import { decodeAllStewardRivs, expectedStewardArtboards, sampleStewardFigure } from './steward-rive-decode';
 
 describe('steward rive artboards', () => {
   test('play picks still when motion is reduced and alive when the heartbeat is fresh', () => {
@@ -29,5 +29,15 @@ describe('official @rive-app/canvas decode', () => {
       expect(row.bytes).toBeGreaterThan(400);
       expect(row.animationCount).toBe(1);
     }
+  }, 30_000);
+
+  test('KeyedObject ids are artboard-relative so official apply moves Figure', async () => {
+    expect(riveKeyedObjectId(1, 2)).toBe(1);
+    const idle = await sampleStewardFigure('quantanamo', 'idle');
+    const still = await sampleStewardFigure('quantanamo', 'still');
+    expect(idle.yMid).toBeLessThan(idle.y0 - 8);
+    expect(idle.scaleXMid).toBeGreaterThan(idle.scaleX0 + 0.1);
+    expect(still.yMid).toBe(still.y0);
+    expect(still.scaleXMid).toBe(still.scaleX0);
   }, 30_000);
 });

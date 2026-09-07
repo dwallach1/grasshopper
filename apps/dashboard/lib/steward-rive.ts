@@ -7,7 +7,12 @@ import type { StewardBotKind, StewardMood } from './desk-avatar';
 
 export const RIVE_WASM_SRC = '/rive/rive.wasm';
 
-/** One artboard per file so generator objectIds resolve in @rive-app/canvas. */
+/** @rive-app remaps KeyedObject.objectId from the artboard, not the file. */
+export function riveKeyedObjectId(artboardId: number, targetId: number): number {
+  return targetId - artboardId;
+}
+
+/** One artboard per file; KeyedObject ids are artboard-relative. */
 export function stewardRiveSrc(kind: StewardBotKind, play: StewardRivePlay): string {
   return `/stewards/${kind}_${play}.riv`;
 }
