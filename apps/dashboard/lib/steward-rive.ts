@@ -5,8 +5,12 @@
  */
 import type { StewardBotKind, StewardMood } from './desk-avatar';
 
-export const STEWARD_RIV_SRC = '/stewards/stewards.riv';
 export const RIVE_WASM_SRC = '/rive/rive.wasm';
+
+/** One artboard per file so generator objectIds resolve in @rive-app/canvas. */
+export function stewardRiveSrc(kind: StewardBotKind, play: StewardRivePlay): string {
+  return `/stewards/${kind}_${play}.riv`;
+}
 
 export const STEWARD_RIVE_PLAYS = ['still', 'idle', 'up', 'down', 'alive'] as const;
 export type StewardRivePlay = (typeof STEWARD_RIVE_PLAYS)[number];

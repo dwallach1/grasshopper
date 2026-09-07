@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { stewardRiveArtboard, stewardRiveArtboards, stewardRivePlay } from './steward-rive';
-import { decodeStewardRiv, expectedStewardArtboards } from './steward-rive-decode';
+import { stewardRiveArtboard, stewardRiveArtboards, stewardRivePlay, stewardRiveSrc } from './steward-rive';
+import { decodeAllStewardRivs, expectedStewardArtboards } from './steward-rive-decode';
 
 describe('steward rive artboards', () => {
   test('play picks still when motion is reduced and alive when the heartbeat is fresh', () => {
@@ -14,17 +14,20 @@ describe('steward rive artboards', () => {
   test('artboard names are KIND_play so the official runtime can select without animation names', () => {
     expect(stewardRiveArtboard('quantanamo', 'idle')).toBe('QUANTANAMO_idle');
     expect(stewardRiveArtboard('oddsborne', 'down')).toBe('ODDSBORNE_down');
+    expect(stewardRiveSrc('quantanamo', 'up')).toBe('/stewards/quantanamo_up.riv');
     expect(stewardRiveArtboards()).toHaveLength(25);
   });
 });
 
 describe('official @rive-app/canvas decode', () => {
-  test('generated stewards.riv loads and exposes every steward artboard', async () => {
-    const decoded = await decodeStewardRiv();
-    expect(decoded.fingerprint).toBe('RIVE');
-    expect(decoded.bytes).toBeGreaterThan(2_000);
-    expect(decoded.artboardCount).toBe(25);
-    expect(decoded.artboards).toEqual(expectedStewardArtboards());
-    expect(decoded.animationsPerArtboard.every((count) => count === 1)).toBe(true);
-  }, 20_000);
+  test('each generated steward .riv loads as one artboard with one clip', async () => {
+    const decoded = await decodeAllStewardRivs();
+    expect(decoded).toHaveLength(25);
+    expect(decoded.map((row) => row.artboard)).toEqual(expectedStewardArtboards());
+    for (const row of decoded) {
+      expect(row.fingerprint).toBe('RIVE');
+      expect(row.bytes).toBeGreaterThan(400);
+      expect(row.animationCount).toBe(1);
+    }
+  }, 30_000);
 });

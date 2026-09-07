@@ -28,7 +28,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dashboardRoot = join(here, '..');
-const outRiv = join(dashboardRoot, 'public/stewards/stewards.riv');
+const outDir = join(dashboardRoot, 'public/stewards');
 const wasmSrc = join(dashboardRoot, 'node_modules/@rive-app/canvas/rive.wasm');
 const wasmDest = join(dashboardRoot, 'public/rive/rive.wasm');
 
@@ -49,62 +49,16 @@ type PlayMotion = {
 
 const PLAY_MOTION = {
   still: { duration: 2, bounceY: 0, scaleX: 1, scaleY: 1, lidMul: 1, loop: 'oneShot' },
-  idle: { duration: 168, bounceY: -3.4, scaleX: 1.05, scaleY: 0.95, lidMul: 1, loop: 'loop' },
-  up: { duration: 126, bounceY: -5.2, scaleX: 1.07, scaleY: 0.93, lidMul: 0.78, loop: 'loop' },
-  down: { duration: 210, bounceY: -1.8, scaleX: 1.03, scaleY: 0.97, lidMul: 1.22, loop: 'loop' },
-  alive: { duration: 120, bounceY: -4.6, scaleX: 1.06, scaleY: 0.94, lidMul: 0.9, loop: 'loop' },
+  idle: { duration: 150, bounceY: -9, scaleX: 1.12, scaleY: 0.88, lidMul: 1, loop: 'loop' },
+  up: { duration: 108, bounceY: -12, scaleX: 1.16, scaleY: 0.84, lidMul: 0.78, loop: 'loop' },
+  down: { duration: 192, bounceY: -5, scaleX: 1.07, scaleY: 0.93, lidMul: 1.22, loop: 'loop' },
+  alive: { duration: 96, bounceY: -11, scaleX: 1.14, scaleY: 0.86, lidMul: 0.9, loop: 'loop' },
 } satisfies Record<StewardRivePlay, PlayMotion>;
 
 function toFigure(pathPoint: Pt): Pt {
   // PR #28 SVG: viewBox 80, inner translate(8 7), path in 64-space.
   // Center that 80 tile inside the 96 artboard, then subtract the figure origin.
   return { x: pathPoint.x - 32, y: pathPoint.y - 63 };
-}
-
-function parseSilhouette(d: string): Pt[] {
-  const tokens = d.match(/[MLCZ]|-?\d*\.?\d+/g);
-  if (!tokens) throw new Error(`empty path: ${d}`);
-  const points: Pt[] = [];
-  let i = 0;
-  let cursor: Pt = { x: 0, y: 0 };
-  while (i < tokens.length) {
-    const cmd = tokens[i];
-    if (cmd === 'M') {
-      cursor = { x: Number(tokens[i + 1]), y: Number(tokens[i + 2]) };
-      points.push(cursor);
-      i += 3;
-      continue;
-    }
-    if (cmd === 'C') {
-      const c1 = { x: Number(tokens[i + 1]), y: Number(tokens[i + 2]) };
-      const c2 = { x: Number(tokens[i + 3]), y: Number(tokens[i + 4]) };
-      const end = { x: Number(tokens[i + 5]), y: Number(tokens[i + 6]) };
-      for (let step = 1; step <= 6; step += 1) {
-        points.push(cubic(cursor, c1, c2, end, step / 6));
-      }
-      cursor = end;
-      i += 7;
-      continue;
-    }
-    if (cmd === 'Z') {
-      i += 1;
-      continue;
-    }
-    throw new Error(`unsupported path token ${cmd}`);
-  }
-  return points.map(toFigure);
-}
-
-function cubic(p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
-  return {
-    x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-    y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
-  };
 }
 
 function addArtboard(riv: RiveFile, name: string): number {
@@ -141,17 +95,6 @@ function addFilledEllipse(
     parent,
   );
   riv.addEllipse(drawable, { width, height });
-  const fill = riv.addFill(drawable);
-  riv.addSolidColor(fill, color);
-  return drawable;
-}
-
-function addFilledPath(riv: RiveFile, parent: number, name: string, points: Pt[], color: number): number {
-  const drawable = riv['addShape'](parent, { name });
-  const path = riv.addPointsPath(drawable, { name: `${name}Path`, closed: true });
-  for (const point of points) {
-    riv.addVertex(path, point);
-  }
   const fill = riv.addFill(drawable);
   riv.addSolidColor(fill, color);
   return drawable;
@@ -220,9 +163,11 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
 
   const fur = stewardFurTone(kind);
   const face = stewardFaceLayout(kind);
-  const body = stewardSilhouette(kind);
+  const mound = stewardSilhouette(kind);
   const motion = PLAY_MOTION[play];
-  const lidCover = Math.min(0.86, Math.max(0.36, face.lidCover * motion.lidMul));
+  const lidCover = Math.min(0.72, Math.max(0.34, face.lidCover * motion.lidMul * 0.88));
+  const bodyW = 36 * mound.girth;
+  const bodyH = 34 * mound.peak + 6;
 
   addFilledEllipse(
     riv,
@@ -234,46 +179,42 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
     4.2,
     rgba(20, 18, 28, 46),
   );
-  addFilledPath(riv, figure, 'Body', parseSilhouette(body.path), hex(fur.base));
-  addFilledEllipse(
-    riv,
-    figure,
-    'Belly',
-    0,
-    -18,
-    kind === 'quantanamo' ? 26 : 20,
-    kind === 'quantanamo' ? 14 : 16,
-    hex(fur.lit),
-  );
-  addFilledEllipse(riv, figure, 'Shine', -8, -42, kind === 'quantanamo' ? 18 : 14, 8, rgba(255, 255, 255, 72));
+  addFilledEllipse(riv, figure, 'Body', 0, -bodyH * 0.42, bodyW, bodyH, hex(fur.base));
+  if (kind === 'bandit') {
+    addFilledEllipse(riv, figure, 'PuffL', -11, -bodyH * 0.78, 14, 12, hex(fur.base));
+    addFilledEllipse(riv, figure, 'PuffC', 0, -bodyH * 0.86, 15, 13, hex(fur.base));
+    addFilledEllipse(riv, figure, 'PuffR', 11, -bodyH * 0.76, 14, 12, hex(fur.base));
+  }
+  addFilledEllipse(riv, figure, 'Belly', 0, -bodyH * 0.22, bodyW * 0.46, bodyH * 0.34, hex(fur.lit));
+  addFilledEllipse(riv, figure, 'Shine', -bodyW * 0.16, -bodyH * 0.72, bodyW * 0.28, 8, rgba(255, 255, 255, 80));
 
   const lids: Array<{ id: number; y: number; travel: number }> = [];
   const pupils: Array<{ id: number; x: number }> = [];
+  const eyeR = face.r * 1.28;
   for (const side of ['L', 'R'] as const) {
     const cx = side === 'L' ? face.left : face.right;
     const origin = toFigure({ x: cx, y: face.cy });
     const tilt = ((side === 'L' ? face.lidTiltL : face.lidTiltR) * Math.PI) / 180;
-    const r = face.r;
-    addFilledEllipse(riv, figure, `Sclera${side}`, origin.x, origin.y, r * 2, r * 1.88, hex('#fffdf8'));
+    addFilledEllipse(riv, figure, `Sclera${side}`, origin.x, origin.y, eyeR * 2, eyeR * 1.86, hex('#fffdf8'));
     pupils.push({
       id: addFilledEllipse(
         riv,
         figure,
         `Pupil${side}`,
         origin.x,
-        origin.y + r * 0.16,
-        r * 0.56,
-        r * 0.56,
+        origin.y + eyeR * 0.18,
+        eyeR * 0.7,
+        eyeR * 0.7,
         hex('#16141c'),
       ),
       x: origin.x,
     });
-    const lidH = r * 2 * lidCover;
-    const lidY = origin.y - r + lidH / 2;
+    const lidH = eyeR * 2 * lidCover;
+    const lidY = origin.y - eyeR + lidH / 2;
     lids.push({
-      id: addFilledEllipse(riv, figure, `Lid${side}`, origin.x, lidY, r * 2.15, lidH, hex(fur.base), tilt),
+      id: addFilledEllipse(riv, figure, `Lid${side}`, origin.x, lidY, eyeR * 2.2, lidH, hex(fur.base), tilt),
       y: lidY,
-      travel: r * (1.05 - lidCover),
+      travel: eyeR * (1.08 - lidCover),
     });
   }
 
@@ -323,14 +264,14 @@ function buildArtboard(riv: RiveFile, kind: StewardBotKind, play: StewardRivePla
   }
 }
 
-export function generateStewardRivBytes(): Uint8Array {
+export function generateStewardRiv(kind: StewardBotKind, play: StewardRivePlay): Uint8Array {
   const riv = new RiveFile();
-  for (const kind of STEWARD_RIVE_KINDS) {
-    for (const play of STEWARD_RIVE_PLAYS) {
-      buildArtboard(riv, kind, play);
-    }
-  }
+  buildArtboard(riv, kind, play);
   return riv.export();
+}
+
+function rivFileName(kind: StewardBotKind, play: StewardRivePlay): string {
+  return `${kind}_${play}.riv`;
 }
 
 function syncWasm(): void {
@@ -339,10 +280,17 @@ function syncWasm(): void {
 }
 
 if (import.meta.main) {
-  mkdirSync(dirname(outRiv), { recursive: true });
-  const bytes = generateStewardRivBytes();
-  writeFileSync(outRiv, bytes);
+  mkdirSync(outDir, { recursive: true });
+  let total = 0;
+  for (const kind of STEWARD_RIVE_KINDS) {
+    for (const play of STEWARD_RIVE_PLAYS) {
+      const bytes = generateStewardRiv(kind, play);
+      const path = join(outDir, rivFileName(kind, play));
+      writeFileSync(path, bytes);
+      total += bytes.byteLength;
+      console.log(`wrote ${path} (${bytes.byteLength} bytes)`);
+    }
+  }
   syncWasm();
-  console.log(`wrote ${outRiv} (${bytes.byteLength} bytes)`);
-  console.log(`copied wasm → ${wasmDest}`);
+  console.log(`copied wasm → ${wasmDest} (${total} bytes of rivs)`);
 }

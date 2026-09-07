@@ -141,10 +141,11 @@ describe('desk IA smoke', () => {
     expect(avatars).not.toContain('from \'three\'');
     expect(avatars).toContain('mood=');
     expect(riveFace).toContain("from '@rive-app/react-canvas'");
-    expect(riveFace).toContain('useRive');
+    expect(riveFace).toContain('RuntimeLoader');
+    expect(riveFace).toContain('LinearAnimationInstance');
     expect(riveFace).toContain('RuntimeLoader.setWasmUrl');
     expect(riveFace).toContain('data-runtime="rive"');
-    expect(riveLib).toContain("STEWARD_RIV_SRC = '/stewards/stewards.riv'");
+    expect(riveLib).toContain('stewardRiveSrc');
     expect(riveLib).toContain('stewardRiveArtboard');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');

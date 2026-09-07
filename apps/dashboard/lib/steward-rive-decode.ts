@@ -7,24 +7,28 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { installRiveDomHarness } from './rive-dom-harness';
-import { stewardRiveArtboards } from './steward-rive';
+import {
+  STEWARD_RIVE_KINDS,
+  STEWARD_RIVE_PLAYS,
+  stewardRiveArtboard,
+  type StewardRivePlay,
+} from './steward-rive';
+import type { StewardBotKind } from './desk-avatar';
 
-export const STEWARD_RIV_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../public/stewards/stewards.riv',
-);
+export const STEWARD_RIV_DIR = join(dirname(fileURLToPath(import.meta.url)), '../public/stewards');
 
 export type DecodedStewardRiv = {
+  path: string;
   bytes: number;
   fingerprint: string;
-  artboardCount: number;
-  artboards: string[];
-  animationsPerArtboard: number[];
+  artboard: string;
+  animationCount: number;
 };
 
-export async function decodeStewardRiv(path = STEWARD_RIV_PATH): Promise<DecodedStewardRiv> {
+export async function decodeOneStewardRiv(kind: StewardBotKind, play: StewardRivePlay): Promise<DecodedStewardRiv> {
   installRiveDomHarness();
   const { EventType, RiveFile } = await import('@rive-app/canvas');
+  const path = join(STEWARD_RIV_DIR, `${kind}_${play}.riv`);
   const bytes = await readFile(path);
   const file = new RiveFile({
     buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
@@ -36,26 +40,31 @@ export async function decodeStewardRiv(path = STEWARD_RIV_PATH): Promise<Decoded
   });
 
   const instance = file.getInstance();
-  const artboardCount = instance.artboardCount();
-  const artboards: string[] = [];
-  const animationsPerArtboard: number[] = [];
-  for (let i = 0; i < artboardCount; i += 1) {
-    const artboard = instance.artboardByIndex(i);
-    artboards.push(artboard.name);
-    animationsPerArtboard.push(artboard.animationCount());
-    artboard.delete();
-  }
-  file.cleanup();
-
-  return {
+  const artboard = instance.defaultArtboard();
+  const decoded = {
+    path,
     bytes: bytes.byteLength,
     fingerprint: String.fromCharCode(...bytes.subarray(0, 4)),
-    artboardCount,
-    artboards,
-    animationsPerArtboard,
+    artboard: artboard.name,
+    animationCount: artboard.animationCount(),
   };
+  artboard.delete();
+  file.cleanup();
+  return decoded;
+}
+
+export async function decodeAllStewardRivs(): Promise<DecodedStewardRiv[]> {
+  const decoded: DecodedStewardRiv[] = [];
+  for (const kind of STEWARD_RIVE_KINDS) {
+    for (const play of STEWARD_RIVE_PLAYS) {
+      decoded.push(await decodeOneStewardRiv(kind, play));
+    }
+  }
+  return decoded;
 }
 
 export function expectedStewardArtboards(): string[] {
-  return stewardRiveArtboards();
+  return STEWARD_RIVE_KINDS.flatMap((kind) =>
+    STEWARD_RIVE_PLAYS.map((play) => stewardRiveArtboard(kind, play)),
+  );
 }
