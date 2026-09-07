@@ -3482,6 +3482,7 @@ a:focus-visible {
   border: 1px solid var(--line);
   background: #0c1014;
   min-width: 0;
+  overflow: visible;
 }
 
 .term-team-card.is-alive {
@@ -3872,6 +3873,7 @@ a:focus-visible {
   gap: 4px;
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: visible;
 }
 
 .line-row.is-empty {
@@ -3888,6 +3890,7 @@ a:focus-visible {
   background: transparent;
   padding: 0;
   text-align: left;
+  overflow: visible;
 }
 
 .line-place {

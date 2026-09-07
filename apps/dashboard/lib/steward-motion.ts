@@ -1,6 +1,6 @@
 /**
- * Soft emote curves for GPU stewards. Times are milliseconds.
- * Double-blink + staggered glance so the desk does not pulse in lockstep.
+ * Soft emote curves for vector stewards. Times are milliseconds.
+ * CSS/WAAPI cycles match these windows: double-blink + staggered glance.
  */
 
 const BLINK_CYCLE_MS = 3200;

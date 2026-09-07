@@ -9,7 +9,8 @@ import {
   stewardEmoteDelayMs,
   stewardFaceLayout,
   stewardFurTone,
-  stewardMeshSpec,
+  stewardMood,
+  stewardSilhouette,
   type StewardBotKind,
 } from './desk-avatar';
 
@@ -77,15 +78,26 @@ describe('desk steward avatars', () => {
     expect(stewardFaceLayout('oddsborne').lidCover).toBeGreaterThan(stewardFaceLayout('quantanamo').lidCover);
   });
 
-  test('GPU mounds stay one species and stay distinct per steward', () => {
+  test('vector mounds stay one species and stay distinct per steward', () => {
     const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit'];
-    const meshes = kinds.map(stewardMeshSpec);
-    expect(new Set(meshes.map((mesh) => mesh.peak.toFixed(2))).size).toBe(3);
-    expect(new Set(meshes.map((mesh) => mesh.girth.toFixed(2))).size).toBe(3);
-    expect(new Set(meshes.map((mesh) => `${mesh.bumpX},${mesh.bumpGain}`)).size).toBe(3);
-    expect(stewardMeshSpec('oddsborne').peak).toBeGreaterThan(stewardMeshSpec('quantanamo').peak);
-    expect(stewardMeshSpec('quantanamo').girth).toBeGreaterThan(stewardMeshSpec('oddsborne').girth);
-    expect(stewardMeshSpec('quantanamo').eyeSpread).toBeGreaterThan(stewardMeshSpec('oddsborne').eyeSpread);
+    const mounds = kinds.map(stewardSilhouette);
+    expect(new Set(mounds.map((mound) => mound.peak.toFixed(2))).size).toBe(3);
+    expect(new Set(mounds.map((mound) => mound.girth.toFixed(2))).size).toBe(3);
+    expect(new Set(mounds.map((mound) => mound.path)).size).toBe(3);
+    expect(stewardSilhouette('oddsborne').peak).toBeGreaterThan(stewardSilhouette('quantanamo').peak);
+    expect(stewardSilhouette('quantanamo').girth).toBeGreaterThan(stewardSilhouette('oddsborne').girth);
+    expect(stewardFaceLayout('quantanamo').right - stewardFaceLayout('quantanamo').left).toBeGreaterThan(
+      stewardFaceLayout('oddsborne').right - stewardFaceLayout('oddsborne').left,
+    );
+  });
+
+  test('board mood follows ranked return: up / down / idle', () => {
+    expect(stewardMood(1.2)).toBe('up');
+    expect(stewardMood(-0.4)).toBe('down');
+    expect(stewardMood(0)).toBe('idle');
+    expect(stewardMood(null)).toBe('idle');
+    expect(stewardMood(undefined)).toBe('idle');
+    expect(stewardMood(Number.NaN)).toBe('idle');
   });
 });
 
