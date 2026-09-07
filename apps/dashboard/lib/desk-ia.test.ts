@@ -145,8 +145,8 @@ describe('desk IA smoke', () => {
     expect(avatarCss).not.toContain('steward-nod');
     expect(avatarCss).not.toContain('steward-beep');
     expect(css).toContain('--font-brand');
-    expect(css).toContain('Courier Prime');
-    expect(layout).toContain('Courier+Prime');
+    expect(css).toContain('Special Elite');
+    expect(layout).toContain('Special+Elite');
   });
 
   test('Board and Book are Liveline-first, not a Rive tape', async () => {

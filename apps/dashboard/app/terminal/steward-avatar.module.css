@@ -17,7 +17,7 @@
 }
 
 .board {
-  --steward-size: 56px;
+  --steward-size: 64px;
 }
 
 .alive {
@@ -41,7 +41,7 @@
 }
 
 .skin {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 56%, #f6e39a);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #ffe9a3);
 }
 
 .belly {
@@ -61,7 +61,8 @@
 
 .strap,
 .maskStrap {
-  fill: #171b21;
+  fill: #3a3224;
+  opacity: 0.55;
 }
 
 .maskStrap {
@@ -69,15 +70,15 @@
 }
 
 .bridge {
-  stroke: #12161b;
-  stroke-width: 3.2;
+  stroke: #2a2f36;
+  stroke-width: 2.4;
   stroke-linecap: round;
 }
 
 .rim {
-  fill: #14181e;
-  stroke: #2c333c;
-  stroke-width: 0.7;
+  fill: none;
+  stroke: #1d2228;
+  stroke-width: 2.35;
 }
 
 .baseShadow {
@@ -148,7 +149,7 @@
 }
 
 .lid {
-  fill: color-mix(in srgb, var(--team-accent, var(--green)) 56%, #f6e39a);
+  fill: color-mix(in srgb, var(--team-accent, var(--green)) 48%, #ffe9a3);
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0;
@@ -184,7 +185,7 @@
   }
 
   .board {
-    --steward-size: 64px;
+    --steward-size: 72px;
   }
 }
 

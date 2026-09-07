@@ -57,22 +57,22 @@ function BotBody({ kind }: { kind: StewardBotKind }) {
 
 function BotStrap({ kind }: { kind: StewardBotKind }) {
   if (kind === 'quantanamo') {
-    return <rect className={styles.strap} x="8.2" y="23.6" width="47.6" height="8.2" rx="4.1" />;
+    return <rect className={styles.strap} x="8.2" y="24.6" width="47.6" height="5.6" rx="2.8" />;
   }
   if (kind === 'grasshopper') {
-    return <rect className={styles.strap} x="17.5" y="21.4" width="29" height="7.4" rx="3.6" />;
+    return <rect className={styles.strap} x="17.5" y="22.4" width="29" height="5.2" rx="2.6" />;
   }
   if (kind === 'spark') {
-    return <rect className={styles.strap} x="14.4" y="24.2" width="35.2" height="7.2" rx="3.6" />;
+    return <rect className={styles.strap} x="14.4" y="25.2" width="35.2" height="5.2" rx="2.6" />;
   }
   return (
     <rect
       className={kind === 'bandit' ? styles.maskStrap : styles.strap}
       x="15.5"
-      y="22.8"
+      y="23.8"
       width="33"
-      height={kind === 'bandit' ? 8.4 : 7.4}
-      rx="3.8"
+      height={kind === 'bandit' ? 6.2 : 5.2}
+      rx="2.6"
     />
   );
 }
@@ -149,18 +149,18 @@ function BotMouth({ kind }: { kind: StewardBotKind }) {
 
 function faceLayout(kind: StewardBotKind) {
   if (kind === 'grasshopper') {
-    return { left: 24.4, right: 39.6, cy: 25.2, rx: 8.4, ry: 8.8 };
+    return { left: 24.8, right: 39.2, cy: 24.8, rx: 7.2, ry: 7.6 };
   }
   if (kind === 'quantanamo') {
-    return { left: 21.6, right: 42.4, cy: 27.8, rx: 9.1, ry: 9.4 };
+    return { left: 22.4, right: 41.6, cy: 27.2, rx: 7.8, ry: 8.1 };
   }
   if (kind === 'bandit') {
-    return { left: 23.6, right: 40.4, cy: 26.8, rx: 8.1, ry: 8.5 };
+    return { left: 24.2, right: 39.8, cy: 26.2, rx: 7.0, ry: 7.4 };
   }
   if (kind === 'spark') {
-    return { left: 24.2, right: 39.8, cy: 27.8, rx: 7.8, ry: 8.2 };
+    return { left: 24.6, right: 39.4, cy: 27.4, rx: 6.8, ry: 7.2 };
   }
-  return { left: 23.8, right: 40.2, cy: 26.6, rx: 8.2, ry: 8.6 };
+  return { left: 24.4, right: 39.6, cy: 26.0, rx: 7.1, ry: 7.5 };
 }
 
 function BotEye({
@@ -178,7 +178,7 @@ function BotEye({
 }) {
   const reactId = useId().replace(/:/g, '');
   const clip = `steward-eye-${reactId}-${side}`;
-  const rim = Math.max(rx, ry) + 2.15;
+  const rim = Math.max(rx, ry) + 0.45;
   return (
     <g className={styles.eye} transform={`translate(${cx} ${cy})`} data-part="eye">
       <circle className={styles.rim} r={rim} />
