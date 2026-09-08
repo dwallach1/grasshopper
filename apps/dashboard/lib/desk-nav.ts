@@ -35,10 +35,14 @@ export const DESK_TABS: readonly DeskTab[] = [
 ] as const;
 
 /** Phone deck: one thumb-swipe surface. Operator tabs stay off this rail. */
-export const DESK_SWIPE_SURFACES = ['leaderboard', 'book', 'theses', 'team'] as const;
+export const DESK_SWIPE_SURFACES = ['leaderboard', 'book', 'team'] as const;
 export type DeskSwipeSurface = (typeof DESK_SWIPE_SURFACES)[number];
 
 export const DESK_SWIPE_TABS: readonly DeskTab[] = DESK_SWIPE_SURFACES.map((id) => tabForSurface(id));
+
+/** Public chrome can show Theses. It is not a DeskPager page. */
+export const PUBLIC_DESK_SURFACES = ['leaderboard', 'book', 'theses', 'team'] as const;
+export const PUBLIC_DESK_TABS: readonly DeskTab[] = PUBLIC_DESK_SURFACES.map((id) => tabForSurface(id));
 
 /** Old bookmarks → current surfaces. Keep chrome mounted; do not 404. */
 export type DeskPathRedirect = {

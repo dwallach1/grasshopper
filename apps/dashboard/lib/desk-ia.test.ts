@@ -41,7 +41,8 @@ describe('desk IA smoke', () => {
     expect(nav).toContain("go: 'm'");
     expect(nav).toContain("go: 'p'");
     expect(nav).toContain('DESK_SWIPE_SURFACES');
-    expect(nav).toContain("'leaderboard', 'book', 'theses', 'team'");
+    expect(nav).toContain("'leaderboard', 'book', 'team'");
+    expect(nav).toContain('PUBLIC_DESK_TABS');
     expect(nav).not.toMatch(/id: 'home'/);
     expect(nav).not.toMatch(/id: 'risk'/);
     expect(nav).not.toMatch(/label: 'Home'/);
@@ -155,11 +156,12 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('pagerScrollBehavior');
     expect(pager).toContain('scrollIntoView');
     expect(pager).toContain("firstPaint.current ? 'auto'");
-    expect(app).toContain('DESK_SWIPE_TABS');
+    expect(app).toContain('PUBLIC_DESK_TABS');
     expect(app).toContain('<DeskPager');
-    expect(app).toContain('theses: publicView');
+    expect(app).toContain("surface === 'theses'");
     expect(app).toContain('<ThesesWorld');
     expect(app).toContain("from './theses-world'");
+    expect(app).not.toContain('theses: publicView');
     expect(app).toContain('prefers-reduced-motion: reduce');
     const world = await readDashboard('app/terminal/theses-world.tsx');
     const districts = await readDashboard('lib/thesis-districts.ts');
@@ -236,6 +238,7 @@ describe('desk IA smoke', () => {
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');
     expect(css).toContain('.desk-pager');
+    expect(css).toContain('.is-theses');
     expect(css).toContain('.steward-deck');
     expect(css).toContain('.id-card');
     expect(css).toContain('.id-card-webgl');

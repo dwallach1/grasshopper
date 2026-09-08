@@ -6,8 +6,8 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
   canonicalDeskPath,
-  DESK_SWIPE_TABS,
   DESK_TABS,
+  PUBLIC_DESK_TABS,
   hrefForSurface,
   surfaceFromGoLetter,
   surfaceFromPath,
@@ -196,11 +196,11 @@ export function TerminalApp({
   const freshness = assembleDeskFreshness(desk);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
   const rollup = assembleDeskBookRollup(desk);
-  const tabs = publicView ? DESK_SWIPE_TABS : DESK_TABS;
+  const tabs = publicView ? PUBLIC_DESK_TABS : DESK_TABS;
   const swipe = isSwipeSurface(surface);
 
   return (
-    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}`}>
+    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}${publicView && surface === 'theses' ? ' is-theses' : ''}`}>
       <header className="term-top">
         <a
           className="term-brand"
@@ -236,31 +236,24 @@ export function TerminalApp({
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
               book: <BookPanel desk={desk} nowIso={nowIso} />,
-              theses: publicView ? (
-                <ThesesWorld
-                  desk={desk}
-                  reduceMotion={reduceMotion}
-                  selectedId={selectedThesisId}
-                  onSelect={setSelectedThesisId}
-                />
-              ) : (
-                <ThesesPanel
-                  desk={desk}
-                  selected={selectedThesis}
-                  onSelect={setSelectedThesisId}
-                />
-              ),
               team: <TeamPanel desk={desk} reduceMotion={reduceMotion} />,
             }}
           </DeskPager>
         )}
-        {surface === 'theses' && !swipe && (
+        {surface === 'theses' && (publicView ? (
+          <ThesesWorld
+            desk={desk}
+            reduceMotion={reduceMotion}
+            selectedId={selectedThesisId}
+            onSelect={setSelectedThesisId}
+          />
+        ) : (
           <ThesesPanel
             desk={desk}
             selected={selectedThesis}
             onSelect={setSelectedThesisId}
           />
-        )}
+        ))}
         {surface === 'backtests' && (
           <BacktestsPanel
             desk={desk}

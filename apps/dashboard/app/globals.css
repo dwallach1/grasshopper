@@ -2519,6 +2519,21 @@ a:focus-visible {
   display: none;
 }
 
+.term.is-theses .term-main {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.term.is-theses .term-status {
+  display: none;
+}
+
+.term.is-theses .thesis-world {
+  flex: 1;
+  min-height: 0;
+}
+
 .desk-pager {
   display: flex;
   width: 100%;
