@@ -40,14 +40,24 @@ Publisher history caps (`loadDeskFromPostgres` / REST) keep 200 Agentic snapshot
 
 ## Book OPEN strip
 
-Book stays closed-lot CRT for edge stats. Above those cards, a thin Liveline strip plots **open** tickets when a real mark series is already in the snapshot. Assembler: `apps/dashboard/lib/book-open-strip.ts`.
+Open tickets only (mark path vs entry). Closed-lot CRT stays the mast. Assembler: `apps/dashboard/lib/book-open-strip.ts`.
 
-| Steward | Line | Source | `referenceLine` |
-|---|---|---|---|
-| ODDSBORNE | mark | `pm_positions.mark` @ `mark_at` | `pm_positions.average_cost` |
-| ODDSBORNE | CLOB last | `pm_markets.last_yes` or `last_no` @ `last_marked_at` | — |
-| BANDIT | mark | `meme_positions.mark_sol` @ `mark_at` | `meme_positions.average_cost_sol` |
-| BANDIT | CLOB last | `meme_tokens.last_price_sol` @ `last_marked_at` | — |
-| QUANTANAMO | mark series | `portfolio_exposure.last_price` (two+ clocks already in the snapshot) | `book.names.average_cost` |
+```text
+pm_positions.mark @ mark_at
+pm_markets.last_yes|last_no @ last_marked_at
+pm_fills.price @ executed_at
+        └─► Liveline
+pm_positions.average_cost  └─► referenceLine
 
-A steward with no open series is omitted. No CLOB fetch. No invented ticks. Optional second overlay at `kill_mid` only when that number is already on the row. Published `pm_fills.price` / `meme_fills.price_sol` clocks join the line when they belong to that ticket. Liveline 0.0.7 needs two clocks — a lone mark is a label, not an empty chart.
+meme_positions.mark_sol @ mark_at
+meme_tokens.last_price_sol @ last_marked_at
+meme_fills.price_sol @ executed_at
+        └─► Liveline
+meme_positions.average_cost_sol └─► referenceLine
+
+portfolio_exposure.last_price (two+ clocks already in snapshot)
+        └─► Liveline
+book.names.average_cost    └─► referenceLine
+```
+
+No CLOB fetch. No invented ticks. `kill_mid` overlay only if that number is already on the row. Two clocks to draw; a lone mark is a label.

@@ -1,57 +1,34 @@
 'use client';
 
 import { DeskLiveline } from './desk-liveline';
-import type { BookOpen, BookOpenSteward, BookOpenTicket } from '../../lib/book-open-strip';
+import type { BookOpen, BookOpenTicket } from '../../lib/book-open-strip';
 import { formatAmount } from '../../lib/money-units';
 
 export function BookOpenStrip({ open }: { open: BookOpen }) {
-  if (open.rows.length === 0) return null;
+  const tickets = open.rows.flatMap((row) => row.tickets);
+  if (tickets.length === 0) return null;
 
   return (
     <section className="book-open" aria-label="Open tickets">
-      <header className="book-open-mast">
-        <p className="book-open-kicker">BOOK // OPEN</p>
-        <p className="book-open-lede">
-          Live marks. Cost is the reference. Missing series omitted.
-        </p>
-      </header>
-      <div className="book-open-stack">
-        {open.rows.map((row) => (
-          <OpenSteward key={row.id} row={row} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function OpenSteward({ row }: { row: BookOpenSteward }) {
-  return (
-    <article className="book-open-card" aria-label={`${row.steward} open`}>
-      <header className="book-open-who">
-        <b>{row.steward}</b>
-        <i>{row.venue_label} · {row.unit}</i>
-      </header>
+      <p className="book-open-kicker">OPEN</p>
       <ul className="book-open-tickets">
-        {row.tickets.map((ticket) => (
+        {tickets.map((ticket) => (
           <li key={ticket.id}>
             <OpenTicket ticket={ticket} />
           </li>
         ))}
       </ul>
-    </article>
+    </section>
   );
 }
 
 function OpenTicket({ ticket }: { ticket: BookOpenTicket }) {
-  const cost = ticket.cost === null ? null : formatAmount(ticket.cost, ticket.unit);
+  const costLabel = ticket.cost === null ? undefined : formatAmount(ticket.cost, ticket.unit);
   return (
-    <div className="book-open-ticket">
+    <div className="book-open-ticket" aria-label={`${ticket.steward} ${ticket.label} ${ticket.meta}`}>
       <div className="book-open-ticket-id">
         <b>{ticket.label}</b>
-        <span>
-          {ticket.meta}
-          {cost ? ` · cost ${cost}` : ''}
-        </span>
+        <span>{ticket.meta}</span>
       </div>
       {ticket.drawable ? (
         <DeskLiveline
@@ -62,7 +39,9 @@ function OpenTicket({ ticket }: { ticket: BookOpenTicket }) {
           unit={ticket.unit}
           color={ticket.color}
           showValue={false}
-          referenceLine={ticket.cost === null ? undefined : { value: ticket.cost, label: 'cost' }}
+          referenceLine={ticket.cost === null || !costLabel
+            ? undefined
+            : { value: ticket.cost, label: costLabel }}
           emptyText="not in ledger"
           className="book-open-line"
         />

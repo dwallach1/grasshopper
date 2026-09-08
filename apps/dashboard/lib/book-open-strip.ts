@@ -6,8 +6,9 @@
  * row. Equities render only when the snapshot already has a multi-point mark
  * series (two+ `portfolio_exposure.last_price` clocks) — no new publish path.
  *
- * `referenceLine` is average cost. A second overlay at kill mid is included
- * only when that price is already a finite number on the row.
+ * `referenceLine` is average cost — that number lives on the line, not also
+ * as ticket chrome. Edge CRT keeps after-the-fact stats. A kill overlay is
+ * included only when `kill_mid` is already a finite number on the row.
  */
 import {
   clocksFromIso,

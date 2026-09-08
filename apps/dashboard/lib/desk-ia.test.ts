@@ -245,6 +245,11 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('referenceLine');
     expect(openStrip).toContain('compact');
     expect(openStrip).not.toContain('StewardAvatar');
+    expect(openStrip).not.toContain('book-open-lede');
+    expect(openStrip).not.toContain('book-open-who');
+    expect(openStrip).not.toContain('venue_label');
+    expect(openStrip).not.toContain('PREDICTIONS');
+    expect(openStrip).not.toContain('cost ${');
     expect(openMap).toContain('pm_positions.mark');
     expect(openMap).toContain('pm_markets.last_yes');
     expect(openMap).toContain('pm_fills.price');
