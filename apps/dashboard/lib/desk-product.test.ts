@@ -9,6 +9,7 @@ import {
   canonicalDeskPath,
   DESK_PATH_REDIRECTS,
   DESK_SURFACES,
+  DESK_SWIPE_TABS,
   DESK_TABS,
   surfaceFromGoLetter,
   surfaceFromPath,
@@ -62,6 +63,7 @@ describe('desk nav labels', () => {
     expect(labels).not.toContain('Runs');
     expect(labels).not.toContain('Lessons');
     expect(DESK_TABS.some((tab) => tab.go === 'r')).toBe(false);
+    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
     for (const label of labels) {
       expect(label.length).toBeGreaterThan(3);
       expect(/^[A-Z]{3,4}$/.test(label)).toBe(false);

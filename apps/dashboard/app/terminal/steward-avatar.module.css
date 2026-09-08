@@ -19,6 +19,10 @@
   --steward-size: 64px;
 }
 
+.card {
+  --steward-size: 128px;
+}
+
 .icon {
   width: 100%;
   height: 100%;
@@ -33,6 +37,10 @@
 
   .board {
     --steward-size: 72px;
+  }
+
+  .card {
+    --steward-size: 148px;
   }
 }
 

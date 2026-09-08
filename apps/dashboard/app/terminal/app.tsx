@@ -6,12 +6,14 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
   canonicalDeskPath,
+  DESK_SWIPE_TABS,
   DESK_TABS,
   hrefForSurface,
   surfaceFromGoLetter,
   surfaceFromPath,
   type DeskSurface,
 } from '../../lib/desk-nav';
+import { isSwipeSurface } from '../../lib/desk-swipe';
 import { assembleDeskBookRollup } from '../../lib/desk-book-rollup';
 import { assembleDeskFreshness, freshnessTone } from '../../lib/desk-freshness';
 import { heldAndCandidateSymbols } from '../../lib/held-catalyst';
@@ -30,6 +32,7 @@ import {
 } from '../../lib/prediction-book';
 import { BacktestsPanel } from './backtests-panel';
 import { BookPanel } from './book-panel';
+import { DeskPager } from './desk-pager';
 import { LeaderboardPanel } from './leaderboard-panel';
 import { TeamPanel } from './team-panel';
 import { VenueFilterBar, VenueMark } from './venue-filter';
@@ -63,10 +66,19 @@ export function TerminalApp({
   const [selectedTestId, setSelectedTestId] = useState(initial.tests[0]?.id ?? null);
   const [goArmed, setGoArmed] = useState(false);
   const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   useEffect(() => {
     rememberDesk(initial);
   }, [initial]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setReduceMotion(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -183,9 +195,11 @@ export function TerminalApp({
   const freshness = assembleDeskFreshness(desk);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
   const rollup = assembleDeskBookRollup(desk);
+  const tabs = publicView ? DESK_SWIPE_TABS : DESK_TABS;
+  const swipe = isSwipeSurface(surface);
 
   return (
-    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}`}>
+    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}`}>
       <header className="term-top">
         <a
           className="term-brand"
@@ -195,7 +209,7 @@ export function TerminalApp({
           GRASSHOPPER
         </a>
         <nav className="term-nav" aria-label="Terminal">
-          {DESK_TABS.map((item) => (
+          {tabs.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -212,7 +226,19 @@ export function TerminalApp({
       </header>
       {notice && <div className="term-banner" role="status">{notice}</div>}
       <main className="term-main">
-        {surface === 'book' && <BookPanel desk={desk} nowIso={nowIso} />}
+        {swipe && (
+          <DeskPager
+            surface={surface}
+            reduceMotion={reduceMotion}
+            onSnap={(next) => go(hrefForSurface(next))}
+          >
+            {{
+              leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
+              book: <BookPanel desk={desk} nowIso={nowIso} />,
+              team: <TeamPanel desk={desk} reduceMotion={reduceMotion} />,
+            }}
+          </DeskPager>
+        )}
         {surface === 'theses' && (
           <ThesesPanel
             desk={desk}
@@ -228,10 +254,6 @@ export function TerminalApp({
           />
         )}
         {surface === 'events' && <EventsPanel desk={desk} />}
-        {surface === 'team' && <TeamPanel desk={desk} now={now} />}
-        {surface === 'leaderboard' && (
-          <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />
-        )}
       </main>
       <footer className="term-status">
         <span>USD NAV {ledgerAmount(rollup.usd_nav, 'USD')}</span>
@@ -242,8 +264,8 @@ export function TerminalApp({
         <span>Q {desk.counts.open_research}</span>
         <span className="term-kbd">1-6 panels · g then letter · j/k thesis · r refresh · ? help</span>
       </footer>
-      <nav className="term-dock" aria-label="Desk tabs">
-        {DESK_TABS.map((item) => (
+      <nav className={`term-dock${publicView ? ' is-indicator' : ''}`} aria-label="Desk tabs">
+        {tabs.map((item) => (
           <a
             key={item.href}
             href={item.href}

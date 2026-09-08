@@ -105,6 +105,16 @@ a:focus-visible {
   html {
     scroll-behavior: auto;
   }
+
+  .desk-pager,
+  .steward-deck {
+    scroll-behavior: auto;
+  }
+
+  .id-card,
+  .id-card-foil {
+    animation: none;
+  }
 }
 
 .money {
@@ -2493,6 +2503,55 @@ a:focus-visible {
   animation: fade-in 280ms var(--ease);
 }
 
+.term.is-swipe {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.term.is-swipe .term-main {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.term.is-swipe .term-status {
+  display: none;
+}
+
+.desk-pager {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.desk-pager::-webkit-scrollbar {
+  display: none;
+}
+
+.desk-pager[data-reduce-motion="1"] {
+  scroll-behavior: auto;
+}
+
+.desk-page {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
 .term-thesis {
   padding: 6px 0 8px;
   border-bottom: 1px solid #1b2129;
@@ -3336,6 +3395,26 @@ a:focus-visible {
     background: rgba(255, 138, 0, 0.12);
   }
 
+  .term-dock.is-indicator {
+    background: transparent;
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .term-dock.is-indicator a {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    background: transparent;
+  }
+
+  .term-dock.is-indicator a.on {
+    color: var(--text);
+    background: transparent;
+    box-shadow: inset 0 -2px 0 var(--amber);
+  }
+
   .term-nav-windows button,
   .term-lot-tile,
   .term-actions button,
@@ -3483,118 +3562,154 @@ a:focus-visible {
   }
 }
 
-.term-team-cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+.steward-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  height: 100%;
+  perspective: 900px;
 }
 
-.term-team-card {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 12px;
-  border: 1px solid var(--line);
-  background: #0c1014;
-  min-width: 0;
-  overflow: visible;
-}
-
-.term-team-card.is-alive {
-  border-color: color-mix(in srgb, var(--team-accent, var(--green)) 45%, var(--line));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--team-accent, var(--green)) 18%, transparent);
-}
-
-.term-team-meta {
-  min-width: 0;
-}
-
-.term-team-name {
+.steward-deck {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  padding: 28px 12%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 12%;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.term-team-name b {
-  letter-spacing: 0.04em;
-  font-size: 14px;
+.steward-deck::-webkit-scrollbar {
+  display: none;
 }
 
-.term-team-pill {
-  display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  font-size: 10px;
-  font-style: normal;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.steward-deck-slot {
+  flex: 0 0 76%;
+  max-width: 320px;
+  scroll-snap-align: center;
 }
 
-.term-team-pill.up {
-  color: var(--green);
-  border-color: rgba(61, 220, 132, 0.4);
+.steward-empty {
+  margin: 0 auto;
+  padding: 48px 20px;
+  text-align: center;
 }
 
-.term-team-pill.warn {
-  color: var(--warn);
-  border-color: rgba(255, 176, 0, 0.4);
+.id-card {
+  --foil-x: 0deg;
+  --foil-y: 0deg;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  transform-style: preserve-3d;
+  animation: id-idle-tilt 7.2s ease-in-out infinite;
+  cursor: grab;
 }
 
-.term-team-pill.muted,
-.term-team-pill.down {
-  color: var(--text-3);
-}
-
-.term-team-role {
-  margin: 4px 0 0;
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.term-team-charter {
-  margin: 6px 0 8px;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.id-card-stock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--card-ink, #8b98a8) 28%, #1b2129);
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--card-ink, #8b98a8) 26%, #14181f) 0%,
+      #0c1014 52%,
+      color-mix(in srgb, var(--card-ink, #8b98a8) 14%, #090b0e) 100%
+    );
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 color-mix(in srgb, var(--card-ink, #8b98a8) 22%, transparent);
 }
 
-.term-team-chips {
+.id-card-stub {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px 8px;
+  color: color-mix(in srgb, var(--card-ink, #8b98a8) 55%, #e8edf2);
+  font-family: var(--font-brand);
+  font-size: 9px;
+  letter-spacing: 0.16em;
 }
 
-.term-team-chip {
-  display: inline-flex;
+.id-card-tear {
+  height: 12px;
+  margin: 0 8px;
+  background:
+    radial-gradient(circle at 6px 50%, var(--canvas) 5px, transparent 5.5px) -6px 0 / 12px 12px;
+  border-top: 1px dashed color-mix(in srgb, var(--card-ink, #8b98a8) 35%, var(--line));
+  border-bottom: 1px dashed color-mix(in srgb, var(--card-ink, #8b98a8) 22%, var(--line));
+}
+
+.id-card-face {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   align-items: center;
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--team-chip, var(--line)) 50%, var(--line));
-  color: var(--team-chip, var(--text-2));
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px 16px 28px;
+  text-align: center;
+}
+
+.id-card-face b {
+  font-family: var(--font-brand);
+  font-size: clamp(16px, 5vw, 20px);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.id-card-face i {
+  color: color-mix(in srgb, var(--card-ink, #8b98a8) 70%, #e8edf2);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.term-team-chip.is-primary {
-  background: color-mix(in srgb, var(--team-chip, var(--amber)) 14%, transparent);
+.id-card-foil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      118deg,
+      transparent 32%,
+      color-mix(in srgb, var(--card-ink, #8b98a8) 28%, rgba(255, 255, 255, 0.2)) 46%,
+      color-mix(in srgb, #c9b8ff 22%, transparent) 52%,
+      transparent 66%
+    );
+  background-size: 220% 220%;
+  mix-blend-mode: overlay;
+  opacity: 0.7;
+  animation: id-foil-sheen 6.4s linear infinite;
 }
 
-.term-team-chip.dim {
-  color: var(--text-3);
-  border-color: var(--line);
+@keyframes id-idle-tilt {
+  0%, 100% {
+    transform: rotateX(calc(var(--foil-x) + 2.2deg)) rotateY(calc(var(--foil-y) - 4deg));
+  }
+  50% {
+    transform: rotateX(calc(var(--foil-x) - 1.8deg)) rotateY(calc(var(--foil-y) + 5deg));
+  }
 }
 
-.term-team-beat {
-  margin: 8px 0 0;
-  color: var(--text-3);
-  font-size: 11px;
+@keyframes id-foil-sheen {
+  0% { background-position: 0% 40%; }
+  100% { background-position: 100% 60%; }
 }
 
 .term-board-rules {
@@ -3674,9 +3789,18 @@ a:focus-visible {
 
 
 @media (min-width: 720px) {
-  .term-team-cards,
   .term-board-cards {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .steward-deck {
+    justify-content: center;
+    padding-inline: 18%;
+    scroll-padding-inline: 18%;
+  }
+
+  .steward-deck-slot {
+    flex-basis: 280px;
   }
 }
 
@@ -3697,9 +3821,14 @@ a:focus-visible {
     font-size: 24px;
   }
 
-  .term-team-card {
-    grid-template-columns: 72px minmax(0, 1fr);
-    padding: 10px;
+  .steward-deck {
+    padding: 20px 10%;
+    scroll-padding-inline: 10%;
+    gap: 10px;
+  }
+
+  .steward-deck-slot {
+    flex-basis: 80%;
   }
 }
 
