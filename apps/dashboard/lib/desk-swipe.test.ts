@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { DESK_SWIPE_SURFACES, DESK_SWIPE_TABS, DESK_TABS } from './desk-nav';
+import { DESK_SWIPE_SURFACES, DESK_SWIPE_TABS, DESK_TABS, PUBLIC_DESK_TABS } from './desk-nav';
 import {
   DESK_PAGER_SLOTS,
   followPagerScroll,
@@ -47,6 +47,8 @@ describe('desk swipe deck', () => {
     expect(DESK_TABS.map((tab) => tab.id)).toEqual([
       'leaderboard', 'book', 'theses', 'events', 'backtests', 'team',
     ]);
+    expect(PUBLIC_DESK_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Theses', 'Team']);
+    expect(PUBLIC_DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/theses', '/team']);
   });
 
   test('reduced motion snaps with no travel animation', () => {
