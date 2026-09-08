@@ -364,7 +364,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(POND, { roughness: 0.18, metalness: 0.12 }),
     'pond',
   );
-  water.scale.set(1.7, 1, 1.05);
+  water.scale.set(2.15, 1, 1.35);
   water.position.set(x, y + 0.02, z);
   root.add(water);
   for (let i = 0; i < 12; i += 1) {
@@ -386,7 +386,7 @@ function addPath(root: Group, shelf: Shelf, radius: number, y: number): void {
   const path = new Group();
   path.name = 'path';
   const rail = shelf.mesh(
-    shelf.geo(new TorusGeometry(radius * 0.86, 0.028, 8, 56)),
+    shelf.geo(new TorusGeometry(radius * 0.86, 0.042, 8, 56)),
     shelf.mat(0xf4efe6, { roughness: 0.55 }),
     'track',
   );
@@ -578,7 +578,7 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
     'arch',
   );
   arch.rotation.y = 0.55;
-  arch.position.set(0.55, y + 0.02, 0.85);
+  arch.position.set(0.2, y + 0.02, 1.55);
   root.add(arch);
   const canvas = makeCanvas(256, 96);
   const ctx = context2d(canvas);
@@ -589,7 +589,7 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
     shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'arch-badge',
   );
-  badge.position.set(0.55, y + 2.12, 0.85);
+  badge.position.set(0.2, y + 2.12, 1.55);
   badge.rotation.y = 0.55;
   root.add(badge);
 }
@@ -816,8 +816,8 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  distant.position.set(5.6, 2.85, -5.4);
-  distant.scale.setScalar(0.62);
+  distant.position.set(2.9, 4.15, -2.6);
+  distant.scale.setScalar(0.48);
   addSoil(distant, shelf, rng, 2.6);
   addGrass(distant, shelf, rng, 2.55, ISLAND_GRASS_Y);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
@@ -865,7 +865,7 @@ export function buildThesisIsland(
   addSoil(group, shelf, rng, radius);
   addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
   addPath(group, shelf, radius, grassY);
-  addPond(group, shelf, 1.05, 1.65, grassY, rng);
+  addPond(group, shelf, -1.35, 1.35, grassY, rng);
 
   const trees: Array<[number, number, number]> = [
     [-2.1, 0.45, 1.05],
