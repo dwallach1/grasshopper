@@ -6,8 +6,8 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
   canonicalDeskPath,
-  DESK_SWIPE_TABS,
   DESK_TABS,
+  PUBLIC_DESK_TABS,
   hrefForSurface,
   surfaceFromGoLetter,
   surfaceFromPath,
@@ -35,6 +35,7 @@ import { BookPanel } from './book-panel';
 import { DeskPager } from './desk-pager';
 import { LeaderboardPanel } from './leaderboard-panel';
 import { TeamPanel } from './team-panel';
+import { ThesesWorld } from './theses-world';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   age,
@@ -195,11 +196,11 @@ export function TerminalApp({
   const freshness = assembleDeskFreshness(desk);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
   const rollup = assembleDeskBookRollup(desk);
-  const tabs = publicView ? DESK_SWIPE_TABS : DESK_TABS;
+  const tabs = publicView ? PUBLIC_DESK_TABS : DESK_TABS;
   const swipe = isSwipeSurface(surface);
 
   return (
-    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}`}>
+    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}${publicView && surface === 'theses' ? ' is-theses' : ''}`}>
       <header className="term-top">
         <a
           className="term-brand"
@@ -239,13 +240,20 @@ export function TerminalApp({
             }}
           </DeskPager>
         )}
-        {surface === 'theses' && (
+        {surface === 'theses' && (publicView ? (
+          <ThesesWorld
+            desk={desk}
+            reduceMotion={reduceMotion}
+            selectedId={selectedThesisId}
+            onSelect={setSelectedThesisId}
+          />
+        ) : (
           <ThesesPanel
             desk={desk}
             selected={selectedThesis}
             onSelect={setSelectedThesisId}
           />
-        )}
+        ))}
         {surface === 'backtests' && (
           <BacktestsPanel
             desk={desk}

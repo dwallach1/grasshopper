@@ -107,7 +107,8 @@ a:focus-visible {
   }
 
   .desk-pager,
-  .steward-deck {
+  .steward-deck,
+  .thesis-districts {
     scroll-behavior: auto;
   }
 
@@ -2518,6 +2519,29 @@ a:focus-visible {
   display: none;
 }
 
+.term.is-theses {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.term.is-theses .term-main {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.term.is-theses .term-status {
+  display: none;
+}
+
+.term.is-theses .thesis-world {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .desk-pager {
   display: flex;
   width: 100%;
@@ -4539,5 +4563,176 @@ a:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .book-open-line {
     filter: none;
+  }
+}
+
+/* ——— Theses world: one miniature district in a cream void ——— */
+
+.thesis-world {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background: #f3ead8;
+}
+
+.thesis-districts {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.thesis-districts::-webkit-scrollbar {
+  display: none;
+}
+
+.thesis-world[data-reduce-motion="1"] .thesis-districts {
+  scroll-behavior: auto;
+}
+
+.thesis-world[data-reading="1"] .thesis-districts {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.thesis-district {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background: #f3ead8;
+}
+
+.thesis-island,
+.thesis-island-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.thesis-island canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.thesis-dots {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.thesis-dots li {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c9c0b2;
+}
+
+.thesis-dots li.is-on {
+  background: #e4b23c;
+}
+
+.thesis-place-index {
+  position: absolute;
+  left: 16px;
+  bottom: 22px;
+  z-index: 2;
+  margin: 0;
+  color: #6a6256;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.thesis-empty {
+  margin: auto;
+  padding: 48px 20px;
+  text-align: center;
+  color: #6a6256;
+}
+
+.thesis-page {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 28px 22px 36px;
+  background: #f4eee3;
+}
+
+.thesis-page-back {
+  align-self: flex-start;
+  margin: 0 0 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #6a6256;
+  font-size: 13px;
+}
+
+.thesis-page h2 {
+  margin: 0 0 16px;
+  max-width: 22rem;
+  color: #1f1b16;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.thesis-page p {
+  margin: 0;
+  max-width: 28rem;
+  color: #2a241c;
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.thesis-page-falsifier {
+  margin-top: 18px !important;
+  color: #6a6256 !important;
+  font-size: 16px !important;
+}
+
+@media (min-width: 720px) {
+  .thesis-page {
+    padding: 48px 72px 64px;
+  }
+
+  .thesis-page h2 {
+    font-size: 36px;
+  }
+
+  .thesis-page p {
+    font-size: 24px;
   }
 }
