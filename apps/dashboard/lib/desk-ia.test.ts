@@ -113,6 +113,9 @@ describe('desk IA smoke', () => {
     expect(team).toContain('stewardIdCards');
     expect(team).toContain('StewardIdCard');
     expect(team).toContain('steward-deck');
+    expect(team).toContain('steward-dragger');
+    expect(team).toContain('data-card-dragger');
+    expect(team).toContain('steward-deck-track');
     expect(team).toContain('live=');
     expect(team).not.toContain('pnl');
     expect(team).not.toContain('win_rate');
@@ -152,9 +155,13 @@ describe('desk IA smoke', () => {
     expect(mesh).toContain('card-core');
     expect(mesh).toContain('card-print-front');
     expect(mesh).toContain('StewardFoilMaterial');
-    expect(pager).toContain('pagerScrollBehavior');
-    expect(pager).toContain('scrollIntoView');
-    expect(pager).toContain("firstPaint.current ? 'auto'");
+    expect(pager).toContain('pagerScrollToBehavior');
+    expect(pager).toContain('wrapSwipeSurface');
+    expect(pager).toContain('isSwipeWrap');
+    expect(pager).toContain('pageSwipeConsumesTarget');
+    expect(pager).toContain('data-circular');
+    expect(pager).toContain('data-desk-pane-scroll');
+    expect(pager).toContain('scrollTo');
     expect(app).toContain('DESK_SWIPE_TABS');
     expect(app).toContain('<DeskPager');
     expect(app).toContain('prefers-reduced-motion: reduce');
@@ -204,6 +211,9 @@ describe('desk IA smoke', () => {
     expect(motion).toContain('stewardBangAmount');
     expect(motion).toContain('approachParam');
     expect(team).toContain('cards.map');
+    expect(team).toContain('StewardCardDragger');
+    expect(team).not.toContain('IntersectionObserver');
+    expect(team).not.toContain('scroll-snap');
     expect(avatars).toContain('size === \'card\'');
     expect(avatars).not.toContain('from \'three\'');
     expect(avatars).toContain('mood=');
@@ -211,6 +221,10 @@ describe('desk IA smoke', () => {
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');
     expect(css).toContain('.desk-pager');
+    expect(css).toContain('.term.is-swipe');
+    expect(css).toContain('minmax(0');
+    expect(css).toContain('.steward-dragger');
+    expect(css).toContain('.steward-deck-track');
     expect(css).toContain('.steward-deck');
     expect(css).toContain('.id-card');
     expect(css).toContain('.id-card-webgl');

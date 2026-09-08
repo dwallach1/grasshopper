@@ -1,5 +1,7 @@
 /**
  * Board / Book / Team are one horizontal deck. Labels are an indicator.
+ * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
+ * lands on Board. Card-deck motion is a separate control (`data-card-dragger`).
  * Reduced motion snaps with no travel animation.
  */
 import {
@@ -8,6 +10,10 @@ import {
   type DeskSurface,
   type DeskSwipeSurface,
 } from './desk-nav';
+
+export const PAGE_SWIPE_PX = 56;
+export const PAGE_SWIPE_LOCK_PX = 10;
+export const CARD_DRAGGER_ATTR = 'data-card-dragger';
 
 export function isSwipeSurface(id: string): id is DeskSwipeSurface {
   for (const surface of DESK_SWIPE_SURFACES) {
@@ -29,10 +35,68 @@ export function swipeSurfaceAt(index: number): DeskSwipeSurface | null {
   return DESK_SWIPE_SURFACES[index] ?? null;
 }
 
+export function wrapSwipeIndex(index: number, delta: number, count = DESK_SWIPE_SURFACES.length): number {
+  if (count <= 0) return 0;
+  return ((index + delta) % count + count) % count;
+}
+
+export function wrapSwipeSurface(id: DeskSwipeSurface, delta: number): DeskSwipeSurface {
+  const next = wrapSwipeIndex(swipeSurfaceIndex(id), delta);
+  return DESK_SWIPE_SURFACES[next] ?? id;
+}
+
+export function isSwipeWrap(from: DeskSwipeSurface, to: DeskSwipeSurface): boolean {
+  return Math.abs(swipeSurfaceIndex(from) - swipeSurfaceIndex(to)) > 1;
+}
+
 export function pagerScrollBehavior(reduceMotion: boolean): ScrollBehavior {
   return reduceMotion ? 'auto' : 'smooth';
 }
 
+export function pagerScrollToBehavior(
+  firstPaint: boolean,
+  wrap: boolean,
+  reduceMotion: boolean,
+): ScrollBehavior {
+  if (firstPaint || wrap) return 'auto';
+  return pagerScrollBehavior(reduceMotion);
+}
+
 export function swipeTabLabel(id: DeskSwipeSurface): string {
   return tabForSurface(id).label;
+}
+
+/** -1 previous, 1 next, 0 not a page swipe (vertical or too short). */
+export function swipeAxis(dx: number, dy: number, threshold = PAGE_SWIPE_PX): -1 | 0 | 1 {
+  if (Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy)) return 0;
+  return dx < 0 ? 1 : -1;
+}
+
+export function isHorizontalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
+  return Math.abs(dx) >= lock && Math.abs(dx) > Math.abs(dy);
+}
+
+export function followPagerScroll(startLeft: number, dx: number, maxLeft: number): number {
+  const next = startLeft - dx;
+  if (next < 0) return 0;
+  if (next > maxLeft) return maxLeft;
+  return next;
+}
+
+export type SwipeHitTarget = {
+  closest: (selector: string) => SwipeHitTarget | null;
+};
+
+export function swipeHitFromEvent(target: EventTarget | null): SwipeHitTarget | null {
+  if (target === null || !('closest' in target)) return null;
+  // SAFETY: pointer targets that expose closest are elements on the desk rail.
+  return target as SwipeHitTarget;
+}
+
+export function isCardDraggerTarget(target: SwipeHitTarget | null): boolean {
+  return target !== null && target.closest(`[${CARD_DRAGGER_ATTR}]`) !== null;
+}
+
+export function pageSwipeConsumesTarget(target: SwipeHitTarget | null): boolean {
+  return !isCardDraggerTarget(target);
 }
