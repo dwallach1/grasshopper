@@ -86,9 +86,10 @@ describe('desk swipe deck', () => {
   test('page swipe is horizontal-only and does not share the card dragger', () => {
     expect(swipeAxis(-80, 10)).toBe(1);
     expect(swipeAxis(80, 8)).toBe(-1);
-    expect(swipeAxis(-80, 90)).toBe(0);
+    expect(swipeAxis(-80, 90)).toBe(1);
     expect(swipeAxis(-20, 0)).toBe(0);
     expect(isHorizontalLock(16, 4)).toBe(true);
+    expect(isHorizontalLock(16, 30)).toBe(true);
     expect(isHorizontalLock(4, 16)).toBe(false);
     expect(followPagerScroll(100, 40, 400)).toBe(60);
     expect(followPagerScroll(0, 40, 400)).toBe(0);

@@ -2547,7 +2547,7 @@ a:focus-visible {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
-  touch-action: pan-y;
+  touch-action: pan-x;
   user-select: none;
   -webkit-user-select: none;
   -webkit-overflow-scrolling: touch;

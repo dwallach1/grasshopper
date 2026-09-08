@@ -80,14 +80,14 @@ export function pagerSlotKey(id: DeskSwipeSurface, clone: boolean): string {
   return clone ? `${id}-clone` : id;
 }
 
-/** -1 previous, 1 next, 0 not a page swipe (vertical or too short). */
+/** -1 previous, 1 next, 0 not a page swipe (too short). |dx| wins even on a sloped list scroll. */
 export function swipeAxis(dx: number, dy: number, threshold = PAGE_SWIPE_PX): -1 | 0 | 1 {
-  if (Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy)) return 0;
+  if (Math.abs(dx) < threshold) return 0;
   return dx < 0 ? 1 : -1;
 }
 
 export function isHorizontalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
-  return Math.abs(dx) >= lock && Math.abs(dx) > Math.abs(dy);
+  return Math.abs(dx) >= lock && Math.abs(dx) >= Math.abs(dy) * 0.45;
 }
 
 export function wrapFromEdgeDrag(
@@ -96,7 +96,7 @@ export function wrapFromEdgeDrag(
   dy: number,
   threshold = PAGE_SWIPE_WRAP_PX,
 ): DeskSwipeSurface | null {
-  if (Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy)) return null;
+  if (Math.abs(dx) < threshold) return null;
   const index = swipeSurfaceIndex(surface);
   const last = DESK_SWIPE_SURFACES.length - 1;
   if (dx > 0 && index === 0) return wrapSwipeSurface(surface, -1);
