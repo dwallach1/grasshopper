@@ -40,8 +40,8 @@ export const POND_RX = 0.86;
 export const POND_RZ = 0.64;
 export const HOOP_RADIUS = 2.12;
 export const HOOP_TUBE = 0.1;
-export const HOOP_X = 0.28;
-export const HOOP_Z = 0.18;
+export const HOOP_X = 0.48;
+export const HOOP_Z = 0.42;
 export const HOOP_YAW = -0.55;
 
 /** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
@@ -410,16 +410,16 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(0xd4c094, { roughness: 0.92 }),
     'pond-rim',
   );
-  basin.scale.set(POND_RX, 1, POND_RZ);
-  basin.position.set(x, y - 0.03, z);
+  basin.scale.set(POND_RX * 1.08, 1, POND_RZ * 1.08);
+  basin.position.set(x, y + 0.02, z);
   root.add(basin);
   const water = shelf.mesh(
     shelf.geo(new CylinderGeometry(1, 1, 0.045, 28)),
     shelf.mat(POND, { roughness: 0.05, metalness: 0.18, emissive: 0x1a8ee0, emissiveIntensity: 0.7 }),
     'pond',
   );
-  water.scale.set(POND_RX * 0.92, 1, POND_RZ * 0.92);
-  water.position.set(x, y - 0.015, z);
+  water.scale.set(POND_RX, 1, POND_RZ);
+  water.position.set(x, y + 0.035, z);
   root.add(water);
   for (let i = 0; i < 10; i += 1) {
     const t = (i / 10) * Math.PI * 2;
