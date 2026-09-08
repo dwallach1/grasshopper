@@ -1,15 +1,24 @@
 import { describe, expect, test } from 'bun:test';
-import { IcosahedronGeometry, LatheGeometry, Mesh } from 'three';
+import { IcosahedronGeometry, LatheGeometry, Mesh, PerspectiveCamera, Vector3 } from 'three';
 
 import { districtPlaceWord } from './thesis-districts';
 import {
   buildThesisIsland,
   islandHitThesisId,
   islandPixelRatio,
+  ISLAND_CAMERA,
   ISLAND_DPR_CAP,
   paintThesisSign,
   wrapSignLines,
 } from './thesis-island';
+
+function phoneNdc(world: Vector3): Vector3 {
+  const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 390 / 756, 0.1, 60);
+  camera.position.set(ISLAND_CAMERA.x, ISLAND_CAMERA.y, ISLAND_CAMERA.z);
+  camera.lookAt(ISLAND_CAMERA.lookX, ISLAND_CAMERA.lookY, ISLAND_CAMERA.lookZ);
+  camera.updateMatrixWorld();
+  return world.clone().project(camera);
+}
 
 function district(id: string, place: 'campus' | 'plant' | 'hangar' | 'lab' | 'yard', name = id) {
   return {
@@ -73,7 +82,10 @@ describe('thesis island craft', () => {
     const grass = island.group.getObjectByName('grass');
     expect(grass).toBeInstanceOf(Mesh);
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
-    expect(island.group.getObjectByName('pond')).toBeTruthy();
+    const pond = island.group.getObjectByName('pond');
+    expect(pond).toBeInstanceOf(Mesh);
+    expect((pond as Mesh).scale.x).toBeGreaterThan(2);
+    expect(island.group.getObjectByName('distant')).toBeTruthy();
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
     expect(island.group.getObjectByName('arch')).toBeTruthy();
@@ -109,6 +121,28 @@ describe('thesis island craft', () => {
     expect(island.group.getObjectByName('tower-0')).toBeTruthy();
     expect(island.group.getObjectByName('tower-1')).toBeTruthy();
     expect(island.group.getObjectByName('tower-2')).toBeTruthy();
+    island.dispose();
+  });
+
+  test('pond and distant island sit inside a 390px portrait frustum', () => {
+    const island = buildThesisIsland(
+      district('ai_power_nuclear', 'plant', 'AI power bottleneck beneficiaries'),
+      { id: 'quantum', place: 'lab' },
+    );
+    const pond = island.group.getObjectByName('pond');
+    const distant = island.group.getObjectByName('distant');
+    expect(pond).toBeTruthy();
+    expect(distant).toBeTruthy();
+    const pondNdc = phoneNdc(pond!.getWorldPosition(new Vector3()));
+    const farNdc = phoneNdc(distant!.getWorldPosition(new Vector3()));
+    expect(Math.abs(pondNdc.x)).toBeLessThan(0.92);
+    expect(Math.abs(pondNdc.y)).toBeLessThan(0.92);
+    expect(pondNdc.z).toBeGreaterThan(-1);
+    expect(pondNdc.z).toBeLessThan(1);
+    expect(farNdc.x).toBeGreaterThan(0.05);
+    expect(farNdc.x).toBeLessThan(0.95);
+    expect(farNdc.y).toBeGreaterThan(0.05);
+    expect(farNdc.y).toBeLessThan(0.92);
     island.dispose();
   });
 });

@@ -31,16 +31,17 @@ import { districtPlaceWord } from './thesis-districts';
 
 export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
-export const ISLAND_GRASS_Y = 1.42;
+export const ISLAND_GRASS_Y = 1.52;
 
+/** Phone portrait is tall; keep the disk, pond, and peek inside ~13–20° of look. */
 export const ISLAND_CAMERA = {
-  x: 7.35,
-  y: 4.85,
-  z: 8.15,
-  fov: 28,
-  lookX: 0.2,
-  lookY: 1.05,
-  lookZ: 0.15,
+  x: 7.85,
+  y: 5.15,
+  z: 8.55,
+  fov: 34,
+  lookX: 0.12,
+  lookY: 1.28,
+  lookZ: 0.42,
 } as const;
 
 type Rng = () => number;
@@ -54,8 +55,8 @@ export type ThesisIsland = {
 
 const EARTH = [0xe6d2b0, 0xd4b896, 0xc4a06a, 0xb08958, 0x9c7d52, 0x8a6a3e];
 const CLIFF = [0xe8d5b0, 0xd7c094, 0xc9b07a, 0xb89a62, 0xa3b07a, 0x8f9a68];
-const GRASS = 0xb7c89a;
-const POND = 0x3a8fd4;
+const GRASS = 0xc4d4a6;
+const POND = 0x2f9ee8;
 const WHITE = 0xf6f2ea;
 const ORANGE = 0xe07a32;
 const TRUNK = 0x4a3828;
@@ -109,9 +110,16 @@ class Shelf {
 
   mat(
     hex: number,
-    opts: { roughness?: number; metalness?: number; map?: Texture; name?: string } = {},
+    opts: {
+      roughness?: number;
+      metalness?: number;
+      map?: Texture;
+      name?: string;
+      emissive?: number;
+      emissiveIntensity?: number;
+    } = {},
   ): MeshStandardMaterial {
-    const key = `${hex}:${opts.roughness ?? 0.9}:${opts.metalness ?? 0}:${opts.map?.uuid ?? ''}:${opts.name ?? ''}`;
+    const key = `${hex}:${opts.roughness ?? 0.9}:${opts.metalness ?? 0}:${opts.map?.uuid ?? ''}:${opts.emissive ?? 0}:${opts.name ?? ''}`;
     const hit = this.mats.get(key);
     if (hit) return hit;
     const mat = new MeshStandardMaterial({
@@ -120,6 +128,10 @@ class Shelf {
       metalness: opts.metalness ?? 0,
       name: opts.name ?? `m-${hex.toString(16)}`,
     });
+    if (opts.emissive != null) {
+      mat.emissive = new Color(opts.emissive);
+      mat.emissiveIntensity = opts.emissiveIntensity ?? 0.35;
+    }
     if (opts.map) {
       mat.map = opts.map;
       mat.color.set(0xffffff);
@@ -293,28 +305,28 @@ function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
   const hullPts: Vector2[] = [];
   for (let i = 0; i <= 16; i += 1) {
     const t = i / 16;
-    const y = t * 0.92;
-    const r = radius * (0.22 + 0.78 * Math.sin(t * Math.PI * 0.72));
-    hullPts.push(new Vector2(Math.max(0.2, r), y));
+    const y = t * 1.08;
+    const r = radius * (0.2 + 0.8 * Math.sin(t * Math.PI * 0.74));
+    hullPts.push(new Vector2(Math.max(0.22, r), y));
   }
   const hull = shelf.mesh(
     shelf.geo(new LatheGeometry(hullPts, 28)),
-    shelf.mat(0x5c4030, { roughness: 0.94 }),
+    shelf.mat(0x4e3628, { roughness: 0.94 }),
     'soil-hull',
   );
   soil.add(hull);
-  const segs = 36;
+  const segs = 40;
   const profile = islandOutline(rng, segs, radius);
-  for (let ring = 0; ring < 2; ring += 1) {
+  for (let ring = 0; ring < 3; ring += 1) {
     for (let i = 0; i < segs; i += 1) {
-      const t = (i / segs) * Math.PI * 2 + ring * 0.08;
-      const r = profile[i]! * (0.97 - ring * 0.06) + (rng() - 0.5) * 0.1;
-      const w = 0.22 + rng() * 0.12;
-      const d = 0.16 + rng() * 0.1;
-      const h = 0.32 + rng() * 0.42 + (i % 5 === 0 ? 0.18 : 0);
+      const t = (i / segs) * Math.PI * 2 + ring * 0.07;
+      const r = profile[i]! * (0.99 - ring * 0.055) + (rng() - 0.5) * 0.08;
+      const w = 0.24 + rng() * 0.14;
+      const d = 0.18 + rng() * 0.1;
+      const h = 0.42 + rng() * 0.52 + (i % 4 === 0 ? 0.22 : 0);
       const hex = CLIFF[(i + ring * 3) % CLIFF.length]!;
-      const block = shelf.box(w, h, d, mixHex(hex, EARTH[ring] ?? hex, rng() * 0.2), `soil-${ring}-${i}`);
-      block.position.set(Math.cos(t) * r, 0.88 + h / 2, Math.sin(t) * r);
+      const block = shelf.box(w, h, d, mixHex(hex, EARTH[ring] ?? hex, rng() * 0.22), `soil-${ring}-${i}`);
+      block.position.set(Math.cos(t) * r, 0.78 + h / 2, Math.sin(t) * r);
       block.rotation.y = -t;
       soil.add(block);
     }
@@ -359,24 +371,32 @@ function addGrass(root: Group, shelf: Shelf, rng: Rng, radius: number, y: number
 }
 
 function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng: Rng): void {
+  const rim = shelf.mesh(
+    shelf.geo(new CylinderGeometry(0.82, 0.82, 0.05, 28)),
+    shelf.mat(0xe8d7b4, { roughness: 0.92 }),
+    'pond-rim',
+  );
+  rim.scale.set(2.35, 1, 1.55);
+  rim.position.set(x, y + 0.01, z);
+  root.add(rim);
   const water = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.52, 0.52, 0.045, 24)),
-    shelf.mat(POND, { roughness: 0.18, metalness: 0.12 }),
+    shelf.geo(new CylinderGeometry(0.76, 0.76, 0.055, 28)),
+    shelf.mat(POND, { roughness: 0.08, metalness: 0.18, emissive: 0x1468a8, emissiveIntensity: 0.28 }),
     'pond',
   );
-  water.scale.set(2.15, 1, 1.35);
-  water.position.set(x, y + 0.02, z);
+  water.scale.set(2.35, 1, 1.55);
+  water.position.set(x, y + 0.04, z);
   root.add(water);
-  for (let i = 0; i < 12; i += 1) {
-    const t = (i / 12) * Math.PI * 2;
+  for (let i = 0; i < 14; i += 1) {
+    const t = (i / 14) * Math.PI * 2;
     const stone = shelf.box(
-      0.1 + rng() * 0.05,
-      0.045,
-      0.08 + rng() * 0.04,
-      mixHex(0xd8c4a4, 0x8a7a62, rng() * 0.35),
+      0.12 + rng() * 0.06,
+      0.05,
+      0.09 + rng() * 0.05,
+      mixHex(0xe2d0ae, 0x8a7a62, rng() * 0.35),
       `pond-stone-${i}`,
     );
-    stone.position.set(x + Math.cos(t) * 0.78, y + 0.04, z + Math.sin(t) * 0.48);
+    stone.position.set(x + Math.cos(t) * 1.05, y + 0.05, z + Math.sin(t) * 0.68);
     stone.rotation.y = t;
     root.add(stone);
   }
@@ -551,46 +571,46 @@ function addSign(
   const ctx = context2d(canvas);
   if (ctx) paintThesisSign(ctx, title);
   const map = ctx && canvas ? shelf.tex(canvas) : undefined;
-  const yaw = 0.78;
+  const yaw = 0.72;
   const face = shelf.mesh(
-    shelf.geo(new BoxGeometry(1.95, 0.78, 0.04)),
+    shelf.geo(new BoxGeometry(2.28, 0.92, 0.045)),
     shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'sign-face',
   );
-  face.position.set(x, y + 0.92, z);
+  face.position.set(x, y + 1.08, z);
   face.rotation.y = yaw;
   root.add(face);
-  for (const side of [-0.72, 0.72]) {
+  for (const side of [-0.86, 0.86]) {
     const post = shelf.mesh(
-      shelf.geo(new CylinderGeometry(0.022, 0.022, 0.98, 8)),
+      shelf.geo(new CylinderGeometry(0.024, 0.024, 1.14, 8)),
       shelf.mat(0xf4efe6, { roughness: 0.5 }),
       'sign-post',
     );
-    post.position.set(x + side * Math.cos(yaw), y + 0.49, z + side * Math.sin(yaw));
+    post.position.set(x + side * Math.cos(yaw), y + 0.57, z + side * Math.sin(yaw));
     root.add(post);
   }
 }
 
 function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   const arch = shelf.mesh(
-    shelf.geo(new TorusGeometry(2.05, 0.042, 10, 48, Math.PI * 1.15)),
-    shelf.mat(ORANGE, { roughness: 0.4, metalness: 0.1 }),
+    shelf.geo(new TorusGeometry(2.22, 0.05, 12, 56)),
+    shelf.mat(ORANGE, { roughness: 0.38, metalness: 0.12 }),
     'arch',
   );
-  arch.rotation.y = 0.55;
-  arch.position.set(0.2, y + 0.02, 1.55);
+  arch.rotation.y = 0.62;
+  arch.position.set(0.28, y + 0.04, 1.15);
   root.add(arch);
   const canvas = makeCanvas(256, 96);
   const ctx = context2d(canvas);
   if (ctx) paintArchBadge(ctx, word);
   const map = ctx && canvas ? shelf.tex(canvas) : undefined;
   const badge = shelf.mesh(
-    shelf.geo(new BoxGeometry(0.78, 0.24, 0.045)),
+    shelf.geo(new BoxGeometry(0.92, 0.3, 0.05)),
     shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'arch-badge',
   );
-  badge.position.set(0.2, y + 2.12, 1.55);
-  badge.rotation.y = 0.55;
+  badge.position.set(0.28, y + 2.28, 1.15);
+  badge.rotation.y = 0.62;
   root.add(badge);
 }
 
@@ -816,16 +836,18 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  distant.position.set(2.9, 4.15, -2.6);
-  distant.scale.setScalar(0.48);
-  addSoil(distant, shelf, rng, 2.6);
-  addGrass(distant, shelf, rng, 2.55, ISLAND_GRASS_Y);
+  // Upper-right of the 390px portrait frustum, same cream table.
+  distant.position.set(1.65, 3.35, 0.85);
+  distant.scale.setScalar(0.4);
+  addSoil(distant, shelf, rng, 2.55);
+  addGrass(distant, shelf, rng, 2.5, ISLAND_GRASS_Y);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
   block.position.set(0.1, ISLAND_GRASS_Y + 0.38, 0);
   distant.add(block);
   addRoofSlab(distant, shelf, 0.1, ISLAND_GRASS_Y + 0.76, 0, 1.05, 0.68);
   addTree(distant, shelf, rng, -0.9, 0.6, ISLAND_GRASS_Y, 1.1);
   addTree(distant, shelf, rng, 0.8, -0.5, ISLAND_GRASS_Y, 0.9);
+  addSign(distant, shelf, place === 'lab' ? 'Primer.' : districtPlaceWord(place), 0.15, 1.35, ISLAND_GRASS_Y);
   if (place === 'plant') {
     const stub = shelf.mesh(
       shelf.geo(new CylinderGeometry(0.28, 0.36, 0.7, 10)),
@@ -865,46 +887,47 @@ export function buildThesisIsland(
   addSoil(group, shelf, rng, radius);
   addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
   addPath(group, shelf, radius, grassY);
-  addPond(group, shelf, -1.35, 1.35, grassY, rng);
+  // Camera-front oval — left of the building, through the ring.
+  addPond(group, shelf, 0.55, 1.78, grassY, rng);
 
   const trees: Array<[number, number, number]> = [
-    [-2.1, 0.45, 1.05],
-    [-1.75, 1.55, 1.15],
-    [2.05, 0.55, 0.95],
-    [2.2, -0.15, 0.85],
-    [1.55, -1.65, 1.05],
-    [-1.95, -1.2, 1.15],
-    [0.55, 2.05, 0.8],
-    [-0.45, 2.15, 0.85],
-    [2.0, 1.55, 0.9],
+    [-2.15, 0.35, 1.08],
+    [-1.95, 1.15, 1.18],
+    [2.15, 0.35, 0.98],
+    [2.28, -0.35, 0.88],
+    [1.45, -1.75, 1.08],
+    [-1.85, -1.35, 1.18],
+    [1.85, 1.85, 0.92],
+    [-0.85, 2.25, 0.88],
+    [2.15, 1.25, 0.95],
   ];
   for (const [x, z, s] of trees) addTree(group, shelf, rng, x, z, grassY, s);
 
   const houses: Array<[number, number]> = [
-    [1.35, 2.05],
-    [1.62, 2.18],
-    [1.88, 2.08],
-    [1.1, 2.22],
-    [-1.45, 1.95],
+    [1.55, 2.28],
+    [1.82, 2.38],
+    [2.08, 2.22],
+    [1.28, 2.42],
+    [-1.65, 2.05],
   ];
   for (const [x, z] of houses) addHouse(group, shelf, rng, x, z, grassY);
 
-  addTurbine(group, shelf, 2.25, -0.95, grassY, turbines);
-  addTurbine(group, shelf, 2.4, -0.25, grassY, turbines);
-  addTurbine(group, shelf, 2.15, 0.85, grassY, turbines);
-  addTurbine(group, shelf, -1.55, 1.85, grassY, turbines);
-  addTurbine(group, shelf, -2.2, 0.15, grassY, turbines);
-  addMast(group, shelf, -2.2, -0.75, grassY);
-  addSolarRow(group, shelf, -0.7, -1.55, grassY);
+  addTurbine(group, shelf, 2.28, -1.05, grassY, turbines);
+  addTurbine(group, shelf, 2.42, -0.35, grassY, turbines);
+  addTurbine(group, shelf, 2.22, 0.75, grassY, turbines);
+  addTurbine(group, shelf, -1.85, 1.65, grassY, turbines);
+  addTurbine(group, shelf, -2.25, 0.05, grassY, turbines);
+  addMast(group, shelf, -2.15, -0.85, grassY);
+  addSolarRow(group, shelf, -0.85, -1.65, grassY);
 
   const building = district.buildings[0];
   if (building) {
     addStructure(group, shelf, district.place, building.id, hits, grassY);
-    addSign(group, shelf, building.name, 1.75, 2.45, grassY);
+    addSign(group, shelf, building.name, 1.85, 2.15, grassY);
   }
   addArch(group, shelf, districtPlaceWord(district.place), grassY);
 
-  if (peek) addDistantIsland(group, shelf, peek.place, rngFrom(peek.id));
+  addDistantIsland(group, shelf, peek?.place ?? 'lab', rngFrom(peek?.id ?? `${district.id}-far`));
 
   return {
     group,

@@ -60,7 +60,7 @@ export function ThesisIslandView({
 
     const scene = new Scene();
     scene.background = new Color(ISLAND_CREAM);
-    scene.fog = new Fog(ISLAND_CREAM, 16, 32);
+    scene.fog = new Fog(ISLAND_CREAM, 22, 40);
 
     const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 1, 0.1, 60);
     camera.position.set(ISLAND_CAMERA.x, ISLAND_CAMERA.y, ISLAND_CAMERA.z);
@@ -104,10 +104,10 @@ export function ThesisIslandView({
     scene.environment = env;
     scene.environmentIntensity = 0.48;
 
-    scene.add(new AmbientLight(0xf6efe2, 0.28));
-    scene.add(new HemisphereLight(0xfff6e8, 0xc4b49a, 0.62));
-    const key = new DirectionalLight(0xfff3d6, 1.55);
-    key.position.set(-4.2, 10.2, 6.4);
+    scene.add(new AmbientLight(0xf6efe2, 0.32));
+    scene.add(new HemisphereLight(0xfff6e8, 0xc4b49a, 0.7));
+    const key = new DirectionalLight(0xfff3d6, 1.62);
+    key.position.set(-5.1, 11.4, 7.2);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
