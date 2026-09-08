@@ -23,6 +23,8 @@ describe('steward foil laminate', () => {
     expect(FOIL_COMMON).toContain('uFoilMap');
     expect(FOIL_MAP).toContain('uTilt');
     expect(FOIL_MAP).toContain('fres');
+    expect(FOIL_MAP).toContain('viewDir.z');
+    expect(FOIL_MAP).not.toContain('normalize(normal)');
     expect(FOIL_ROUGH).toContain('roughnessFactor');
     expect(FOIL_METAL).toContain('metalnessFactor');
     const shader = {
