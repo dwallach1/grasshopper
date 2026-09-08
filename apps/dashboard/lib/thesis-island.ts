@@ -33,8 +33,8 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 0.95;
-export const POND_Z = 0.95;
+export const POND_X = 0.88;
+export const POND_Z = 1.68;
 export const HOOP_RADIUS = 2.02;
 export const HOOP_TUBE = 0.11;
 
