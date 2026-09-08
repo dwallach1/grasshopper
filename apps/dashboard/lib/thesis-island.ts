@@ -40,8 +40,8 @@ export const POND_RX = 0.86;
 export const POND_RZ = 0.64;
 export const HOOP_RADIUS = 2.12;
 export const HOOP_TUBE = 0.1;
-export const HOOP_X = 0.48;
-export const HOOP_Z = 0.42;
+export const HOOP_X = 0.28;
+export const HOOP_Z = 0.18;
 export const HOOP_YAW = -0.55;
 
 /** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
@@ -356,11 +356,12 @@ function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
 function pondHole(x: number, z: number, rx: number, rz: number): Path {
   const hole = new Path();
   const segs = 24;
-  for (let i = 0; i <= segs; i += 1) {
+  // Opposite winding from the grass outline so ExtrudeGeometry punches through.
+  for (let i = segs; i >= 0; i -= 1) {
     const t = (i / segs) * Math.PI * 2;
     const hx = x + Math.cos(t) * rx;
     const hz = z + Math.sin(t) * rz;
-    if (i === 0) hole.moveTo(hx, hz);
+    if (i === segs) hole.moveTo(hx, hz);
     else hole.lineTo(hx, hz);
   }
   hole.closePath();
