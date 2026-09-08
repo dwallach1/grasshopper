@@ -154,7 +154,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 | 3 | Theses | Same thesis list with EQ/PM chips. Lifecycle + evidence + held/candidate symbols (ontology folded in) + lessons (`research_lessons` and `pm_notes`). |
 | 4 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 5 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
-| 6 | Team | One boarding-pass ID card per trading steward (`desk_agents`: QUANTANAMO, ODDSBORNE, BANDIT, plus COINTANAMO if present). Face is circle+eyes, name, and domain (Stocks / Predictions / Coins / Crypto). No win rate, hold, size, NAV, or heartbeat — those stay on Board and Book. Empty `desk_agents` is an honest empty, not the fallback roster. `/mates` redirects here. |
+| 6 | Team | One laminated steward card per trading steward (`desk_agents`: QUANTANAMO, ODDSBORNE, BANDIT, plus COINTANAMO if present). In-frame card is a thin Three.js stock (core + paper + printed face) with MeshPhysical foil that answers viewing angle. Face is circle+eyes, name, and domain. No win rate, hold, size, NAV, or heartbeat. Empty `desk_agents` is an honest empty. `/mates` redirects here. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/leaderboard` and `/board` → `/`; `/risk` and `/runs` → `/book`; `/catalysts` → `/events`; `/ontology` and `/learnings` → `/theses`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 

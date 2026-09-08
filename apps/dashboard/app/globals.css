@@ -111,8 +111,7 @@ a:focus-visible {
     scroll-behavior: auto;
   }
 
-  .id-card,
-  .id-card-foil {
+  .id-card {
     animation: none;
   }
 }
@@ -3568,20 +3567,21 @@ a:focus-visible {
   justify-content: center;
   min-height: 100%;
   height: 100%;
-  perspective: 900px;
+  background:
+    radial-gradient(80% 60% at 50% 42%, #12161c 0%, #07080a 70%);
 }
 
 .steward-deck {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   height: 100%;
   min-height: 0;
-  padding: 28px 12%;
+  padding: 20px 11%;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  scroll-padding-inline: 12%;
+  scroll-padding-inline: 11%;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -3592,8 +3592,8 @@ a:focus-visible {
 }
 
 .steward-deck-slot {
-  flex: 0 0 76%;
-  max-width: 320px;
+  flex: 0 0 min(78vw, 340px);
+  max-width: 340px;
   scroll-snap-align: center;
 }
 
@@ -3604,112 +3604,49 @@ a:focus-visible {
 }
 
 .id-card {
-  --foil-x: 0deg;
-  --foil-y: 0deg;
   position: relative;
   width: 100%;
   aspect-ratio: 5 / 7;
-  transform-style: preserve-3d;
-  animation: id-idle-tilt 7.2s ease-in-out infinite;
   cursor: grab;
+  background: transparent;
 }
 
-.id-card-stock {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--card-ink, #8b98a8) 28%, #1b2129);
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--card-ink, #8b98a8) 26%, #14181f) 0%,
-      #0c1014 52%,
-      color-mix(in srgb, var(--card-ink, #8b98a8) 14%, #090b0e) 100%
-    );
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 color-mix(in srgb, var(--card-ink, #8b98a8) 22%, transparent);
-}
-
-.id-card-stub {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px 8px;
-  color: color-mix(in srgb, var(--card-ink, #8b98a8) 55%, #e8edf2);
-  font-family: var(--font-brand);
-  font-size: 9px;
-  letter-spacing: 0.16em;
-}
-
-.id-card-tear {
-  height: 12px;
-  margin: 0 8px;
-  background:
-    radial-gradient(circle at 6px 50%, var(--canvas) 5px, transparent 5.5px) -6px 0 / 12px 12px;
-  border-top: 1px dashed color-mix(in srgb, var(--card-ink, #8b98a8) 35%, var(--line));
-  border-bottom: 1px dashed color-mix(in srgb, var(--card-ink, #8b98a8) 22%, var(--line));
-}
-
-.id-card-face {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 18px 16px 28px;
-  text-align: center;
-}
-
-.id-card-face b {
-  font-family: var(--font-brand);
-  font-size: clamp(16px, 5vw, 20px);
-  font-weight: 400;
-  letter-spacing: 0.12em;
-}
-
-.id-card-face i {
-  color: color-mix(in srgb, var(--card-ink, #8b98a8) 70%, #e8edf2);
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.id-card-foil {
+.id-card-webgl,
+.id-card-poster {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.id-card-webgl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.id-card-poster {
+  border-radius: 4.4% / 3.1%;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
+}
+
+.id-card-stamp {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.id-card-mascot {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 36%;
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  background:
-    linear-gradient(
-      118deg,
-      transparent 32%,
-      color-mix(in srgb, var(--card-ink, #8b98a8) 28%, rgba(255, 255, 255, 0.2)) 46%,
-      color-mix(in srgb, #c9b8ff 22%, transparent) 52%,
-      transparent 66%
-    );
-  background-size: 220% 220%;
-  mix-blend-mode: overlay;
-  opacity: 0.7;
-  animation: id-foil-sheen 6.4s linear infinite;
-}
-
-@keyframes id-idle-tilt {
-  0%, 100% {
-    transform: rotateX(calc(var(--foil-x) + 2.2deg)) rotateY(calc(var(--foil-y) - 4deg));
-  }
-  50% {
-    transform: rotateX(calc(var(--foil-x) - 1.8deg)) rotateY(calc(var(--foil-y) + 5deg));
-  }
-}
-
-@keyframes id-foil-sheen {
-  0% { background-position: 0% 40%; }
-  100% { background-position: 100% 60%; }
 }
 
 .term-board-rules {
