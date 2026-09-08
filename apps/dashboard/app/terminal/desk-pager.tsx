@@ -45,12 +45,19 @@ export function DeskPager({
     programmatic.current = true;
     const wrap = isSwipeWrap(fromRef.current, surface);
     fromRef.current = surface;
+    const jump = firstPaint.current || wrap;
     const behavior = pagerScrollToBehavior(firstPaint.current, wrap, reduceMotion);
     firstPaint.current = false;
-    root.scrollTo({ left: pane.offsetLeft, top: 0, behavior });
+    if (jump) {
+      root.style.scrollSnapType = 'none';
+      root.scrollLeft = pane.offsetLeft;
+      root.style.scrollSnapType = '';
+    } else {
+      root.scrollTo({ left: pane.offsetLeft, top: 0, behavior });
+    }
     const id = window.setTimeout(() => {
       programmatic.current = false;
-    }, reduceMotion || wrap ? 20 : 420);
+    }, reduceMotion || wrap ? 320 : 420);
     return () => window.clearTimeout(id);
   }, [reduceMotion, surface]);
 
