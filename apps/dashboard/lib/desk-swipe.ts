@@ -1,5 +1,5 @@
 /**
- * Board / Book / Team are one horizontal deck. Labels are an indicator.
+ * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
  * Reduced motion snaps with no travel animation.
  */
 import {

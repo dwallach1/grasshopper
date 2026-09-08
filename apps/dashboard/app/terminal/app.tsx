@@ -35,6 +35,7 @@ import { BookPanel } from './book-panel';
 import { DeskPager } from './desk-pager';
 import { LeaderboardPanel } from './leaderboard-panel';
 import { TeamPanel } from './team-panel';
+import { ThesesWorld } from './theses-world';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   age,
@@ -235,11 +236,25 @@ export function TerminalApp({
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
               book: <BookPanel desk={desk} nowIso={nowIso} />,
+              theses: publicView ? (
+                <ThesesWorld
+                  desk={desk}
+                  reduceMotion={reduceMotion}
+                  selectedId={selectedThesisId}
+                  onSelect={setSelectedThesisId}
+                />
+              ) : (
+                <ThesesPanel
+                  desk={desk}
+                  selected={selectedThesis}
+                  onSelect={setSelectedThesisId}
+                />
+              ),
               team: <TeamPanel desk={desk} reduceMotion={reduceMotion} />,
             }}
           </DeskPager>
         )}
-        {surface === 'theses' && (
+        {surface === 'theses' && !swipe && (
           <ThesesPanel
             desk={desk}
             selected={selectedThesis}

@@ -107,7 +107,8 @@ a:focus-visible {
   }
 
   .desk-pager,
-  .steward-deck {
+  .steward-deck,
+  .thesis-districts {
     scroll-behavior: auto;
   }
 
@@ -4539,5 +4540,429 @@ a:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .book-open-line {
     filter: none;
+  }
+}
+
+/* ——— Theses world: one district, buildings as theses ——— */
+
+.thesis-world {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(90% 70% at 50% 18%, #141820 0%, #07080a 62%);
+}
+
+.thesis-districts {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.thesis-districts::-webkit-scrollbar {
+  display: none;
+}
+
+.thesis-world[data-reduce-motion="1"] .thesis-districts {
+  scroll-behavior: auto;
+}
+
+.thesis-world[data-reading="1"] .thesis-districts {
+  pointer-events: none;
+}
+
+.thesis-district {
+  position: relative;
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.thesis-place {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.thesis-place-name {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.thesis-place-index {
+  margin: 0;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.thesis-lot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.thesis-table {
+  position: absolute;
+  inset: 12% 0 0;
+  perspective: 900px;
+}
+
+.thesis-stage {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.thesis-district[data-live="1"] .thesis-stage {
+  animation: thesis-idle 9s var(--ease) infinite alternate;
+}
+
+.thesis-world[data-reduce-motion="1"] .thesis-district .thesis-stage,
+.thesis-district[data-live="0"] .thesis-stage {
+  animation: none;
+}
+
+@keyframes thesis-idle {
+  from { transform: translate3d(0, 0, 0) rotateY(-0.6deg); }
+  to { transform: translate3d(0, -3px, 0) rotateY(0.8deg); }
+}
+
+.thesis-ground {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  bottom: 16%;
+  height: 46%;
+  border: 1px solid #2a241c;
+  background:
+    linear-gradient(180deg, #2a2620 0%, #1a1814 70%, #12100d 100%);
+  box-shadow:
+    0 28px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transform: rotateX(66deg);
+  transform-origin: center bottom;
+}
+
+.thesis-district[data-place="campus"] .thesis-ground {
+  background:
+    linear-gradient(180deg, #2c3034 0%, #1b1e22 72%, #121416 100%);
+  border-color: #34383c;
+}
+
+.thesis-district[data-place="plant"] .thesis-ground {
+  background:
+    linear-gradient(180deg, #2a261c 0%, #1c1912 72%, #12100c 100%);
+}
+
+.thesis-plot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 22px;
+  height: 54%;
+  padding: 0 10%;
+  transform-style: preserve-3d;
+}
+
+.thesis-bldg {
+  position: relative;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  width: 132px;
+  height: 168px;
+  cursor: pointer;
+  transform-style: preserve-3d;
+}
+
+.thesis-bldg-mass {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 108px;
+  height: 128px;
+  margin-left: -54px;
+  transform: rotateY(-16deg) rotateX(5deg);
+  transform-style: preserve-3d;
+}
+
+.thesis-district[data-place="campus"] .thesis-bldg {
+  width: 188px;
+}
+
+.thesis-district[data-place="campus"] .thesis-bldg-mass {
+  width: 168px;
+  height: 96px;
+  margin-left: -84px;
+}
+
+.thesis-district[data-place="plant"] .thesis-bldg-mass {
+  width: 118px;
+  height: 118px;
+  margin-left: -59px;
+}
+
+.thesis-district[data-place="hangar"] .thesis-bldg {
+  width: 196px;
+}
+
+.thesis-district[data-place="hangar"] .thesis-bldg-mass {
+  width: 176px;
+  height: 88px;
+  margin-left: -88px;
+}
+
+.thesis-district[data-place="lab"] .thesis-bldg-mass {
+  width: 100px;
+  height: 148px;
+  margin-left: -50px;
+}
+
+.thesis-face {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+  backface-visibility: hidden;
+}
+
+.thesis-south {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 10px 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--steward) 72%, #f2efe6) 0%, var(--steward) 42%, color-mix(in srgb, var(--steward) 78%, #1a120c) 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+  transform: translateZ(18px);
+}
+
+.thesis-district[data-place="campus"] .thesis-south,
+.thesis-district[data-place="hangar"] .thesis-south {
+  transform: translateZ(14px);
+}
+
+.thesis-east {
+  width: 36px;
+  left: auto;
+  right: -18px;
+  background: color-mix(in srgb, var(--steward) 58%, #14110d);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  transform: rotateY(90deg) translateZ(18px);
+}
+
+.thesis-district[data-place="campus"] .thesis-east,
+.thesis-district[data-place="hangar"] .thesis-east {
+  transform: rotateY(90deg) translateZ(14px);
+}
+
+.thesis-top {
+  height: 36px;
+  bottom: auto;
+  background: color-mix(in srgb, var(--steward) 42%, #ebe6db);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+  transform: rotateX(90deg) translateZ(18px);
+}
+
+.thesis-district[data-place="campus"] .thesis-top,
+.thesis-district[data-place="hangar"] .thesis-top {
+  transform: rotateX(90deg) translateZ(14px);
+}
+
+.thesis-door {
+  display: -webkit-box;
+  width: 100%;
+  padding: 7px 8px 6px;
+  border: 1px solid rgba(20, 16, 12, 0.35);
+  background: color-mix(in srgb, var(--steward) 28%, #1a1612);
+  color: #f4efe6;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.thesis-stack {
+  display: none;
+}
+
+.thesis-district[data-place="plant"] .thesis-stack {
+  display: block;
+  position: absolute;
+  left: 14px;
+  top: -46px;
+  width: 28px;
+  height: 52px;
+  border-radius: 14px 14px 2px 2px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--steward) 40%, #2a241c), color-mix(in srgb, var(--steward) 70%, #111));
+  box-shadow: inset -6px 0 0 rgba(0, 0, 0, 0.2);
+  transform: translateZ(8px);
+}
+
+.thesis-wisp {
+  display: none;
+}
+
+.thesis-district[data-place="plant"][data-live="1"] .thesis-wisp {
+  display: block;
+  position: absolute;
+  left: 20px;
+  top: -78px;
+  width: 16px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232, 228, 220, 0.45), transparent 70%);
+  animation: thesis-wisp 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.thesis-district[data-place="campus"][data-live="1"] .thesis-wisp,
+.thesis-district[data-place="lab"][data-live="1"] .thesis-wisp,
+.thesis-district[data-place="hangar"][data-live="1"] .thesis-wisp,
+.thesis-district[data-place="yard"][data-live="1"] .thesis-wisp {
+  display: block;
+  position: absolute;
+  right: 18px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--steward) 30%, #f6e7a1);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--steward) 35%, #f6e7a1);
+  animation: thesis-lamp 4.8s ease-in-out infinite;
+  transform: translateZ(20px);
+}
+
+.thesis-world[data-reduce-motion="1"] .thesis-wisp {
+  animation: none;
+}
+
+@keyframes thesis-wisp {
+  0%, 100% { opacity: 0.25; transform: translate3d(0, 0, 8px) scale(0.85); }
+  50% { opacity: 0.7; transform: translate3d(3px, -10px, 8px) scale(1.15); }
+}
+
+@keyframes thesis-lamp {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.thesis-bldg.is-on .thesis-south,
+.thesis-bldg:focus-visible .thesis-south {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 0 2px color-mix(in srgb, var(--steward) 70%, #fff);
+}
+
+.thesis-empty {
+  margin: auto;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.thesis-page {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 28px 22px 36px;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 10, 0.28) 0%, #0c0d10 28%, #0c0d10 100%);
+}
+
+.thesis-page-back {
+  align-self: flex-start;
+  margin: 0 0 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.thesis-page h2 {
+  margin: 0 0 16px;
+  max-width: 22rem;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.thesis-page p {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+.thesis-page-falsifier {
+  margin-top: 18px !important;
+  color: var(--text-2) !important;
+  font-size: 16px !important;
+}
+
+@media (min-width: 720px) {
+  .thesis-place-name {
+    font-size: 28px;
+  }
+
+  .thesis-bldg {
+    width: 160px;
+    height: 200px;
+  }
+
+  .thesis-page {
+    padding: 48px 72px 64px;
+  }
+
+  .thesis-page h2 {
+    font-size: 36px;
+  }
+
+  .thesis-page p {
+    font-size: 24px;
   }
 }
