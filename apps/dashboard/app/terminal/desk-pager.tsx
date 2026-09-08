@@ -140,6 +140,7 @@ function bindPagerSwipe(
     gesture.originY = event.clientY;
     gesture.startLeft = pager.scrollLeft;
     gesture.pointerId = event.pointerId;
+    pager.dataset.swipe = `down:${currentSurface()}`;
   }
 
   function onMove(event: PointerEvent) {
@@ -150,7 +151,9 @@ function bindPagerSwipe(
       if (!isHorizontalLock(dx, dy)) return;
       gesture.dragging = true;
     }
-    const wrap = wrapFromEdgeDrag(currentSurface(), dx, dy);
+    const here = currentSurface();
+    const wrap = wrapFromEdgeDrag(here, dx, dy);
+    pager.dataset.swipe = `move:${here}:${Math.round(dx)}:${wrap ?? 'none'}`;
     if (wrap) {
       gesture.armed = false;
       gesture.dragging = false;
@@ -186,14 +189,25 @@ function bindPagerSwipe(
     if (pane) pager.scrollTo({ left: pane.offsetLeft, top: 0, behavior: 'auto' });
   }
 
+  function onScroll() {
+    if (programmatic.current) return;
+    const width = pager.clientWidth;
+    if (width <= 0) return;
+    const slot = Math.round(pager.scrollLeft / width);
+    const spec = DESK_PAGER_SLOTS[slot];
+    if (spec && spec.id !== currentSurface()) snapTo(spec.id);
+  }
+
   pager.addEventListener('pointerdown', onDown, true);
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
+  pager.addEventListener('scroll', onScroll, { passive: true });
   return () => {
     pager.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
+    pager.removeEventListener('scroll', onScroll);
   };
 }
