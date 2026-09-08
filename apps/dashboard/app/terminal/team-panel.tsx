@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import { clampDeckIndex, deckIndexFromThumb, deckThumbRatio, stepDeckIndex } from '../../lib/steward-deck';
 import { stewardIdCards } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { StewardIdCard } from './steward-id-card';
@@ -15,47 +16,141 @@ export function TeamPanel({
   reduceMotion?: boolean;
 }) {
   const cards = stewardIdCards(desk);
-  const deckRef = useRef<HTMLDivElement>(null);
   const roster = cards.map((card) => card.slug).join('|');
-  const [liveSlug, setLiveSlug] = useState(cards[0]?.slug ?? '');
+  const [index, setIndex] = useState(0);
+  const liveSlug = cards[clampDeckIndex(index, cards.length)]?.slug ?? '';
 
   useEffect(() => {
-    setLiveSlug(roster.split('|')[0] ?? '');
+    setIndex(0);
   }, [roster]);
 
-  useEffect(() => {
-    const root = deckRef.current;
-    if (!root) return undefined;
-    const slots = [...root.querySelectorAll<HTMLElement>('[data-card-slot]')];
-    const io = new IntersectionObserver((entries) => {
-      const hit = entries
-        .filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.55)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      const slug = hit?.target.getAttribute('data-card-slot');
-      if (slug) setLiveSlug(slug);
-    }, { root, threshold: [0.55, 0.85] });
-    for (const slot of slots) io.observe(slot);
-    return () => io.disconnect();
-  }, [roster]);
+  function show(next: number) {
+    setIndex(clampDeckIndex(next, cards.length));
+  }
 
   return (
     <div className="steward-stage" data-roster="desk_agents">
       <h1 className="visually-hidden">Team</h1>
       {cards.length ? (
-        <div ref={deckRef} className="steward-deck" aria-label="Steward cards">
-          {cards.map((card) => (
-            <div key={card.slug} className="steward-deck-slot" data-card-slot={card.slug}>
-              <StewardIdCard
-                card={card}
-                reduceMotion={reduceMotion}
-                live={card.slug === liveSlug}
-              />
+        <>
+          <div className="steward-deck" aria-label="Steward cards">
+            <div
+              className="steward-deck-track"
+              data-reduce-motion={reduceMotion ? '1' : '0'}
+              style={{ transform: `translateX(${-clampDeckIndex(index, cards.length) * 100}%)` }}
+            >
+              {cards.map((card) => (
+                <div key={card.slug} className="steward-deck-slot" data-card-slot={card.slug}>
+                  <StewardIdCard
+                    card={card}
+                    reduceMotion={reduceMotion}
+                    live={card.slug === liveSlug}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+          <StewardCardDragger
+            names={cards.map((card) => card.display_name)}
+            index={clampDeckIndex(index, cards.length)}
+            onIndex={show}
+          />
+        </>
       ) : (
         <p className="empty steward-empty">{NOT_IN_LEDGER}</p>
       )}
     </div>
+  );
+}
+
+function StewardCardDragger({
+  names,
+  index,
+  onIndex,
+}: {
+  names: readonly string[];
+  index: number;
+  onIndex: (next: number) => void;
+}) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const count = names.length;
+  const current = names[index] ?? '';
+  const ratio = deckThumbRatio(index, count);
+
+  function seek(clientX: number) {
+    const rail = railRef.current;
+    if (!rail) return;
+    const box = rail.getBoundingClientRect();
+    onIndex(deckIndexFromThumb(clientX - box.left, box.width, count));
+  }
+
+  function onRailDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    seek(event.clientX);
+  }
+
+  function onRailMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.stopPropagation();
+    seek(event.clientX);
+  }
+
+  if (count === 0) return null;
+
+  return (
+    <nav
+      className="steward-dragger"
+      data-card-dragger="1"
+      aria-label="Steward card control"
+    >
+      <button
+        type="button"
+        aria-label="Previous steward"
+        disabled={index <= 0}
+        onClick={() => onIndex(stepDeckIndex(index, -1, count))}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        ‹
+      </button>
+      <div
+        ref={railRef}
+        className="steward-dragger-rail"
+        role="slider"
+        aria-label="Steward card track"
+        aria-valuemin={1}
+        aria-valuemax={count}
+        aria-valuenow={index + 1}
+        aria-valuetext={current}
+        onPointerDown={onRailDown}
+        onPointerMove={onRailMove}
+      >
+        <i
+          className="steward-dragger-thumb"
+          style={{ left: `${ratio * 100}%` }}
+        />
+      </div>
+      <button
+        type="button"
+        aria-label="Next steward"
+        disabled={index >= count - 1}
+        onClick={() => onIndex(stepDeckIndex(index, 1, count))}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        ›
+      </button>
+      <div className="steward-dragger-dots">
+        {names.map((name, slot) => (
+          <button
+            key={name}
+            type="button"
+            aria-label={name}
+            aria-current={slot === index ? 'true' : undefined}
+            onClick={() => onIndex(slot)}
+            onPointerDown={(event) => event.stopPropagation()}
+          />
+        ))}
+      </div>
+    </nav>
   );
 }
