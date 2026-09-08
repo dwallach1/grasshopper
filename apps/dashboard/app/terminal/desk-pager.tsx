@@ -145,7 +145,20 @@ function bindPagerSwipe(
     if (!gesture.dragging) {
       if (!isHorizontalLock(dx, dy)) return;
       gesture.dragging = true;
-      pager.setPointerCapture(event.pointerId);
+      try {
+        pager.setPointerCapture(event.pointerId);
+      } catch {
+        // Capture is optional; window listeners still see the drag.
+      }
+    }
+    event.preventDefault();
+    const wrap = wrapFromEdgeDrag(currentSurface(), dx, dy);
+    if (wrap) {
+      gesture.armed = false;
+      gesture.dragging = false;
+      releaseCapture();
+      snapTo(wrap);
+      return;
     }
     const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
     pager.scrollLeft = followPagerScroll(gesture.startLeft, dx, maxLeft);
