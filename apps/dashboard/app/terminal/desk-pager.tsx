@@ -2,17 +2,16 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 
+import { type DeskSwipeSurface } from '../../lib/desk-nav';
 import {
-  DESK_SWIPE_SURFACES,
-  type DeskSwipeSurface,
-} from '../../lib/desk-nav';
-import {
+  DESK_PAGER_SLOTS,
   followPagerScroll,
   isHorizontalLock,
   isSwipeSurface,
   isSwipeWrap,
   pageSwipeConsumesTarget,
   pagerScrollToBehavior,
+  pagerSlotKey,
   swipeAxis,
   swipeHitFromEvent,
   swipeTabLabel,
@@ -41,7 +40,7 @@ export function DeskPager({
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
-    const pane = root.querySelector<HTMLElement>(`[data-desk-page="${surface}"]`);
+    const pane = canonicalPane(root, surface);
     if (!pane) return;
     programmatic.current = true;
     const wrap = isSwipeWrap(fromRef.current, surface);
@@ -85,20 +84,25 @@ export function DeskPager({
       data-reduce-motion={reduceMotion ? '1' : '0'}
       aria-label="Desk surfaces"
     >
-      {DESK_SWIPE_SURFACES.map((id) => (
+      {DESK_PAGER_SLOTS.map((slot) => (
         <section
-          key={id}
+          key={pagerSlotKey(slot.id, slot.clone)}
           className="desk-page"
-          data-desk-page={id}
-          data-desk-pane-scroll="1"
-          aria-label={swipeTabLabel(id)}
-          aria-hidden={id === surface ? undefined : true}
+          data-desk-page={slot.id}
+          data-clone={slot.clone ? '1' : undefined}
+          data-desk-pane-scroll={slot.clone ? undefined : '1'}
+          aria-label={swipeTabLabel(slot.id)}
+          aria-hidden={slot.clone || slot.id !== surface ? true : undefined}
         >
-          {children[id]}
+          {slot.clone ? null : children[slot.id]}
         </section>
       ))}
     </div>
   );
+}
+
+function canonicalPane(root: HTMLElement, surface: DeskSwipeSurface): HTMLElement | null {
+  return root.querySelector(`[data-desk-page="${surface}"]:not([data-clone])`);
 }
 
 function bindPagerSwipe(
@@ -145,13 +149,7 @@ function bindPagerSwipe(
     if (!gesture.dragging) {
       if (!isHorizontalLock(dx, dy)) return;
       gesture.dragging = true;
-      try {
-        pager.setPointerCapture(event.pointerId);
-      } catch {
-        // Capture is optional; window listeners still see the drag.
-      }
     }
-    event.preventDefault();
     const wrap = wrapFromEdgeDrag(currentSurface(), dx, dy);
     if (wrap) {
       gesture.armed = false;
@@ -184,7 +182,7 @@ function bindPagerSwipe(
       snapTo(wrapSwipeSurface(here, axis));
       return;
     }
-    const pane = pager.querySelector<HTMLElement>(`[data-desk-page="${here}"]`);
+    const pane = canonicalPane(pager, here);
     if (pane) pager.scrollTo({ left: pane.offsetLeft, top: 0, behavior: 'auto' });
   }
 

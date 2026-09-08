@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { DESK_SWIPE_SURFACES, DESK_SWIPE_TABS, DESK_TABS } from './desk-nav';
 import {
+  DESK_PAGER_SLOTS,
   followPagerScroll,
   isCardDraggerTarget,
   isHorizontalLock,
@@ -10,6 +11,7 @@ import {
   pageSwipeConsumesTarget,
   pagerScrollBehavior,
   pagerScrollToBehavior,
+  pagerSlotKey,
   swipeAxis,
   swipeHitFromEvent,
   swipeSurfaceAt,
@@ -65,6 +67,9 @@ describe('desk swipe deck', () => {
     expect(wrapFromEdgeDrag('team', -80, 8)).toBe('leaderboard');
     expect(wrapFromEdgeDrag('book', 80, 8)).toBeNull();
     expect(wrapFromEdgeDrag('leaderboard', 20, 4)).toBeNull();
+    expect(DESK_PAGER_SLOTS.map((slot) => pagerSlotKey(slot.id, slot.clone))).toEqual([
+      'team-clone', 'leaderboard', 'book', 'team', 'leaderboard-clone',
+    ]);
     expect(isSwipeWrap('leaderboard', 'team')).toBe(true);
     expect(isSwipeWrap('team', 'leaderboard')).toBe(true);
     expect(isSwipeWrap('leaderboard', 'book')).toBe(false);

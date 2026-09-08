@@ -158,7 +158,9 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('pagerScrollToBehavior');
     expect(pager).toContain('wrapSwipeSurface');
     expect(pager).toContain('wrapFromEdgeDrag');
-    expect(pager).toContain('setPointerCapture');
+    expect(pager).toContain('DESK_PAGER_SLOTS');
+    expect(pager).toContain('data-clone');
+    expect(pager).toContain('canonicalPane');
     expect(pager).toContain('isSwipeWrap');
     expect(pager).toContain('pageSwipeConsumesTarget');
     expect(pager).toContain('data-circular');

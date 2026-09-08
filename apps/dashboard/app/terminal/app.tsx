@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
 import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
@@ -12,6 +12,7 @@ import {
   surfaceFromGoLetter,
   surfaceFromPath,
   type DeskSurface,
+  type DeskSwipeSurface,
 } from '../../lib/desk-nav';
 import { isSwipeSurface } from '../../lib/desk-swipe';
 import { assembleDeskBookRollup } from '../../lib/desk-book-rollup';
@@ -127,14 +128,18 @@ export function TerminalApp({
     return () => window.removeEventListener('popstate', onPop);
   }, [pathname]);
 
-  function go(href: string) {
+  const go = useCallback((href: string) => {
     const canonical = canonicalDeskPath(href);
     const next = surfaceFromPath(canonical);
     setSurface(next);
     if (window.location.pathname !== canonical) {
       window.history.pushState({ desk: next }, '', canonical);
     }
-  }
+  }, []);
+
+  const onPagerSnap = useCallback((next: DeskSwipeSurface) => {
+    go(hrefForSurface(next));
+  }, [go]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -230,7 +235,7 @@ export function TerminalApp({
           <DeskPager
             surface={surface}
             reduceMotion={reduceMotion}
-            onSnap={(next) => go(hrefForSurface(next))}
+            onSnap={onPagerSnap}
           >
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,

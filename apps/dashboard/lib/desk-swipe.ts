@@ -16,6 +16,15 @@ export const PAGE_SWIPE_WRAP_PX = 36;
 export const PAGE_SWIPE_LOCK_PX = 10;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
 
+/** Clone the ends so native snap can wrap: Team | Board | Book | Team | Board */
+export const DESK_PAGER_SLOTS = [
+  { id: 'team', clone: true },
+  { id: 'leaderboard', clone: false },
+  { id: 'book', clone: false },
+  { id: 'team', clone: false },
+  { id: 'leaderboard', clone: true },
+] as const satisfies readonly { id: DeskSwipeSurface; clone: boolean }[];
+
 export function isSwipeSurface(id: string): id is DeskSwipeSurface {
   for (const surface of DESK_SWIPE_SURFACES) {
     if (surface === id) return true;
@@ -65,6 +74,10 @@ export function pagerScrollToBehavior(
 
 export function swipeTabLabel(id: DeskSwipeSurface): string {
   return tabForSurface(id).label;
+}
+
+export function pagerSlotKey(id: DeskSwipeSurface, clone: boolean): string {
+  return clone ? `${id}-clone` : id;
 }
 
 /** -1 previous, 1 next, 0 not a page swipe (vertical or too short). */
