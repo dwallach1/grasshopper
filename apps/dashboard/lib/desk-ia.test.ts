@@ -47,6 +47,7 @@ describe('desk IA smoke', () => {
     expect(app).toContain('VenueFilterBar');
     expect(book).not.toContain('VenueFilterBar');
     expect(book).toContain('assembleBookEdge');
+    expect(book).toContain('assembleBookOpen');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
@@ -191,9 +192,13 @@ describe('desk IA smoke', () => {
     const app = await readDashboard('app/terminal/app.tsx');
     const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
     const wrap = await readDashboard('app/terminal/desk-liveline.tsx');
+    const openStrip = await readDashboard('app/terminal/book-open-strip.tsx');
+    const openMap = await readDashboard('lib/book-open-strip.ts');
     const map = await readDashboard('lib/desk-liveline.ts');
     const css = await readDashboard('app/globals.css');
     expect(book).toContain('assembleBookEdge');
+    expect(book).toContain('assembleBookOpen');
+    expect(book).toContain('<BookOpenStrip');
     expect(book).toContain('crt-book-readout');
     expect(book).not.toContain('<DeskLiveline');
     expect(book).not.toContain('<BookTable');
@@ -229,10 +234,29 @@ describe('desk IA smoke', () => {
     expect(book).toContain('visually-hidden');
     expect(book).toContain('BOOK // EDGE');
     expect(css).toContain('.crt-book');
+    expect(css).toContain('.book-open');
+    expect(css).toContain('.crt-book .book-open-line.line-frame > div:has(canvas)');
     expect(css).toContain('crt-book-sweep');
     expect(css).toContain('.term-fresh');
     expect(wrap).toContain("from 'liveline'");
     expect(wrap).toContain('theme="dark"');
+    expect(wrap).toContain('referenceLine');
+    expect(wrap).toContain('compact');
+    expect(wrap).toContain("compact ? () => ''");
+    expect(openStrip).toContain('referenceLine');
+    expect(openStrip).toContain('compact');
+    expect(openStrip).not.toContain('StewardAvatar');
+    expect(openStrip).not.toContain('book-open-lede');
+    expect(openStrip).not.toContain('book-open-who');
+    expect(openStrip).not.toContain('venue_label');
+    expect(openStrip).not.toContain('PREDICTIONS');
+    expect(openStrip).not.toContain('cost ${');
+    expect(openMap).toContain('pm_positions.mark');
+    expect(openMap).toContain('pm_markets.last_yes');
+    expect(openMap).toContain('pm_fills.price');
+    expect(openMap).toContain('average_cost');
+    expect(openMap).toContain('kill_mid');
+    expect(openMap).not.toContain('clobTokenIds');
     expect(map).toContain('unix seconds');
     expect(map).toContain('never SOL→USD');
   });
