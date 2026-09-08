@@ -58,7 +58,8 @@ describe('steward foil laminate', () => {
   });
 
   test('stock is thin paper, ink is the steward fill', () => {
-    expect(STEWARD_CARD.depth).toBeLessThan(0.03);
+    expect(STEWARD_CARD.depth).toBeLessThan(0.06);
+    expect(STEWARD_CARD.core).toBeGreaterThan(STEWARD_CARD.paper);
     expect(STEWARD_CARD.height / STEWARD_CARD.width).toBeCloseTo(3 / 2.1, 5);
     const built = buildStewardCard('#9EC9C8');
     expect(built.group.getObjectByName('card-core')).toBeTruthy();

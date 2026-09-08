@@ -27,7 +27,7 @@ export const FOIL_MAP = /* glsl */ `
   float fres = pow(clamp(1.0 - abs(viewDir.z), 0.0, 1.0), 2.0);
   float glide = 0.5 + 0.5 * sin(dot(vMapUv, vec2(2.8, 1.15)) + uTilt.x * 2.6 + uTilt.y * 2.0);
   vec3 laminate = uInk * (0.42 + 0.58 * fres) * (0.62 + 0.38 * glide);
-  diffuseColor.rgb = mix(diffuseColor.rgb, laminate, stewardFoil * 0.62);
+  diffuseColor.rgb = mix(diffuseColor.rgb, laminate, stewardFoil * 0.78);
 #endif
 `;
 
@@ -64,7 +64,7 @@ export class StewardFoilMaterial extends MeshPhysicalMaterial {
       metalness: 0.18,
       clearcoat: 1,
       clearcoatRoughness: 0.08,
-      iridescence: 0.28,
+      iridescence: 0.34,
       iridescenceIOR: 1.5,
       iridescenceThicknessRange: [120, 260],
       sheen: 0.2,

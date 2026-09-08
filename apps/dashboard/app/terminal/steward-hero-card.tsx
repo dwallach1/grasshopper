@@ -35,10 +35,10 @@ import {
 import { buildStewardCard } from '../../lib/steward-card-mesh';
 import type { StewardIdCard as StewardIdCardModel } from '../../lib/steward-id';
 
-const IDLE_X = 0.055;
-const IDLE_Y = 0.1;
-const FOLLOW_X = 0.38;
-const FOLLOW_Y = 0.5;
+const IDLE_X = 0.1;
+const IDLE_Y = 0.18;
+const FOLLOW_X = 0.42;
+const FOLLOW_Y = 0.55;
 
 export function StewardHeroCard({
   card,
@@ -66,9 +66,9 @@ export function StewardHeroCard({
 
     const scene = new Scene();
     scene.background = new Color(0x07080a);
-    const camera = new PerspectiveCamera(34, 1, 0.1, 20);
-    camera.position.set(0, 0.05, 5.55);
-    camera.lookAt(0, 0, 0);
+    const camera = new PerspectiveCamera(32, 1, 0.1, 20);
+    camera.position.set(0.62, 0.34, 5.35);
+    camera.lookAt(0, -0.04, 0);
 
     let renderer: WebGLRenderer;
     try {
@@ -88,16 +88,16 @@ export function StewardHeroCard({
 
     scene.add(new AmbientLight(0x8a93a0, 0.22));
     scene.add(new HemisphereLight(0xf3eee4, 0x12151a, 0.35));
-    const key = new RectAreaLight(0xfff1d6, 8.5, 2.8, 2.2);
-    key.position.set(-1.4, 1.6, 2.4);
+    const key = new RectAreaLight(0xfff1d6, 12.5, 2.8, 2.2);
+    key.position.set(-1.8, 2.1, 2.6);
     key.lookAt(0, 0, 0);
     scene.add(key);
-    const fill = new RectAreaLight(0xcdd8ff, 4.2, 2.2, 2.6);
-    fill.position.set(1.7, 0.2, 2.1);
+    const fill = new RectAreaLight(0xcdd8ff, 5.4, 2.2, 2.6);
+    fill.position.set(2.1, 0.15, 2.3);
     fill.lookAt(0, 0, 0);
     scene.add(fill);
-    const rim = new DirectionalLight(0xe8edf2, 1.15);
-    rim.position.set(-2.2, 1.4, -2.4);
+    const rim = new DirectionalLight(0xf4f7fb, 1.85);
+    rim.position.set(-2.4, 1.6, -2.1);
     scene.add(rim);
 
     const floor = new Mesh(
@@ -167,9 +167,9 @@ export function StewardHeroCard({
     function applyTilt(groupRef: Group, elapsed: number) {
       const reduced = reduceRef.current;
       if (reduced) {
-        groupRef.rotation.x = 0.04;
-        groupRef.rotation.y = -0.06;
-        foil.setTilt(0, 0);
+        groupRef.rotation.x = 0.12;
+        groupRef.rotation.y = -0.22;
+        foil.setTilt(-0.22, 0.12);
         return;
       }
       pointer.x += (pointer.tx - pointer.x) * 0.12;

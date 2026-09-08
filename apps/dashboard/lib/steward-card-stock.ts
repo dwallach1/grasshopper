@@ -7,10 +7,10 @@ import { stewardBotKind, stewardSpecies } from './desk-avatar';
 export const STEWARD_CARD = {
   width: 2.1,
   height: 3.0,
-  depth: 0.014,
+  depth: 0.042,
   radius: 0.11,
-  paper: 0.0022,
-  core: 0.008,
+  paper: 0.006,
+  core: 0.028,
 } as const;
 
 export const STEWARD_CARD_DPR_CAP = 1.5;
