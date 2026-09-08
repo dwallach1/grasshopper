@@ -34,14 +34,15 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.28;
-export const POND_Z = -0.52;
-export const POND_RX = 0.88;
-export const POND_RZ = 0.64;
-export const HOOP_RADIUS = 2.05;
+export const POND_X = 1.15;
+export const POND_Z = 0.35;
+export const POND_RX = 0.72;
+export const POND_RZ = 0.54;
+export const HOOP_RADIUS = 2.08;
 export const HOOP_TUBE = 0.1;
-export const HOOP_X = 0.15;
-export const HOOP_Z = -0.25;
+export const HOOP_X = 0.18;
+export const HOOP_Z = -0.12;
+export const HOOP_YAW = -0.55;
 
 /** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
 export const ISLAND_CAMERA = {
@@ -630,10 +631,10 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   // dips into the pond and the far arc goes behind the building.
   // Face the camera so the near tube is in front of the hall and the far tube
   // is behind it. The lower-right arc crosses the pond.
-  const yaw = 0.74;
+  const yaw = HOOP_YAW;
   const cx = HOOP_X;
   const cz = HOOP_Z;
-  const cy = y + HOOP_RADIUS - 0.18;
+  const cy = y + HOOP_RADIUS - 0.16;
   const ring = shelf.mesh(
     shelf.geo(new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 16, 72)),
     shelf.mat(ORANGE, { roughness: 0.34, metalness: 0.16 }),

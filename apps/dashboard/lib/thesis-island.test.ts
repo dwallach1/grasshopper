@@ -93,8 +93,8 @@ describe('thesis island craft', () => {
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
     const pond = island.group.getObjectByName('pond');
     expect(pond).toBeInstanceOf(Mesh);
-    expect((pond as Mesh).scale.x).toBeGreaterThan(0.7);
-    expect((pond as Mesh).scale.z).toBeGreaterThan(0.5);
+    expect((pond as Mesh).scale.x).toBeGreaterThan(0.55);
+    expect((pond as Mesh).scale.z).toBeGreaterThan(0.4);
     expect(island.group.getObjectByName('distant')).toBeTruthy();
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
