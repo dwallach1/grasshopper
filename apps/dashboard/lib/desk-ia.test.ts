@@ -235,7 +235,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('BOOK // EDGE');
     expect(css).toContain('.crt-book');
     expect(css).toContain('.book-open');
-    expect(css).toContain('.book-open-line > div:has(canvas)');
+    expect(css).toContain('.crt-book .book-open-line.line-frame > div:has(canvas)');
     expect(css).toContain('crt-book-sweep');
     expect(css).toContain('.term-fresh');
     expect(wrap).toContain("from 'liveline'");
@@ -247,6 +247,7 @@ describe('desk IA smoke', () => {
     expect(openStrip).not.toContain('StewardAvatar');
     expect(openMap).toContain('pm_positions.mark');
     expect(openMap).toContain('pm_markets.last_yes');
+    expect(openMap).toContain('pm_fills.price');
     expect(openMap).toContain('average_cost');
     expect(openMap).toContain('kill_mid');
     expect(openMap).not.toContain('clobTokenIds');

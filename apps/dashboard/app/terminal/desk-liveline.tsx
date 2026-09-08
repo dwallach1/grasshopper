@@ -93,7 +93,10 @@ export function DeskLiveline({
     : (multi.length > 1 ? multi : undefined);
 
   return (
-    <div className={className ? `line-frame ${className}` : 'line-frame'}>
+    <div
+      className={className ? `line-frame ${className}` : 'line-frame'}
+      style={compact ? { height: 72 } : undefined}
+    >
       <Liveline
         data={data}
         value={latest}

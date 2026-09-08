@@ -53,6 +53,8 @@ export type BookOpenTicket = {
   kill_mid: number | null;
   source: string;
   overlays: LivelineOverlay[];
+  /** Liveline 0.0.7 needs two clocks. One published mark is a label, not a fake line. */
+  drawable: boolean;
 };
 
 export type BookOpenSteward = {
@@ -168,6 +170,7 @@ function finishSteward(
 
 function predictionTickets(payload: PredictionMarketsPayload): BookOpenTicket[] {
   const markets = new Map(payload.markets.map((row) => [row.id, row]));
+  const orders = new Map(payload.orders.map((row) => [row.id, row]));
   const tickets: BookOpenTicket[] = [];
   for (const row of payload.positions) {
     if (!OPEN_POSITION.has(row.status.toLowerCase())) continue;
@@ -183,6 +186,14 @@ function predictionTickets(payload: PredictionMarketsPayload): BookOpenTicket[] 
     }
     if (row.mark !== null && row.mark_at) {
       marks.push({ as_of: row.mark_at, value: row.mark, field: 'pm_positions.mark' });
+    }
+    for (const fill of payload.fills) {
+      const order = orders.get(fill.order_id);
+      const samePosition = fill.position_id === row.id;
+      const sameMarket = (order?.market_id ?? '') === row.market_id
+        && fill.outcome.trim().toLowerCase() === row.outcome.trim().toLowerCase();
+      if (!samePosition && !sameMarket) continue;
+      marks.push({ as_of: fill.executed_at, value: fill.price, field: 'pm_fills.price' });
     }
     const points = clocksFromIso(marks.map((item) => ({ as_of: item.as_of, value: item.value })));
     if (points.length === 0) continue;
@@ -208,6 +219,7 @@ function predictionTickets(payload: PredictionMarketsPayload): BookOpenTicket[] 
 
 function memeTickets(payload: MemeCoinsPayload): BookOpenTicket[] {
   const tokens = new Map(payload.tokens.map((row) => [row.id, row]));
+  const orders = new Map(payload.orders.map((row) => [row.id, row]));
   const tickets: BookOpenTicket[] = [];
   for (const row of payload.positions) {
     if (!OPEN_POSITION.has(row.status.toLowerCase())) continue;
@@ -222,6 +234,13 @@ function memeTickets(payload: MemeCoinsPayload): BookOpenTicket[] {
     }
     if (row.mark_sol !== null && row.mark_at) {
       marks.push({ as_of: row.mark_at, value: row.mark_sol, field: 'meme_positions.mark_sol' });
+    }
+    for (const fill of payload.fills) {
+      const order = orders.get(fill.order_id);
+      const samePosition = fill.position_id === row.id;
+      const sameToken = (order?.token_id ?? '') === row.token_id;
+      if (!samePosition && !sameToken) continue;
+      marks.push({ as_of: fill.executed_at, value: fill.price_sol, field: 'meme_fills.price_sol' });
     }
     const points = clocksFromIso(marks.map((item) => ({ as_of: item.as_of, value: item.value })));
     if (points.length === 0) continue;
@@ -350,6 +369,7 @@ function ticket(input: {
     kill_mid: input.kill_mid,
     source: input.kill_mid === null ? input.source : `${input.source} · kill_mid`,
     overlays,
+    drawable: input.points.length >= 2,
   };
 }
 

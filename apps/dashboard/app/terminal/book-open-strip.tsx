@@ -53,18 +53,20 @@ function OpenTicket({ ticket }: { ticket: BookOpenTicket }) {
           {cost ? ` · cost ${cost}` : ''}
         </span>
       </div>
-      <DeskLiveline
-        compact
-        points={ticket.points}
-        value={ticket.value}
-        series={ticket.overlays}
-        unit={ticket.unit}
-        color={ticket.color}
-        showValue={false}
-        referenceLine={ticket.cost === null ? undefined : { value: ticket.cost, label: 'cost' }}
-        emptyText="not in ledger"
-        className="book-open-line"
-      />
+      {ticket.drawable ? (
+        <DeskLiveline
+          compact
+          points={ticket.points}
+          value={ticket.value}
+          series={ticket.overlays}
+          unit={ticket.unit}
+          color={ticket.color}
+          showValue={false}
+          referenceLine={ticket.cost === null ? undefined : { value: ticket.cost, label: 'cost' }}
+          emptyText="not in ledger"
+          className="book-open-line"
+        />
+      ) : null}
     </div>
   );
 }

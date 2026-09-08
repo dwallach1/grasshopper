@@ -167,6 +167,73 @@ describe('assembleBookOpen', () => {
     expect(ticket?.overlays).toHaveLength(1);
     expect(ticket?.overlays[0]?.value).toBe(0.22);
     expect(ticket?.overlays[0]?.data.every((point) => point.value === 0.22)).toBe(true);
+    expect(ticket?.drawable).toBe(true);
+  });
+
+  test('published fills join the mark clocks — never invented ticks', () => {
+    const open = assembleBookOpen(desk({
+      prediction_markets: {
+        desk: 'ODDSBORNE',
+        venue: 'prediction',
+        markets: [{
+          id: 'm1',
+          venue: 'polymarket',
+          slug: 'fed-sep-25bps',
+          question: 'Fed Sep +25bps',
+          status: 'open',
+          close_time: null,
+          last_yes: null,
+          last_no: null,
+          last_marked_at: null,
+          thesis_id: null,
+          rules_summary: null,
+        }],
+        positions: [{
+          id: 'p1',
+          market_id: 'm1',
+          account_key: 'oddsborne',
+          thesis_id: null,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 25,
+          average_cost: 0.41,
+          mark: 0.61,
+          mark_at: '2026-09-08T15:40:00.000Z',
+          thesis_text: null,
+        }],
+        orders: [{
+          id: 'o1',
+          market_id: 'm1',
+          thesis_id: null,
+          outcome: 'yes',
+          side: 'buy',
+          order_type: 'market',
+          size: 25,
+          price: 0.41,
+          status: 'filled',
+          mode: 'live',
+          venue_order_id: null,
+          submitted_at: '2026-09-08T13:20:00.000Z',
+          created_at: '2026-09-08T13:20:00.000Z',
+        }],
+        fills: [{
+          id: 'f1',
+          order_id: 'o1',
+          position_id: 'p1',
+          outcome: 'yes',
+          side: 'buy',
+          quantity: 25,
+          price: 0.41,
+          executed_at: '2026-09-08T13:20:00.000Z',
+        }],
+        pnl: [],
+        notes: [],
+      },
+    }));
+    const ticket = open.rows[0]?.tickets[0];
+    expect(ticket?.points.map((row) => row.value)).toEqual([0.41, 0.61]);
+    expect(ticket?.source).toContain('pm_fills.price');
+    expect(ticket?.drawable).toBe(true);
   });
 
   test('closed or unmarked prediction lots do not invent ticks', () => {
@@ -274,6 +341,7 @@ describe('assembleBookOpen', () => {
     expect(ticket?.source).toContain('meme_tokens.last_price_sol');
     expect(ticket?.source).toContain('meme_positions.mark_sol');
     expect(ticket?.overlays).toEqual([]);
+    expect(ticket?.drawable).toBe(false);
   });
 
   test('equities need a multi-point mark series already in the snapshot', () => {

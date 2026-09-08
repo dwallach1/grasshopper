@@ -50,4 +50,4 @@ Book stays closed-lot CRT for edge stats. Above those cards, a thin Liveline str
 | BANDIT | CLOB last | `meme_tokens.last_price_sol` @ `last_marked_at` | — |
 | QUANTANAMO | mark series | `portfolio_exposure.last_price` (two+ clocks already in the snapshot) | `book.names.average_cost` |
 
-A steward with no open series is omitted. No CLOB fetch. No invented ticks. Optional second overlay at `kill_mid` only when that number is already on the row. Fill prices stay off the line.
+A steward with no open series is omitted. No CLOB fetch. No invented ticks. Optional second overlay at `kill_mid` only when that number is already on the row. Published `pm_fills.price` / `meme_fills.price_sol` clocks join the line when they belong to that ticket. Liveline 0.0.7 needs two clocks — a lone mark is a label, not an empty chart.
