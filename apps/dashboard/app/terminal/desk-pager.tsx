@@ -132,6 +132,7 @@ function bindPagerSwipe(
   }
 
   function onDown(event: PointerEvent) {
+    if (gesture.armed) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (!pageSwipeConsumesTarget(swipeHitFromEvent(event.target))) return;
     gesture.armed = true;
