@@ -33,20 +33,20 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.58;
-export const POND_Z = -0.98;
-export const HOOP_RADIUS = 2.08;
-export const HOOP_TUBE = 0.078;
+export const POND_X = 1.12;
+export const POND_Z = 0.72;
+export const HOOP_RADIUS = 2.02;
+export const HOOP_TUBE = 0.11;
 
-/** High 3/4 so the whole disk sits in a generous cream field. */
+/** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
 export const ISLAND_CAMERA = {
-  x: 15.4,
-  y: 12.8,
-  z: 16.8,
-  fov: 42,
+  x: 16.6,
+  y: 9.4,
+  z: 18.2,
+  fov: 40,
   lookX: 0.0,
-  lookY: 0.55,
-  lookZ: 0.05,
+  lookY: 0.72,
+  lookZ: 0.08,
 } as const;
 
 type Rng = () => number;
@@ -381,7 +381,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(0xd8c49a, { roughness: 0.92 }),
     'pond-rim',
   );
-  basin.scale.set(2.35, 1, 1.72);
+  basin.scale.set(2.15, 1, 2.05);
   basin.position.set(x, y - 0.04, z);
   root.add(basin);
   const water = shelf.mesh(
@@ -389,7 +389,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(POND, { roughness: 0.06, metalness: 0.22, emissive: 0x1478c8, emissiveIntensity: 0.55 }),
     'pond',
   );
-  water.scale.set(2.35, 1, 1.72);
+  water.scale.set(2.15, 1, 2.05);
   water.position.set(x, y - 0.01, z);
   root.add(water);
   for (let i = 0; i < 12; i += 1) {
@@ -401,7 +401,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
       mixHex(0xe2d0ae, 0x8a7a62, rng() * 0.35),
       `pond-stone-${i}`,
     );
-    stone.position.set(x + Math.cos(t) * 1.05, y + 0.02, z + Math.sin(t) * 0.76);
+    stone.position.set(x + Math.cos(t) * 0.98, y + 0.02, z + Math.sin(t) * 0.92);
     stone.rotation.y = t;
     root.add(stone);
   }
@@ -601,10 +601,10 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   hoop.name = 'arch';
   // Standing torus in XY. Center sits above the lot so the lower arc
   // dips into the pond and the far arc goes behind the building.
-  const yaw = 0.76;
-  const cx = 0.38;
-  const cz = 0.12;
-  const cy = y + HOOP_RADIUS - 0.2;
+  const yaw = 0.52;
+  const cx = 0.42;
+  const cz = 0.22;
+  const cy = y + HOOP_RADIUS - 0.28;
   const ring = shelf.mesh(
     shelf.geo(new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 16, 72)),
     shelf.mat(ORANGE, { roughness: 0.34, metalness: 0.16 }),
