@@ -33,8 +33,8 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.12;
-export const POND_Z = 0.72;
+export const POND_X = 0.88;
+export const POND_Z = 1.68;
 export const HOOP_RADIUS = 2.02;
 export const HOOP_TUBE = 0.11;
 
@@ -602,8 +602,8 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   // Standing torus in XY. Center sits above the lot so the lower arc
   // dips into the pond and the far arc goes behind the building.
   const yaw = 0.52;
-  const cx = 0.42;
-  const cz = 0.22;
+  const cx = 0.48;
+  const cz = 0.55;
   const cy = y + HOOP_RADIUS - 0.28;
   const ring = shelf.mesh(
     shelf.geo(new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 16, 72)),
@@ -910,18 +910,18 @@ export function buildThesisIsland(
     [2.42, 0.15, 0.88],
     [1.45, -1.75, 1.08],
     [-1.85, -1.35, 1.18],
-    [-0.35, 2.35, 0.88],
-    [-0.85, 2.25, 0.88],
+    [-0.95, 2.35, 0.88],
+    [-1.35, 2.15, 0.88],
     [2.35, 1.55, 0.95],
   ];
   for (const [x, z, s] of trees) addTree(group, shelf, rng, x, z, grassY, s);
 
   const houses: Array<[number, number]> = [
-    [-0.15, 2.42],
-    [0.12, 2.52],
-    [0.38, 2.38],
-    [-0.42, 2.48],
-    [-1.75, 2.05],
+    [-1.55, 2.15],
+    [-1.82, 2.28],
+    [-2.05, 2.08],
+    [-1.28, 2.32],
+    [-2.15, 1.55],
   ];
   for (const [x, z] of houses) addHouse(group, shelf, rng, x, z, grassY);
 
