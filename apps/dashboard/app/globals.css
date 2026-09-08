@@ -105,6 +105,15 @@ a:focus-visible {
   html {
     scroll-behavior: auto;
   }
+
+  .desk-pager,
+  .steward-deck {
+    scroll-behavior: auto;
+  }
+
+  .id-card {
+    animation: none;
+  }
 }
 
 .money {
@@ -2493,6 +2502,55 @@ a:focus-visible {
   animation: fade-in 280ms var(--ease);
 }
 
+.term.is-swipe {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.term.is-swipe .term-main {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.term.is-swipe .term-status {
+  display: none;
+}
+
+.desk-pager {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.desk-pager::-webkit-scrollbar {
+  display: none;
+}
+
+.desk-pager[data-reduce-motion="1"] {
+  scroll-behavior: auto;
+}
+
+.desk-page {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
 .term-thesis {
   padding: 6px 0 8px;
   border-bottom: 1px solid #1b2129;
@@ -3336,6 +3394,26 @@ a:focus-visible {
     background: rgba(255, 138, 0, 0.12);
   }
 
+  .term-dock.is-indicator {
+    background: transparent;
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .term-dock.is-indicator a {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    background: transparent;
+  }
+
+  .term-dock.is-indicator a.on {
+    color: var(--text);
+    background: transparent;
+    box-shadow: inset 0 -2px 0 var(--amber);
+  }
+
   .term-nav-windows button,
   .term-lot-tile,
   .term-actions button,
@@ -3483,118 +3561,92 @@ a:focus-visible {
   }
 }
 
-.term-team-cards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+.steward-stage {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  height: 100%;
+  background:
+    radial-gradient(80% 60% at 50% 42%, #12161c 0%, #07080a 70%);
 }
 
-.term-team-card {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 12px;
-  border: 1px solid var(--line);
-  background: #0c1014;
-  min-width: 0;
-  overflow: visible;
-}
-
-.term-team-card.is-alive {
-  border-color: color-mix(in srgb, var(--team-accent, var(--green)) 45%, var(--line));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--team-accent, var(--green)) 18%, transparent);
-}
-
-.term-team-meta {
-  min-width: 0;
-}
-
-.term-team-name {
+.steward-deck {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 20px 11%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 11%;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.term-team-name b {
-  letter-spacing: 0.04em;
-  font-size: 14px;
+.steward-deck::-webkit-scrollbar {
+  display: none;
 }
 
-.term-team-pill {
-  display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  font-size: 10px;
-  font-style: normal;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.steward-deck-slot {
+  flex: 0 0 min(78vw, 340px);
+  max-width: 340px;
+  scroll-snap-align: center;
 }
 
-.term-team-pill.up {
-  color: var(--green);
-  border-color: rgba(61, 220, 132, 0.4);
+.steward-empty {
+  margin: 0 auto;
+  padding: 48px 20px;
+  text-align: center;
 }
 
-.term-team-pill.warn {
-  color: var(--warn);
-  border-color: rgba(255, 176, 0, 0.4);
+.id-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  cursor: grab;
+  background: transparent;
 }
 
-.term-team-pill.muted,
-.term-team-pill.down {
-  color: var(--text-3);
+.id-card-webgl,
+.id-card-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
 }
 
-.term-team-role {
-  margin: 4px 0 0;
-  color: var(--text-2);
-  font-size: 12px;
+.id-card-webgl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.term-team-charter {
-  margin: 6px 0 8px;
-  color: var(--text-3);
-  font-size: 12px;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.id-card-poster {
+  border-radius: 4.4% / 3.1%;
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
+}
+
+.id-card-stamp {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 
-.term-team-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.term-team-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--team-chip, var(--line)) 50%, var(--line));
-  color: var(--team-chip, var(--text-2));
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.term-team-chip.is-primary {
-  background: color-mix(in srgb, var(--team-chip, var(--amber)) 14%, transparent);
-}
-
-.term-team-chip.dim {
-  color: var(--text-3);
-  border-color: var(--line);
-}
-
-.term-team-beat {
-  margin: 8px 0 0;
-  color: var(--text-3);
-  font-size: 11px;
+.id-card-mascot {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 36%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .term-board-rules {
@@ -3674,9 +3726,18 @@ a:focus-visible {
 
 
 @media (min-width: 720px) {
-  .term-team-cards,
   .term-board-cards {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .steward-deck {
+    justify-content: center;
+    padding-inline: 18%;
+    scroll-padding-inline: 18%;
+  }
+
+  .steward-deck-slot {
+    flex-basis: 280px;
   }
 }
 
@@ -3697,9 +3758,14 @@ a:focus-visible {
     font-size: 24px;
   }
 
-  .term-team-card {
-    grid-template-columns: 72px minmax(0, 1fr);
-    padding: 10px;
+  .steward-deck {
+    padding: 20px 10%;
+    scroll-padding-inline: 10%;
+    gap: 10px;
+  }
+
+  .steward-deck-slot {
+    flex-basis: 80%;
   }
 }
 

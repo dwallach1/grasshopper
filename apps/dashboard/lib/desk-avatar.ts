@@ -4,7 +4,7 @@
  */
 import { AVATAR_COLORS } from './desk-team';
 
-export type StewardAvatarSize = 'board' | 'team';
+export type StewardAvatarSize = 'board' | 'card' | 'team';
 
 export type StewardBotKind = 'bandit' | 'grasshopper' | 'oddsborne' | 'quantanamo' | 'spark';
 
