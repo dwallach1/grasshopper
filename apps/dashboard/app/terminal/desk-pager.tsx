@@ -16,6 +16,7 @@ import {
   swipeAxis,
   swipeHitFromEvent,
   swipeTabLabel,
+  wrapFromEdgeDrag,
   wrapSwipeSurface,
 } from '../../lib/desk-swipe';
 
@@ -73,7 +74,7 @@ export function DeskPager({
   useEffect(() => {
     const pager = scrollerRef.current;
     if (pager === null) return undefined;
-    return bindPagerSwipe(pager, () => surfaceRef.current, onSnap);
+    return bindPagerSwipe(pager, () => surfaceRef.current, onSnap, programmatic);
   }, [onSnap]);
 
   return (
@@ -104,6 +105,7 @@ function bindPagerSwipe(
   pager: HTMLDivElement,
   currentSurface: () => DeskSwipeSurface,
   onSnap: (next: DeskSwipeSurface) => void,
+  programmatic: { current: boolean },
 ): () => void {
   const gesture = {
     armed: false,
@@ -111,7 +113,19 @@ function bindPagerSwipe(
     originX: 0,
     originY: 0,
     startLeft: 0,
+    pointerId: -1,
   };
+
+  function snapTo(next: DeskSwipeSurface) {
+    programmatic.current = true;
+    onSnap(next);
+  }
+
+  function releaseCapture() {
+    if (gesture.pointerId < 0) return;
+    if (pager.hasPointerCapture(gesture.pointerId)) pager.releasePointerCapture(gesture.pointerId);
+    gesture.pointerId = -1;
+  }
 
   function onDown(event: PointerEvent) {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -121,6 +135,7 @@ function bindPagerSwipe(
     gesture.originX = event.clientX;
     gesture.originY = event.clientY;
     gesture.startLeft = pager.scrollLeft;
+    gesture.pointerId = event.pointerId;
   }
 
   function onMove(event: PointerEvent) {
@@ -130,6 +145,7 @@ function bindPagerSwipe(
     if (!gesture.dragging) {
       if (!isHorizontalLock(dx, dy)) return;
       gesture.dragging = true;
+      pager.setPointerCapture(event.pointerId);
     }
     const maxLeft = Math.max(0, pager.scrollWidth - pager.clientWidth);
     pager.scrollLeft = followPagerScroll(gesture.startLeft, dx, maxLeft);
@@ -142,22 +158,29 @@ function bindPagerSwipe(
     const dragged = gesture.dragging;
     gesture.armed = false;
     gesture.dragging = false;
+    releaseCapture();
     if (!pageSwipeConsumesTarget(swipeHitFromEvent(event.target)) && !dragged) return;
-    const axis = swipeAxis(dx, dy);
-    if (axis !== 0) {
-      onSnap(wrapSwipeSurface(currentSurface(), axis));
+    const here = currentSurface();
+    const wrap = wrapFromEdgeDrag(here, dx, dy);
+    if (wrap) {
+      snapTo(wrap);
       return;
     }
-    const pane = pager.querySelector<HTMLElement>(`[data-desk-page="${currentSurface()}"]`);
+    const axis = swipeAxis(dx, dy);
+    if (axis !== 0) {
+      snapTo(wrapSwipeSurface(here, axis));
+      return;
+    }
+    const pane = pager.querySelector<HTMLElement>(`[data-desk-page="${here}"]`);
     if (pane) pager.scrollTo({ left: pane.offsetLeft, top: 0, behavior: 'auto' });
   }
 
-  pager.addEventListener('pointerdown', onDown);
+  pager.addEventListener('pointerdown', onDown, true);
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
   return () => {
-    pager.removeEventListener('pointerdown', onDown);
+    pager.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);

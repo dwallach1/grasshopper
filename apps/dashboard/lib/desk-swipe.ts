@@ -12,6 +12,7 @@ import {
 } from './desk-nav';
 
 export const PAGE_SWIPE_PX = 56;
+export const PAGE_SWIPE_WRAP_PX = 36;
 export const PAGE_SWIPE_LOCK_PX = 10;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
 
@@ -74,6 +75,20 @@ export function swipeAxis(dx: number, dy: number, threshold = PAGE_SWIPE_PX): -1
 
 export function isHorizontalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
   return Math.abs(dx) >= lock && Math.abs(dx) > Math.abs(dy);
+}
+
+export function wrapFromEdgeDrag(
+  surface: DeskSwipeSurface,
+  dx: number,
+  dy: number,
+  threshold = PAGE_SWIPE_WRAP_PX,
+): DeskSwipeSurface | null {
+  if (Math.abs(dx) < threshold || Math.abs(dx) <= Math.abs(dy)) return null;
+  const index = swipeSurfaceIndex(surface);
+  const last = DESK_SWIPE_SURFACES.length - 1;
+  if (dx > 0 && index === 0) return wrapSwipeSurface(surface, -1);
+  if (dx < 0 && index === last) return wrapSwipeSurface(surface, 1);
+  return null;
 }
 
 export function followPagerScroll(startLeft: number, dx: number, maxLeft: number): number {

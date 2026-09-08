@@ -2548,6 +2548,8 @@ a:focus-visible {
   scroll-behavior: smooth;
   overscroll-behavior: contain;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -3751,6 +3753,7 @@ a:focus-visible {
   height: 100%;
   border: 0;
   display: block;
+  touch-action: pan-y;
 }
 
 .id-card-webgl canvas {

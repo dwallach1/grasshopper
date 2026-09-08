@@ -157,6 +157,8 @@ describe('desk IA smoke', () => {
     expect(mesh).toContain('StewardFoilMaterial');
     expect(pager).toContain('pagerScrollToBehavior');
     expect(pager).toContain('wrapSwipeSurface');
+    expect(pager).toContain('wrapFromEdgeDrag');
+    expect(pager).toContain('setPointerCapture');
     expect(pager).toContain('isSwipeWrap');
     expect(pager).toContain('pageSwipeConsumesTarget');
     expect(pager).toContain('data-circular');

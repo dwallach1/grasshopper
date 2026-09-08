@@ -15,6 +15,7 @@ import {
   swipeSurfaceAt,
   swipeSurfaceIndex,
   swipeTabLabel,
+  wrapFromEdgeDrag,
   wrapSwipeIndex,
   wrapSwipeSurface,
   type SwipeHitTarget,
@@ -60,6 +61,10 @@ describe('desk swipe deck', () => {
     expect(wrapSwipeSurface('team', 1)).toBe('leaderboard');
     expect(wrapSwipeSurface('book', 1)).toBe('team');
     expect(wrapSwipeSurface('team', -1)).toBe('book');
+    expect(wrapFromEdgeDrag('leaderboard', 80, 8)).toBe('team');
+    expect(wrapFromEdgeDrag('team', -80, 8)).toBe('leaderboard');
+    expect(wrapFromEdgeDrag('book', 80, 8)).toBeNull();
+    expect(wrapFromEdgeDrag('leaderboard', 20, 4)).toBeNull();
     expect(isSwipeWrap('leaderboard', 'team')).toBe(true);
     expect(isSwipeWrap('team', 'leaderboard')).toBe(true);
     expect(isSwipeWrap('leaderboard', 'book')).toBe(false);
