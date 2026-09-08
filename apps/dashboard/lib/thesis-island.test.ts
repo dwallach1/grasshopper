@@ -7,10 +7,14 @@ import {
   islandHitThesisId,
   islandPixelRatio,
   HOOP_RADIUS,
+  HOOP_X,
+  HOOP_Z,
   ISLAND_CAMERA,
   ISLAND_DPR_CAP,
   ISLAND_GRASS_Y,
   ISLAND_RADIUS,
+  POND_RX,
+  POND_RZ,
   POND_X,
   POND_Z,
   paintThesisSign,
@@ -89,8 +93,8 @@ describe('thesis island craft', () => {
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
     const pond = island.group.getObjectByName('pond');
     expect(pond).toBeInstanceOf(Mesh);
-    expect((pond as Mesh).scale.x).toBeGreaterThan(1.5);
-    expect((pond as Mesh).scale.z).toBeGreaterThan(1);
+    expect((pond as Mesh).scale.x).toBeGreaterThan(0.7);
+    expect((pond as Mesh).scale.z).toBeGreaterThan(0.5);
     expect(island.group.getObjectByName('distant')).toBeTruthy();
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
@@ -130,17 +134,23 @@ describe('thesis island craft', () => {
     island.dispose();
   });
 
-  test('pond is an oval of water and the hoop stands through the set', () => {
+  test('pond is an oval cut into the grass and the hoop goes through the hall', () => {
     const island = buildThesisIsland(district('quantum', 'lab', 'Quantum computing'));
     const pond = island.group.getObjectByName('pond') as Mesh;
     expect(pond.position.x).toBeCloseTo(POND_X, 5);
     expect(pond.position.z).toBeCloseTo(POND_Z, 5);
-    const spanX = 0.66 * pond.scale.x * 2;
-    const spanZ = 0.66 * pond.scale.z * 2;
-    expect(spanX).toBeGreaterThan(2);
-    expect(spanZ).toBeGreaterThan(1.3);
+    expect(Math.hypot(POND_X, POND_Z) + Math.max(POND_RX, POND_RZ)).toBeLessThan(ISLAND_RADIUS - 0.35);
+    expect(POND_RX * 2).toBeGreaterThan(1.4);
+    expect(POND_RZ * 2).toBeGreaterThan(1);
+    const grass = island.group.getObjectByName('grass') as Mesh;
+    const shape = (grass.geometry as { parameters?: { shapes?: { holes: unknown[] } | Array<{ holes: unknown[] }> } })
+      .parameters?.shapes;
+    const holes = Array.isArray(shape) ? shape[0]?.holes : shape?.holes;
+    expect(holes?.length).toBe(1);
     const hoop = island.group.getObjectByName('hoop') as Mesh;
     expect(hoop).toBeInstanceOf(Mesh);
+    expect(hoop.position.x).toBeCloseTo(HOOP_X, 5);
+    expect(hoop.position.z).toBeCloseTo(HOOP_Z, 5);
     expect(hoop.position.y).toBeGreaterThan(ISLAND_GRASS_Y + HOOP_RADIUS * 0.6);
     expect(hoop.position.y).toBeLessThan(ISLAND_GRASS_Y + HOOP_RADIUS + 0.4);
     island.dispose();
