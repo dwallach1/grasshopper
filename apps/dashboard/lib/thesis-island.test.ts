@@ -117,6 +117,8 @@ describe('thesis island craft', () => {
     const tower = island.group.getObjectByName('cooling-tower');
     expect(tower).toBeInstanceOf(Mesh);
     expect((tower as Mesh).geometry).toBeInstanceOf(LatheGeometry);
+    expect((tower as Mesh).position.x).toBeCloseTo(0.15, 5);
+    expect((tower as Mesh).position.z).toBeCloseTo(-0.25, 5);
     expect(island.group.getObjectByName('reactor-hall')).toBeTruthy();
     expect(island.group.getObjectByName('roof-slab')).toBeTruthy();
     expect(island.group.getObjectByName('distant')).toBeTruthy();

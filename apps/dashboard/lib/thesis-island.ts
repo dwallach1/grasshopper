@@ -721,27 +721,28 @@ function addPowerPlant(
     shelf.mat(0xe8e2d6, { roughness: 0.82 }),
     'cooling-tower',
   );
-  tower.position.set(origin[0] - 0.55, origin[1], origin[2] - 0.15);
+  // Sit the tower on the hoop center so the ring plane cuts through it.
+  tower.position.set(origin[0], origin[1], origin[2]);
   group.add(tower);
   const lip = shelf.mesh(
     shelf.geo(new CylinderGeometry(0.72, 0.72, 0.06, 20)),
     shelf.mat(0xd8d0c4, { roughness: 0.75 }),
     'cooling-lip',
   );
-  lip.position.set(origin[0] - 0.55, origin[1] + 1.56, origin[2] - 0.15);
+  lip.position.set(origin[0], origin[1] + 1.56, origin[2]);
   group.add(lip);
   const glass = windowMat(shelf, 'warm');
   const hall = shelf.mesh(shelf.geo(new BoxGeometry(1.05, 0.72, 0.7)), glass, 'reactor-hall');
-  hall.position.set(origin[0] + 0.55, origin[1] + 0.36, origin[2] + 0.12);
+  hall.position.set(origin[0] + 0.9, origin[1] + 0.36, origin[2] - 0.7);
   group.add(hall);
-  addRoofSlab(group, shelf, origin[0] + 0.55, origin[1] + 0.76, origin[2] + 0.12, 1.18, 0.82);
+  addRoofSlab(group, shelf, origin[0] + 0.9, origin[1] + 0.76, origin[2] - 0.7, 1.18, 0.82);
   for (const sx of [0.28, 0.58]) {
     const stack = shelf.mesh(
       shelf.geo(new CylinderGeometry(0.07, 0.09, 0.95, 10)),
       shelf.mat(0xd8d2c6, { roughness: 0.7 }),
       'stack',
     );
-    stack.position.set(origin[0] + sx + 0.55, origin[1] + 1.15, origin[2] + 0.02);
+    stack.position.set(origin[0] + sx + 0.9, origin[1] + 1.15, origin[2] - 0.7);
     group.add(stack);
     const rim = shelf.mesh(
       shelf.geo(new CylinderGeometry(0.08, 0.08, 0.05, 10)),
