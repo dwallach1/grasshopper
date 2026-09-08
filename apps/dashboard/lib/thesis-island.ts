@@ -5,6 +5,7 @@
 import {
   BoxGeometry,
   CanvasTexture,
+  CircleGeometry,
   Color,
   CylinderGeometry,
   ExtrudeGeometry,
@@ -12,9 +13,11 @@ import {
   IcosahedronGeometry,
   LatheGeometry,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   Shape,
+  SphereGeometry,
   SRGBColorSpace,
   TorusGeometry,
   Vector2,
@@ -26,17 +29,18 @@ import {
 import type { ThesisDistrict, ThesisDistrictPlace } from './thesis-districts';
 import { districtPlaceWord } from './thesis-districts';
 
-export const ISLAND_CREAM = 0xefe6d4;
+export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
+export const ISLAND_GRASS_Y = 1.42;
 
 export const ISLAND_CAMERA = {
-  x: 8.4,
-  y: 6.2,
-  z: 9.1,
-  fov: 26,
-  lookX: 0.05,
+  x: 7.35,
+  y: 4.85,
+  z: 8.15,
+  fov: 28,
+  lookX: 0.2,
   lookY: 1.05,
-  lookZ: 0.1,
+  lookZ: 0.15,
 } as const;
 
 type Rng = () => number;
@@ -48,17 +52,17 @@ export type ThesisIsland = {
   dispose: () => void;
 };
 
-const EARTH = [0xd8c09a, 0xc4a574, 0xb08958, 0x9a7348, 0x86633c, 0x6f5130];
-const GRASS = 0x9dbe6e;
-const POND = 0x3d86b8;
-const PATH = 0xc8bba4;
-const TRACK = 0x9aa3ab;
-const WHITE = 0xf3efe6;
+const EARTH = [0xe6d2b0, 0xd4b896, 0xc4a06a, 0xb08958, 0x9c7d52, 0x8a6a3e];
+const CLIFF = [0xe8d5b0, 0xd7c094, 0xc9b07a, 0xb89a62, 0xa3b07a, 0x8f9a68];
+const GRASS = 0xb7c89a;
+const POND = 0x3a8fd4;
+const WHITE = 0xf6f2ea;
 const ORANGE = 0xe07a32;
-const TRUNK = 0x6a4e32;
-const CANOPY = [0x8fbf62, 0x7eaf54, 0xa3c86f];
-const HOUSE = [0xf2ebe0, 0xe7ddd0, 0xf7f2ea];
-const ROOF = [0xc45ad0, 0xd96a2c, 0x6b7c9a];
+const TRUNK = 0x4a3828;
+const CANOPY = [0x7d9a5c, 0x6f8c52, 0x8aa86a];
+const HOUSE = [0xf6f1e8, 0xefe6d8];
+const ROOF = [0xa85ad8, 0xe07a32];
+const BERRY = [0xe07a32, 0xc0453a];
 
 function hashId(id: string): number {
   let h = 2166136261;
@@ -226,18 +230,16 @@ function context2d(canvas: HTMLCanvasElement | null): CanvasRenderingContext2D |
 function paintWindows(ctx: CanvasRenderingContext2D, tint: 'warm' | 'cool'): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  ctx.fillStyle = tint === 'cool' ? '#eef2f4' : '#f4efe6';
+  ctx.fillStyle = tint === 'cool' ? '#f2f4f6' : '#f6f2ea';
   ctx.fillRect(0, 0, w, h);
-  const cols = 7;
-  const rows = 9;
-  const gw = 10;
-  const gh = 7;
-  const sx = (w - cols * 22) / 2;
-  const sy = 18;
+  const cols = 8;
+  const rows = 11;
+  const sx = 16;
+  const sy = 14;
   for (let y = 0; y < rows; y += 1) {
     for (let x = 0; x < cols; x += 1) {
-      ctx.fillStyle = (x + y) % 5 === 0 ? '#c45a4a' : '#6d7176';
-      ctx.fillRect(sx + x * 22, sy + y * 16, gw, gh);
+      ctx.fillStyle = (x + y) % 4 === 0 ? '#c0453a' : '#2c2a28';
+      ctx.fillRect(sx + x * 18, sy + y * 16, 12, 3);
     }
   }
 }
@@ -245,13 +247,13 @@ function paintWindows(ctx: CanvasRenderingContext2D, tint: 'warm' | 'cool'): voi
 function paintGrass(ctx: CanvasRenderingContext2D): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  ctx.fillStyle = '#9dbe6e';
+  ctx.fillStyle = '#b7c89a';
   ctx.fillRect(0, 0, w, h);
-  for (let i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 70; i += 1) {
     const x = (i * 47) % w;
     const y = (i * 31) % h;
-    ctx.fillStyle = i % 3 === 0 ? '#8aaf5c' : i % 3 === 1 ? '#aad078' : '#7ea352';
-    ctx.fillRect(x, y, 18 + (i % 7), 14 + (i % 5));
+    ctx.fillStyle = i % 3 === 0 ? '#a8bc88' : i % 3 === 1 ? '#c2d2a6' : '#9aaf7a';
+    ctx.fillRect(x, y, 16 + (i % 7), 12 + (i % 5));
   }
 }
 
@@ -288,34 +290,43 @@ function islandOutline(rng: Rng, count: number, radius: number): number[] {
 function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
   const soil = new Group();
   soil.name = 'soil';
-  const segs = 24;
-  const layers = 6;
-  const layerH = 0.28;
+  const hullPts: Vector2[] = [];
+  for (let i = 0; i <= 16; i += 1) {
+    const t = i / 16;
+    const y = t * 0.92;
+    const r = radius * (0.22 + 0.78 * Math.sin(t * Math.PI * 0.72));
+    hullPts.push(new Vector2(Math.max(0.2, r), y));
+  }
+  const hull = shelf.mesh(
+    shelf.geo(new LatheGeometry(hullPts, 28)),
+    shelf.mat(0x5c4030, { roughness: 0.94 }),
+    'soil-hull',
+  );
+  soil.add(hull);
+  const segs = 36;
   const profile = islandOutline(rng, segs, radius);
-  for (let layer = 0; layer < layers; layer += 1) {
-    const y = layer * layerH + layerH / 2;
-    const inset = 1 - layer * 0.018 + (layer % 2 === 0 ? 0.03 : -0.02);
-    const hex = EARTH[layer] ?? EARTH[EARTH.length - 1]!;
-    const fillR = radius * inset * 0.78;
-    const fill = shelf.mesh(
-      shelf.geo(new CylinderGeometry(fillR, fillR * 0.98, layerH * 0.98, 20)),
-      shelf.mat(mixHex(hex, 0xb08958, 0.25)),
-      `soil-fill-${layer}`,
-    );
-    fill.position.y = y;
-    soil.add(fill);
+  for (let ring = 0; ring < 2; ring += 1) {
     for (let i = 0; i < segs; i += 1) {
-      const t = (i / segs) * Math.PI * 2;
-      const r = profile[i]! * inset + (rng() - 0.5) * 0.28;
-      const w = (2 * Math.PI * r) / segs + 0.1;
-      const d = 0.5 + rng() * 0.38;
-      const h = layerH * (0.95 + rng() * 0.35);
-      const block = shelf.box(w, h, d, mixHex(hex, 0xe8d4b0, rng() * 0.18), `soil-${layer}-${i}`);
-      block.position.set(Math.cos(t) * r, y + (h - layerH) * 0.2, Math.sin(t) * r);
+      const t = (i / segs) * Math.PI * 2 + ring * 0.08;
+      const r = profile[i]! * (0.97 - ring * 0.06) + (rng() - 0.5) * 0.1;
+      const w = 0.22 + rng() * 0.12;
+      const d = 0.16 + rng() * 0.1;
+      const h = 0.32 + rng() * 0.42 + (i % 5 === 0 ? 0.18 : 0);
+      const hex = CLIFF[(i + ring * 3) % CLIFF.length]!;
+      const block = shelf.box(w, h, d, mixHex(hex, EARTH[ring] ?? hex, rng() * 0.2), `soil-${ring}-${i}`);
+      block.position.set(Math.cos(t) * r, 0.88 + h / 2, Math.sin(t) * r);
       block.rotation.y = -t;
       soil.add(block);
     }
   }
+  const contact = new Mesh(
+    shelf.geo(new CircleGeometry(radius * 0.92, 28)),
+    new MeshBasicMaterial({ color: 0xc9b89a, transparent: true, opacity: 0.22 }),
+  );
+  contact.name = 'soil-contact';
+  contact.rotation.x = -Math.PI / 2;
+  contact.position.y = 0.03;
+  soil.add(contact);
   root.add(soil);
 }
 
@@ -349,99 +360,86 @@ function addGrass(root: Group, shelf: Shelf, rng: Rng, radius: number, y: number
 
 function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng: Rng): void {
   const water = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.42, 0.42, 0.04, 20)),
-    shelf.mat(POND, { roughness: 0.22, metalness: 0.08 }),
+    shelf.geo(new CylinderGeometry(0.52, 0.52, 0.045, 24)),
+    shelf.mat(POND, { roughness: 0.18, metalness: 0.12 }),
     'pond',
   );
-  water.scale.set(1.55, 1, 1.0);
+  water.scale.set(1.7, 1, 1.05);
   water.position.set(x, y + 0.02, z);
   root.add(water);
-  for (let i = 0; i < 10; i += 1) {
-    const t = (i / 10) * Math.PI * 2;
+  for (let i = 0; i < 12; i += 1) {
+    const t = (i / 12) * Math.PI * 2;
     const stone = shelf.box(
-      0.1 + rng() * 0.06,
-      0.05,
-      0.08 + rng() * 0.05,
-      mixHex(0xc4b49a, 0x8a7a62, rng() * 0.4),
+      0.1 + rng() * 0.05,
+      0.045,
+      0.08 + rng() * 0.04,
+      mixHex(0xd8c4a4, 0x8a7a62, rng() * 0.35),
       `pond-stone-${i}`,
     );
-    stone.position.set(x + Math.cos(t) * 0.58, y + 0.04, z + Math.sin(t) * 0.38);
+    stone.position.set(x + Math.cos(t) * 0.78, y + 0.04, z + Math.sin(t) * 0.48);
     stone.rotation.y = t;
     root.add(stone);
   }
 }
 
-function addPath(root: Group, shelf: Shelf, y: number): void {
+function addPath(root: Group, shelf: Shelf, radius: number, y: number): void {
   const path = new Group();
   path.name = 'path';
-  const pts = [
-    [-0.9, 1.15],
-    [-0.35, 0.7],
-    [0.15, 0.15],
-    [0.35, -0.35],
-  ] as const;
-  for (let i = 0; i < pts.length - 1; i += 1) {
-    const [ax, az] = pts[i]!;
-    const [bx, bz] = pts[i + 1]!;
-    const dx = bx - ax;
-    const dz = bz - az;
-    const len = Math.hypot(dx, dz);
-    const slab = shelf.box(0.28, 0.03, len + 0.04, PATH, `path-${i}`, { roughness: 0.95 });
-    slab.position.set((ax + bx) / 2, y + 0.02, (az + bz) / 2);
-    slab.rotation.y = Math.atan2(dx, dz);
-    path.add(slab);
-  }
-  root.add(path);
-}
-
-function addTrack(root: Group, shelf: Shelf, radius: number, y: number): void {
   const rail = shelf.mesh(
-    shelf.geo(new TorusGeometry(radius * 0.9, 0.035, 8, 48)),
-    shelf.mat(TRACK, { roughness: 0.55, metalness: 0.12 }),
+    shelf.geo(new TorusGeometry(radius * 0.86, 0.028, 8, 56)),
+    shelf.mat(0xf4efe6, { roughness: 0.55 }),
     'track',
   );
   rail.rotation.x = Math.PI / 2;
-  rail.position.y = y + 0.12;
-  root.add(rail);
-  for (let i = 0; i < 10; i += 1) {
-    const t = (i / 10) * Math.PI * 2;
-    const post = shelf.box(0.045, 0.16, 0.045, 0x7d868e, `track-post-${i}`);
-    post.position.set(Math.cos(t) * radius * 0.9, y + 0.06, Math.sin(t) * radius * 0.9);
-    root.add(post);
+  rail.position.y = y + 0.03;
+  path.add(rail);
+  for (let i = 0; i < 28; i += 1) {
+    const t = (i / 28) * Math.PI * 2;
+    const sleeper = shelf.box(0.16, 0.03, 0.07, 0x8a6a42, `sleeper-${i}`);
+    sleeper.position.set(Math.cos(t) * radius * 0.86, y + 0.015, Math.sin(t) * radius * 0.86);
+    sleeper.rotation.y = -t;
+    path.add(sleeper);
   }
+  root.add(path);
 }
 
 function addTree(root: Group, shelf: Shelf, rng: Rng, x: number, z: number, y: number, scale: number): void {
   const tree = new Group();
   tree.name = 'tree';
-  const trunkH = 0.28 * scale;
+  const trunkH = 0.34 * scale;
   const trunk = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.035 * scale, 0.05 * scale, trunkH, 6)),
-    shelf.mat(TRUNK, { roughness: 0.95 }),
+    shelf.geo(new CylinderGeometry(0.018 * scale, 0.028 * scale, trunkH, 5)),
+    shelf.mat(TRUNK, { roughness: 0.96 }),
     'trunk',
   );
-  trunk.position.y = y + trunkH / 2;
+  trunk.position.set(x, y + trunkH / 2, z);
   tree.add(trunk);
   const shade = CANOPY[Math.floor(rng() * CANOPY.length)]!;
-  const blobs = 2 + Math.floor(rng() * 2);
-  for (let i = 0; i < blobs; i += 1) {
-    const r = (0.16 + rng() * 0.08) * scale;
+  for (let i = 0; i < 4; i += 1) {
+    const r = (0.14 + rng() * 0.1) * scale;
     const canopy = shelf.mesh(
       shelf.geo(new IcosahedronGeometry(r, 0)),
-      shelf.mat(mixHex(shade, 0x5f8a3a, rng() * 0.25), { roughness: 0.92 }),
+      shelf.mat(mixHex(shade, 0x4f6a38, rng() * 0.22), { roughness: 0.93 }),
       `canopy-${i}`,
     );
     canopy.position.set(
-      x + (rng() - 0.5) * 0.1 * scale,
-      y + trunkH + r * 0.55 + i * 0.08 * scale,
-      z + (rng() - 0.5) * 0.1 * scale,
+      x + (rng() - 0.5) * 0.16 * scale,
+      y + trunkH + r * 0.45 + i * 0.05 * scale,
+      z + (rng() - 0.5) * 0.16 * scale,
     );
-    canopy.scale.set(1, 0.82 + rng() * 0.12, 1);
-    canopy.rotation.set(rng(), rng(), rng());
+    canopy.scale.set(1.15, 0.72 + rng() * 0.18, 1.05);
+    canopy.rotation.set(rng() * 1.2, rng() * 2, rng());
     tree.add(canopy);
   }
-  trunk.position.x = x;
-  trunk.position.z = z;
+  if (rng() > 0.45) {
+    const berry = shelf.mesh(
+      shelf.geo(new SphereGeometry(0.035 * scale, 8, 6)),
+      shelf.mat(BERRY[Math.floor(rng() * BERRY.length)]!, { roughness: 0.55 }),
+      'berry',
+    );
+    berry.position.set(x + 0.08 * scale, y + trunkH + 0.12 * scale, z + 0.04 * scale);
+    tree.add(berry);
+  }
   root.add(tree);
 }
 
@@ -497,16 +495,26 @@ function addTurbine(root: Group, shelf: Shelf, x: number, z: number, y: number, 
 }
 
 function addMast(root: Group, shelf: Shelf, x: number, z: number, y: number): void {
-  const h = 1.05;
-  for (let i = 0; i < 6; i += 1) {
-    const stripe = shelf.box(0.055, 0.16, 0.055, i % 2 === 0 ? 0xe8e0d4 : 0xc0453a, `mast-${i}`);
-    stripe.position.set(x, y + 0.1 + i * 0.16, z);
+  for (const [dx, dz, s] of [[-0.12, 0.08, 0.16], [0.1, -0.06, 0.13], [0.02, 0.12, 0.11]] as const) {
+    const rock = shelf.mesh(
+      shelf.geo(new IcosahedronGeometry(s, 0)),
+      shelf.mat(0x8a6a48, { roughness: 0.96 }),
+      'mast-rock',
+    );
+    rock.position.set(x + dx, y + s * 0.45, z + dz);
+    rock.scale.set(1.2, 0.7, 1);
+    root.add(rock);
+  }
+  const h = 1.12;
+  for (let i = 0; i < 7; i += 1) {
+    const stripe = shelf.box(0.05, 0.15, 0.05, i % 2 === 0 ? 0xf2ece4 : 0xc0453a, `mast-${i}`);
+    stripe.position.set(x, y + 0.18 + i * 0.15, z);
     root.add(stripe);
   }
-  for (let i = 0; i < 4; i += 1) {
-    const brace = shelf.box(0.2, 0.018, 0.018, 0xc9c2b6, `mast-brace-${i}`);
-    brace.position.set(x, y + 0.22 + i * 0.2, z);
-    brace.rotation.z = i % 2 === 0 ? 0.7 : -0.7;
+  for (let i = 0; i < 5; i += 1) {
+    const brace = shelf.box(0.22, 0.016, 0.016, 0xd8cfc4, `mast-brace-${i}`);
+    brace.position.set(x, y + 0.28 + i * 0.18, z);
+    brace.rotation.z = i % 2 === 0 ? 0.75 : -0.75;
     root.add(brace);
   }
   const cap = shelf.box(0.12, 0.04, 0.12, 0xc0453a, 'mast-cap');
@@ -539,51 +547,50 @@ function addSign(
   z: number,
   y: number,
 ): void {
-  const canvas = makeCanvas(512, 220);
+  const canvas = makeCanvas(640, 240);
   const ctx = context2d(canvas);
   if (ctx) paintThesisSign(ctx, title);
-    const map = ctx && canvas ? shelf.tex(canvas) : undefined;
+  const map = ctx && canvas ? shelf.tex(canvas) : undefined;
+  const yaw = 0.78;
   const face = shelf.mesh(
-    shelf.geo(new BoxGeometry(1.72, 0.7, 0.045)),
-    shelf.mat(0xf7f4ee, { map, roughness: 0.82 }),
+    shelf.geo(new BoxGeometry(1.95, 0.78, 0.04)),
+    shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'sign-face',
   );
-  face.position.set(x, y + 0.82, z);
-  face.rotation.y = 0.82;
+  face.position.set(x, y + 0.92, z);
+  face.rotation.y = yaw;
   root.add(face);
-  const frame = shelf.box(1.58, 0.7, 0.03, 0x2a2620, 'sign-frame');
-  frame.position.copy(face.position);
-  frame.position.x -= 0.02;
-  frame.position.z -= 0.03;
-  frame.rotation.y = face.rotation.y;
-  root.add(frame);
-  for (const side of [-0.66, 0.66]) {
-    const post = shelf.box(0.045, 0.86, 0.045, 0x2a2620, 'sign-post');
-    post.position.set(x + side * Math.cos(0.82), y + 0.43, z + side * Math.sin(0.82));
+  for (const side of [-0.72, 0.72]) {
+    const post = shelf.mesh(
+      shelf.geo(new CylinderGeometry(0.022, 0.022, 0.98, 8)),
+      shelf.mat(0xf4efe6, { roughness: 0.5 }),
+      'sign-post',
+    );
+    post.position.set(x + side * Math.cos(yaw), y + 0.49, z + side * Math.sin(yaw));
     root.add(post);
   }
 }
 
 function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   const arch = shelf.mesh(
-    shelf.geo(new TorusGeometry(1.85, 0.038, 10, 40, Math.PI * 1.08)),
-    shelf.mat(ORANGE, { roughness: 0.42, metalness: 0.08 }),
+    shelf.geo(new TorusGeometry(2.05, 0.042, 10, 48, Math.PI * 1.15)),
+    shelf.mat(ORANGE, { roughness: 0.4, metalness: 0.1 }),
     'arch',
   );
-  arch.rotation.y = 0.7;
-  arch.position.set(0.15, y + 0.02, -0.15);
+  arch.rotation.y = 0.55;
+  arch.position.set(0.55, y + 0.02, 0.85);
   root.add(arch);
   const canvas = makeCanvas(256, 96);
   const ctx = context2d(canvas);
   if (ctx) paintArchBadge(ctx, word);
-    const map = ctx && canvas ? shelf.tex(canvas) : undefined;
+  const map = ctx && canvas ? shelf.tex(canvas) : undefined;
   const badge = shelf.mesh(
-    shelf.geo(new BoxGeometry(0.72, 0.22, 0.04)),
+    shelf.geo(new BoxGeometry(0.78, 0.24, 0.045)),
     shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'arch-badge',
   );
-  badge.position.set(0.15, y + 1.92, -0.15);
-  badge.rotation.y = 0.7;
+  badge.position.set(0.55, y + 2.12, 0.85);
+  badge.rotation.y = 0.55;
   root.add(badge);
 }
 
@@ -613,6 +620,9 @@ function addTowerCluster(
   group.name = 'structure';
   group.userData.thesisId = thesisId;
   const glass = windowMat(shelf, 'warm');
+  const plinth = shelf.box(1.28, 0.1, 0.92, 0xe8e0d4, 'tower-base');
+  plinth.position.set(origin[0] + 0.08, origin[1] + 0.05, origin[2] + 0.06);
+  group.add(plinth);
   const towers = [
     { x: -0.28, z: 0.05, w: 0.42, d: 0.38, h: 1.05 },
     { x: 0.12, z: -0.02, w: 0.36, d: 0.34, h: 1.38 },
@@ -806,23 +816,23 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  distant.position.set(4.6, 3.4, -5.2);
-  distant.scale.setScalar(0.58);
+  distant.position.set(5.6, 2.85, -5.4);
+  distant.scale.setScalar(0.62);
   addSoil(distant, shelf, rng, 2.6);
-  addGrass(distant, shelf, rng, 2.55, 1.68);
+  addGrass(distant, shelf, rng, 2.55, ISLAND_GRASS_Y);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
-  block.position.set(0.1, 2.06, 0);
+  block.position.set(0.1, ISLAND_GRASS_Y + 0.38, 0);
   distant.add(block);
-  addRoofSlab(distant, shelf, 0.1, 2.44, 0, 1.05, 0.68);
-  addTree(distant, shelf, rng, -0.9, 0.6, 1.68, 1.1);
-  addTree(distant, shelf, rng, 0.8, -0.5, 1.68, 0.9);
+  addRoofSlab(distant, shelf, 0.1, ISLAND_GRASS_Y + 0.76, 0, 1.05, 0.68);
+  addTree(distant, shelf, rng, -0.9, 0.6, ISLAND_GRASS_Y, 1.1);
+  addTree(distant, shelf, rng, 0.8, -0.5, ISLAND_GRASS_Y, 0.9);
   if (place === 'plant') {
     const stub = shelf.mesh(
       shelf.geo(new CylinderGeometry(0.28, 0.36, 0.7, 10)),
       shelf.mat(0xe8e2d6),
       'distant-tower',
     );
-    stub.position.set(-0.4, 2.06, -0.3);
+    stub.position.set(-0.4, ISLAND_GRASS_Y + 0.38, -0.3);
     distant.add(stub);
   }
   root.add(distant);
@@ -848,47 +858,49 @@ export function buildThesisIsland(
   const group = new Group();
   group.name = `island-${district.id}`;
   const radius = 3.15;
-  const grassY = 1.68;
+  const grassY = ISLAND_GRASS_Y;
   const hits: Object3D[] = [];
   const turbines: Group[] = [];
 
   addSoil(group, shelf, rng, radius);
   addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
-  addPath(group, shelf, grassY);
-  addPond(group, shelf, 1.25, 1.55, grassY, rng);
-  addTrack(group, shelf, radius, grassY);
+  addPath(group, shelf, radius, grassY);
+  addPond(group, shelf, 1.05, 1.65, grassY, rng);
 
   const trees: Array<[number, number, number]> = [
-    [-2.05, 0.35, 0.95],
-    [-1.7, 1.55, 1.05],
-    [1.85, 1.35, 1.15],
-    [2.15, 0.15, 0.85],
-    [1.55, -1.55, 1.0],
-    [-1.85, -1.25, 1.1],
-    [0.85, 1.85, 0.75],
-    [-0.35, 2.05, 0.8],
+    [-2.1, 0.45, 1.05],
+    [-1.75, 1.55, 1.15],
+    [2.05, 0.55, 0.95],
+    [2.2, -0.15, 0.85],
+    [1.55, -1.65, 1.05],
+    [-1.95, -1.2, 1.15],
+    [0.55, 2.05, 0.8],
+    [-0.45, 2.15, 0.85],
+    [2.0, 1.55, 0.9],
   ];
   for (const [x, z, s] of trees) addTree(group, shelf, rng, x, z, grassY, s);
 
   const houses: Array<[number, number]> = [
-    [1.15, 1.55],
-    [1.45, 1.85],
-    [0.85, 1.95],
-    [-1.55, 1.75],
+    [1.35, 2.05],
+    [1.62, 2.18],
+    [1.88, 2.08],
+    [1.1, 2.22],
+    [-1.45, 1.95],
   ];
   for (const [x, z] of houses) addHouse(group, shelf, rng, x, z, grassY);
 
-  addTurbine(group, shelf, 2.05, -0.85, grassY, turbines);
-  addTurbine(group, shelf, 2.35, -0.35, grassY, turbines);
-  addTurbine(group, shelf, 2.2, 1.15, grassY, turbines);
-  addMast(group, shelf, -2.15, -0.55, grassY);
-  if (district.place === 'campus') addSolarRow(group, shelf, -0.85, -1.35, grassY);
-  else addSolarRow(group, shelf, 0.95, -1.45, grassY);
+  addTurbine(group, shelf, 2.25, -0.95, grassY, turbines);
+  addTurbine(group, shelf, 2.4, -0.25, grassY, turbines);
+  addTurbine(group, shelf, 2.15, 0.85, grassY, turbines);
+  addTurbine(group, shelf, -1.55, 1.85, grassY, turbines);
+  addTurbine(group, shelf, -2.2, 0.15, grassY, turbines);
+  addMast(group, shelf, -2.2, -0.75, grassY);
+  addSolarRow(group, shelf, -0.7, -1.55, grassY);
 
   const building = district.buildings[0];
   if (building) {
     addStructure(group, shelf, district.place, building.id, hits, grassY);
-    addSign(group, shelf, building.name, 1.55, 2.35, grassY);
+    addSign(group, shelf, building.name, 1.75, 2.45, grassY);
   }
   addArch(group, shelf, districtPlaceWord(district.place), grassY);
 
@@ -911,7 +923,7 @@ export function paintIslandPoster(
 ): void {
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
-  ctx.fillStyle = '#efe6d4';
+  ctx.fillStyle = '#f3ead8';
   ctx.fillRect(0, 0, w, h);
   const cx = w * 0.48;
   const cy = h * 0.58;

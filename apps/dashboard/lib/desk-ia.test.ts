@@ -185,7 +185,7 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.thesis-world');
     expect(css).toContain('.thesis-districts');
     expect(css).toContain('.thesis-island');
-    expect(css).toContain('#efe6d4');
+    expect(css).toContain('#f3ead8');
     expect(css).toContain('.term.is-theses');
     expect(css).toContain('100dvh');
     expect(css).not.toContain('.thesis-bldg');

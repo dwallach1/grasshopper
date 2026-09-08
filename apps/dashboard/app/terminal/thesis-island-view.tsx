@@ -60,7 +60,7 @@ export function ThesisIslandView({
 
     const scene = new Scene();
     scene.background = new Color(ISLAND_CREAM);
-    scene.fog = new Fog(ISLAND_CREAM, 14, 28);
+    scene.fog = new Fog(ISLAND_CREAM, 16, 32);
 
     const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 1, 0.1, 60);
     camera.position.set(ISLAND_CAMERA.x, ISLAND_CAMERA.y, ISLAND_CAMERA.z);
@@ -91,24 +91,24 @@ export function ThesisIslandView({
     }
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.12;
     renderer.setClearColor(ISLAND_CREAM, 1);
     const webgl2 = isWebGL2Available();
-    renderer.shadowMap.enabled = webgl2;
-    if (webgl2) renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = PCFSoftShadowMap;
     renderer.domElement.setAttribute('aria-hidden', 'true');
     root.appendChild(renderer.domElement);
 
     const pmrem = new PMREMGenerator(renderer);
     const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.32;
+    scene.environmentIntensity = 0.48;
 
-    scene.add(new AmbientLight(0xf2ead8, 0.42));
-    scene.add(new HemisphereLight(0xf7f0e4, 0xc4b49a, 0.72));
-    const key = new DirectionalLight(0xfff6e8, 1.28);
-    key.position.set(6.2, 9.4, 4.2);
-    key.castShadow = webgl2;
+    scene.add(new AmbientLight(0xf6efe2, 0.28));
+    scene.add(new HemisphereLight(0xfff6e8, 0xc4b49a, 0.62));
+    const key = new DirectionalLight(0xfff3d6, 1.55);
+    key.position.set(-4.2, 10.2, 6.4);
+    key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
     key.shadow.camera.far = 28;
@@ -119,6 +119,9 @@ export function ThesisIslandView({
     key.shadow.radius = 2.2;
     key.shadow.bias = -0.0009;
     scene.add(key);
+    const fill = new DirectionalLight(0xe4edff, 0.42);
+    fill.position.set(5.5, 3.4, -2.2);
+    scene.add(fill);
 
     const island = buildThesisIsland(districtRef.current, peekRef.current);
     scene.add(island.group);

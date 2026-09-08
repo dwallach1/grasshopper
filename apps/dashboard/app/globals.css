@@ -4575,7 +4575,7 @@ a:focus-visible {
   height: 100%;
   min-height: 100%;
   overflow: hidden;
-  background: #efe6d4;
+  background: #f3ead8;
 }
 
 .thesis-districts {
@@ -4612,7 +4612,7 @@ a:focus-visible {
   min-width: 0;
   scroll-snap-align: start;
   scroll-snap-stop: always;
-  background: #efe6d4;
+  background: #f3ead8;
 }
 
 .thesis-island,

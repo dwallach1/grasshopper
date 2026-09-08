@@ -63,10 +63,13 @@ describe('thesis island craft', () => {
     expect(islandPixelRatio(1)).toBe(1);
   });
 
-  test('soil is a stack of blocks, grass is extruded, trees are faceted', () => {
+  test('soil is a hull plus palisade, grass is extruded, trees are faceted', () => {
     const island = buildThesisIsland(district('neocloud_compute', 'campus', 'Neocloud basket'));
     const soil = island.group.getObjectByName('soil');
     expect(soil?.children.length).toBeGreaterThan(40);
+    const hull = island.group.getObjectByName('soil-hull');
+    expect(hull).toBeInstanceOf(Mesh);
+    expect((hull as Mesh).geometry).toBeInstanceOf(LatheGeometry);
     const grass = island.group.getObjectByName('grass');
     expect(grass).toBeInstanceOf(Mesh);
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
@@ -74,6 +77,7 @@ describe('thesis island craft', () => {
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
     expect(island.group.getObjectByName('arch')).toBeTruthy();
+    expect(island.turbines.length).toBeGreaterThanOrEqual(4);
     const kinds = geos(island.group);
     expect(kinds).toContain('IcosahedronGeometry');
     expect(kinds).not.toContain('ConeGeometry');
