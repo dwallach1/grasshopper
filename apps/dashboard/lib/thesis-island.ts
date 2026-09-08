@@ -33,8 +33,8 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.42;
-export const POND_Z = 0.62;
+export const POND_X = 1.18;
+export const POND_Z = -0.48;
 export const HOOP_RADIUS = 2.08;
 export const HOOP_TUBE = 0.078;
 
@@ -381,15 +381,15 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(0xd8c49a, { roughness: 0.92 }),
     'pond-rim',
   );
-  basin.scale.set(1.72, 1, 1.18);
-  basin.position.set(x, y - 0.03, z);
+  basin.scale.set(2.05, 1, 1.48);
+  basin.position.set(x, y - 0.04, z);
   root.add(basin);
   const water = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.66, 0.66, 0.055, 28)),
-    shelf.mat(POND, { roughness: 0.08, metalness: 0.18, emissive: 0x1468a8, emissiveIntensity: 0.32 }),
+    shelf.geo(new CylinderGeometry(0.66, 0.66, 0.06, 28)),
+    shelf.mat(POND, { roughness: 0.07, metalness: 0.2, emissive: 0x0d5aa0, emissiveIntensity: 0.42 }),
     'pond',
   );
-  water.scale.set(1.72, 1, 1.18);
+  water.scale.set(2.05, 1, 1.48);
   water.position.set(x, y - 0.01, z);
   root.add(water);
   for (let i = 0; i < 12; i += 1) {
@@ -401,7 +401,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
       mixHex(0xe2d0ae, 0x8a7a62, rng() * 0.35),
       `pond-stone-${i}`,
     );
-    stone.position.set(x + Math.cos(t) * 0.78, y + 0.02, z + Math.sin(t) * 0.52);
+    stone.position.set(x + Math.cos(t) * 0.92, y + 0.02, z + Math.sin(t) * 0.66);
     stone.rotation.y = t;
     root.add(stone);
   }
@@ -906,8 +906,8 @@ export function buildThesisIsland(
   const trees: Array<[number, number, number]> = [
     [-2.15, 0.35, 1.08],
     [-1.95, 1.15, 1.18],
-    [2.35, -1.05, 0.98],
-    [2.28, -0.35, 0.88],
+    [2.45, -1.45, 0.98],
+    [2.42, 0.15, 0.88],
     [1.45, -1.75, 1.08],
     [-1.85, -1.35, 1.18],
     [-0.35, 2.35, 0.88],
