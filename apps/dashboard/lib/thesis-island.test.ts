@@ -142,10 +142,11 @@ describe('thesis island craft', () => {
     expect(pond.position.x).toBeCloseTo(POND_X, 5);
     expect(pond.position.z).toBeCloseTo(POND_Z, 5);
     expect(pond.position.y).toBeGreaterThan(ISLAND_GRASS_Y + 0.07);
-    expect(POND_R).toBeGreaterThan(0.9);
-    expect(POND_X).toBeGreaterThan(0.4);
-    expect(POND_Z).toBeGreaterThan(0);
+    expect(POND_R).toBeGreaterThan(0.75);
+    expect(POND_X).toBeGreaterThan(0.8);
+    expect(POND_Z).toBeGreaterThan(0.6);
     expect(Math.hypot(POND_X, POND_Z) + POND_R).toBeLessThan(ISLAND_RADIUS - 0.35);
+    expect(Math.hypot(POND_X - 0.15, POND_Z + 0.25)).toBeGreaterThan(POND_R + 0.72);
     const hoop = island.group.getObjectByName('hoop') as Mesh;
     expect(hoop).toBeInstanceOf(Mesh);
     expect(hoop.geometry.type).toBe('TorusGeometry');

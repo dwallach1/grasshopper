@@ -33,9 +33,9 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.05;
-export const POND_Z = 0.35;
-export const POND_R = 1.08;
+export const POND_X = 1.52;
+export const POND_Z = 1.08;
+export const POND_R = 0.86;
 export const HOOP_RADIUS = 1.9;
 export const HOOP_TUBE = 0.095;
 export const HOOP_X = 0.15;
@@ -912,7 +912,7 @@ export function buildThesisIsland(
 
   addTurbine(group, shelf, 2.28, -1.05, grassY, turbines);
   addTurbine(group, shelf, 2.42, -0.35, grassY, turbines);
-  addTurbine(group, shelf, 2.22, 0.75, grassY, turbines);
+  addTurbine(group, shelf, 2.48, 0.18, grassY, turbines);
   addTurbine(group, shelf, -1.85, 1.65, grassY, turbines);
   addTurbine(group, shelf, -2.25, 0.05, grassY, turbines);
   addMast(group, shelf, -2.15, -0.85, grassY);
