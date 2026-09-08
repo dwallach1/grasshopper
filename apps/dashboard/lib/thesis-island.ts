@@ -30,13 +30,13 @@ export const ISLAND_CREAM = 0xefe6d4;
 export const ISLAND_DPR_CAP = 1.5;
 
 export const ISLAND_CAMERA = {
-  x: 6.05,
-  y: 5.15,
-  z: 6.55,
-  fov: 28,
-  lookX: 0.05,
-  lookY: 0.72,
-  lookZ: 0.05,
+  x: 5.15,
+  y: 3.55,
+  z: 5.45,
+  fov: 32,
+  lookX: 0.1,
+  lookY: 0.85,
+  lookZ: 0.15,
 } as const;
 
 type Rng = () => number;
@@ -288,9 +288,9 @@ function islandOutline(rng: Rng, count: number, radius: number): number[] {
 function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
   const soil = new Group();
   soil.name = 'soil';
-  const segs = 26;
+  const segs = 24;
   const layers = 6;
-  const layerH = 0.22;
+  const layerH = 0.28;
   const profile = islandOutline(rng, segs, radius);
   for (let layer = 0; layer < layers; layer += 1) {
     const y = layer * layerH + layerH / 2;
@@ -306,10 +306,10 @@ function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
     soil.add(fill);
     for (let i = 0; i < segs; i += 1) {
       const t = (i / segs) * Math.PI * 2;
-      const r = profile[i]! * inset + (rng() - 0.5) * 0.16;
-      const w = (2 * Math.PI * r) / segs + 0.06;
-      const d = 0.38 + rng() * 0.28;
-      const h = layerH * (0.92 + rng() * 0.28);
+      const r = profile[i]! * inset + (rng() - 0.5) * 0.28;
+      const w = (2 * Math.PI * r) / segs + 0.1;
+      const d = 0.5 + rng() * 0.38;
+      const h = layerH * (0.95 + rng() * 0.35);
       const block = shelf.box(w, h, d, mixHex(hex, 0xe8d4b0, rng() * 0.18), `soil-${layer}-${i}`);
       block.position.set(Math.cos(t) * r, y + (h - layerH) * 0.2, Math.sin(t) * r);
       block.rotation.y = -t;
@@ -805,23 +805,23 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  distant.position.set(7.6, 1.55, -8.4);
-  distant.scale.setScalar(0.42);
+  distant.position.set(6.8, 1.85, -7.2);
+  distant.scale.setScalar(0.48);
   addSoil(distant, shelf, rng, 2.6);
-  addGrass(distant, shelf, rng, 2.55, 1.32);
+  addGrass(distant, shelf, rng, 2.55, 1.68);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
-  block.position.set(0.1, 1.7, 0);
+  block.position.set(0.1, 2.06, 0);
   distant.add(block);
-  addRoofSlab(distant, shelf, 0.1, 2.08, 0, 1.05, 0.68);
-  addTree(distant, shelf, rng, -0.9, 0.6, 1.32, 1.1);
-  addTree(distant, shelf, rng, 0.8, -0.5, 1.32, 0.9);
+  addRoofSlab(distant, shelf, 0.1, 2.44, 0, 1.05, 0.68);
+  addTree(distant, shelf, rng, -0.9, 0.6, 1.68, 1.1);
+  addTree(distant, shelf, rng, 0.8, -0.5, 1.68, 0.9);
   if (place === 'plant') {
     const stub = shelf.mesh(
       shelf.geo(new CylinderGeometry(0.28, 0.36, 0.7, 10)),
       shelf.mat(0xe8e2d6),
       'distant-tower',
     );
-    stub.position.set(-0.4, 1.7, -0.3);
+    stub.position.set(-0.4, 2.06, -0.3);
     distant.add(stub);
   }
   root.add(distant);
@@ -847,7 +847,7 @@ export function buildThesisIsland(
   const group = new Group();
   group.name = `island-${district.id}`;
   const radius = 3.15;
-  const grassY = 1.32;
+  const grassY = 1.68;
   const hits: Object3D[] = [];
   const turbines: Group[] = [];
 

@@ -2519,10 +2519,18 @@ a:focus-visible {
   display: none;
 }
 
+.term.is-theses {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .term.is-theses .term-main {
   display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
+  min-height: 0;
 }
 
 .term.is-theses .term-status {
@@ -2530,7 +2538,7 @@ a:focus-visible {
 }
 
 .term.is-theses .thesis-world {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
 }
 

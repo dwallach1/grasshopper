@@ -121,8 +121,9 @@ export function ThesisIslandView({
     let visible = true;
 
     function resize(): void {
-      const w = root.clientWidth;
-      const h = root.clientHeight;
+      const parent = root.parentElement;
+      const w = Math.max(root.clientWidth, parent?.clientWidth ?? 0);
+      const h = Math.max(root.clientHeight, parent?.clientHeight ?? 0, window.innerHeight - 88);
       if (w < 8 || h < 8) return;
       renderer.setPixelRatio(islandPixelRatio(window.devicePixelRatio || 1));
       renderer.setSize(w, h, false);
