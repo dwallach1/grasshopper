@@ -66,8 +66,8 @@ export function StewardHeroCard({
 
     const scene = new Scene();
     scene.background = new Color(0x07080a);
-    const camera = new PerspectiveCamera(28, 1, 0.1, 20);
-    camera.position.set(0, 0.06, 4.15);
+    const camera = new PerspectiveCamera(34, 1, 0.1, 20);
+    camera.position.set(0, 0.05, 5.55);
     camera.lookAt(0, 0, 0);
 
     let renderer: WebGLRenderer;

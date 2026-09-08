@@ -25,6 +25,24 @@ describe('steward foil laminate', () => {
     expect(FOIL_MAP).toContain('fres');
     expect(FOIL_ROUGH).toContain('roughnessFactor');
     expect(FOIL_METAL).toContain('metalnessFactor');
+    const shader = {
+      uniforms: {},
+      vertexShader: '',
+      fragmentShader: [
+        '#include <common>',
+        '#include <map_fragment>',
+        '#include <roughnessmap_fragment>',
+        '#include <metalnessmap_fragment>',
+        '#include <normal_fragment_maps>',
+      ].join('\n'),
+    };
+    // SAFETY: compile-hook fixture, not a live WebGL program.
+    mat.onBeforeCompile(shader as Parameters<MeshPhysicalMaterial['onBeforeCompile']>[0]);
+    expect(shader.fragmentShader.indexOf(FOIL_COMMON))
+      .toBeGreaterThan(shader.fragmentShader.indexOf('#include <common>'));
+    expect(shader.fragmentShader.indexOf(FOIL_MAP))
+      .toBeGreaterThan(shader.fragmentShader.indexOf('#include <normal_fragment_maps>'));
+    expect(shader.fragmentShader).not.toContain('#include <map_fragment>\n' + FOIL_MAP);
   });
 
   test('rejects ektogamat hologram / scanline / glitch toys', () => {

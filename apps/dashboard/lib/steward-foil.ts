@@ -80,9 +80,10 @@ export class StewardFoilMaterial extends MeshPhysicalMaterial {
       shader.uniforms.uTilt = this.uTilt;
       shader.uniforms.uFoilMix = this.uFoilMix;
       shader.uniforms.uFoilMap = this.uFoilMap;
+      // MeshPhysical declares `normal` in normal_fragment_begin — after map_fragment.
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FOIL_COMMON}`)
-        .replace('#include <map_fragment>', `#include <map_fragment>\n${FOIL_MAP}`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${FOIL_MAP}`)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${FOIL_ROUGH}`)
         .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\n${FOIL_METAL}`);
     };
