@@ -35,13 +35,13 @@ export const ISLAND_GRASS_Y = 1.52;
 
 /** Phone portrait is tall; keep the disk, pond, and peek inside ~13–20° of look. */
 export const ISLAND_CAMERA = {
-  x: 7.85,
-  y: 5.15,
-  z: 8.55,
-  fov: 34,
-  lookX: 0.12,
-  lookY: 1.28,
-  lookZ: 0.42,
+  x: 10.1,
+  y: 6.2,
+  z: 11.0,
+  fov: 38,
+  lookX: 0.0,
+  lookY: 1.05,
+  lookZ: 0.2,
 } as const;
 
 type Rng = () => number;
@@ -923,7 +923,7 @@ export function buildThesisIsland(
   const building = district.buildings[0];
   if (building) {
     addStructure(group, shelf, district.place, building.id, hits, grassY);
-    addSign(group, shelf, building.name, 1.85, 2.15, grassY);
+    addSign(group, shelf, building.name, -1.75, 1.55, grassY);
   }
   addArch(group, shelf, districtPlaceWord(district.place), grassY);
 
