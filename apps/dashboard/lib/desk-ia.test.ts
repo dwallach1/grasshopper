@@ -242,6 +242,7 @@ describe('desk IA smoke', () => {
     expect(wrap).toContain('theme="dark"');
     expect(wrap).toContain('referenceLine');
     expect(wrap).toContain('compact');
+    expect(wrap).toContain("compact ? () => ''");
     expect(openStrip).toContain('referenceLine');
     expect(openStrip).toContain('compact');
     expect(openStrip).not.toContain('StewardAvatar');

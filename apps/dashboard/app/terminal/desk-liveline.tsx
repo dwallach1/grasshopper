@@ -121,10 +121,10 @@ export function DeskLiveline({
         paused={motion.reduce || motion.hidden}
         emptyText={empty ? emptyText : LIVELINE_EMPTY}
         formatValue={(v) => formatLivelineValue(v, unit)}
-        formatTime={(t) => formatLivelineTime(t, span)}
+        formatTime={compact ? () => '' : (t) => formatLivelineTime(t, span)}
         referenceLine={referenceLine}
         padding={compact
-          ? { top: 8, right: 10, bottom: 14, left: 6 }
+          ? { top: 6, right: 36, bottom: 6, left: 4 }
           : {
             top: showValue ? 52 : 16,
             right: multi.length > 1 ? 88 : 16,
