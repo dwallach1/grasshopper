@@ -2250,6 +2250,18 @@ a:focus-visible {
   font-size: 10px;
 }
 
+.term-fresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.term-fresh .term-chip {
+  margin-left: 0;
+}
+
 .term-live {
   display: flex;
   align-items: center;
@@ -3246,6 +3258,10 @@ a:focus-visible {
     font-size: 15px;
   }
 
+  .term-public .term-fresh {
+    margin-left: auto;
+  }
+
   .term-public .term-chip,
   .term-public .term-live {
     margin-left: 0;
@@ -3254,8 +3270,8 @@ a:focus-visible {
     font-size: 10px;
   }
 
-  .term-public .term-chip {
-    margin-left: auto;
+  .term-public .term-fresh .term-chip {
+    margin-left: 0;
   }
 
   .term-public .term-status {
@@ -3779,27 +3795,6 @@ a:focus-visible {
   line-height: 1.45;
 }
 
-.line-foci {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.line-foci button {
-  border: 0;
-  background: transparent;
-  color: var(--text-3);
-  padding: 6px 10px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-}
-
-.line-foci button.on,
-.line-foci button:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-}
-
 .line-hero,
 .line-frame {
   display: flex;
@@ -3891,6 +3886,7 @@ a:focus-visible {
   padding: 0;
   text-align: left;
   overflow: visible;
+  cursor: default;
 }
 
 .line-place {
@@ -3982,20 +3978,6 @@ a:focus-visible {
 
   .line-lede {
     font-size: 14px;
-  }
-
-  .line-foci {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
-  }
-
-  .line-foci button {
-    min-height: 40px;
-    padding: 8px 6px;
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-align: center;
   }
 
   .line-frame > div:has(canvas) {
@@ -4248,11 +4230,154 @@ a:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .crt-boot.is-warm .crt-boot-bar,
-  .crt-tape-scroll {
+  .crt-tape-scroll,
+  .crt-book-tube::after {
     animation: none;
   }
 
   .crt-boot.is-out {
     transition: none;
+  }
+}
+
+/* ——— Book edge CRT / ASCII Magic readout ——— */
+
+.crt-book {
+  --crt: #7dffb3;
+  --crt-dim: #1c3d2c;
+  --crt-ink: #04110a;
+  gap: 16px;
+}
+
+.crt-book-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crt-book-kicker {
+  margin: 0;
+  color: #9ef0ff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-shadow: 0 0 8px rgba(125, 255, 179, 0.35);
+}
+
+.crt-book-lede {
+  margin: 0;
+  max-width: 36rem;
+  color: rgba(125, 255, 179, 0.62);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.crt-book-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.crt-book-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: visible;
+}
+
+.crt-book-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: visible;
+}
+
+.crt-book-id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.crt-book-id b {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--crt);
+  text-shadow: 0 0 8px rgba(125, 255, 179, 0.4);
+}
+
+.crt-book-id i {
+  color: #9ef0ff;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.crt-book-tube {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 10px 10px;
+  border: 1px solid rgba(125, 255, 179, 0.28);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(125, 255, 179, 0.045) 0 1px,
+      transparent 1px 3px
+    ),
+    radial-gradient(circle at 50% 0%, rgba(125, 255, 179, 0.08), transparent 55%),
+    var(--crt-ink);
+  color: var(--crt);
+  text-shadow: 0 0 6px rgba(125, 255, 179, 0.35);
+}
+
+.crt-book-tube::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(125, 255, 179, 0.05) 50%,
+    transparent 60%
+  );
+  animation: crt-book-sweep 6.5s linear infinite;
+}
+
+.crt-book-card.is-thin .crt-book-tube {
+  color: rgba(125, 255, 179, 0.72);
+}
+
+.crt-book-readout {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+@keyframes crt-book-sweep {
+  from { transform: translateY(-40%); }
+  to { transform: translateY(140%); }
+}
+
+@media (max-width: 720px) {
+  .crt-book {
+    padding: 12px 12px 20px;
+  }
+
+  .crt-book-readout {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-book-tube::after {
+    animation: none;
+    background: none;
   }
 }

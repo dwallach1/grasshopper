@@ -442,6 +442,7 @@ const PositionSchema = z
     quantity: Money,
     average_cost: OptionalMoney,
     opened_at: OptionalTimestamp,
+    closed_at: OptionalTimestamp.optional().transform((value) => value ?? null),
     next_review_at: OptionalTimestamp,
   })
   .passthrough();

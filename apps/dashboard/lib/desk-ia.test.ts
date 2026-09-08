@@ -20,7 +20,10 @@ describe('desk IA smoke', () => {
     expect(app).toContain('<BookPanel');
     expect(app).toContain('<TeamPanel');
     expect(app).toContain('<LeaderboardPanel');
-    expect(app).toContain('LastRunChip');
+    expect(app).toContain('assembleDeskFreshness');
+    expect(app).toContain('FreshnessChips');
+    expect(app).not.toContain('LastRunChip');
+    expect(app).not.toContain('shortRoutine');
     expect(app).not.toContain("surface === 'home'");
     expect(app).not.toContain("surface === 'risk'");
     expect(app).not.toContain('RiskPanel');
@@ -42,7 +45,8 @@ describe('desk IA smoke', () => {
     expect(nav).not.toMatch(/label: 'Risk'/);
     expect(nav).not.toMatch(/Polymarket/);
     expect(app).toContain('VenueFilterBar');
-    expect(book).toContain('VenueFilterBar');
+    expect(book).not.toContain('VenueFilterBar');
+    expect(book).toContain('assembleBookEdge');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
@@ -56,7 +60,9 @@ describe('desk IA smoke', () => {
     const tests = await readDashboard('app/terminal/backtests-panel.tsx');
     expect(app).toMatch(/term-brand[\s\S]{0,180}GRASSHOPPER\s*<\/a>/);
     expect(app).not.toMatch(/term-brand[\s\S]{0,180}QUANTANAMO/);
-    expect(app).toContain('no QUANTANAMO run');
+    expect(app).not.toContain('no QUANTANAMO run');
+    expect(app).not.toContain("label: 'scan'");
+    expect(app).toContain("chip.label} · {age");
     expect(shell).toContain('GRASSHOPPER');
     expect(shell).toContain('CrtBoot');
     expect(shell).toContain("prefers-reduced-motion: reduce");
@@ -73,11 +79,15 @@ describe('desk IA smoke', () => {
     expect(venue).toContain("return 'BANDIT'");
     expect(venue).toContain("return 'PREDICTIONS'");
     expect(venue).toContain("return 'COINS'");
-    expect(book).toContain('CoinNote');
-    expect(book).toContain('assembleDeskBookRollup');
-    expect(book).toContain("venue === 'all'");
-    expect(book).toContain("venue === 'meme'");
-    expect(book).toContain("ledgerAmount(pnl.cash_sol, 'SOL')");
+    expect(book).toContain('assembleBookEdge');
+    expect(book).toContain('asciiFillBar');
+    expect(book).toContain('crt-book');
+    expect(book).toContain('StewardAvatar');
+    expect(book).toContain('GOOD');
+    expect(book).toContain('HOLD');
+    expect(book).not.toContain('CoinNote');
+    expect(book).not.toContain('assembleDeskBookRollup');
+    expect(book).not.toContain("venue === 'all'");
     expect(book).not.toContain('compact={venue === \'all\'}');
     expect(chips).toContain('venueShort(venue)');
     expect(chips).not.toContain("'EQ'");
@@ -176,14 +186,17 @@ describe('desk IA smoke', () => {
     expect(layout).toContain('Special+Elite');
   });
 
-  test('Board and Book are Liveline-first, not a Rive tape', async () => {
+  test('Board stays Liveline-first; Book is CRT edge, not a Rive tape', async () => {
     const book = await readDashboard('app/terminal/book-panel.tsx');
     const app = await readDashboard('app/terminal/app.tsx');
     const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
     const wrap = await readDashboard('app/terminal/desk-liveline.tsx');
     const map = await readDashboard('lib/desk-liveline.ts');
-    expect(book).toContain('<DeskLiveline');
-    expect(book).toContain('<BookTable');
+    const css = await readDashboard('app/globals.css');
+    expect(book).toContain('assembleBookEdge');
+    expect(book).toContain('crt-book-readout');
+    expect(book).not.toContain('<DeskLiveline');
+    expect(book).not.toContain('<BookTable');
     expect(book).not.toContain('BookExploded');
     expect(book).not.toContain('cluster.rotation');
     expect(book).not.toContain('@rive-app');
@@ -199,6 +212,9 @@ describe('desk IA smoke', () => {
     expect(board).toContain('stewardMood');
     expect(board).toContain('DeskLiveline');
     expect(board).toContain('CrtTape');
+    expect(board).not.toContain('line-foci');
+    expect(board).not.toContain("label: 'ALL'");
+    expect(board).not.toContain('setFocus');
     expect(board).not.toContain('TeamAvatar');
     expect(board).toContain('NOT_RANKED');
     expect(board).not.toContain('0.00%');
@@ -210,8 +226,11 @@ describe('desk IA smoke', () => {
     expect(board).not.toContain('TradeReplay');
     expect(board).not.toContain('threeui');
     expect(board).not.toContain('ascii-magic');
-    expect(book).toContain('line-mast');
-    expect(book).toContain('<h1>Book</h1>');
+    expect(book).toContain('visually-hidden');
+    expect(book).toContain('BOOK // EDGE');
+    expect(css).toContain('.crt-book');
+    expect(css).toContain('crt-book-sweep');
+    expect(css).toContain('.term-fresh');
     expect(wrap).toContain("from 'liveline'");
     expect(wrap).toContain('theme="dark"');
     expect(map).toContain('unix seconds');

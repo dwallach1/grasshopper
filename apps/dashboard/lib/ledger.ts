@@ -276,10 +276,11 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       optionalRows(
         'position_episodes',
         sql`
-        select id, account_key, symbol, status, quantity, average_cost, opened_at, next_review_at
+        select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at
         from public.position_episodes
-        where status in ('proposed', 'open', 'closing')
+        where status in ('proposed', 'open', 'closing', 'closed')
         order by opened_at desc nulls last, symbol
+        limit 400
       `,
       ),
       sql`
@@ -300,7 +301,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
                broker_order_id, created_at, updated_at
         from public.trade_intents
         order by created_at desc
-        limit 40
+        limit 200
       `,
       ),
       sql`
@@ -315,7 +316,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         select id, trade_intent_id, quantity, price, executed_at
         from public.broker_fills
         order by executed_at desc
-        limit 40
+        limit 200
       `,
       ),
       sql`
@@ -481,11 +482,11 @@ async function loadDeskFromRest(accessToken: string): Promise<DeskPayload> {
     restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=200', accessToken),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', accessToken),
-    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,next_review_at&status=in.(proposed,open,closing)&order=symbol.asc', accessToken),
+    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,closed_at,next_review_at&status=in.(proposed,open,closing,closed)&order=opened_at.desc.nullslast,symbol.asc&limit=400', accessToken),
     restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,last_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, accessToken),
-    restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=40', accessToken),
+    restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=200', accessToken),
     restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', accessToken),
-    restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=40', accessToken),
+    restRows('broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=200', accessToken),
     restRows('insights?select=id,title,summary,insight_type,novelty,confidence,status&order=updated_at.desc,id.desc&limit=40', accessToken),
     restRows('predictions?select=id,thesis_id,statement,target_date,probability,status&order=updated_at.desc,id.desc', accessToken),
     restRows('risk_controls?select=id,control_key,scope,control_type,threshold_json,enforcement_level,status&order=control_key.asc', accessToken),
@@ -559,7 +560,7 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
       `,
       sql`
         select id, market_id, account_key, thesis_id, outcome, status, quantity,
-               average_cost, mark, mark_at, thesis_text
+               average_cost, mark, mark_at, opened_at, closed_at, thesis_text
         from public.pm_positions
         order by updated_at desc
         limit 200
@@ -692,7 +693,7 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
       `,
       sql`
         select id, token_id, account_key, thesis_id, status, quantity,
-               average_cost_sol, mark_sol, mark_at, thesis_text
+               average_cost_sol, mark_sol, mark_at, opened_at, closed_at, thesis_text
         from public.meme_positions
         order by updated_at desc
         limit 200
@@ -744,7 +745,7 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
 async function loadMemeCoinsRest(accessToken: string): Promise<MemeCoinsPayload> {
   const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
     restOptional('meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id,kill_criteria&order=updated_at.desc&limit=200', accessToken),
-    restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
+    restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
     restOptional('meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
     restOptional('meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200', accessToken),
     restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=200', accessToken),
@@ -756,7 +757,7 @@ async function loadMemeCoinsRest(accessToken: string): Promise<MemeCoinsPayload>
 async function loadPredictionMarketsRest(accessToken: string): Promise<PredictionMarketsPayload> {
   const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
     restOptional('pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200', accessToken),
-    restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
+    restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text&order=updated_at.desc&limit=200', accessToken),
     restOptional('pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', accessToken),
     restOptional('pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200', accessToken),
     restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=200', accessToken),

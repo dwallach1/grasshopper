@@ -47,6 +47,8 @@ export type PredictionPositionRow = {
   average_cost: number | null;
   mark: number | null;
   mark_at: string | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
   thesis_text: string | null;
 };
 
@@ -489,6 +491,8 @@ export function mapPredictionMarkets(input: {
       average_cost: asOptionalNumber(row.average_cost as string | number | null, 'pm_positions.average_cost'),
       mark: asOptionalNumber(row.mark as string | number | null, 'pm_positions.mark'),
       mark_at: row.mark_at == null ? null : requireIso(row.mark_at as string | Date, 'pm_positions.mark_at'),
+      opened_at: row.opened_at == null ? null : requireIso(row.opened_at as string | Date, 'pm_positions.opened_at'),
+      closed_at: row.closed_at == null ? null : requireIso(row.closed_at as string | Date, 'pm_positions.closed_at'),
       thesis_text: optionalText(row, 'thesis_text'),
     })),
     orders: (input.orders ?? []).map((row) => ({
