@@ -34,14 +34,14 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.15;
-export const POND_Z = 0.35;
-export const POND_RX = 0.72;
-export const POND_RZ = 0.54;
-export const HOOP_RADIUS = 2.08;
+export const POND_X = 1.48;
+export const POND_Z = 0.72;
+export const POND_RX = 0.86;
+export const POND_RZ = 0.64;
+export const HOOP_RADIUS = 2.12;
 export const HOOP_TUBE = 0.1;
-export const HOOP_X = 0.18;
-export const HOOP_Z = -0.12;
+export const HOOP_X = 0.48;
+export const HOOP_Z = 0.42;
 export const HOOP_YAW = -0.55;
 
 /** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
@@ -67,7 +67,7 @@ export type ThesisIsland = {
 const EARTH = [0xe6d2b0, 0xd4b896, 0xc4a06a, 0xb08958, 0x9c7d52, 0x8a6a3e];
 const CLIFF = [0xe8d5b0, 0xd7c094, 0xc9b07a, 0xb89a62, 0xa3b07a, 0x8f9a68];
 const GRASS = 0xc4d4a6;
-const POND = 0x2aa4f0;
+const POND = 0x3cb4ff;
 const WHITE = 0xf6f2ea;
 const ORANGE = 0xe07a32;
 const TRUNK = 0x4a3828;
@@ -414,7 +414,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
   root.add(basin);
   const water = shelf.mesh(
     shelf.geo(new CylinderGeometry(1, 1, 0.045, 28)),
-    shelf.mat(POND, { roughness: 0.06, metalness: 0.2, emissive: 0x1478c8, emissiveIntensity: 0.5 }),
+    shelf.mat(POND, { roughness: 0.05, metalness: 0.18, emissive: 0x1a8ee0, emissiveIntensity: 0.7 }),
     'pond',
   );
   water.scale.set(POND_RX * 0.92, 1, POND_RZ * 0.92);
@@ -942,7 +942,7 @@ export function buildThesisIsland(
     [-2.15, 0.35, 1.08],
     [-1.95, 1.15, 1.18],
     [2.45, -1.45, 0.98],
-    [2.35, 0.85, 0.88],
+    [2.45, 1.55, 0.88],
     [1.45, -1.75, 1.08],
     [-1.85, -1.35, 1.18],
     [-0.95, 2.35, 0.88],
