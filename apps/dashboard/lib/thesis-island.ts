@@ -16,7 +16,6 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
-  Path,
   Shape,
   SphereGeometry,
   SRGBColorSpace,
@@ -34,15 +33,14 @@ export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
 export const ISLAND_RADIUS = 3.15;
-export const POND_X = 1.48;
-export const POND_Z = 0.72;
-export const POND_RX = 0.86;
-export const POND_RZ = 0.64;
-export const HOOP_RADIUS = 2.12;
-export const HOOP_TUBE = 0.1;
-export const HOOP_X = 0.48;
-export const HOOP_Z = 0.42;
-export const HOOP_YAW = -0.55;
+export const POND_X = 1.05;
+export const POND_Z = 0.35;
+export const POND_R = 1.08;
+export const HOOP_RADIUS = 1.9;
+export const HOOP_TUBE = 0.095;
+export const HOOP_X = 0.15;
+export const HOOP_Z = -0.25;
+export const HOOP_YAW = 0.74;
 
 /** Pulled-back 3/4: full disk in cream, pond still reads as an oval. */
 export const ISLAND_CAMERA = {
@@ -353,29 +351,7 @@ function addSoil(root: Group, shelf: Shelf, rng: Rng, radius: number): void {
   root.add(soil);
 }
 
-function pondHole(x: number, z: number, rx: number, rz: number): Path {
-  const hole = new Path();
-  const segs = 24;
-  // Opposite winding from the grass outline so ExtrudeGeometry punches through.
-  for (let i = segs; i >= 0; i -= 1) {
-    const t = (i / segs) * Math.PI * 2;
-    const hx = x + Math.cos(t) * rx;
-    const hz = z + Math.sin(t) * rz;
-    if (i === segs) hole.moveTo(hx, hz);
-    else hole.lineTo(hx, hz);
-  }
-  hole.closePath();
-  return hole;
-}
-
-function addGrass(
-  root: Group,
-  shelf: Shelf,
-  rng: Rng,
-  radius: number,
-  y: number,
-  hole?: { x: number; z: number; rx: number; rz: number },
-): Mesh {
+function addGrass(root: Group, shelf: Shelf, rng: Rng, radius: number, y: number): Mesh {
   const shape = new Shape();
   const segs = 28;
   const profile = islandOutline(rng, segs, radius * 0.96);
@@ -388,7 +364,6 @@ function addGrass(
     else shape.lineTo(x, z);
   }
   shape.closePath();
-  if (hole) shape.holes.push(pondHole(hole.x, hole.z, hole.rx, hole.rz));
   const canvas = makeCanvas(256, 256);
   const ctx = context2d(canvas);
   if (ctx) paintGrass(ctx);
@@ -404,36 +379,16 @@ function addGrass(
   return grass;
 }
 
-function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng: Rng): void {
-  const basin = shelf.mesh(
-    shelf.geo(new CylinderGeometry(1, 1.06, 0.08, 28)),
-    shelf.mat(0xd4c094, { roughness: 0.92 }),
-    'pond-rim',
-  );
-  basin.scale.set(POND_RX * 1.08, 1, POND_RZ * 1.08);
-  basin.position.set(x, y + 0.02, z);
-  root.add(basin);
+function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number): void {
+  // Cylinder along Y: flat faces already point up. Grass extrudes 0.07 up, so sit on that plate.
   const water = shelf.mesh(
-    shelf.geo(new CylinderGeometry(1, 1, 0.045, 28)),
-    shelf.mat(POND, { roughness: 0.05, metalness: 0.18, emissive: 0x1a8ee0, emissiveIntensity: 0.7 }),
+    shelf.geo(new CylinderGeometry(POND_R, POND_R, 0.02, 32)),
+    shelf.mat(POND, { roughness: 0.08, metalness: 0.12, emissive: 0x1a8ee0, emissiveIntensity: 0.55 }),
     'pond',
   );
-  water.scale.set(POND_RX, 1, POND_RZ);
-  water.position.set(x, y + 0.035, z);
+  water.position.set(x, y + 0.09, z);
+  water.renderOrder = 2;
   root.add(water);
-  for (let i = 0; i < 10; i += 1) {
-    const t = (i / 10) * Math.PI * 2;
-    const stone = shelf.box(
-      0.1 + rng() * 0.04,
-      0.04,
-      0.07 + rng() * 0.03,
-      mixHex(0xe2d0ae, 0x8a7a62, rng() * 0.35),
-      `pond-stone-${i}`,
-    );
-    stone.position.set(x + Math.cos(t) * POND_RX * 0.98, y + 0.015, z + Math.sin(t) * POND_RZ * 0.98);
-    stone.rotation.y = t;
-    root.add(stone);
-  }
 }
 
 function addPath(root: Group, shelf: Shelf, radius: number, y: number): void {
@@ -628,14 +583,12 @@ function addSign(
 function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
   const hoop = new Group();
   hoop.name = 'arch';
-  // Standing torus in XY. Center sits above the lot so the lower arc
-  // dips into the pond and the far arc goes behind the building.
-  // Face the camera so the near tube is in front of the hall and the far tube
-  // is behind it. The lower-right arc crosses the pond.
+  // Vertical torus in XY, centered on the hall so the building sits in the hole.
   const yaw = HOOP_YAW;
   const cx = HOOP_X;
   const cz = HOOP_Z;
-  const cy = y + HOOP_RADIUS - 0.16;
+  // Center on the hall; bottom of the ring sits on the grass / pond.
+  const cy = y + HOOP_RADIUS + 0.02;
   const ring = shelf.mesh(
     shelf.geo(new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 16, 72)),
     shelf.mat(ORANGE, { roughness: 0.34, metalness: 0.16 }),
@@ -930,14 +883,9 @@ export function buildThesisIsland(
   const turbines: Group[] = [];
 
   addSoil(group, shelf, rng, radius);
-  addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY, {
-    x: POND_X,
-    z: POND_Z,
-    rx: POND_RX,
-    rz: POND_RZ,
-  });
+  addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
   addPath(group, shelf, radius, grassY);
-  addPond(group, shelf, POND_X, POND_Z, grassY, rng);
+  addPond(group, shelf, POND_X, POND_Z, grassY);
 
   const trees: Array<[number, number, number]> = [
     [-2.15, 0.35, 1.08],

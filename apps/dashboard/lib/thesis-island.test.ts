@@ -8,13 +8,13 @@ import {
   islandPixelRatio,
   HOOP_RADIUS,
   HOOP_X,
+  HOOP_YAW,
   HOOP_Z,
   ISLAND_CAMERA,
   ISLAND_DPR_CAP,
   ISLAND_GRASS_Y,
   ISLAND_RADIUS,
-  POND_RX,
-  POND_RZ,
+  POND_R,
   POND_X,
   POND_Z,
   paintThesisSign,
@@ -93,8 +93,8 @@ describe('thesis island craft', () => {
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
     const pond = island.group.getObjectByName('pond');
     expect(pond).toBeInstanceOf(Mesh);
-    expect((pond as Mesh).scale.x).toBeGreaterThan(0.55);
-    expect((pond as Mesh).scale.z).toBeGreaterThan(0.4);
+    expect((pond as Mesh).geometry.type).toBe('CylinderGeometry');
+    expect((pond as Mesh).rotation.x).toBeCloseTo(0, 5);
     expect(island.group.getObjectByName('distant')).toBeTruthy();
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
@@ -134,25 +134,30 @@ describe('thesis island craft', () => {
     island.dispose();
   });
 
-  test('pond is an oval cut into the grass and the hoop goes through the hall', () => {
+  test('pond sits on the grass and the hoop is centered on the hall', () => {
     const island = buildThesisIsland(district('quantum', 'lab', 'Quantum computing'));
     const pond = island.group.getObjectByName('pond') as Mesh;
     expect(pond.position.x).toBeCloseTo(POND_X, 5);
     expect(pond.position.z).toBeCloseTo(POND_Z, 5);
-    expect(Math.hypot(POND_X, POND_Z) + Math.max(POND_RX, POND_RZ)).toBeLessThan(ISLAND_RADIUS - 0.35);
-    expect(POND_RX * 2).toBeGreaterThan(1.4);
-    expect(POND_RZ * 2).toBeGreaterThan(1);
-    const grass = island.group.getObjectByName('grass') as Mesh;
-    const shape = (grass.geometry as { parameters?: { shapes?: { holes: unknown[] } | Array<{ holes: unknown[] }> } })
-      .parameters?.shapes;
-    const holes = Array.isArray(shape) ? shape[0]?.holes : shape?.holes;
-    expect(holes?.length).toBe(1);
+    expect(pond.position.y).toBeGreaterThan(ISLAND_GRASS_Y + 0.07);
+    expect(POND_R).toBeGreaterThan(0.9);
+    expect(POND_X).toBeGreaterThan(0.4);
+    expect(POND_Z).toBeGreaterThan(0);
+    expect(Math.hypot(POND_X, POND_Z) + POND_R).toBeLessThan(ISLAND_RADIUS - 0.35);
     const hoop = island.group.getObjectByName('hoop') as Mesh;
     expect(hoop).toBeInstanceOf(Mesh);
+    expect(hoop.geometry.type).toBe('TorusGeometry');
+    expect(hoop.position.x).toBeCloseTo(0.15, 5);
+    expect(hoop.position.z).toBeCloseTo(-0.25, 5);
     expect(hoop.position.x).toBeCloseTo(HOOP_X, 5);
     expect(hoop.position.z).toBeCloseTo(HOOP_Z, 5);
+    expect(hoop.rotation.x).toBeCloseTo(0, 5);
+    expect(hoop.rotation.y).toBeCloseTo(HOOP_YAW, 5);
     expect(hoop.position.y).toBeGreaterThan(ISLAND_GRASS_Y + HOOP_RADIUS * 0.6);
     expect(hoop.position.y).toBeLessThan(ISLAND_GRASS_Y + HOOP_RADIUS + 0.4);
+    const hall = island.group.getObjectByName('structure') as Mesh;
+    expect(hall.position.x).toBeCloseTo(0, 5);
+    expect(Math.hypot(hoop.position.x - 0.15, hoop.position.z + 0.25)).toBeLessThan(0.02);
     island.dispose();
   });
 
@@ -166,6 +171,25 @@ describe('thesis island craft', () => {
     expect(pond).toBeTruthy();
     expect(distant).toBeTruthy();
     const pondNdc = phoneNdc(pond!.getWorldPosition(new Vector3()));
+    const camDirX = 16.6 / Math.hypot(16.6, 18.2);
+    const camDirZ = 18.2 / Math.hypot(16.6, 18.2);
+    const nearShore = phoneNdc(new Vector3(
+      POND_X + camDirX * POND_R,
+      ISLAND_GRASS_Y + 0.09,
+      POND_Z + camDirZ * POND_R,
+    ));
+    const farShore = phoneNdc(new Vector3(
+      POND_X - camDirX * POND_R,
+      ISLAND_GRASS_Y + 0.09,
+      POND_Z - camDirZ * POND_R,
+    ));
+    expect(nearShore.z).toBeGreaterThan(-1);
+    expect(nearShore.z).toBeLessThan(1);
+    expect(farShore.z).toBeGreaterThan(-1);
+    expect(farShore.z).toBeLessThan(1);
+    expect(Math.abs(nearShore.x)).toBeLessThan(0.9);
+    expect(Math.abs(farShore.x)).toBeLessThan(0.9);
+    expect(Math.abs(nearShore.y - farShore.y)).toBeGreaterThan(0.04);
     const farNdc = phoneNdc(distant!.getWorldPosition(new Vector3()));
     expect(Math.abs(pondNdc.x)).toBeLessThan(0.78);
     expect(Math.abs(pondNdc.y)).toBeLessThan(0.78);
