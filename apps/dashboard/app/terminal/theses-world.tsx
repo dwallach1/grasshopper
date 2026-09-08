@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
@@ -8,9 +8,11 @@ import { pagerScrollBehavior } from '../../lib/desk-swipe';
 import {
   assembleThesisDistricts,
   districtForThesis,
+  districtPlaceWord,
   type ThesisBuilding,
   type ThesisDistrict,
 } from '../../lib/thesis-districts';
+import { ThesisIslandPoster, ThesisIslandView } from './thesis-island-view';
 
 export function ThesesWorld({
   desk,
@@ -115,11 +117,12 @@ export function ThesesWorld({
             <DistrictPane
               key={district.id}
               district={district}
+              peek={districts[(index + 1) % districts.length] ?? null}
               live={district.id === liveId && !reading}
-              selectedId={selectedId}
               index={index}
               total={districts.length}
               onOpen={openBuilding}
+              reduceMotion={reduceMotion}
             />
           ))}
         </div>
@@ -135,19 +138,23 @@ export function ThesesWorld({
 
 function DistrictPane({
   district,
+  peek,
   live,
-  selectedId,
   index,
   total,
   onOpen,
+  reduceMotion,
 }: {
   district: ThesisDistrict;
+  peek: ThesisDistrict | null;
   live: boolean;
-  selectedId?: string;
   index: number;
   total: number;
   onOpen: (building: ThesisBuilding) => void;
+  reduceMotion: boolean;
 }) {
+  const word = districtPlaceWord(district.place);
+  const mark = String(index + 1).padStart(2, '0');
   return (
     <section
       className="thesis-district"
@@ -157,41 +164,32 @@ function DistrictPane({
       data-live={live ? '1' : '0'}
       aria-label={district.name}
     >
-      <header className="thesis-place">
-        <p className="thesis-place-name">{district.name}</p>
-        <p className="thesis-place-index" aria-hidden="true">{index + 1} / {total}</p>
-      </header>
-      <div className="thesis-lot" aria-hidden={false}>
-        <div className="thesis-table">
-          <div className="thesis-stage">
-            <div className="thesis-ground" />
-            <div className="thesis-plot">
-              {district.buildings.map((building, slot) => (
-                <button
-                  key={building.id}
-                  type="button"
-                  className={`thesis-bldg${building.id === selectedId ? ' is-on' : ''}`}
-                  data-place={district.place}
-                  data-slot={slot}
-                  style={{ '--steward': building.accent } as CSSProperties}
-                  onClick={() => onOpen(building)}
-                >
-                  <span className="thesis-bldg-mass" aria-hidden="true">
-                    <i className="thesis-face thesis-top" />
-                    <i className="thesis-face thesis-east" />
-                    <i className="thesis-face thesis-south">
-                      <b className="thesis-door">{building.name}</b>
-                    </i>
-                    <i className="thesis-stack" />
-                    <i className="thesis-wisp" />
-                  </span>
-                  <span className="visually-hidden">{building.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      {live ? (
+        <ThesisIslandView
+          district={district}
+          peek={peek && peek.id !== district.id ? peek : null}
+          reduceMotion={reduceMotion}
+          onOpen={onOpen}
+        />
+      ) : (
+        <ThesisIslandPoster district={district} />
+      )}
+      <ol className="thesis-dots" aria-hidden="true">
+        {Array.from({ length: total }, (_, slot) => (
+          <li key={slot} className={slot === index ? 'is-on' : undefined} />
+        ))}
+      </ol>
+      <p className="thesis-place-index" aria-hidden="true">{mark} / {word}</p>
+      {district.buildings.map((building) => (
+        <button
+          key={building.id}
+          type="button"
+          className="visually-hidden"
+          onClick={() => onOpen(building)}
+        >
+          {building.name}
+        </button>
+      ))}
     </section>
   );
 }

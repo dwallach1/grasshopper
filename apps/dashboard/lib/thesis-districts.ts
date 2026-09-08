@@ -13,6 +13,18 @@ export const LIVE_THESIS_STATUSES = ['forming', 'hardening'] as const;
 export const DISTRICT_PLACES = ['campus', 'plant', 'hangar', 'lab', 'yard'] as const;
 export type ThesisDistrictPlace = (typeof DISTRICT_PLACES)[number];
 
+export const DISTRICT_PLACE_WORD: Record<ThesisDistrictPlace, string> = {
+  campus: 'CAMPUS',
+  plant: 'POWER',
+  hangar: 'RANGE',
+  lab: 'LAB',
+  yard: 'YARD',
+};
+
+export function districtPlaceWord(place: ThesisDistrictPlace): string {
+  return DISTRICT_PLACE_WORD[place];
+}
+
 export type ThesisBuilding = {
   id: string;
   name: string;

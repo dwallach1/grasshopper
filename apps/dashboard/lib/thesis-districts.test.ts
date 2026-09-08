@@ -7,6 +7,7 @@ import {
   buildingForThesis,
   districtForThesis,
   districtPlace,
+  districtPlaceWord,
   isLiveThesis,
   thesisStewardAccent,
   thesisStewardSlug,
@@ -244,6 +245,8 @@ describe('thesis districts', () => {
     expect(districtPlace('defense_drones_space', 'Defense, drones, and space')).toBe('hangar');
     expect(districtPlace('quantum', 'Quantum computing')).toBe('lab');
     expect(districtPlace('earnings_gap_structure', 'Earnings gap structure')).toBe('yard');
+    expect(districtPlaceWord('campus')).toBe('CAMPUS');
+    expect(districtPlaceWord('plant')).toBe('POWER');
     expect(isLiveThesis(thesis('x'))).toBe(true);
     expect(isLiveThesis(thesis('x', { status: 'killed' }))).toBe(false);
   });
