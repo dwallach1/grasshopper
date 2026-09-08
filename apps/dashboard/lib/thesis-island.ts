@@ -30,13 +30,13 @@ export const ISLAND_CREAM = 0xefe6d4;
 export const ISLAND_DPR_CAP = 1.5;
 
 export const ISLAND_CAMERA = {
-  x: 5.15,
-  y: 3.55,
-  z: 5.45,
-  fov: 32,
-  lookX: 0.1,
-  lookY: 0.85,
-  lookZ: 0.15,
+  x: 8.4,
+  y: 6.2,
+  z: 9.1,
+  fov: 26,
+  lookX: 0.05,
+  lookY: 1.05,
+  lookZ: 0.1,
 } as const;
 
 type Rng = () => number;
@@ -54,7 +54,7 @@ const POND = 0x3d86b8;
 const PATH = 0xc8bba4;
 const TRACK = 0x9aa3ab;
 const WHITE = 0xf3efe6;
-const ORANGE = 0xd96a2c;
+const ORANGE = 0xe07a32;
 const TRUNK = 0x6a4e32;
 const CANOPY = [0x8fbf62, 0x7eaf54, 0xa3c86f];
 const HOUSE = [0xf2ebe0, 0xe7ddd0, 0xf7f2ea];
@@ -353,7 +353,7 @@ function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng
     shelf.mat(POND, { roughness: 0.22, metalness: 0.08 }),
     'pond',
   );
-  water.scale.set(1.35, 1, 0.82);
+  water.scale.set(1.55, 1, 1.0);
   water.position.set(x, y + 0.02, z);
   root.add(water);
   for (let i = 0; i < 10; i += 1) {
@@ -544,21 +544,22 @@ function addSign(
   if (ctx) paintThesisSign(ctx, title);
     const map = ctx && canvas ? shelf.tex(canvas) : undefined;
   const face = shelf.mesh(
-    shelf.geo(new BoxGeometry(1.42, 0.58, 0.04)),
+    shelf.geo(new BoxGeometry(1.72, 0.7, 0.045)),
     shelf.mat(0xf7f4ee, { map, roughness: 0.82 }),
     'sign-face',
   );
-  face.position.set(x, y + 0.72, z);
-  face.rotation.y = 0.55;
+  face.position.set(x, y + 0.82, z);
+  face.rotation.y = 0.82;
   root.add(face);
-  const frame = shelf.box(1.5, 0.66, 0.03, 0x2a2620, 'sign-frame');
+  const frame = shelf.box(1.58, 0.7, 0.03, 0x2a2620, 'sign-frame');
   frame.position.copy(face.position);
+  frame.position.x -= 0.02;
   frame.position.z -= 0.03;
   frame.rotation.y = face.rotation.y;
   root.add(frame);
-  for (const side of [-0.62, 0.62]) {
-    const post = shelf.box(0.045, 0.78, 0.045, 0x2a2620, 'sign-post');
-    post.position.set(x + side * Math.cos(0.55), y + 0.39, z + side * Math.sin(0.55));
+  for (const side of [-0.66, 0.66]) {
+    const post = shelf.box(0.045, 0.86, 0.045, 0x2a2620, 'sign-post');
+    post.position.set(x + side * Math.cos(0.82), y + 0.43, z + side * Math.sin(0.82));
     root.add(post);
   }
 }
@@ -805,8 +806,8 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  distant.position.set(6.8, 1.85, -7.2);
-  distant.scale.setScalar(0.48);
+  distant.position.set(4.6, 3.4, -5.2);
+  distant.scale.setScalar(0.58);
   addSoil(distant, shelf, rng, 2.6);
   addGrass(distant, shelf, rng, 2.55, 1.68);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
@@ -854,7 +855,7 @@ export function buildThesisIsland(
   addSoil(group, shelf, rng, radius);
   addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
   addPath(group, shelf, grassY);
-  addPond(group, shelf, -1.15, 0.95, grassY, rng);
+  addPond(group, shelf, 1.25, 1.55, grassY, rng);
   addTrack(group, shelf, radius, grassY);
 
   const trees: Array<[number, number, number]> = [
@@ -879,6 +880,7 @@ export function buildThesisIsland(
 
   addTurbine(group, shelf, 2.05, -0.85, grassY, turbines);
   addTurbine(group, shelf, 2.35, -0.35, grassY, turbines);
+  addTurbine(group, shelf, 2.2, 1.15, grassY, turbines);
   addMast(group, shelf, -2.15, -0.55, grassY);
   if (district.place === 'campus') addSolarRow(group, shelf, -0.85, -1.35, grassY);
   else addSolarRow(group, shelf, 0.95, -1.45, grassY);
@@ -886,7 +888,7 @@ export function buildThesisIsland(
   const building = district.buildings[0];
   if (building) {
     addStructure(group, shelf, district.place, building.id, hits, grassY);
-    addSign(group, shelf, building.name, -1.55, 1.55, grassY);
+    addSign(group, shelf, building.name, 1.55, 2.35, grassY);
   }
   addArch(group, shelf, districtPlaceWord(district.place), grassY);
 

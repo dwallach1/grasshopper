@@ -195,6 +195,7 @@ describe('desk IA smoke', () => {
     expect(islandView).toContain('WebGLRenderer');
     expect(islandView).toContain('BokehPass');
     expect(islandView).toContain('islandPixelRatio');
+    expect(islandView).toContain('failIfMajorPerformanceCaveat');
     expect(islandView).toContain('isWebGL2Available');
     expect(islandView).toContain('reduceMotion');
     expect(islandView).toContain('island.group.rotation.y = 0');

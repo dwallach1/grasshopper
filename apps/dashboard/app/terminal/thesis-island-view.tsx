@@ -55,7 +55,7 @@ export function ThesisIslandView({
 
   useEffect(() => {
     const mount = hostRef.current;
-    if (!mount || !isWebGL2Available()) return undefined;
+    if (!mount) return undefined;
     const root: HTMLDivElement = mount;
 
     const scene = new Scene();
@@ -68,15 +68,34 @@ export function ThesisIslandView({
 
     let renderer: WebGLRenderer;
     try {
-      renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+      renderer = new WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false,
+        preserveDrawingBuffer: true,
+      });
     } catch {
-      return undefined;
+      const poster = document.createElement('canvas');
+      poster.className = 'thesis-island-poster';
+      poster.setAttribute('aria-hidden', 'true');
+      root.appendChild(poster);
+      const box = root.getBoundingClientRect();
+      poster.width = Math.max(8, Math.round(box.width || 390));
+      poster.height = Math.max(8, Math.round(box.height || 640));
+      const ctx = poster.getContext('2d');
+      if (ctx) paintIslandPoster(ctx, districtRef.current);
+      return () => {
+        if (poster.parentNode === root) root.removeChild(poster);
+      };
     }
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.setClearColor(ISLAND_CREAM, 1);
+    const webgl2 = isWebGL2Available();
+    renderer.shadowMap.enabled = webgl2;
+    if (webgl2) renderer.shadowMap.type = PCFSoftShadowMap;
     renderer.domElement.setAttribute('aria-hidden', 'true');
     root.appendChild(renderer.domElement);
 
@@ -89,7 +108,7 @@ export function ThesisIslandView({
     scene.add(new HemisphereLight(0xf7f0e4, 0xc4b49a, 0.72));
     const key = new DirectionalLight(0xfff6e8, 1.28);
     key.position.set(6.2, 9.4, 4.2);
-    key.castShadow = true;
+    key.castShadow = webgl2;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
     key.shadow.camera.far = 28;
@@ -104,15 +123,21 @@ export function ThesisIslandView({
     const island = buildThesisIsland(districtRef.current, peekRef.current);
     scene.add(island.group);
 
-    const composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const focus = camera.position.distanceTo(island.group.position.clone().setY(0.9));
-    const bokeh = new BokehPass(scene, camera, {
-      focus,
-      aperture: 0.00016,
-      maxblur: 0.009,
-    });
-    composer.addPass(bokeh);
+    let composer: EffectComposer | null = null;
+    if (webgl2) {
+      try {
+        composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        const focus = camera.position.distanceTo(island.group.position.clone().setY(0.9));
+        composer.addPass(new BokehPass(scene, camera, {
+          focus,
+          aperture: 0.00016,
+          maxblur: 0.009,
+        }));
+      } catch {
+        composer = null;
+      }
+    }
 
     const raycaster = new Raycaster();
     const pointer = new Vector2();
@@ -127,7 +152,7 @@ export function ThesisIslandView({
       if (w < 8 || h < 8) return;
       renderer.setPixelRatio(islandPixelRatio(window.devicePixelRatio || 1));
       renderer.setSize(w, h, false);
-      composer.setSize(w, h);
+      composer?.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     }
@@ -140,7 +165,8 @@ export function ThesisIslandView({
       } else {
         island.group.rotation.y = 0;
       }
-      composer.render();
+      if (composer) composer.render();
+      else renderer.render(scene, camera);
     }
 
     function tick(now: number): void {
@@ -204,11 +230,11 @@ export function ThesisIslandView({
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('pointerup', onPointerUp);
       window.cancelAnimationFrame(frame);
-      if (renderer.domElement.parentNode === root) root.removeChild(renderer.domElement);
+      renderer.domElement.remove();
       island.dispose();
       env.dispose();
       pmrem.dispose();
-      composer.dispose();
+      composer?.dispose();
       renderer.dispose();
     };
   }, [district.id, peek?.id, reduceMotion]);
