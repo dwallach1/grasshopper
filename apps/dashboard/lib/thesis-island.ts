@@ -32,16 +32,21 @@ import { districtPlaceWord } from './thesis-districts';
 export const ISLAND_CREAM = 0xf3ead8;
 export const ISLAND_DPR_CAP = 1.5;
 export const ISLAND_GRASS_Y = 1.52;
+export const ISLAND_RADIUS = 3.15;
+export const POND_X = 1.42;
+export const POND_Z = 0.62;
+export const HOOP_RADIUS = 2.08;
+export const HOOP_TUBE = 0.078;
 
-/** Phone portrait is tall; keep the disk, pond, and peek inside ~13–20° of look. */
+/** High 3/4 so the whole disk sits in a generous cream field. */
 export const ISLAND_CAMERA = {
-  x: 10.1,
-  y: 6.2,
-  z: 11.0,
-  fov: 38,
+  x: 15.4,
+  y: 12.8,
+  z: 16.8,
+  fov: 42,
   lookX: 0.0,
-  lookY: 1.05,
-  lookZ: 0.2,
+  lookY: 0.55,
+  lookZ: 0.05,
 } as const;
 
 type Rng = () => number;
@@ -371,32 +376,32 @@ function addGrass(root: Group, shelf: Shelf, rng: Rng, radius: number, y: number
 }
 
 function addPond(root: Group, shelf: Shelf, x: number, z: number, y: number, rng: Rng): void {
-  const rim = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.82, 0.82, 0.05, 28)),
-    shelf.mat(0xe8d7b4, { roughness: 0.92 }),
+  const basin = shelf.mesh(
+    shelf.geo(new CylinderGeometry(0.72, 0.78, 0.1, 28)),
+    shelf.mat(0xd8c49a, { roughness: 0.92 }),
     'pond-rim',
   );
-  rim.scale.set(2.35, 1, 1.55);
-  rim.position.set(x, y + 0.01, z);
-  root.add(rim);
+  basin.scale.set(1.72, 1, 1.18);
+  basin.position.set(x, y - 0.03, z);
+  root.add(basin);
   const water = shelf.mesh(
-    shelf.geo(new CylinderGeometry(0.76, 0.76, 0.055, 28)),
-    shelf.mat(POND, { roughness: 0.08, metalness: 0.18, emissive: 0x1468a8, emissiveIntensity: 0.28 }),
+    shelf.geo(new CylinderGeometry(0.66, 0.66, 0.055, 28)),
+    shelf.mat(POND, { roughness: 0.08, metalness: 0.18, emissive: 0x1468a8, emissiveIntensity: 0.32 }),
     'pond',
   );
-  water.scale.set(2.35, 1, 1.55);
-  water.position.set(x, y + 0.04, z);
+  water.scale.set(1.72, 1, 1.18);
+  water.position.set(x, y - 0.01, z);
   root.add(water);
-  for (let i = 0; i < 14; i += 1) {
-    const t = (i / 14) * Math.PI * 2;
+  for (let i = 0; i < 12; i += 1) {
+    const t = (i / 12) * Math.PI * 2;
     const stone = shelf.box(
-      0.12 + rng() * 0.06,
-      0.05,
-      0.09 + rng() * 0.05,
+      0.11 + rng() * 0.05,
+      0.045,
+      0.08 + rng() * 0.04,
       mixHex(0xe2d0ae, 0x8a7a62, rng() * 0.35),
       `pond-stone-${i}`,
     );
-    stone.position.set(x + Math.cos(t) * 1.05, y + 0.05, z + Math.sin(t) * 0.68);
+    stone.position.set(x + Math.cos(t) * 0.78, y + 0.02, z + Math.sin(t) * 0.52);
     stone.rotation.y = t;
     root.add(stone);
   }
@@ -592,14 +597,22 @@ function addSign(
 }
 
 function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
-  const arch = shelf.mesh(
-    shelf.geo(new TorusGeometry(2.22, 0.05, 12, 56)),
-    shelf.mat(ORANGE, { roughness: 0.38, metalness: 0.12 }),
-    'arch',
+  const hoop = new Group();
+  hoop.name = 'arch';
+  // Standing torus in XY. Center sits above the lot so the lower arc
+  // dips into the pond and the far arc goes behind the building.
+  const yaw = 0.76;
+  const cx = 0.38;
+  const cz = 0.12;
+  const cy = y + HOOP_RADIUS - 0.2;
+  const ring = shelf.mesh(
+    shelf.geo(new TorusGeometry(HOOP_RADIUS, HOOP_TUBE, 16, 72)),
+    shelf.mat(ORANGE, { roughness: 0.34, metalness: 0.16 }),
+    'hoop',
   );
-  arch.rotation.y = 0.62;
-  arch.position.set(0.28, y + 0.04, 1.15);
-  root.add(arch);
+  ring.position.set(cx, cy, cz);
+  ring.rotation.y = yaw;
+  hoop.add(ring);
   const canvas = makeCanvas(256, 96);
   const ctx = context2d(canvas);
   if (ctx) paintArchBadge(ctx, word);
@@ -609,9 +622,10 @@ function addArch(root: Group, shelf: Shelf, word: string, y: number): void {
     shelf.mat(0xf7f4ee, { map, roughness: 0.8 }),
     'arch-badge',
   );
-  badge.position.set(0.28, y + 2.28, 1.15);
-  badge.rotation.y = 0.62;
-  root.add(badge);
+  badge.position.set(cx, cy + HOOP_RADIUS - 0.02, cz);
+  badge.rotation.y = yaw;
+  hoop.add(badge);
+  root.add(hoop);
 }
 
 function windowMat(shelf: Shelf, tint: 'warm' | 'cool'): MeshStandardMaterial {
@@ -836,9 +850,9 @@ function addDistantIsland(
 ): void {
   const distant = new Group();
   distant.name = 'distant';
-  // Upper-right of the 390px portrait frustum, same cream table.
-  distant.position.set(1.65, 3.35, 0.85);
-  distant.scale.setScalar(0.4);
+  // Upper-right of the pulled-back phone frustum, same cream table.
+  distant.position.set(3.35, 5.15, -0.35);
+  distant.scale.setScalar(0.36);
   addSoil(distant, shelf, rng, 2.55);
   addGrass(distant, shelf, rng, 2.5, ISLAND_GRASS_Y);
   const block = shelf.box(0.9, 0.7, 0.55, WHITE, 'distant-hall');
@@ -879,7 +893,7 @@ export function buildThesisIsland(
   const rng = rngFrom(district.id);
   const group = new Group();
   group.name = `island-${district.id}`;
-  const radius = 3.15;
+  const radius = ISLAND_RADIUS;
   const grassY = ISLAND_GRASS_Y;
   const hits: Object3D[] = [];
   const turbines: Group[] = [];
@@ -887,28 +901,27 @@ export function buildThesisIsland(
   addSoil(group, shelf, rng, radius);
   addGrass(group, shelf, rngFrom(`${district.id}-grass`), radius, grassY);
   addPath(group, shelf, radius, grassY);
-  // Camera-front oval — left of the building, through the ring.
-  addPond(group, shelf, 0.55, 1.78, grassY, rng);
+  addPond(group, shelf, POND_X, POND_Z, grassY, rng);
 
   const trees: Array<[number, number, number]> = [
     [-2.15, 0.35, 1.08],
     [-1.95, 1.15, 1.18],
-    [2.15, 0.35, 0.98],
+    [2.35, -1.05, 0.98],
     [2.28, -0.35, 0.88],
     [1.45, -1.75, 1.08],
     [-1.85, -1.35, 1.18],
-    [1.85, 1.85, 0.92],
+    [-0.35, 2.35, 0.88],
     [-0.85, 2.25, 0.88],
-    [2.15, 1.25, 0.95],
+    [2.35, 1.55, 0.95],
   ];
   for (const [x, z, s] of trees) addTree(group, shelf, rng, x, z, grassY, s);
 
   const houses: Array<[number, number]> = [
-    [1.55, 2.28],
-    [1.82, 2.38],
-    [2.08, 2.22],
-    [1.28, 2.42],
-    [-1.65, 2.05],
+    [-0.15, 2.42],
+    [0.12, 2.52],
+    [0.38, 2.38],
+    [-0.42, 2.48],
+    [-1.75, 2.05],
   ];
   for (const [x, z] of houses) addHouse(group, shelf, rng, x, z, grassY);
 

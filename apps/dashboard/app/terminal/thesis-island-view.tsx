@@ -60,9 +60,9 @@ export function ThesisIslandView({
 
     const scene = new Scene();
     scene.background = new Color(ISLAND_CREAM);
-    scene.fog = new Fog(ISLAND_CREAM, 22, 40);
+    scene.fog = new Fog(ISLAND_CREAM, 36, 72);
 
-    const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 1, 0.1, 60);
+    const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 1, 0.1, 90);
     camera.position.set(ISLAND_CAMERA.x, ISLAND_CAMERA.y, ISLAND_CAMERA.z);
     camera.lookAt(ISLAND_CAMERA.lookX, ISLAND_CAMERA.lookY, ISLAND_CAMERA.lookZ);
 
@@ -111,11 +111,11 @@ export function ThesisIslandView({
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = 28;
-    key.shadow.camera.left = -8;
-    key.shadow.camera.right = 8;
-    key.shadow.camera.top = 8;
-    key.shadow.camera.bottom = -8;
+    key.shadow.camera.far = 42;
+    key.shadow.camera.left = -11;
+    key.shadow.camera.right = 11;
+    key.shadow.camera.top = 11;
+    key.shadow.camera.bottom = -11;
     key.shadow.radius = 2.2;
     key.shadow.bias = -0.0009;
     scene.add(key);

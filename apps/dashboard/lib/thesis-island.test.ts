@@ -6,8 +6,13 @@ import {
   buildThesisIsland,
   islandHitThesisId,
   islandPixelRatio,
+  HOOP_RADIUS,
   ISLAND_CAMERA,
   ISLAND_DPR_CAP,
+  ISLAND_GRASS_Y,
+  ISLAND_RADIUS,
+  POND_X,
+  POND_Z,
   paintThesisSign,
   wrapSignLines,
 } from './thesis-island';
@@ -84,7 +89,8 @@ describe('thesis island craft', () => {
     expect((grass as Mesh).geometry.type).toBe('ExtrudeGeometry');
     const pond = island.group.getObjectByName('pond');
     expect(pond).toBeInstanceOf(Mesh);
-    expect((pond as Mesh).scale.x).toBeGreaterThan(2);
+    expect((pond as Mesh).scale.x).toBeGreaterThan(1.5);
+    expect((pond as Mesh).scale.z).toBeGreaterThan(1);
     expect(island.group.getObjectByName('distant')).toBeTruthy();
     expect(island.group.getObjectByName('path')).toBeTruthy();
     expect(island.group.getObjectByName('sign-face')).toBeTruthy();
@@ -124,7 +130,23 @@ describe('thesis island craft', () => {
     island.dispose();
   });
 
-  test('pond and distant island sit inside a 390px portrait frustum', () => {
+  test('pond is an oval of water and the hoop stands through the set', () => {
+    const island = buildThesisIsland(district('quantum', 'lab', 'Quantum computing'));
+    const pond = island.group.getObjectByName('pond') as Mesh;
+    expect(pond.position.x).toBeCloseTo(POND_X, 5);
+    expect(pond.position.z).toBeCloseTo(POND_Z, 5);
+    const spanX = 0.66 * pond.scale.x * 2;
+    const spanZ = 0.66 * pond.scale.z * 2;
+    expect(spanX).toBeGreaterThan(2);
+    expect(spanZ).toBeGreaterThan(1.3);
+    const hoop = island.group.getObjectByName('hoop') as Mesh;
+    expect(hoop).toBeInstanceOf(Mesh);
+    expect(hoop.position.y).toBeGreaterThan(ISLAND_GRASS_Y + HOOP_RADIUS * 0.6);
+    expect(hoop.position.y).toBeLessThan(ISLAND_GRASS_Y + HOOP_RADIUS + 0.4);
+    island.dispose();
+  });
+
+  test('the whole disk, pond, and peek sit in a 390px portrait frustum', () => {
     const island = buildThesisIsland(
       district('ai_power_nuclear', 'plant', 'AI power bottleneck beneficiaries'),
       { id: 'quantum', place: 'lab' },
@@ -135,14 +157,24 @@ describe('thesis island craft', () => {
     expect(distant).toBeTruthy();
     const pondNdc = phoneNdc(pond!.getWorldPosition(new Vector3()));
     const farNdc = phoneNdc(distant!.getWorldPosition(new Vector3()));
-    expect(Math.abs(pondNdc.x)).toBeLessThan(0.92);
-    expect(Math.abs(pondNdc.y)).toBeLessThan(0.92);
+    expect(Math.abs(pondNdc.x)).toBeLessThan(0.78);
+    expect(Math.abs(pondNdc.y)).toBeLessThan(0.78);
     expect(pondNdc.z).toBeGreaterThan(-1);
     expect(pondNdc.z).toBeLessThan(1);
     expect(farNdc.x).toBeGreaterThan(0.05);
-    expect(farNdc.x).toBeLessThan(0.95);
-    expect(farNdc.y).toBeGreaterThan(0.05);
-    expect(farNdc.y).toBeLessThan(0.92);
+    expect(farNdc.x).toBeLessThan(0.92);
+    expect(farNdc.y).toBeGreaterThan(0.08);
+    expect(farNdc.y).toBeLessThan(0.88);
+    for (const [x, z] of [
+      [ISLAND_RADIUS, 0],
+      [-ISLAND_RADIUS, 0],
+      [0, ISLAND_RADIUS],
+      [0, -ISLAND_RADIUS],
+    ] as const) {
+      const edge = phoneNdc(new Vector3(x, ISLAND_GRASS_Y, z));
+      expect(Math.abs(edge.x)).toBeLessThan(0.82);
+      expect(Math.abs(edge.y)).toBeLessThan(0.82);
+    }
     island.dispose();
   });
 });
