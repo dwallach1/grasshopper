@@ -37,3 +37,17 @@ Liveline’s default window is 30 seconds — useless for a snapshot desk. We se
 - No fabricated ticks between ledger observations — the spline is chrome
 
 Publisher history caps (`loadDeskFromPostgres` / REST) keep 200 Agentic snapshots and 200 `pm_pnl` / `meme_pnl` rows so the line can breathe from real history.
+
+## Book OPEN strip
+
+Book stays closed-lot CRT for edge stats. Above those cards, a thin Liveline strip plots **open** tickets when a real mark series is already in the snapshot. Assembler: `apps/dashboard/lib/book-open-strip.ts`.
+
+| Steward | Line | Source | `referenceLine` |
+|---|---|---|---|
+| ODDSBORNE | mark | `pm_positions.mark` @ `mark_at` | `pm_positions.average_cost` |
+| ODDSBORNE | CLOB last | `pm_markets.last_yes` or `last_no` @ `last_marked_at` | — |
+| BANDIT | mark | `meme_positions.mark_sol` @ `mark_at` | `meme_positions.average_cost_sol` |
+| BANDIT | CLOB last | `meme_tokens.last_price_sol` @ `last_marked_at` | — |
+| QUANTANAMO | mark series | `portfolio_exposure.last_price` (two+ clocks already in the snapshot) | `book.names.average_cost` |
+
+A steward with no open series is omitted. No CLOB fetch. No invented ticks. Optional second overlay at `kill_mid` only when that number is already on the row. Fill prices stay off the line.

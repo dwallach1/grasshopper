@@ -15,6 +15,11 @@ import {
   type LivelineUnit,
 } from '../../lib/desk-liveline';
 
+export type LivelineReference = {
+  value: number;
+  label?: string;
+};
+
 export type DeskLivelineProps = {
   points?: readonly LivelineClock[];
   value?: number | null;
@@ -27,6 +32,10 @@ export type DeskLivelineProps = {
   showValue?: boolean;
   degen?: boolean;
   className?: string;
+  /** Polymarket-style threshold. Book OPEN passes average cost. */
+  referenceLine?: LivelineReference;
+  /** Thin Book OPEN sparkline — no window chips, no degen, no clip box. */
+  compact?: boolean;
 };
 
 export function DeskLiveline({
@@ -41,14 +50,18 @@ export function DeskLiveline({
   showValue = true,
   degen = false,
   className,
+  referenceLine,
+  compact = false,
 }: DeskLivelineProps) {
   const motion = useMotionPrefs();
   const nowSecs = (motion.nowMs ?? Date.now()) / 1000;
   const overlay = series ?? [];
-  const clocks = overlay.length ? overlay.flatMap((row) => row.data) : points;
+  const clocks = overlay.length
+    ? [...points, ...overlay.flatMap((row) => row.data)]
+    : points;
   const span = seriesSpanSecs(clocks, nowSecs);
   const windows = useMemo(() => livelineWindows(clocks, nowSecs), [clocks, nowSecs]);
-  const windowSecs = windows[windows.length - 1]?.secs ?? span;
+  const windowSecs = compact ? span : (windows[windows.length - 1]?.secs ?? span);
   const multi: LivelineSeries[] = overlay
     .filter((row) => row.data.length > 0)
     .map((row) => ({
@@ -59,24 +72,39 @@ export function DeskLiveline({
       value: row.value,
     }));
   const solo = multi.length === 1 ? multi[0] : null;
-  const data: LivelinePoint[] = solo ? solo.data : [...points];
-  const latest = solo ? solo.value : (value ?? (data[data.length - 1]?.value ?? 0));
+  const data: LivelinePoint[] = solo && points.length === 0 ? solo.data : [...points];
+  const latest = solo && points.length === 0
+    ? solo.value
+    : (value ?? (data[data.length - 1]?.value ?? 0));
   const empty = !loading && data.length === 0 && multi.length === 0;
-  const allowDegen = degen && livelineDegen(returnPct) && !motion.reduce && !motion.coarse;
+  const allowDegen = !compact && degen && livelineDegen(returnPct) && !motion.reduce && !motion.coarse;
+  const extraOnPoints = points.length > 0 && multi.length > 0;
+  const livelineSeries = extraOnPoints
+    ? [
+      {
+        id: 'mark',
+        label: 'mark',
+        color,
+        data: [...points],
+        value: latest,
+      },
+      ...multi,
+    ]
+    : (multi.length > 1 ? multi : undefined);
 
   return (
     <div className={className ? `line-frame ${className}` : 'line-frame'}>
       <Liveline
         data={data}
         value={latest}
-        series={multi.length > 1 ? multi : undefined}
+        series={livelineSeries}
         theme="dark"
         color={solo?.color ?? color}
         window={windowSecs}
-        windows={windows}
+        windows={compact ? undefined : windows}
         windowStyle="text"
         seriesToggleCompact={motion.coarse}
-        grid
+        grid={!compact}
         badge={false}
         momentum={!motion.reduce}
         fill
@@ -91,12 +119,15 @@ export function DeskLiveline({
         emptyText={empty ? emptyText : LIVELINE_EMPTY}
         formatValue={(v) => formatLivelineValue(v, unit)}
         formatTime={(t) => formatLivelineTime(t, span)}
-        padding={{
-          top: showValue ? 52 : 16,
-          right: multi.length > 1 ? 88 : 16,
-          bottom: 28,
-          left: 12,
-        }}
+        referenceLine={referenceLine}
+        padding={compact
+          ? { top: 8, right: 10, bottom: 14, left: 6 }
+          : {
+            top: showValue ? 52 : 16,
+            right: multi.length > 1 ? 88 : 16,
+            bottom: 28,
+            left: 12,
+          }}
       />
     </div>
   );

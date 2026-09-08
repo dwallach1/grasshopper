@@ -4381,3 +4381,145 @@ a:focus-visible {
     background: none;
   }
 }
+
+/* ——— Book OPEN strip (Liveline marks above closed-edge CRT) ——— */
+
+.book-open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible;
+}
+
+.book-open-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.book-open-kicker {
+  margin: 0;
+  color: #9ef0ff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+}
+
+.book-open-lede {
+  margin: 0;
+  max-width: 36rem;
+  color: rgba(232, 237, 242, 0.55);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.book-open-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: visible;
+}
+
+.book-open-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: visible;
+}
+
+.book-open-who {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.book-open-who b {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.book-open-who i {
+  color: var(--text-3);
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.book-open-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: visible;
+}
+
+.book-open-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: visible;
+}
+
+.book-open-ticket-id {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.book-open-ticket-id b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.book-open-ticket-id span {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.book-open-line,
+.book-open-line.line-frame {
+  overflow: visible;
+}
+
+.book-open-line > div:has(canvas) {
+  width: 100%;
+  height: 72px;
+  min-height: 72px;
+  overflow: visible;
+}
+
+@media (max-width: 720px) {
+  .book-open-ticket-id b {
+    font-size: 11px;
+  }
+
+  .book-open-line > div:has(canvas) {
+    height: 64px;
+    min-height: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-open-line {
+    filter: none;
+  }
+}

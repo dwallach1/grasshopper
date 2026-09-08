@@ -10,8 +10,10 @@ import {
   formatHold,
   type StewardEdge,
 } from '../../lib/book-edge-stats';
+import { assembleBookOpen } from '../../lib/book-open-strip';
 import { stewardMood } from '../../lib/desk-avatar';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { BookOpenStrip } from './book-open-strip';
 import { StewardAvatar } from './steward-avatar';
 
 export function BookPanel({
@@ -21,6 +23,7 @@ export function BookPanel({
   nowIso?: string;
 }) {
   const edge = useMemo(() => assembleBookEdge(desk), [desk]);
+  const open = useMemo(() => assembleBookOpen(desk), [desk]);
 
   return (
     <div className="line-stage crt-book">
@@ -31,6 +34,8 @@ export function BookPanel({
           Closed lots only. Native units. Missing exits stay unmarked.
         </p>
       </header>
+
+      <BookOpenStrip open={open} />
 
       <div className="crt-book-stack">
         {edge.rows.map((row) => (
