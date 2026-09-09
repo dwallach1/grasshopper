@@ -339,6 +339,7 @@ create table public.portfolio_exposure (
   symbol text not null,
   quantity numeric(28, 10) not null,
   average_buy_price numeric(20, 6),
+  last_price numeric,
   source text not null default 'robinhood_mcp'
 );
 create index idx_portfolio_exposure_symbol_observed on public.portfolio_exposure(symbol, observed_at desc);

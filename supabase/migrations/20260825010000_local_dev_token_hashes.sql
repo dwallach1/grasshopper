@@ -1,5 +1,8 @@
 -- Accept local-only tokens used by Miniflare / Vite against `supabase start`.
 -- Plaintext values live only in committed `.dev.vars.example` files.
+--
+-- Hosted Quantanamo records this version as applied without executing it
+-- (migration repair). Do not replay these hashes on the live project.
 
 create or replace function public.publish_dashboard_snapshot(
   p_trade_policy jsonb,

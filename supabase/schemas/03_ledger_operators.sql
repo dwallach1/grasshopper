@@ -1,5 +1,5 @@
 -- Signed-in operators for the local desk. Applied incrementally via
--- supabase/migrations/20260826200000_ledger_operator_auth.sql.
+-- supabase/migrations/20260826195412_ledger_operator_auth.sql.
 
 create table if not exists public.ledger_operators (
   user_id uuid primary key references auth.users(id) on delete cascade,
