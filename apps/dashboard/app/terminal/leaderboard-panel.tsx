@@ -30,7 +30,7 @@ export function LeaderboardPanel({
   const line = useMemo(() => assembleLiveline(desk), [desk]);
   const ranked = board.rows.filter((row) => row.ranked);
   const lead = ranked[0];
-  const [order, setOrder] = useState(() => board.rows.map((row) => row.id));
+  const [order, setOrder] = useState<string[]>(() => board.rows.map((row) => row.id));
   const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
   const orderRef = useRef(order);
   orderRef.current = order;
