@@ -218,16 +218,14 @@ That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and
 
 ### Deploy
 
-Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.github/workflows/deploy-public-desk.yml`. That job mints the reader JWT and uploads Worker secrets the same way the other Workers already do (`wrangler-action` `secrets:`), then `wrangler deploy`. Merge turns live reads on. There is no human `wrangler secret put` step and no publish command.
-
-Required GitHub Actions secrets (Settings → Secrets and variables → Actions) — same values as operator `.env.local`, never committed:
+Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.github/workflows/deploy-public-desk.yml`: `desk:build` then `wrangler-action deploy`. That is the same Cloudflare path that shipped before #39. It needs only:
 
 | Secret | Value |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Edit Cloudflare Workers** |
 | `CLOUDFLARE_ACCOUNT_ID` | `97af2e2312077d4689e9a012ef5dde75` |
-| `SUPABASE_JWT_SECRET` | Project JWT secret (mints `role=desk_public_reader`). Alias: `JWT_SECRET`. |
-| `DESK_READER_APIKEY` | Publishable/anon Kong key. Aliases: `SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ANON_KEY`. |
+
+Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_reader` JWT claim). Live PostgREST SELECTs go through the GET-only `desk-public-rest` function so merge does not wait on a JWT secret in Actions. There is no publish command and no KV.
 
 The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
 
@@ -254,8 +252,8 @@ Env (see `.env.example`; never commit secrets):
 | `NEXT_PUBLIC_DESK_MODE=public` | Public client / `web:public` | Skip operator auth |
 | `NEXT_PUBLIC_DESK_URL` | Public metadata | Canonical public origin |
 | `QUANTANAMO_DATABASE_URL` | Local `/api/desk` | Assemble the live desk (postgres.js). Not on the Worker. |
-| `DESK_READER_APIKEY` | Worker secret (CI) | Publishable/anon key for Kong. Not in the SPA. |
-| `DESK_READER_JWT` | Worker secret (CI mints) | JWT `role=desk_public_reader`. |
+| `DESK_READER_APIKEY` | Worker var | Publishable/anon key for Kong. Not in the SPA. |
+| `DESK_READER_JWT` | Worker var | JWT claim `role=desk_public_reader`. |
 
 Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
 

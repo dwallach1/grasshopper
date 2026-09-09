@@ -1,5 +1,5 @@
-# Live read-only PostgREST. Never service_role, never QUANTANAMO_DATABASE_URL.
-# Production: GitHub Actions mints DESK_READER_JWT and wrangler secret put on deploy.
-DESK_SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co
+# Local wrangler only. Production reads these from wrangler.jsonc vars.
+# Never service_role, never QUANTANAMO_DATABASE_URL.
+DESK_SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co/functions/v1/desk-public-rest
 DESK_READER_APIKEY=
 DESK_READER_JWT=

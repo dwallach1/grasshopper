@@ -25,10 +25,9 @@
     ]
   },
   "vars": {
-    "DESK_SUPABASE_URL": "https://xqungxapqicdmboniezz.supabase.co"
-  },
-  "secrets": {
-    "required": ["DESK_READER_APIKEY", "DESK_READER_JWT"]
+    "DESK_SUPABASE_URL": "https://xqungxapqicdmboniezz.supabase.co/functions/v1/desk-public-rest",
+    "DESK_READER_APIKEY": "sb_publishable_mmdS2KqyzybyDvMhxku6Vg_AMjRxBWj",
+    "DESK_READER_JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxdW5neGFwcWljZG1ib25pZXp6Iiwicm9sZSI6ImRlc2tfcHVibGljX3JlYWRlciIsImlhdCI6MTc4ODk2MDAwMCwiZXhwIjoyMTAzMDg2NzU5fQ.desk_public_reader"
   },
   "observability": {
     "enabled": true,

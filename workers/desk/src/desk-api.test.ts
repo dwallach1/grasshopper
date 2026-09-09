@@ -150,11 +150,24 @@ describe('public desk reader credentials', () => {
     })).toBe(false);
   });
 
+  test('live load uses one /bundle request, not per-table PostgREST', async () => {
+    const source = await Bun.file(new URL('./desk-live.ts', import.meta.url)).text();
+    expect(source).toContain('/bundle');
+    expect(source).toContain('assembleDeskFromRestBag');
+    expect(source).not.toContain('/rest/v1/');
+    const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
+    expect(fn).toContain("path === '/bundle'");
+    expect(fn).toContain('handleBundle');
+    expect(fn).toContain("req.method !== 'GET'");
+    expect(fn).toContain("status: 405");
+  });
+
   test('wrangler config has no KV snapshot binding', async () => {
     const wrangler = await Bun.file(new URL('../wrangler.jsonc', import.meta.url)).text();
     expect(wrangler).not.toContain('kv_namespaces');
     expect(wrangler).not.toContain('DESK_SNAPSHOT');
     expect(wrangler).not.toContain('DESK_PUBLISH_TOKEN');
+    expect(wrangler).not.toContain('"secrets"');
     expect(wrangler).toContain('DESK_READER_APIKEY');
     expect(wrangler).toContain('DESK_READER_JWT');
   });
