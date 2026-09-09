@@ -24,6 +24,8 @@ import {
   wrapFromEdgeDrag,
   wrapSwipeIndex,
   wrapSwipeSurface,
+  compatMouseUntil,
+  isCompatMouseSuppressed,
   type SwipeHitTarget,
 } from './desk-swipe';
 
@@ -129,5 +131,14 @@ describe('desk swipe deck', () => {
     expect(pageSwipeConsumesTarget(pane)).toBe(true);
     expect(pageSwipeConsumesTarget(null)).toBe(true);
     expect(swipeHitFromEvent(null)).toBeNull();
+  });
+
+  test('a touch swipe does not re-arm on the compatibility mouse down', () => {
+    expect(compatMouseUntil('touch', 1000)).toBe(1700);
+    expect(compatMouseUntil('pen', 1000)).toBe(1700);
+    expect(compatMouseUntil('mouse', 1000)).toBe(0);
+    expect(isCompatMouseSuppressed('mouse', 1200, 1700)).toBe(true);
+    expect(isCompatMouseSuppressed('mouse', 1800, 1700)).toBe(false);
+    expect(isCompatMouseSuppressed('touch', 1200, 1700)).toBe(false);
   });
 });

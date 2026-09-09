@@ -5,7 +5,9 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { type DeskSwipeSurface } from '../../lib/desk-nav';
 import {
   DESK_PAGER_SLOTS,
+  compatMouseUntil,
   followPagerScroll,
+  isCompatMouseSuppressed,
   isSwipeSurface,
   isSwipeWrap,
   lockSwipeAxis,
@@ -128,6 +130,7 @@ function bindPagerSwipe(
     originY: 0,
     startLeft: 0,
     pointerId: -1,
+    ignoreMouseUntil: 0,
   };
 
   function snapTo(next: DeskSwipeSurface) {
@@ -135,9 +138,22 @@ function bindPagerSwipe(
     onSnap(next);
   }
 
+  function capturePointer(id: number) {
+    if (id < 0) return;
+    try {
+      pager.setPointerCapture(id);
+    } catch {
+      // pointer already gone
+    }
+  }
+
   function releaseCapture() {
     if (gesture.pointerId < 0) return;
-    if (pager.hasPointerCapture(gesture.pointerId)) pager.releasePointerCapture(gesture.pointerId);
+    try {
+      if (pager.hasPointerCapture(gesture.pointerId)) pager.releasePointerCapture(gesture.pointerId);
+    } catch {
+      // already released
+    }
     gesture.pointerId = -1;
   }
 
@@ -146,12 +162,14 @@ function bindPagerSwipe(
     gesture.dragging = false;
     gesture.axis = null;
     holding.current = false;
+    pager.dataset.axis = '';
     releaseCapture();
   }
 
   function onDown(event: PointerEvent) {
     if (gesture.armed) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (isCompatMouseSuppressed(event.pointerType, performance.now(), gesture.ignoreMouseUntil)) return;
     if (!pageSwipeConsumesTarget(swipeHitFromEvent(event.target))) return;
     gesture.armed = true;
     gesture.dragging = false;
@@ -162,11 +180,13 @@ function bindPagerSwipe(
     gesture.originY = event.clientY;
     gesture.startLeft = pager.scrollLeft;
     gesture.pointerId = event.pointerId;
+    capturePointer(event.pointerId);
     pager.dataset.swipe = `down:${gesture.from}`;
   }
 
   function onMove(event: PointerEvent) {
     if (!gesture.armed || gesture.axis === 'y') return;
+    if (gesture.pointerId >= 0 && event.pointerId !== gesture.pointerId) return;
     const dx = event.clientX - gesture.originX;
     const dy = event.clientY - gesture.originY;
     if (gesture.axis !== 'x') {
@@ -179,10 +199,14 @@ function bindPagerSwipe(
       if (locked !== 'x') return;
       gesture.axis = 'x';
       gesture.dragging = true;
+      pager.dataset.axis = 'x';
     }
+    event.preventDefault();
     const next = pageSwipeFromDrag(gesture.from, dx, dy);
     pager.dataset.swipe = `move:${gesture.from}:${Math.round(dx)}:${next ?? 'none'}`;
     if (next && isSwipeWrap(gesture.from, next)) {
+      const until = compatMouseUntil(event.pointerType, performance.now());
+      if (until) gesture.ignoreMouseUntil = until;
       disarm();
       snapTo(next);
       return;
@@ -193,10 +217,13 @@ function bindPagerSwipe(
 
   function onUp(event: PointerEvent) {
     if (!gesture.armed) return;
+    if (gesture.pointerId >= 0 && event.pointerId !== gesture.pointerId) return;
     const dx = event.clientX - gesture.originX;
     const dy = event.clientY - gesture.originY;
     const dragged = gesture.dragging && gesture.axis === 'x';
     const from = gesture.from;
+    const until = compatMouseUntil(event.pointerType, performance.now());
+    if (until) gesture.ignoreMouseUntil = until;
     disarm();
     if (!dragged) return;
     const next = pageSwipeFromDrag(from, dx, dy);
@@ -218,12 +245,20 @@ function bindPagerSwipe(
   }
 
   pager.addEventListener('pointerdown', onDown, true);
-  window.addEventListener('pointermove', onMove);
+  pager.addEventListener('pointermove', onMove, { passive: false });
+  pager.addEventListener('pointerup', onUp);
+  pager.addEventListener('pointercancel', onUp);
+  pager.addEventListener('lostpointercapture', onUp);
+  window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
   pager.addEventListener('scroll', onScroll, { passive: true });
   return () => {
     pager.removeEventListener('pointerdown', onDown, true);
+    pager.removeEventListener('pointermove', onMove);
+    pager.removeEventListener('pointerup', onUp);
+    pager.removeEventListener('pointercancel', onUp);
+    pager.removeEventListener('lostpointercapture', onUp);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);

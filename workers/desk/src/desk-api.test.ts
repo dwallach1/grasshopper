@@ -154,6 +154,9 @@ describe('public desk reader credentials', () => {
     const source = await Bun.file(new URL('./desk-live.ts', import.meta.url)).text();
     expect(source).toContain('/bundle');
     expect(source).toContain('assembleDeskFromRestBag');
+    expect(source).toContain('readBoundedJson');
+    expect(source).toContain('LIVE_CACHE_MS');
+    expect(source).not.toContain('await response.json()');
     expect(source).not.toContain('/rest/v1/');
     const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
     expect(fn).toContain("path === '/bundle'");

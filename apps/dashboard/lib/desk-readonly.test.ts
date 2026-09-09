@@ -33,9 +33,14 @@ describe('read-only operator desk', () => {
     expect(pub).not.toContain('/api/ledger');
     expect(pub).not.toContain('createBrowserSupabase');
     expect(client).toContain("isPublicDesk() ? '/api/desk' : '/api/ledger'");
+    expect(client).toContain('parseDeskResponseText');
+    expect(client).toContain('Accept');
     expect(client).not.toContain('createBrowserSupabase');
+    expect(client).not.toContain('response.json()');
     expect(realtime).toContain('createBrowserSupabase');
     expect(app).toContain('publicView');
+    expect(app).toContain('cachedDesk');
+    expect(app).toContain('PUBLIC_DESK_UNAVAILABLE');
     expect(app).not.toContain('SessionControls');
   });
 

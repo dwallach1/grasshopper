@@ -17,6 +17,8 @@ export const PAGE_SWIPE_LOCK_PX = 12;
 /** |dx| must beat |dy| by this factor. 1.2 ≈ 40° from the horizontal — not a diagonal. */
 export const PAGE_SWIPE_DOMINANCE = 1.2;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
+/** Chrome synthesizes a mouse down after a touch swipe. Ignore it or the rail re-arms short. */
+export const COMPAT_MOUSE_SUPPRESS_MS = 700;
 
 export type SwipeAxisLock = 'x' | 'y' | null;
 
@@ -166,4 +168,21 @@ export function isCardDraggerTarget(target: SwipeHitTarget | null): boolean {
 
 export function pageSwipeConsumesTarget(target: SwipeHitTarget | null): boolean {
   return !isCardDraggerTarget(target);
+}
+
+export function isCompatMouseSuppressed(
+  pointerType: string,
+  now: number,
+  until: number,
+): boolean {
+  return pointerType === 'mouse' && now < until;
+}
+
+export function compatMouseUntil(
+  pointerType: string,
+  now: number,
+  windowMs = COMPAT_MOUSE_SUPPRESS_MS,
+): number {
+  if (pointerType === 'touch' || pointerType === 'pen') return now + windowMs;
+  return 0;
 }

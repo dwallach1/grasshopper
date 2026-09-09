@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 
+import { applyStandingOrder, moveStanding, standingShiftFromDrag } from '../../lib/desk-board-order';
 import {
   assembleLeaderboard,
   NOT_RANKED,
@@ -29,6 +30,48 @@ export function LeaderboardPanel({
   const line = useMemo(() => assembleLiveline(desk), [desk]);
   const ranked = board.rows.filter((row) => row.ranked);
   const lead = ranked[0];
+  const [order, setOrder] = useState(() => board.rows.map((row) => row.id));
+  const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+
+  useEffect(() => {
+    setOrder((prev) => applyStandingOrder(board.rows, prev).map((row) => row.id));
+  }, [board.rows]);
+
+  useEffect(() => {
+    function onMove(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      setOrder(moveStanding(active.origin, active.id, standingShiftFromDrag(event.clientY - active.startY)));
+    }
+    function onUp(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      drag.current = null;
+    }
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
+  const rows = useMemo(() => applyStandingOrder(board.rows, order), [board.rows, order]);
+
+  function onPlaceDown(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    event.stopPropagation();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // capture is optional; window listeners still drive the reorder
+    }
+    drag.current = { id, pointerId: event.pointerId, startY: event.clientY, origin: orderRef.current };
+  }
 
   return (
     <div className="line-stage line-board">
@@ -53,7 +96,7 @@ export function LeaderboardPanel({
       </p>
 
       <ol className="line-standings">
-        {board.rows.map((row) => (
+        {rows.map((row) => (
           <li
             key={row.id}
             className={`line-row${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}`}
@@ -61,7 +104,15 @@ export function LeaderboardPanel({
             style={{ '--team-accent': row.accent } as CSSProperties}
           >
             <div className="line-row-hit">
-              <span className="line-place">{row.place ?? '—'}</span>
+              <button
+                type="button"
+                className="line-place"
+                data-card-dragger="1"
+                aria-label={`Reorder ${row.steward}`}
+                onPointerDown={(event) => onPlaceDown(event, row.id)}
+              >
+                {row.place ?? '—'}
+              </button>
               <StewardAvatar
                 slug={row.slug}
                 name={row.steward}
