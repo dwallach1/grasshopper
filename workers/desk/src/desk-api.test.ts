@@ -155,6 +155,7 @@ describe('public desk reader credentials', () => {
     expect(wrangler).not.toContain('kv_namespaces');
     expect(wrangler).not.toContain('DESK_SNAPSHOT');
     expect(wrangler).not.toContain('DESK_PUBLISH_TOKEN');
+    expect(wrangler).not.toContain('"secrets"');
     expect(wrangler).toContain('DESK_READER_APIKEY');
     expect(wrangler).toContain('DESK_READER_JWT');
   });
