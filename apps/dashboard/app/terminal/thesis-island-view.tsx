@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ACESFilmicToneMapping,
   AmbientLight,
@@ -26,7 +26,10 @@ import {
   buildThesisIsland,
   ISLAND_CAMERA,
   ISLAND_CREAM,
+  islandAllowsComposer,
+  islandDrawingOk,
   islandHitThesisId,
+  islandHostSize,
   islandPixelRatio,
   paintIslandPoster,
 } from '../../lib/thesis-island';
@@ -48,6 +51,7 @@ export function ThesisIslandView({
   const districtRef = useRef(district);
   const peekRef = useRef(peek);
   const reduceRef = useRef(reduceMotion);
+  const [webgl, setWebgl] = useState(true);
   openRef.current = onOpen;
   districtRef.current = district;
   peekRef.current = peek;
@@ -76,18 +80,8 @@ export function ThesisIslandView({
         preserveDrawingBuffer: true,
       });
     } catch {
-      const poster = document.createElement('canvas');
-      poster.className = 'thesis-island-poster';
-      poster.setAttribute('aria-hidden', 'true');
-      root.appendChild(poster);
-      const box = root.getBoundingClientRect();
-      poster.width = Math.max(8, Math.round(box.width || 390));
-      poster.height = Math.max(8, Math.round(box.height || 640));
-      const ctx = poster.getContext('2d');
-      if (ctx) paintIslandPoster(ctx, districtRef.current);
-      return () => {
-        if (poster.parentNode === root) root.removeChild(poster);
-      };
+      setWebgl(false);
+      return undefined;
     }
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
@@ -97,7 +91,19 @@ export function ThesisIslandView({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
     renderer.domElement.setAttribute('aria-hidden', 'true');
+    renderer.domElement.hidden = true;
     root.appendChild(renderer.domElement);
+
+    function dropWebgl(): void {
+      setWebgl(false);
+      renderer.domElement.hidden = true;
+    }
+
+    function onContextLost(event: Event): void {
+      event.preventDefault();
+      dropWebgl();
+    }
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost);
 
     const pmrem = new PMREMGenerator(renderer);
     const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -127,7 +133,11 @@ export function ThesisIslandView({
     scene.add(island.group);
 
     let composer: EffectComposer | null = null;
-    if (webgl2) {
+    if (islandAllowsComposer({
+      webgl2,
+      userAgent: navigator.userAgent,
+      maxTouchPoints: navigator.maxTouchPoints,
+    })) {
       try {
         composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
@@ -147,17 +157,25 @@ export function ThesisIslandView({
     const tap = { x: 0, y: 0, active: false };
     let frame = 0;
     let visible = true;
+    let presented = false;
 
-    function resize(): void {
-      const parent = root.parentElement;
-      const w = Math.max(root.clientWidth, parent?.clientWidth ?? 0);
-      const h = Math.max(root.clientHeight, parent?.clientHeight ?? 0, window.innerHeight - 88);
-      if (w < 8 || h < 8) return;
+    function viewportBox(): { width: number; height: number } {
+      const view = window.visualViewport;
+      return {
+        width: view?.width || window.innerWidth,
+        height: Math.max(120, (view?.height || window.innerHeight) - 88),
+      };
+    }
+
+    function resize(): boolean {
+      const box = islandHostSize(root, viewportBox());
+      if (!islandDrawingOk(box.width, box.height)) return false;
       renderer.setPixelRatio(islandPixelRatio(window.devicePixelRatio || 1));
-      renderer.setSize(w, h, false);
-      composer?.setSize(w, h);
-      camera.aspect = w / h;
+      renderer.setSize(box.width, box.height, false);
+      composer?.setSize(box.width, box.height);
+      camera.aspect = box.width / box.height;
       camera.updateProjectionMatrix();
+      return true;
     }
 
     function draw(now: number): void {
@@ -170,10 +188,19 @@ export function ThesisIslandView({
       }
       if (composer) composer.render();
       else renderer.render(scene, camera);
+      if (!presented) {
+        presented = true;
+        renderer.domElement.hidden = false;
+        setWebgl(true);
+      }
     }
 
     function tick(now: number): void {
       if (!visible) return;
+      if (!resize()) {
+        dropWebgl();
+        return;
+      }
       draw(now);
       if (reduceRef.current) return;
       frame = window.requestAnimationFrame(tick);
@@ -205,7 +232,8 @@ export function ThesisIslandView({
     }
 
     const io = new IntersectionObserver((entries) => {
-      visible = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio > 0.2);
+      visible = entries.some((entry) => entry.isIntersecting && entry.intersectionRatio > 0.05)
+        || root.clientWidth >= 8;
       if (visible && !reduceRef.current && frame === 0) {
         frame = window.requestAnimationFrame(tick);
       }
@@ -213,17 +241,20 @@ export function ThesisIslandView({
         window.cancelAnimationFrame(frame);
         frame = 0;
       }
-    }, { threshold: [0, 0.2, 0.6] });
+    }, { threshold: [0, 0.05, 0.2, 0.6] });
     io.observe(root);
 
     const ro = new ResizeObserver(() => {
-      resize();
+      if (!resize()) return;
       draw(performance.now());
     });
     ro.observe(root);
-    resize();
-    draw(performance.now());
-    if (!reduceMotion) frame = window.requestAnimationFrame(tick);
+    if (resize()) {
+      draw(performance.now());
+      if (!reduceMotion) frame = window.requestAnimationFrame(tick);
+    } else {
+      dropWebgl();
+    }
 
     root.addEventListener('pointerdown', onPointerDown);
     root.addEventListener('pointerup', onPointerUp);
@@ -232,6 +263,7 @@ export function ThesisIslandView({
       ro.disconnect();
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('pointerup', onPointerUp);
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
       window.cancelAnimationFrame(frame);
       renderer.domElement.remove();
       island.dispose();
@@ -242,7 +274,15 @@ export function ThesisIslandView({
     };
   }, [district.id, peek?.id, reduceMotion]);
 
-  return <div ref={hostRef} className="thesis-island" />;
+  return (
+    <div
+      ref={hostRef}
+      className="thesis-island"
+      data-webgl={webgl ? '1' : '0'}
+    >
+      <ThesisIslandPoster district={district} />
+    </div>
+  );
 }
 
 export function ThesisIslandPoster({ district }: { district: ThesisDistrict }) {
@@ -251,9 +291,16 @@ export function ThesisIslandPoster({ district }: { district: ThesisDistrict }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const box = canvas.parentElement?.getBoundingClientRect();
-    canvas.width = Math.max(8, Math.round(box?.width ?? 390));
-    canvas.height = Math.max(8, Math.round(box?.height ?? 640));
+    const host = canvas.parentElement;
+    const box = islandHostSize(
+      { clientWidth: host?.clientWidth ?? 0, clientHeight: host?.clientHeight ?? 0 },
+      {
+        width: typeof window === 'undefined' ? 390 : window.innerWidth,
+        height: typeof window === 'undefined' ? 640 : Math.max(120, window.innerHeight - 88),
+      },
+    );
+    canvas.width = box.width;
+    canvas.height = box.height;
     const ctx = canvas.getContext('2d');
     if (ctx) paintIslandPoster(ctx, district);
   }, [district]);

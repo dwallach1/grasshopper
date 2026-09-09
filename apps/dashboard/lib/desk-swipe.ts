@@ -12,9 +12,13 @@ import {
 } from './desk-nav';
 
 export const PAGE_SWIPE_PX = 56;
-export const PAGE_SWIPE_WRAP_PX = 36;
-export const PAGE_SWIPE_LOCK_PX = 10;
+export const PAGE_SWIPE_WRAP_PX = 56;
+export const PAGE_SWIPE_LOCK_PX = 12;
+/** |dx| must beat |dy| by this factor. 1.2 ≈ 40° from the horizontal — not a diagonal. */
+export const PAGE_SWIPE_DOMINANCE = 1.2;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
+
+export type SwipeAxisLock = 'x' | 'y' | null;
 
 /** Clone the ends so native snap can wrap: Team | Board | Book | Team | Board */
 export const DESK_PAGER_SLOTS = [
@@ -80,14 +84,35 @@ export function pagerSlotKey(id: DeskSwipeSurface, clone: boolean): string {
   return clone ? `${id}-clone` : id;
 }
 
-/** -1 previous, 1 next, 0 not a page swipe (too short). |dx| wins even on a sloped list scroll. */
+export function isDominantHorizontal(
+  dx: number,
+  dy: number,
+  dominance = PAGE_SWIPE_DOMINANCE,
+): boolean {
+  return Math.abs(dx) > Math.abs(dy) * dominance;
+}
+
+/** -1 previous, 1 next, 0 stay. Needs dominant X past the threshold — not a vertical flick. */
 export function swipeAxis(dx: number, dy: number, threshold = PAGE_SWIPE_PX): -1 | 0 | 1 {
   if (Math.abs(dx) < threshold) return 0;
+  if (!isDominantHorizontal(dx, dy)) return 0;
   return dx < 0 ? 1 : -1;
 }
 
 export function isHorizontalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
-  return Math.abs(dx) >= lock && Math.abs(dx) >= Math.abs(dy) * 0.45;
+  return Math.abs(dx) >= lock && isDominantHorizontal(dx, dy);
+}
+
+export function isVerticalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
+  const ay = Math.abs(dy);
+  return ay >= lock && ay >= Math.abs(dx);
+}
+
+/** First clear axis wins. Diagonals wait; a vertical lock never becomes a tab swipe. */
+export function lockSwipeAxis(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): SwipeAxisLock {
+  if (isHorizontalLock(dx, dy, lock)) return 'x';
+  if (isVerticalLock(dx, dy, lock)) return 'y';
+  return null;
 }
 
 export function wrapFromEdgeDrag(
@@ -97,11 +122,25 @@ export function wrapFromEdgeDrag(
   threshold = PAGE_SWIPE_WRAP_PX,
 ): DeskSwipeSurface | null {
   if (Math.abs(dx) < threshold) return null;
+  if (!isDominantHorizontal(dx, dy)) return null;
   const index = swipeSurfaceIndex(surface);
   const last = DESK_SWIPE_SURFACES.length - 1;
   if (dx > 0 && index === 0) return wrapSwipeSurface(surface, -1);
   if (dx < 0 && index === last) return wrapSwipeSurface(surface, 1);
   return null;
+}
+
+/** Pane to snap to, or null if this drag is vertical / short / diagonal. */
+export function pageSwipeFromDrag(
+  surface: DeskSwipeSurface,
+  dx: number,
+  dy: number,
+): DeskSwipeSurface | null {
+  const wrap = wrapFromEdgeDrag(surface, dx, dy);
+  if (wrap) return wrap;
+  const axis = swipeAxis(dx, dy);
+  if (axis === 0) return null;
+  return wrapSwipeSurface(surface, axis);
 }
 
 export function followPagerScroll(startLeft: number, dx: number, maxLeft: number): number {

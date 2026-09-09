@@ -5,10 +5,14 @@ import {
   DESK_PAGER_SLOTS,
   followPagerScroll,
   isCardDraggerTarget,
+  isDominantHorizontal,
   isHorizontalLock,
   isSwipeSurface,
   isSwipeWrap,
+  isVerticalLock,
+  lockSwipeAxis,
   pageSwipeConsumesTarget,
+  pageSwipeFromDrag,
   pagerScrollBehavior,
   pagerScrollToBehavior,
   pagerSlotKey,
@@ -69,6 +73,12 @@ describe('desk swipe deck', () => {
     expect(wrapFromEdgeDrag('team', -80, 8)).toBe('leaderboard');
     expect(wrapFromEdgeDrag('book', 80, 8)).toBeNull();
     expect(wrapFromEdgeDrag('leaderboard', 20, 4)).toBeNull();
+    expect(wrapFromEdgeDrag('leaderboard', 80, 90)).toBeNull();
+    expect(pageSwipeFromDrag('leaderboard', 80, 8)).toBe('team');
+    expect(pageSwipeFromDrag('team', -80, 8)).toBe('leaderboard');
+    expect(pageSwipeFromDrag('leaderboard', -80, 10)).toBe('book');
+    expect(pageSwipeFromDrag('leaderboard', -300, 12)).toBe('book');
+    expect(pageSwipeFromDrag('leaderboard', 12, 140)).toBeNull();
     expect(DESK_PAGER_SLOTS.map((slot) => pagerSlotKey(slot.id, slot.clone))).toEqual([
       'team-clone', 'leaderboard', 'book', 'team', 'leaderboard-clone',
     ]);
@@ -86,13 +96,21 @@ describe('desk swipe deck', () => {
   });
 
   test('page swipe is horizontal-only and does not share the card dragger', () => {
+    expect(isDominantHorizontal(-80, 10)).toBe(true);
+    expect(isDominantHorizontal(-80, 90)).toBe(false);
     expect(swipeAxis(-80, 10)).toBe(1);
     expect(swipeAxis(80, 8)).toBe(-1);
-    expect(swipeAxis(-80, 90)).toBe(1);
+    expect(swipeAxis(-80, 90)).toBe(0);
+    expect(swipeAxis(40, 140)).toBe(0);
     expect(swipeAxis(-20, 0)).toBe(0);
-    expect(isHorizontalLock(16, 4)).toBe(true);
-    expect(isHorizontalLock(16, 30)).toBe(true);
+    expect(isHorizontalLock(24, 8)).toBe(true);
+    expect(isHorizontalLock(16, 30)).toBe(false);
     expect(isHorizontalLock(4, 16)).toBe(false);
+    expect(isVerticalLock(12, 140)).toBe(true);
+    expect(isVerticalLock(80, 8)).toBe(false);
+    expect(lockSwipeAxis(8, 40)).toBe('y');
+    expect(lockSwipeAxis(40, 8)).toBe('x');
+    expect(lockSwipeAxis(4, 4)).toBeNull();
     expect(followPagerScroll(100, 40, 400)).toBe(60);
     expect(followPagerScroll(0, 40, 400)).toBe(0);
     expect(followPagerScroll(400, -40, 400)).toBe(400);

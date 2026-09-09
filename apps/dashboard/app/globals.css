@@ -2538,13 +2538,24 @@ a:focus-visible {
 }
 
 .term.is-theses {
+  display: flex;
+  flex-direction: column;
   height: 100dvh;
-  min-height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   overflow: hidden;
+  padding-bottom: 0;
+}
+
+.term.is-theses .term-top,
+.term.is-theses .term-banner,
+.term.is-theses .term-dock {
+  flex: 0 0 auto;
 }
 
 .term.is-theses .term-main {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   padding: 0;
   overflow: hidden;
@@ -2558,6 +2569,7 @@ a:focus-visible {
 .term.is-theses .thesis-world {
   flex: 1 1 auto;
   min-height: 0;
+  height: auto;
 }
 
 .desk-pager {
@@ -2571,7 +2583,7 @@ a:focus-visible {
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
-  touch-action: pan-x;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-overflow-scrolling: touch;
@@ -3426,7 +3438,8 @@ a:focus-visible {
     padding: 0 4px env(safe-area-inset-bottom, 0px);
   }
 
-  .term.is-swipe .term-dock {
+  .term.is-swipe .term-dock,
+  .term.is-theses .term-dock {
     position: relative;
     left: auto;
     right: auto;
@@ -3435,7 +3448,8 @@ a:focus-visible {
   }
 
   .term.is-swipe,
-  .term.is-swipe.is-line {
+  .term.is-swipe.is-line,
+  .term.is-theses {
     padding-bottom: 0;
   }
 
@@ -4714,8 +4728,9 @@ a:focus-visible {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #f3ead8;
 }
@@ -4763,13 +4778,26 @@ a:focus-visible {
   inset: 0;
   width: 100%;
   height: 100%;
+  min-width: 8px;
+  min-height: 8px;
   display: block;
+  background: #f3ead8;
 }
 
 .thesis-island canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.thesis-island-poster {
+  z-index: 0;
+}
+
+.thesis-island canvas:not(.thesis-island-poster) {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 .thesis-dots {
