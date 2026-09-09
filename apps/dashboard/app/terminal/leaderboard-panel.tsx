@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 
+import { applyStandingOrder, moveStanding, standingShiftFromDrag } from '../../lib/desk-board-order';
 import {
   assembleLeaderboard,
   NOT_RANKED,
@@ -29,6 +30,34 @@ export function LeaderboardPanel({
   const line = useMemo(() => assembleLiveline(desk), [desk]);
   const ranked = board.rows.filter((row) => row.ranked);
   const lead = ranked[0];
+  const [order, setOrder] = useState(() => board.rows.map((row) => row.id));
+  const drag = useRef<{ id: string; startY: number; origin: string[] } | null>(null);
+
+  useEffect(() => {
+    setOrder((prev) => applyStandingOrder(board.rows, prev).map((row) => row.id));
+  }, [board.rows]);
+
+  const rows = useMemo(() => applyStandingOrder(board.rows, order), [board.rows, order]);
+
+  function onPlaceDown(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { id, startY: event.clientY, origin: order };
+  }
+
+  function onPlaceMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!drag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    event.stopPropagation();
+    event.preventDefault();
+    setOrder(moveStanding(drag.current.origin, drag.current.id, standingShiftFromDrag(event.clientY - drag.current.startY)));
+  }
+
+  function onPlaceUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    drag.current = null;
+  }
 
   return (
     <div className="line-stage line-board">
@@ -53,7 +82,7 @@ export function LeaderboardPanel({
       </p>
 
       <ol className="line-standings">
-        {board.rows.map((row) => (
+        {rows.map((row) => (
           <li
             key={row.id}
             className={`line-row${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}`}
@@ -61,7 +90,18 @@ export function LeaderboardPanel({
             style={{ '--team-accent': row.accent } as CSSProperties}
           >
             <div className="line-row-hit">
-              <span className="line-place">{row.place ?? '—'}</span>
+              <button
+                type="button"
+                className="line-place"
+                data-card-dragger="1"
+                aria-label={`Reorder ${row.steward}`}
+                onPointerDown={(event) => onPlaceDown(event, row.id)}
+                onPointerMove={onPlaceMove}
+                onPointerUp={onPlaceUp}
+                onPointerCancel={onPlaceUp}
+              >
+                {row.place ?? '—'}
+              </button>
               <StewardAvatar
                 slug={row.slug}
                 name={row.steward}

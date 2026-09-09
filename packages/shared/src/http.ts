@@ -1,3 +1,18 @@
+/** JSON.parse that never surfaces a raw SyntaxError for HTML or Cloudflare error pages. */
+export function parseUnknownJson(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const start = trimmed[0];
+  if (start !== '{' && start !== '[' && start !== '"' && start !== '-' && start !== 't' && start !== 'f' && start !== 'n' && (start < '0' || start > '9')) {
+    throw new Error('Response was not JSON');
+  }
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    throw new Error('Response was not JSON');
+  }
+}
+
 /** Read a response body up to `maxBytes`, then JSON.parse without trusting shape. */
 export async function readBoundedJson(response: Response, maxBytes: number): Promise<unknown> {
   const declared = Number(response.headers.get('content-length') || 0);
@@ -30,5 +45,5 @@ export async function readBoundedJson(response: Response, maxBytes: number): Pro
   }
   const text = new TextDecoder().decode(output);
   if (!text) return null;
-  return JSON.parse(text) as unknown;
+  return parseUnknownJson(text);
 }

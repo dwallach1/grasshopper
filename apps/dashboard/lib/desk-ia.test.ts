@@ -171,6 +171,8 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('if (gesture.armed) return');
     expect(pager).toContain('isSwipeWrap');
     expect(pager).toContain('pageSwipeConsumesTarget');
+    expect(pager).toContain('setPointerCapture');
+    expect(pager).toContain('isCompatMouseSuppressed');
     expect(pager).toContain('data-circular');
     expect(pager).toContain('data-desk-pane-scroll');
     expect(pager).toContain('scrollTo');
@@ -211,6 +213,8 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.term.is-theses');
     expect(css).toContain('.term.is-theses .term-dock');
     expect(css).toMatch(/\.desk-pager \{[\s\S]*?touch-action: pan-y/);
+    expect(css).toContain('.desk-pager[data-axis="x"]');
+    expect(css).toContain('.line-place');
     expect(css).toContain('100dvh');
     expect(css).not.toContain('.thesis-bldg');
     expect(css).not.toContain('thesis-idle');
@@ -367,6 +371,8 @@ describe('desk IA smoke', () => {
     expect(app).toContain("from './leaderboard-panel'");
     expect(board).toContain('assembleLeaderboard');
     expect(board).toContain('assembleLiveline');
+    expect(board).toContain('data-card-dragger');
+    expect(board).toContain('applyStandingOrder');
     expect(board).toContain('StewardAvatar');
     expect(board).toContain('size="board"');
     expect(board).toContain('stewardDeskFaces');

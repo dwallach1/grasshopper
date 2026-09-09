@@ -2598,6 +2598,10 @@ a:focus-visible {
   scroll-behavior: auto;
 }
 
+.desk-pager[data-axis="x"] {
+  touch-action: none;
+}
+
 .desk-page {
   flex: 0 0 100%;
   width: 100%;
@@ -2608,6 +2612,8 @@ a:focus-visible {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   scroll-snap-stop: always;
@@ -4116,6 +4122,8 @@ a:focus-visible {
   padding-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .line-row.is-empty {
@@ -4137,9 +4145,25 @@ a:focus-visible {
 }
 
 .line-place {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  margin: 0;
+  min-width: 28px;
+  min-height: 36px;
   font-family: var(--font-display);
   font-size: 22px;
   color: var(--text-3);
+  text-align: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.line-place:active {
+  cursor: grabbing;
 }
 
 .line-row.is-lead .line-place {

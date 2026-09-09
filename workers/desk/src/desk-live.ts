@@ -1,14 +1,23 @@
 import {
   DESK_PUBLIC_READER_ROLE,
   isPublicSnapshot,
+  MAX_SNAPSHOT_BYTES,
   toPublicDeskSnapshot,
 } from '@quantanamo/contracts/desk-snapshot';
+import { readBoundedJson } from '@quantanamo/shared/http';
 import { isPublishableKey } from '../../../apps/dashboard/lib/auth-public';
 import { assembleTeam } from '../../../apps/dashboard/lib/desk-team';
 import { assembleDeskFromRestBag } from '../../../apps/dashboard/lib/ledger-live';
 import type { JsonObjectRow } from '../../../apps/dashboard/lib/ledger-map';
 import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
 import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
+
+const LIVE_CACHE_MS = 8_000;
+let liveCache: { at: number; value: unknown } | null = null;
+
+export function resetPublicDeskLiveCache(): void {
+  liveCache = null;
+}
 
 function asObjectRows(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) return [];
@@ -62,6 +71,10 @@ export function liveReaderReady(env: DeskReaderEnv): boolean {
 }
 
 export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
+  const now = Date.now();
+  if (liveCache && now - liveCache.at < LIVE_CACHE_MS) {
+    return liveCache.value;
+  }
   const supabaseUrl = env.DESK_SUPABASE_URL?.trim() || '';
   const apiKey = env.DESK_READER_APIKEY?.trim() || '';
   const accessToken = env.DESK_READER_JWT?.trim() || '';
@@ -72,6 +85,7 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
     headers: {
       apikey: apiKey,
       Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
     },
     cache: 'no-store',
     signal: AbortSignal.timeout(25_000),
@@ -79,7 +93,11 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!response.ok) {
     throw new Error(`desk_bundle_${response.status}`);
   }
-  const bag = await response.json() as {
+  const raw = await readBoundedJson(response, MAX_SNAPSHOT_BYTES);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('desk_bundle_not_json');
+  }
+  const bag = raw as {
     theses?: unknown;
     symbols?: unknown;
     evidence?: unknown;
@@ -179,5 +197,6 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!isPublicSnapshot(published)) {
     throw new Error('desk_live_rejected');
   }
+  liveCache = { at: Date.now(), value: published };
   return published;
 }

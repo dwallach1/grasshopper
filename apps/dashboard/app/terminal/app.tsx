@@ -1,9 +1,10 @@
 'use client';
 
+import { PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
-import { fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
+import { cachedDesk, fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
 import {
   canonicalDeskPath,
   DESK_TABS,
@@ -335,7 +336,9 @@ async function refreshDesk(
     setDesk(await fetchDeskPayload());
     setNotice(null);
   } catch (error) {
-    setNotice(error instanceof Error ? error.message : 'Ledger refresh failed');
+    if (cachedDesk()) return;
+    const message = error instanceof Error ? error.message : PUBLIC_DESK_UNAVAILABLE;
+    setNotice(message.includes('Unexpected token') ? PUBLIC_DESK_UNAVAILABLE : message);
   }
 }
 
