@@ -77,6 +77,7 @@ describe('desk swipe deck', () => {
     expect(pageSwipeFromDrag('leaderboard', 80, 8)).toBe('team');
     expect(pageSwipeFromDrag('team', -80, 8)).toBe('leaderboard');
     expect(pageSwipeFromDrag('leaderboard', -80, 10)).toBe('book');
+    expect(pageSwipeFromDrag('leaderboard', -300, 12)).toBe('book');
     expect(pageSwipeFromDrag('leaderboard', 12, 140)).toBeNull();
     expect(DESK_PAGER_SLOTS.map((slot) => pagerSlotKey(slot.id, slot.clone))).toEqual([
       'team-clone', 'leaderboard', 'book', 'team', 'leaderboard-clone',

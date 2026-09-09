@@ -160,6 +160,8 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('pageSwipeFromDrag');
     expect(pager).toContain('lockSwipeAxis');
     expect(pager).toContain("gesture.axis === 'y'");
+    expect(pager).toContain('holding.current');
+    expect(pager).toContain('gesture.from');
     expect(pager).toContain('DESK_PAGER_SLOTS');
     expect(pager).toContain('data-clone');
     expect(pager).toContain('canonicalPane');
