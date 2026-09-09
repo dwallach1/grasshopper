@@ -163,13 +163,68 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 
-  const mappedTests = mapTests(tests);
-  const mappedArtifacts = mapBacktestArtifacts(artifacts);
   const [prediction, meme, team] = await Promise.all([
     loadPredictionMarketsRest(auth),
     loadMemeCoinsRest(auth),
     loadTeamRest(auth),
   ]);
+  return assembleDeskFromRestBag({
+    theses, symbols, evidence, scores, relations, runs, cloudRuns, cloudTasks,
+    automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
+    scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
+    intents, proposals, fills, insights, predictions, riskControls, themes,
+    ontologySymbols, candidates, actions, prediction, meme, team,
+  });
+}
+
+export type RestDeskBag = {
+  theses: JsonObjectRow[];
+  symbols: JsonObjectRow[];
+  evidence: JsonObjectRow[];
+  scores: JsonObjectRow[];
+  relations: JsonObjectRow[];
+  runs: JsonObjectRow[];
+  cloudRuns: JsonObjectRow[];
+  cloudTasks: JsonObjectRow[];
+  automations: JsonObjectRow[];
+  catalysts: JsonObjectRow[];
+  queue: JsonObjectRow[];
+  lessons: JsonObjectRow[];
+  postmortems: JsonObjectRow[];
+  cycles: JsonObjectRow[];
+  tests: JsonObjectRow[];
+  artifacts: JsonObjectRow[];
+  scenarios: JsonObjectRow[];
+  agentRuns: JsonObjectRow[];
+  accountLatest: JsonObjectRow[];
+  accountFirst: JsonObjectRow[];
+  positions: JsonObjectRow[];
+  exposures: JsonObjectRow[];
+  intents: JsonObjectRow[];
+  proposals: JsonObjectRow[];
+  fills: JsonObjectRow[];
+  insights: JsonObjectRow[];
+  predictions: JsonObjectRow[];
+  riskControls: JsonObjectRow[];
+  themes: JsonObjectRow[];
+  ontologySymbols: JsonObjectRow[];
+  candidates: JsonObjectRow[];
+  actions: JsonObjectRow[];
+  prediction: PredictionMarketsPayload;
+  meme: MemeCoinsPayload;
+  team: DeskTeamPayload;
+};
+
+export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
+  const mappedTests = mapTests(bag.tests);
+  const mappedArtifacts = mapBacktestArtifacts(bag.artifacts);
+  const {
+    theses, symbols, evidence, scores, relations, runs, cloudRuns, cloudTasks,
+    automations, catalysts, queue, lessons, postmortems, cycles, scenarios,
+    agentRuns, accountLatest, accountFirst, positions, exposures, intents,
+    proposals, fills, insights, predictions, riskControls, themes,
+    ontologySymbols, candidates, actions, prediction, meme, team,
+  } = bag;
   return assembleDesk('postgrest', decorateDesk(theses, symbols, {
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),

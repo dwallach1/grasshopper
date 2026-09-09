@@ -4,7 +4,26 @@ import {
   toPublicDeskSnapshot,
 } from '@quantanamo/contracts/desk-snapshot';
 import { isPublishableKey } from '../../../apps/dashboard/lib/auth-public';
-import { loadDeskFromRest } from '../../../apps/dashboard/lib/ledger-live';
+import { assembleTeam } from '../../../apps/dashboard/lib/desk-team';
+import { assembleDeskFromRestBag } from '../../../apps/dashboard/lib/ledger-live';
+import type { JsonObjectRow } from '../../../apps/dashboard/lib/ledger-map';
+import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
+import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
+
+function asObjectRows(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row): row is Record<string, unknown> =>
+    Boolean(row) && typeof row === 'object' && !Array.isArray(row),
+  );
+}
+
+function asJsonRows(value: unknown): JsonObjectRow[] {
+  return asObjectRows(value) as JsonObjectRow[];
+}
+
+function asUnknownRows(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
 
 export type DeskReaderEnv = {
   DESK_SUPABASE_URL?: string;
@@ -49,10 +68,109 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!liveReaderReady(env) || !supabaseUrl || !apiKey || !accessToken) {
     throw new Error('desk_reader_unconfigured');
   }
-  const live = await loadDeskFromRest({
-    supabaseUrl,
-    apiKey,
-    accessToken,
+  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/bundle`, {
+    headers: {
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(25_000),
+  });
+  if (!response.ok) {
+    throw new Error(`desk_bundle_${response.status}`);
+  }
+  const bag = await response.json() as {
+    theses?: unknown;
+    symbols?: unknown;
+    evidence?: unknown;
+    scores?: unknown;
+    relations?: unknown;
+    runs?: unknown;
+    cloudRuns?: unknown;
+    cloudTasks?: unknown;
+    automations?: unknown;
+    catalysts?: unknown;
+    queue?: unknown;
+    lessons?: unknown;
+    postmortems?: unknown;
+    cycles?: unknown;
+    tests?: unknown;
+    artifacts?: unknown;
+    scenarios?: unknown;
+    agentRuns?: unknown;
+    accountLatest?: unknown;
+    accountFirst?: unknown;
+    positions?: unknown;
+    exposures?: unknown;
+    intents?: unknown;
+    proposals?: unknown;
+    fills?: unknown;
+    insights?: unknown;
+    predictions?: unknown;
+    riskControls?: unknown;
+    themes?: unknown;
+    ontologySymbols?: unknown;
+    candidates?: unknown;
+    actions?: unknown;
+    pm?: { markets?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; notes?: unknown[] };
+    meme?: { tokens?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; notes?: unknown[] };
+    team?: { agents?: unknown[]; domains?: unknown[]; stewards?: unknown[]; accounts?: unknown[] };
+  };
+  const live = assembleDeskFromRestBag({
+    theses: asJsonRows(bag.theses),
+    symbols: asJsonRows(bag.symbols),
+    evidence: asJsonRows(bag.evidence),
+    scores: asJsonRows(bag.scores),
+    relations: asJsonRows(bag.relations),
+    runs: asJsonRows(bag.runs),
+    cloudRuns: asJsonRows(bag.cloudRuns),
+    cloudTasks: asJsonRows(bag.cloudTasks),
+    automations: asJsonRows(bag.automations),
+    catalysts: asJsonRows(bag.catalysts),
+    queue: asJsonRows(bag.queue),
+    lessons: asJsonRows(bag.lessons),
+    postmortems: asJsonRows(bag.postmortems),
+    cycles: asJsonRows(bag.cycles),
+    tests: asJsonRows(bag.tests),
+    artifacts: asJsonRows(bag.artifacts),
+    scenarios: asJsonRows(bag.scenarios),
+    agentRuns: asJsonRows(bag.agentRuns),
+    accountLatest: asJsonRows(bag.accountLatest),
+    accountFirst: asJsonRows(bag.accountFirst),
+    positions: asJsonRows(bag.positions),
+    exposures: asJsonRows(bag.exposures),
+    intents: asJsonRows(bag.intents),
+    proposals: asJsonRows(bag.proposals),
+    fills: asJsonRows(bag.fills),
+    insights: asJsonRows(bag.insights),
+    predictions: asJsonRows(bag.predictions),
+    riskControls: asJsonRows(bag.riskControls),
+    themes: asJsonRows(bag.themes),
+    ontologySymbols: asJsonRows(bag.ontologySymbols),
+    candidates: asJsonRows(bag.candidates),
+    actions: asJsonRows(bag.actions),
+    prediction: mapPredictionMarkets({
+      markets: asObjectRows(bag.pm?.markets),
+      positions: asObjectRows(bag.pm?.positions),
+      orders: asObjectRows(bag.pm?.orders),
+      fills: asObjectRows(bag.pm?.fills),
+      pnl: asObjectRows(bag.pm?.pnl),
+      notes: asObjectRows(bag.pm?.notes),
+    }),
+    meme: mapMemeCoins({
+      tokens: asObjectRows(bag.meme?.tokens),
+      positions: asObjectRows(bag.meme?.positions),
+      orders: asObjectRows(bag.meme?.orders),
+      fills: asObjectRows(bag.meme?.fills),
+      pnl: asObjectRows(bag.meme?.pnl),
+      notes: asObjectRows(bag.meme?.notes),
+    }),
+    team: assembleTeam({
+      agents: asUnknownRows(bag.team?.agents),
+      domains: asUnknownRows(bag.team?.domains),
+      stewards: asUnknownRows(bag.team?.stewards),
+      accounts: asUnknownRows(bag.team?.accounts),
+    }),
   });
   const published = toPublicDeskSnapshot({
     ...live,

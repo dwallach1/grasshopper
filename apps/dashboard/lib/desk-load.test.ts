@@ -33,6 +33,8 @@ describe('desk load path', () => {
     expect(live).toContain('AbortSignal.timeout(auth.fetchMs ?? REST_FETCH_MS)');
     expect(ledger).toContain('last_price');
     expect(live).toContain('export const REST_FETCH_MS = 8_000');
+    expect(live).toContain('export function assembleDeskFromRestBag');
+    expect(live).toContain('export type RestDeskBag');
     expect(ledger).toContain('loadPredictionMarkets');
     expect(ledger).toContain('pm_markets');
     expect(ledger).toContain('loadMemeCoins');
