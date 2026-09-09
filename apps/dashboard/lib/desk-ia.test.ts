@@ -199,6 +199,10 @@ describe('desk IA smoke', () => {
     expect(districts).not.toContain('win_rate');
     expect(css).toContain('.thesis-world');
     expect(css).toContain('.thesis-districts');
+    expect(css).toContain('scroll-snap-type: y mandatory');
+    expect(css).toContain('flex-direction: column');
+    expect(world).toContain('data-axis="y"');
+    expect(world).toContain("block: 'start'");
     expect(css).toContain('.thesis-island');
     expect(css).toContain('#f3ead8');
     expect(css).toContain('.term.is-theses');
@@ -226,7 +230,12 @@ describe('desk IA smoke', () => {
     expect(islandLib).toContain('IcosahedronGeometry');
     expect(islandLib).toContain('paintThesisSign');
     expect(islandLib).toContain('ExtrudeGeometry');
+    expect(islandLib).toContain('islandKit');
+    expect(islandLib).toContain('addCables');
+    expect(islandLib).toContain('addPipes');
     expect(islandLib).not.toContain('ConeGeometry');
+    expect(islandLib).not.toContain('HOOP_RADIUS');
+    expect(islandLib).not.toContain('TorusGeometry');
     expect(islandLib).not.toContain('GLTFLoader');
     expect(islandLib).not.toContain('emoji');
     expect(avatars).toContain('StewardLivingIcon');

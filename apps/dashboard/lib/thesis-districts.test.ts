@@ -162,6 +162,24 @@ describe('thesis districts', () => {
     expect(districts.some((row) => row.id === 'neocloud')).toBe(false);
   });
 
+  test('related theses under one theme become two buildings in that place', () => {
+    const districts = assembleThesisDistricts({
+      theses: [
+        thesis('neocloud_compute', { name: 'Neocloud basket' }),
+        thesis('neocloud_compute_burst', { name: 'GPU burst financing' }),
+      ],
+      ontology_themes: [
+        theme('neocloud_compute', { name: 'Neocloud and GPU compute' }),
+      ],
+    });
+    expect(districts).toHaveLength(1);
+    expect(districts[0]?.buildings.map((row) => row.id)).toEqual([
+      'neocloud_compute',
+      'neocloud_compute_burst',
+    ]);
+    expect(districts[0]?.place).toBe('campus');
+  });
+
   test('energy and neocloud stay separate districts', () => {
     const districts = assembleThesisDistricts({
       theses: [

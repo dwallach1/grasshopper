@@ -25,12 +25,12 @@ import { isWebGL2Available } from '../../lib/steward-foil';
 import {
   buildThesisIsland,
   ISLAND_CAMERA,
-  ISLAND_CREAM,
   islandAllowsComposer,
   islandDrawingOk,
   islandHitThesisId,
   islandHostSize,
   islandPixelRatio,
+  islandVoid,
   paintIslandPoster,
 } from '../../lib/thesis-island';
 import type { ThesisBuilding, ThesisDistrict } from '../../lib/thesis-districts';
@@ -62,9 +62,11 @@ export function ThesisIslandView({
     if (!mount) return undefined;
     const root: HTMLDivElement = mount;
 
+    const voidHex = islandVoid(districtRef.current.place);
+    const night = districtRef.current.place === 'campus';
     const scene = new Scene();
-    scene.background = new Color(ISLAND_CREAM);
-    scene.fog = new Fog(ISLAND_CREAM, 36, 72);
+    scene.background = new Color(voidHex);
+    scene.fog = new Fog(voidHex, 36, 72);
 
     const camera = new PerspectiveCamera(ISLAND_CAMERA.fov, 1, 0.1, 90);
     camera.position.set(ISLAND_CAMERA.x, ISLAND_CAMERA.y, ISLAND_CAMERA.z);
@@ -85,8 +87,8 @@ export function ThesisIslandView({
     }
     renderer.outputColorSpace = SRGBColorSpace;
     renderer.toneMapping = ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.12;
-    renderer.setClearColor(ISLAND_CREAM, 1);
+    renderer.toneMappingExposure = night ? 0.92 : 1.12;
+    renderer.setClearColor(voidHex, 1);
     const webgl2 = isWebGL2Available();
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
@@ -110,9 +112,9 @@ export function ThesisIslandView({
     scene.environment = env;
     scene.environmentIntensity = 0.48;
 
-    scene.add(new AmbientLight(0xf6efe2, 0.32));
-    scene.add(new HemisphereLight(0xfff6e8, 0xc4b49a, 0.7));
-    const key = new DirectionalLight(0xfff3d6, 1.62);
+    scene.add(new AmbientLight(night ? 0xc8d2e4 : 0xf6efe2, night ? 0.22 : 0.32));
+    scene.add(new HemisphereLight(night ? 0xd4dcf0 : 0xfff6e8, night ? 0x6a7380 : 0xc4b49a, night ? 0.48 : 0.7));
+    const key = new DirectionalLight(night ? 0xcdd8f0 : 0xfff3d6, night ? 0.85 : 1.62);
     key.position.set(-5.1, 11.4, 7.2);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
