@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isPublicDesk, publicDeskOrigin, publicDeskSnapshotPath } from './desk-mode';
+import { isPublicDesk, publicDeskOrigin } from './desk-mode';
 
 describe('desk mode', () => {
   test('defaults to the operator desk', () => {
@@ -15,19 +15,12 @@ describe('desk mode', () => {
     else process.env.NEXT_PUBLIC_DESK_MODE = previous;
   });
 
-  test('snapshot path and public origin stay empty unless set', () => {
-    const pathWas = process.env.PUBLIC_DESK_SNAPSHOT_PATH;
+  test('public origin stays empty unless set', () => {
     const urlWas = process.env.NEXT_PUBLIC_DESK_URL;
-    delete process.env.PUBLIC_DESK_SNAPSHOT_PATH;
     delete process.env.NEXT_PUBLIC_DESK_URL;
-    expect(publicDeskSnapshotPath()).toBe('');
     expect(publicDeskOrigin()).toBe('');
-    process.env.PUBLIC_DESK_SNAPSHOT_PATH = '/tmp/desk.json';
     process.env.NEXT_PUBLIC_DESK_URL = 'https://example.workers.dev/';
-    expect(publicDeskSnapshotPath()).toBe('/tmp/desk.json');
     expect(publicDeskOrigin()).toBe('https://example.workers.dev');
-    if (pathWas === undefined) delete process.env.PUBLIC_DESK_SNAPSHOT_PATH;
-    else process.env.PUBLIC_DESK_SNAPSHOT_PATH = pathWas;
     if (urlWas === undefined) delete process.env.NEXT_PUBLIC_DESK_URL;
     else process.env.NEXT_PUBLIC_DESK_URL = urlWas;
   });

@@ -28,7 +28,7 @@ export function PublicTerminal() {
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : 'Desk snapshot unavailable');
+          setError(caught instanceof Error ? caught.message : 'Desk ledger unavailable');
         }
       });
     return () => {
@@ -43,10 +43,10 @@ export function PublicTerminal() {
         <DeskLiveline
           unit="USD"
           loading={false}
-          emptyText="snapshot not in ledger"
+          emptyText="ledger unavailable"
           showValue={false}
         />
-        <p className="line-caption">Published snapshot only. The site does not query the live ledger.</p>
+        <p className="line-caption">Live ledger unavailable.</p>
       </main>
     );
   }
@@ -56,7 +56,7 @@ export function PublicTerminal() {
       return (
         <main className="line-boot">
           <p className="term-brand">GRASSHOPPER</p>
-          <DeskLiveline unit="USD" loading emptyText="waiting for published snapshot" showValue={false} />
+          <DeskLiveline unit="USD" loading emptyText="waiting for ledger" showValue={false} />
         </main>
       );
     }

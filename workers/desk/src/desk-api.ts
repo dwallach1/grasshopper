@@ -3,12 +3,12 @@ import {
   MAX_SNAPSHOT_BYTES,
   PUBLIC_DESK_REDIRECTS,
   publicDeskJsonError,
-  SNAPSHOT_KV_KEY,
 } from '@quantanamo/contracts/desk-snapshot';
-import { secretsEqual } from '@quantanamo/shared/secrets';
+
+import { liveReaderReady, loadPublicDeskLive } from './desk-live';
 
 export const DESK_API_HEADERS = {
-  'Cache-Control': 'public, max-age=15, stale-while-revalidate=60',
+  'Cache-Control': 'no-store',
   'Content-Type': 'application/json; charset=utf-8',
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -19,9 +19,12 @@ export const DESK_API_HEADERS = {
 } as const;
 
 export type DeskBindings = {
-  DESK_SNAPSHOT: KVNamespace;
-  DESK_PUBLISH_TOKEN?: string;
+  DESK_SUPABASE_URL?: string;
+  DESK_READER_APIKEY?: string;
+  DESK_READER_JWT?: string;
 };
+
+export type DeskLiveLoader = (env: DeskBindings) => Promise<unknown>;
 
 export function jsonResponse(status: number, body: unknown, extra?: HeadersInit): Response {
   return new Response(JSON.stringify(body), {
@@ -48,7 +51,11 @@ export function isWriteMethod(method: string): boolean {
   return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
 }
 
-export async function handleDeskApi(request: Request, env: DeskBindings): Promise<Response> {
+export async function handleDeskApi(
+  request: Request,
+  env: DeskBindings,
+  loadLive: DeskLiveLoader = loadPublicDeskLive,
+): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
@@ -60,17 +67,13 @@ export async function handleDeskApi(request: Request, env: DeskBindings): Promis
     });
   }
 
-  if (path === '/internal/snapshot') {
-    return handlePublish(request, env);
-  }
-
   if (path === '/api/health' && request.method === 'GET') {
-    return handleHealth(env);
+    return handleHealth(env, loadLive);
   }
 
   if (path === '/api/desk') {
     if (request.method !== 'GET') return publicError(405, 'Method not allowed');
-    return handleSnapshotGet(env);
+    return handleLiveGet(env, loadLive);
   }
 
   if (path.startsWith('/api/') || path.startsWith('/internal/')) {
@@ -81,106 +84,55 @@ export async function handleDeskApi(request: Request, env: DeskBindings): Promis
   return publicError(404, 'Not found');
 }
 
-async function handleHealth(env: DeskBindings): Promise<Response> {
-  const raw = await env.DESK_SNAPSHOT.get(SNAPSHOT_KV_KEY);
-  if (!raw) return publicError(503);
+async function handleHealth(
+  env: DeskBindings,
+  loadLive: DeskLiveLoader,
+): Promise<Response> {
+  const served = await handleLiveGet(env, loadLive);
+  if (served.status !== 200) return publicError(503);
   try {
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = await served.clone().json();
     if (!isPublicSnapshot(parsed)) return publicError(503);
-    return jsonResponse(200, { ok: true, generated_at: parsed.generated_at, source: 'snapshot' });
+    return jsonResponse(200, {
+      ok: true,
+      generated_at: parsed.generated_at,
+      source: 'live',
+    });
   } catch {
     return publicError(503);
   }
 }
 
-async function handleSnapshotGet(env: DeskBindings): Promise<Response> {
-  const raw = await env.DESK_SNAPSHOT.get(SNAPSHOT_KV_KEY);
-  if (!raw) return publicError(503);
-  if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
-    console.error(JSON.stringify({ event: 'desk_snapshot_too_large' }));
+async function handleLiveGet(
+  env: DeskBindings,
+  loadLive: DeskLiveLoader,
+): Promise<Response> {
+  if (!liveReaderReady(env)) {
+    console.error(JSON.stringify({ event: 'desk_reader_unconfigured' }));
     return publicError(503);
   }
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isPublicSnapshot(parsed)) {
-      console.error(JSON.stringify({ event: 'desk_snapshot_rejected' }));
+    const live = await loadLive(env);
+    if (!isPublicSnapshot(live)) {
+      console.error(JSON.stringify({ event: 'desk_live_rejected' }));
       return publicError(503);
     }
-    return jsonResponse(200, parsed);
-  } catch {
-    console.error(JSON.stringify({ event: 'desk_snapshot_parse_failed' }));
+    const raw = JSON.stringify(live);
+    if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
+      console.error(JSON.stringify({ event: 'desk_live_too_large' }));
+      return publicError(503);
+    }
+    console.error(JSON.stringify({
+      event: 'desk_live_read',
+      generated_at: live.generated_at,
+    }));
+    return jsonResponse(200, live);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'desk_live_read_failed',
+      error: error instanceof Error ? error.message : 'unknown',
+      configured: liveReaderReady(env),
+    }));
     return publicError(503);
   }
-}
-
-async function handlePublish(request: Request, env: DeskBindings): Promise<Response> {
-  if (request.method !== 'PUT') return publicError(405, 'Method not allowed');
-  const expected = env.DESK_PUBLISH_TOKEN?.trim() || '';
-  if (!expected) {
-    console.error(JSON.stringify({ event: 'desk_publish_token_missing' }));
-    return publicError(404, 'Not found');
-  }
-  const provided = bearerToken(request.headers.get('authorization'));
-  if (!(await secretsEqual(provided, expected))) {
-    console.error(JSON.stringify({ event: 'desk_publish_unauthorized' }));
-    return publicError(404, 'Not found');
-  }
-
-  const declared = Number(request.headers.get('content-length') || 0);
-  if (declared > MAX_SNAPSHOT_BYTES) return publicError(404, 'Not found');
-
-  const raw = await readBoundedBody(request);
-  if (raw === null) return publicError(404, 'Not found');
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return publicError(404, 'Not found');
-  }
-  if (!isPublicSnapshot(parsed)) {
-    console.error(JSON.stringify({ event: 'desk_publish_invalid_payload' }));
-    return publicError(404, 'Not found');
-  }
-
-  await env.DESK_SNAPSHOT.put(SNAPSHOT_KV_KEY, JSON.stringify(parsed));
-  console.error(JSON.stringify({
-    event: 'desk_snapshot_published',
-    generated_at: parsed.generated_at,
-  }));
-  return jsonResponse(200, { ok: true, generated_at: parsed.generated_at });
-}
-
-function bearerToken(header: string | null): string {
-  if (!header) return '';
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match?.[1]?.trim() || '';
-}
-
-async function readBoundedBody(request: Request): Promise<string | null> {
-  if (!request.body) return null;
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_SNAPSHOT_BYTES) {
-        await reader.cancel('snapshot size limit exceeded');
-        return null;
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(body);
 }

@@ -1,3 +1,5 @@
-# Operator-only publish token. Never put this in the public SPA or NEXT_PUBLIC_*.
-# wrangler secret put DESK_PUBLISH_TOKEN
-DESK_PUBLISH_TOKEN=
+# Live read-only PostgREST. Never service_role, never QUANTANAMO_DATABASE_URL.
+# Production: GitHub Actions mints DESK_READER_JWT and wrangler secret put on deploy.
+DESK_SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co
+DESK_READER_APIKEY=
+DESK_READER_JWT=

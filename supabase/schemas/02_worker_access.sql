@@ -670,7 +670,7 @@ revoke all on function public.publish_dashboard_snapshot(jsonb, boolean)
 grant execute on function public.publish_dashboard_snapshot(jsonb, boolean)
   to service_role;
 
--- Public phone desk reads a Worker-served KV snapshot, not PostgREST.
+-- Public phone desk live-reads PostgREST as desk_public_reader (SELECT only).
 -- Keep dashboard_snapshots private: service_role / QUANTANAMO_DATABASE_URL only.
 revoke all on table public.dashboard_snapshots from anon, authenticated;
 
@@ -946,7 +946,7 @@ grant usage on schema public to quantanamo_worker;
 
 -- Domain lanes created outside this list (pm_*, meme_*) must GRANT SELECT to
 -- quantanamo_worker AND add policy quantanamo_worker_select using (true).
--- GRANT alone yields empty desk:publish arrays under RLS — no Postgres error.
+-- GRANT alone yields empty SELECT arrays under RLS — no Postgres error.
 
 do $$
 declare

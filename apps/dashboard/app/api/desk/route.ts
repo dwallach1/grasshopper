@@ -1,39 +1,37 @@
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
-
-import { isPublicSnapshot, publicDeskJsonError } from '@quantanamo/contracts/desk-snapshot';
+import { isPublicSnapshot, publicDeskJsonError, toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 import { NextResponse } from 'next/server';
 
-import { isPublicDesk, publicDeskSnapshotPath } from '../../../lib/desk-mode';
+import { isPublicDesk } from '../../../lib/desk-mode';
+import { loadDeskFromPostgres } from '../../../lib/ledger';
+import { hasDatabaseUrl } from '../../../lib/postgres';
 import { loadRootEnvLocal } from '../../../load-root-env';
 
 export const dynamic = 'force-dynamic';
-
-const DEFAULT_RELATIVE = join('workers', 'desk', '.data', 'current.json');
-
-function snapshotFilePath(): string {
-  const configured = publicDeskSnapshotPath();
-  if (configured) return isAbsolute(configured) ? configured : join(process.cwd(), configured);
-  return join(process.cwd(), '..', '..', DEFAULT_RELATIVE);
-}
 
 export async function GET() {
   loadRootEnvLocal();
   if (!isPublicDesk()) {
     return NextResponse.json(publicDeskJsonError('Not found'), { status: 404 });
   }
+  if (!hasDatabaseUrl()) {
+    return NextResponse.json(publicDeskJsonError(), { status: 503 });
+  }
   try {
-    const raw = await readFile(snapshotFilePath(), 'utf8');
-    const body: unknown = JSON.parse(raw);
-    if (!isPublicSnapshot(body)) {
+    const published = toPublicDeskSnapshot({
+      ...await loadDeskFromPostgres(),
+      source: 'postgres',
+    });
+    if (!isPublicSnapshot(published)) {
       return NextResponse.json(publicDeskJsonError(), { status: 503 });
     }
-    return NextResponse.json(body, {
-      headers: {
-        'Cache-Control': 'no-store',
-      },
+    return NextResponse.json(published, {
+      headers: { 'Cache-Control': 'no-store' },
     });
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'desk_local_live_read_failed',
+      error: error instanceof Error ? error.message : 'unknown',
+    }));
     return NextResponse.json(publicDeskJsonError(), { status: 503 });
   }
 }

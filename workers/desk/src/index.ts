@@ -27,7 +27,7 @@ export default {
         event: 'desk_worker_error',
         error: error instanceof Error ? error.message : 'unknown',
       }));
-      return new Response(JSON.stringify({ error: 'Desk snapshot unavailable' }), {
+      return new Response(JSON.stringify({ error: 'Desk ledger unavailable' }), {
         status: 503,
         headers: { ...DESK_API_HEADERS, 'Cache-Control': 'no-store' },
       });
