@@ -102,15 +102,20 @@ function buildingFrom(thesis: ThesisRow, desk?: Pick<DeskPayload, 'team'>): Thes
   };
 }
 
-function themeThesis(
-  theme: OntologyThemeRow,
-  liveById: Map<string, ThesisRow>,
-): ThesisRow | undefined {
-  if (theme.thesis_id) {
-    const linked = liveById.get(theme.thesis_id);
-    if (linked) return linked;
-  }
-  return liveById.get(theme.id);
+function thesisBelongsToTheme(theme: OntologyThemeRow, thesis: ThesisRow): boolean {
+  if (theme.thesis_id && theme.thesis_id === thesis.id) return true;
+  if (theme.id === thesis.id) return true;
+  return thesis.id.startsWith(`${theme.id}_`);
+}
+
+function themeTheses(theme: OntologyThemeRow, live: readonly ThesisRow[]): ThesisRow[] {
+  const rows = live.filter((row) => thesisBelongsToTheme(theme, row));
+  const primary = rows.find((row) => row.id === theme.thesis_id)
+    ?? rows.find((row) => row.id === theme.id);
+  const rest = rows
+    .filter((row) => row !== primary)
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  return primary ? [primary, ...rest] : rest;
 }
 
 /**
@@ -122,7 +127,6 @@ export function assembleThesisDistricts(
   desk: Pick<DeskPayload, 'theses' | 'ontology_themes' | 'team'>,
 ): ThesisDistrict[] {
   const live = (desk.theses ?? []).filter(isLiveThesis);
-  const liveById = new Map(live.map((row) => [row.id, row]));
   const claimed = new Set<string>();
   const districts: ThesisDistrict[] = [];
 
@@ -132,16 +136,16 @@ export function assembleThesisDistricts(
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
   for (const theme of themes) {
-    const thesis = themeThesis(theme, liveById);
-    if (!thesis) continue;
-    claimed.add(thesis.id);
+    const rows = themeTheses(theme, live);
+    if (!rows.length) continue;
+    for (const thesis of rows) claimed.add(thesis.id);
     districts.push({
       id: theme.id,
       name: theme.name,
       description: theme.description,
       source: 'theme',
       place: districtPlace(theme.id, theme.name),
-      buildings: [buildingFrom(thesis, desk)],
+      buildings: rows.map((thesis) => buildingFrom(thesis, desk)),
     });
   }
 

@@ -64,7 +64,7 @@ export function ThesesWorld({
     programmatic.current = true;
     const behavior = firstPaint.current ? 'auto' : pagerScrollBehavior(reduceMotion);
     firstPaint.current = false;
-    pane.scrollIntoView({ inline: 'start', block: 'nearest', behavior });
+    pane.scrollIntoView({ block: 'start', inline: 'nearest', behavior });
     setLiveId(next.id);
     const id = window.setTimeout(() => {
       programmatic.current = false;
@@ -110,6 +110,7 @@ export function ThesesWorld({
         <div
           ref={scrollerRef}
           className="thesis-districts"
+          data-axis="y"
           aria-label="Thesis districts"
           aria-hidden={reading ? true : undefined}
         >
