@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test src/ai.test.ts src/http.test.ts",
+    "test": "bun test src/ai.test.ts src/http.test.ts src/migration-history.test.ts",
     "typecheck": "bun --bun tsc --project tsconfig.json"
   },
   "exports": {

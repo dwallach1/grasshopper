@@ -40,7 +40,7 @@ select id, email from auth.users where email = 'you@example.com';
 
 Operator RLS is **already applied** on `xqungxapqicdmboniezz` (`anon` remains revoked):
 
-- [`supabase/migrations/20260826200000_ledger_operator_auth.sql`](supabase/migrations/20260826200000_ledger_operator_auth.sql)
+- [`supabase/migrations/20260826195412_ledger_operator_auth.sql`](supabase/migrations/20260826195412_ledger_operator_auth.sql)
 - [`supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql`](supabase/migrations/20260826215510_is_ledger_operator_security_definer.sql) (`is_ledger_operator` SECURITY DEFINER + `ledger_operators_self_select`)
 - [`supabase/migrations/20260827142807_lock_exposed_security_definer_rpcs.sql`](supabase/migrations/20260827142807_lock_exposed_security_definer_rpcs.sql) (public operator RPCs are INVOKER wrappers; ontology write RPC dropped)
 

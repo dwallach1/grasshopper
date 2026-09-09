@@ -89,7 +89,7 @@ wrangler queues create quantanamo-knowledge-x-research
 wrangler queues create quantanamo-knowledge-x-research-dlq
 ```
 
-- The migration `20260825031500_x_compounding_research.sql` creates the
+- The migration `20260825030728_x_compounding_research.sql` creates the
   session tables with the standard `quantanamo_worker` RLS policies.
 - X API note: `read_conversation` and `search_x` use
   `GET /2/tweets/search/recent`, which requires an X API tier with recent
