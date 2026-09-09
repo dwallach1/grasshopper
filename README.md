@@ -49,11 +49,11 @@ flowchart LR
 | **QUANTANAMO (Grok Bot)** | Research and trading brain. Writes the ledger. Places equities through Robinhood MCP when gates pass. |
 | **Supabase** `xqungxapqicdmboniezz` | Canonical store: theses, runs, `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, … |
 | **Local desk** | `bun run web:app` / `bash scripts/web-app.sh`. Reads the ledger as the signed-in operator. Does not run the bot. |
-| **Public phone desk** | Cloudflare Worker `quantanamo-desk`. Same Book/Theses/Events/Tests chrome, read-only snapshot from KV. No Supabase keys in the browser. |
+| **Public phone desk** | Cloudflare Worker `grasshopper-desk`. Same Book/Theses/Events/Tests chrome. Live SELECT via `desk_public_reader`; KV is last-good cache. No Supabase keys in the browser. |
 | **X connector** | Bookmark seeds from `@wallachworld`. Not the reconnect-OAuth path on the desk. |
 | **Robinhood Agentic** | Live proof account, nickname **Agentic**, last4 **7638**. Official MCP only. |
 
-ThesisForge cron and the `dashboard-publication` / `cloud-control` edge functions are **retired ingest**. The operator desk talks to PostgREST as the signed-in user. `workers/desk` is the public read-only phone site (snapshot only). Other worker folders are not the live research/trading loop.
+ThesisForge cron and the `dashboard-publication` / `cloud-control` edge functions are **retired ingest**. The operator desk talks to PostgREST as the signed-in user. `workers/desk` is the public read-only phone site (live SELECT, KV cache). Other worker folders are not the live research/trading loop.
 
 ---
 
@@ -174,7 +174,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Coins | `meme_tokens`, `meme_positions`, `meme_orders`, `meme_fills`, `meme_pnl`, `meme_notes` (BANDIT / Solana; `solana-bandit-primary`). Publisher role needs `quantanamo_worker_select` RLS, not just `GRANT SELECT` — same as `pm_*`. |
 | Automation | `runs` (`notes.outcome` is `passed` \| `failed` \| `skipped` when JSON) |
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
-| Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker reads the snapshot only) |
+| Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker SELECT as `desk_public_reader`) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
 
 The desk is read-only. QUANTANAMO writes the ledger. See [`LOCAL.md`](LOCAL.md).
@@ -190,7 +190,7 @@ docs/                    runbooks (some still describe retired Cloudflare ingest
 supabase/schemas/        declarative Postgres
 supabase/migrations/     history
 packages/                shared helpers
-workers/desk             public phone desk (static assets + snapshot API)
+workers/desk             public phone desk (static assets + live /api/desk)
 workers/                 retired Cloudflare ingest — not the live brain
 ```
 
@@ -198,30 +198,34 @@ workers/                 retired Cloudflare ingest — not the live brain
 
 ## Public phone desk
 
-The operator desk stays localhost-only (`bun run web:app`). The public site is the same desk (Board / Book / Theses / Events / Tests / Team) hosted on Cloudflare Workers static assets. Board and Book are Liveline-first. It never talks to PostgREST.
+The operator desk stays localhost-only (`bun run web:app`). The public site is the same desk (Board / Book / Theses / Events / Tests / Team) hosted on Cloudflare Workers static assets. Board and Book are Liveline-first. It never talks to PostgREST from the browser.
 
 ```
-phone  →  Worker GET /api/desk  →  KV key `current`  (curated DeskPayload, source=snapshot)
-operator machine / QUANTANAMO  →  bun run desk:publish  →  file + optional PUT /internal/snapshot
+phone  →  Worker GET /api/desk  →  PostgREST as desk_public_reader (live ledger)
+                                 →  KV key `current` last-good cache if live read fails
+stewards / QUANTANAMO            →  bun run desk:publish  →  optional PUT /internal/snapshot
 ```
 
-### How data is published (no live DB on the public Worker)
+### How the public Worker reads (no write credentials)
 
-1. `bun run desk:publish` runs **server-side** with `QUANTANAMO_DATABASE_URL`. It uses the same `loadDeskFromPostgres()` assembler as the operator desk, then `toPublicDeskSnapshot()` (`source: 'snapshot'`, operator audit rows dropped).
-2. It writes `workers/desk/.data/current.json` (gitignored) and, when the DB is reachable, an audit row `dashboard_snapshots.id = 'public'`.
-3. With `DESK_PUBLISH_URL` + `DESK_PUBLISH_TOKEN` it PUTs that JSON to the Worker (`/internal/snapshot`). The Worker stores it in KV. Wrong/missing token looks like `404`.
-4. The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
+1. `GET /api/desk` loads the same assembler as the operator desk (`loadDeskFromRest`) against Supabase PostgREST. Kong `apikey` is the **publishable/anon** key. `Authorization` is a JWT with `role=desk_public_reader` (SELECT-only RLS). `toPublicDeskSnapshot()` sets `source: 'snapshot'` and drops operator audit rows (`ontology_actions`).
+2. On success the Worker writes KV `current` in `waitUntil` so the next live outage still has a last-good payload. HTTP `Cache-Control: max-age=15` is a short edge cache, not the source of truth.
+3. If the live read fails (or reader secrets are missing), the Worker serves the last good KV value. It returns 503 only when **both** live and cache are empty — never because `desk:publish` was skipped.
+4. `PUT /internal/snapshot` stays token-gated for stewards. It warms KV; the phone does not wait on it.
+5. The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
 
-`anon` cannot read `dashboard_snapshots` (or live tables) through PostgREST. Do not put `service_role`, `QUANTANAMO_DATABASE_URL`, or a publishable/anon key in the public client. Ignore retired 410 stubs `dashboard-publication` and `cloud-control` — they are not this path.
+**Show-me — role and tables.** Role `desk_public_reader` (`nologin`, granted to `authenticator`). `GRANT SELECT` + policy `desk_public_reader_select` on: `theses`, `thesis_symbols`, `thesis_evidence`, `thesis_scores`, `thesis_relations`, `runs`, `cloud_runs`, `cloud_tasks`, `codex_automations`, `catalysts`, `research_queue`, `research_lessons`, `postmortems`, `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts`, `agent_runs`, `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `trade_proposals`, `broker_fills`, `insights`, `predictions`, `risk_controls`, `ontology_themes`, `symbols`, `ontology_candidates`, `ontology_management_actions`, ODDSBORNE `pm_*`, BANDIT `meme_*`, Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts`. No INSERT/UPDATE/DELETE. No `dashboard_snapshots`. `anon` stays revoked on live tables. Never put `service_role` or `QUANTANAMO_DATABASE_URL` on this Worker.
 
-`pm_*` and `meme_*` rows (now live on Supabase) map into the **same** Book / Theses / Events language as equities. The public Worker does not query them — the publisher folds `prediction_markets` and `meme_coins` into the snapshot. Empty tables stay empty; no invented P/L. New domain lanes need `quantanamo_worker_select` RLS (`using (true)`), not just `GRANT SELECT` — otherwise `desk:publish` writes empty arrays with no Postgres error.
+`pm_*` and `meme_*` rows map into the **same** Book / Theses / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for the publisher.
 
 ### Deploy
 
 ```sh
 # KV DESK_SNAPSHOT is already created (id in workers/desk/wrangler.jsonc).
-# Publish token is a Worker secret — never commit it.
+# Publish token and reader JWT are Worker secrets — never commit them.
 bun --cwd workers/desk wrangler secret put DESK_PUBLISH_TOKEN
+bun --cwd workers/desk wrangler secret put DESK_READER_APIKEY   # publishable/anon
+SUPABASE_JWT_SECRET=... bun scripts/mint-desk-reader-jwt.ts | bun --cwd workers/desk wrangler secret put DESK_READER_JWT
 bun run desk:deploy
 ```
 
@@ -240,17 +244,17 @@ The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is att
 
 | | Operator (`bun run web:app`) | Public (`NEXT_PUBLIC_DESK_MODE=public` or the Worker) |
 |---|---|---|
-| Auth | Magic link / passkey; `ledger_operators` RLS | None. Snapshot only. |
-| Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` from a file (local) or KV (Cloudflare) |
-| Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys |
+| Auth | Magic link / passkey; `ledger_operators` RLS | None. Worker reads as `desk_public_reader`. |
+| Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` live PostgREST, KV last-good cache |
+| Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys in the SPA. Reader JWT is a Worker secret. |
 | Writes | Retired 410s | 405 / 404 |
 | Chrome | Sign out / Passkey+ | Hidden |
 
 Local public preview (same Next app, no Cloudflare):
 
 ```sh
-bun run desk:publish          # needs QUANTANAMO_DATABASE_URL
-bun run web:public            # http://localhost:5173 — GET /api/desk
+bun run web:public            # http://localhost:5173 — GET /api/desk (live postgres, file fallback)
+# bun run desk:publish        # optional local file cache / Worker KV warm
 ```
 
 Env (see `.env.example`; never commit secrets):
@@ -260,11 +264,13 @@ Env (see `.env.example`; never commit secrets):
 | `NEXT_PUBLIC_DESK_MODE=public` | Public client / `web:public` | Skip operator auth |
 | `NEXT_PUBLIC_DESK_URL` | Public metadata | Canonical public origin |
 | `PUBLIC_DESK_SNAPSHOT_PATH` | Local Next `/api/desk` | Snapshot file (default `workers/desk/.data/current.json`) |
-| `QUANTANAMO_DATABASE_URL` | Publisher only | Assemble the snapshot |
-| `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` |
+| `QUANTANAMO_DATABASE_URL` | Publisher + local `/api/desk` | Assemble the live desk |
+| `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` (optional KV warm) |
 | `DESK_PUBLISH_TOKEN` | Publisher + `wrangler secret` | Timing-safe ingest. Not `NEXT_PUBLIC_*`. |
+| `DESK_READER_APIKEY` | Worker secret | Publishable/anon key for Kong. Not in the SPA. |
+| `DESK_READER_JWT` | Worker secret | JWT `role=desk_public_reader`. Mint with `bun scripts/mint-desk-reader-jwt.ts`. |
 
-After deploy: run `desk:publish` after market-scan / ledger writes (or wire QUANTANAMO to PUT `/internal/snapshot`) so the public URL is not an empty snapshot. Optional custom domain. Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
+Live `GET /api/desk` does not need `desk:publish`. Optional custom domain. Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
 
 ```sh
 bun run --cwd apps/dashboard test

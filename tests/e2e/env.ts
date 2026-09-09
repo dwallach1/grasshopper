@@ -13,6 +13,9 @@ export const LOCAL = {
   serviceRoleKey:
     process.env.SUPABASE_SECRET_KEY
     || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU',
+  /** Local JWT for role desk_public_reader (same demo secret as anon). */
+  deskPublicReaderKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImRlc2tfcHVibGljX3JlYWRlciIsImV4cCI6MTk4MzgxMjk5Nn0.tyxbl5QgLMWzlp-7y4iMdCNOFPkdonLsZFqG94yAOOU',
   dashboardToken: 'local-dashboard-token-do-not-use-in-prod',
   managerToken: 'local-manager-token-do-not-use-in-prod',
   publicationToken: 'local-publication-token-do-not-use-in-prod',

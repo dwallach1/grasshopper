@@ -1,6 +1,6 @@
 # Liveline ← ledger time series
 
-The public desk draws [Liveline](https://benji.org/liveline) from the published snapshot only. The line interpolates at 60fps between **real marks**. It does not invent a price, a P/L, or a SOL→USD print.
+The public desk draws [Liveline](https://benji.org/liveline) from `/api/desk`. The Worker live-reads the ledger as `desk_public_reader` and caches a last-good KV copy. The line interpolates at 60fps between **real marks**. It does not invent a price, a P/L, or a SOL→USD print.
 
 `time` is unix **seconds** (Liveline’s clock). `value` is the ledger number in that book’s native unit.
 

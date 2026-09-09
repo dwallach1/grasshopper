@@ -24,6 +24,8 @@ export type DeskWire = z.infer<typeof DeskWireSchema>;
 export const PUBLIC_DESK_UNAVAILABLE = 'Desk snapshot unavailable';
 export const SNAPSHOT_KV_KEY = 'current';
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+/** PostgREST JWT `role` claim for the public Worker. SELECT only. */
+export const DESK_PUBLIC_READER_ROLE = 'desk_public_reader';
 
 /** Old desk URLs the public Worker 302s so phones do not land on empty chrome. */
 export const PUBLIC_DESK_REDIRECTS = [
@@ -46,7 +48,7 @@ export function isDeskWire(value: unknown): value is DeskWire {
   return DeskWireSchema.safeParse(value).success;
 }
 
-/** Public site only serves curated snapshots — never a live postgres/postgrest envelope. */
+/** Public site serves a curated envelope. Live PostgREST reads are sanitized to `source=snapshot`. */
 export function isPublicSnapshot(value: unknown): value is DeskWire {
   const parsed = DeskWireSchema.safeParse(value);
   return parsed.success && parsed.data.source === 'snapshot';

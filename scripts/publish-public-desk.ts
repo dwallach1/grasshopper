@@ -123,7 +123,7 @@ try {
         set generated_at = excluded.generated_at,
             payload = excluded.payload
       `;
-      console.error('Recorded dashboard_snapshots.id=public (Worker still serves KV, not PostgREST).');
+      console.error('Recorded dashboard_snapshots.id=public (audit only; Worker live-reads PostgREST).');
     } catch (error) {
       console.error(JSON.stringify({
         event: 'desk_publish_ledger_audit_failed',

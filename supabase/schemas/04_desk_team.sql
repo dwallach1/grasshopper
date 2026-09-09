@@ -3,7 +3,8 @@
 -- Seeded domains today: ledger, equity, prediction, meme.
 -- Seeded agents today: grasshopper, quantanamo, oddsborne, bandit.
 -- Browser `anon` has no privileges. Local desk reads as `authenticated`.
--- QUANTANAMO writes via the server connection. Public Worker never queries these.
+-- QUANTANAMO writes via the server connection. Public Worker reads as
+-- desk_public_reader (SELECT only) — see 05_desk_public_reader.sql.
 -- New domain ledgers (pm_*, meme_*, …) need publisher SELECT RLS for
 -- quantanamo_worker (`quantanamo_worker_select … using (true)`), not just GRANTs.
 

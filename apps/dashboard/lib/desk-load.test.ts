@@ -27,11 +27,12 @@ describe('desk load path', () => {
 
   test('loadDesk uses postgres when DATABASE_URL is set; REST has an abort', async () => {
     const ledger = await readDashboard('lib/ledger.ts');
+    const live = await readDashboard('lib/ledger-live.ts');
     expect(ledger).toContain('if (hasDatabaseUrl()) return loadDeskFromPostgres()');
-    expect(ledger).toContain('return loadDeskFromRest(accessToken)');
-    expect(ledger).toContain('AbortSignal.timeout(REST_FETCH_MS)');
+    expect(ledger).toContain('return loadDeskFromRest({');
+    expect(live).toContain('AbortSignal.timeout(auth.fetchMs ?? REST_FETCH_MS)');
     expect(ledger).toContain('last_price');
-    expect(ledger).toContain('REST_FETCH_MS = 8_000');
+    expect(live).toContain('export const REST_FETCH_MS = 8_000');
     expect(ledger).toContain('loadPredictionMarkets');
     expect(ledger).toContain('pm_markets');
     expect(ledger).toContain('loadMemeCoins');
@@ -40,12 +41,20 @@ describe('desk load path', () => {
     expect(ledger).toContain('closed_at');
     expect(ledger).toContain("status in ('proposed', 'open', 'closing', 'closed')");
     expect(ledger).toContain('limit 200');
-    expect(ledger).toContain('limit=200');
+    expect(live).toContain('limit=200');
     expect(ledger).toContain('loadTeam');
     expect(ledger).toContain('desk_agents');
     expect(ledger).toContain('desk_domain_stewards');
     expect(ledger).toContain("ended_at is null");
     expect(ledger).toContain('to_regclass');
     expect(ledger).toContain('opened_at, closed_at');
+  });
+
+  test('public /api/desk reads live postgres first, then the snapshot file', async () => {
+    const route = await readDashboard('app/api/desk/route.ts');
+    expect(route).toContain('loadDeskFromPostgres');
+    expect(route).toContain('toPublicDeskSnapshot');
+    expect(route).toContain('filePublicDesk');
+    expect(route).toContain('(await livePublicDesk()) ?? (await filePublicDesk())');
   });
 });
