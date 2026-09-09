@@ -5,6 +5,9 @@ import { districtPlaceWord } from './thesis-districts';
 import {
   buildThesisIsland,
   islandHitThesisId,
+  islandAllowsComposer,
+  islandDrawingOk,
+  islandHostSize,
   islandPixelRatio,
   HOOP_RADIUS,
   HOOP_X,
@@ -79,6 +82,26 @@ describe('thesis island craft', () => {
   test('caps device pixel ratio like the Team card', () => {
     expect(islandPixelRatio(3)).toBe(ISLAND_DPR_CAP);
     expect(islandPixelRatio(1)).toBe(1);
+  });
+
+  test('a 0px host still gets a phone-sized drawing box', () => {
+    expect(islandHostSize({ clientWidth: 0, clientHeight: 0 }, { width: 390, height: 756 })).toEqual({
+      width: 390,
+      height: 756,
+    });
+    expect(islandHostSize({ clientWidth: 390, clientHeight: 640 }, { width: 390, height: 756 })).toEqual({
+      width: 390,
+      height: 640,
+    });
+    expect(islandDrawingOk(0, 640)).toBe(false);
+    expect(islandDrawingOk(390, 640)).toBe(true);
+  });
+
+  test('iPhone WebGL2 does not get the bokeh composer', () => {
+    expect(islandAllowsComposer({ webgl2: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' })).toBe(false);
+    expect(islandAllowsComposer({ webgl2: true, userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', maxTouchPoints: 5 })).toBe(false);
+    expect(islandAllowsComposer({ webgl2: true, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' })).toBe(true);
+    expect(islandAllowsComposer({ webgl2: false, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' })).toBe(false);
   });
 
   test('soil is a hull plus palisade, grass is extruded, trees are faceted', () => {

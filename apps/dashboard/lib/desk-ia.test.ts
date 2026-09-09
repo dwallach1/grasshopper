@@ -157,8 +157,9 @@ describe('desk IA smoke', () => {
     expect(mesh).toContain('card-print-front');
     expect(mesh).toContain('StewardFoilMaterial');
     expect(pager).toContain('pagerScrollToBehavior');
-    expect(pager).toContain('wrapSwipeSurface');
-    expect(pager).toContain('wrapFromEdgeDrag');
+    expect(pager).toContain('pageSwipeFromDrag');
+    expect(pager).toContain('lockSwipeAxis');
+    expect(pager).toContain("gesture.axis === 'y'");
     expect(pager).toContain('DESK_PAGER_SLOTS');
     expect(pager).toContain('data-clone');
     expect(pager).toContain('canonicalPane');
@@ -199,6 +200,8 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.thesis-island');
     expect(css).toContain('#f3ead8');
     expect(css).toContain('.term.is-theses');
+    expect(css).toContain('.term.is-theses .term-dock');
+    expect(css).toMatch(/\.desk-pager \{[\s\S]*?touch-action: pan-y/);
     expect(css).toContain('100dvh');
     expect(css).not.toContain('.thesis-bldg');
     expect(css).not.toContain('thesis-idle');
@@ -207,6 +210,10 @@ describe('desk IA smoke', () => {
     expect(islandView).toContain('WebGLRenderer');
     expect(islandView).toContain('BokehPass');
     expect(islandView).toContain('islandPixelRatio');
+    expect(islandView).toContain('islandAllowsComposer');
+    expect(islandView).toContain('islandHostSize');
+    expect(islandView).toContain('ThesisIslandPoster');
+    expect(islandView).toContain('webglcontextlost');
     expect(islandView).toContain('failIfMajorPerformanceCaveat');
     expect(islandView).toContain('isWebGL2Available');
     expect(islandView).toContain('reduceMotion');

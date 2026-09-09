@@ -976,3 +976,33 @@ export function islandPixelRatio(deviceRatio: number): number {
   if (!Number.isFinite(deviceRatio) || deviceRatio <= 0) return 1;
   return Math.min(deviceRatio, ISLAND_DPR_CAP);
 }
+
+export function islandHostSize(
+  host: { clientWidth: number; clientHeight: number },
+  viewport: { width: number; height: number },
+): { width: number; height: number } {
+  const width = Math.max(host.clientWidth, 0);
+  const height = Math.max(host.clientHeight, 0);
+  if (width >= 8 && height >= 8) return { width, height };
+  return {
+    width: Math.max(8, Math.round(viewport.width || 390)),
+    height: Math.max(8, Math.round(viewport.height || 640)),
+  };
+}
+
+export function islandDrawingOk(width: number, height: number): boolean {
+  return width >= 8 && height >= 8;
+}
+
+/** Bokeh / EffectComposer often presents a black frame on iOS WebGL2. */
+export function islandAllowsComposer(input: {
+  webgl2: boolean;
+  userAgent: string;
+  maxTouchPoints?: number;
+}): boolean {
+  if (!input.webgl2) return false;
+  const ua = input.userAgent;
+  if (/iP(hone|ad|od)/i.test(ua)) return false;
+  if (/Macintosh/i.test(ua) && (input.maxTouchPoints ?? 0) > 1) return false;
+  return true;
+}
