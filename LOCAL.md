@@ -94,7 +94,7 @@ On **Tests** you should see every `strategy_tests` row (including old seed keys 
 
 The desk is **read-only**. QUANTANAMO writes the ledger. Sign-in stays as the operator gate. There are no thesis status buttons, evidence/lesson forms, or other operator RPCs that insert/update/delete ledger rows.
 
-The **public phone desk** is a different build: `NEXT_PUBLIC_DESK_MODE=public` or the Cloudflare Worker `grasshopper-desk`. It reads live PostgREST as `desk_public_reader` (`/api/desk`) and never signs in. See the README **Public phone desk** section. Do not point the public SPA at PostgREST. `desk:publish` reads `meme_*` / `pm_*` as `quantanamo_worker` — those tables need `quantanamo_worker_select` RLS, not just `GRANT SELECT`. The public Worker needs the matching `desk_public_reader_select` policy.
+The **public phone desk** is a different build: `NEXT_PUBLIC_DESK_MODE=public` or the Cloudflare Worker `grasshopper-desk`. It reads the live ledger as `desk_public_reader` (`/api/desk`) and never signs in. See the README **Public phone desk** section. Do not point the public SPA at PostgREST. QUANTANAMO reads `meme_*` / `pm_*` as `quantanamo_worker` — those tables need `quantanamo_worker_select` RLS, not just `GRANT SELECT`. The public Worker needs the matching `desk_public_reader_select` policy.
 
 `curl` without the session cookie is 401. `POST /api/ledger/thesis|evidence|lesson|run` returns 410.
 

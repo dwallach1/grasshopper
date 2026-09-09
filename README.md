@@ -39,7 +39,7 @@ flowchart LR
   X -->|X connector| G
   G -->|theses · runs · snapshots| L
   L -->|PostgREST as operator| D
-  L -->|publish-public-desk| P
+  L -->|PostgREST as desk_public_reader| P
   G -->|review then place| R
   R -->|NAV · fills · positions| G
 ```
@@ -49,7 +49,7 @@ flowchart LR
 | **QUANTANAMO (Grok Bot)** | Research and trading brain. Writes the ledger. Places equities through Robinhood MCP when gates pass. |
 | **Supabase** `xqungxapqicdmboniezz` | Canonical store: theses, runs, `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, … |
 | **Local desk** | `bun run web:app` / `bash scripts/web-app.sh`. Reads the ledger as the signed-in operator. Does not run the bot. |
-| **Public phone desk** | Cloudflare Worker `grasshopper-desk`. Same Book/Theses/Events/Tests chrome. Live SELECT via `desk_public_reader`; KV is last-good cache. No Supabase keys in the browser. |
+| **Public phone desk** | Cloudflare Worker `grasshopper-desk`. Same Book/Theses/Events/Tests chrome. `GET /api/desk` is a live SELECT as `desk_public_reader`. No KV copy, no publish step, no Supabase keys in the browser. |
 | **X connector** | Bookmark seeds from `@wallachworld`. Not the reconnect-OAuth path on the desk. |
 | **Robinhood Agentic** | Live proof account, nickname **Agentic**, last4 **7638**. Official MCP only. |
 
@@ -202,50 +202,41 @@ The operator desk stays localhost-only (`bun run web:app`). The public site is t
 
 ```
 phone  →  Worker GET /api/desk  →  PostgREST as desk_public_reader (live ledger)
-                                 →  KV key `current` last-good cache if live read fails
-stewards / QUANTANAMO            →  bun run desk:publish  →  optional PUT /internal/snapshot
 ```
+
+That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and no last-good published copy.
 
 ### How the public Worker reads (no write credentials)
 
-1. `GET /api/desk` loads the same assembler as the operator desk (`loadDeskFromRest`) against Supabase PostgREST. Kong `apikey` is the **publishable/anon** key. `Authorization` is a JWT with `role=desk_public_reader` (SELECT-only RLS). `toPublicDeskSnapshot()` sets `source: 'snapshot'` and drops operator audit rows (`ontology_actions`).
-2. On success the Worker writes KV `current` in `waitUntil` so the next live outage still has a last-good payload. HTTP `Cache-Control: max-age=15` is a short edge cache, not the source of truth.
-3. If the live read fails (or reader secrets are missing), the Worker serves the last good KV value. It returns 503 only when **both** live and cache are empty — never because `desk:publish` was skipped.
-4. `PUT /internal/snapshot` stays token-gated for stewards. It warms KV; the phone does not wait on it.
-5. The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
+1. `GET /api/desk` always loads the same assembler as the operator desk (`loadDeskFromRest`) against Supabase PostgREST. Kong `apikey` is the **publishable/anon** key. `Authorization` is a JWT with `role=desk_public_reader` (SELECT-only RLS). `toPublicDeskSnapshot()` sets `source: 'snapshot'` (sanitized public envelope) and drops operator audit rows (`ontology_actions`).
+2. HTTP `Cache-Control: no-store`. A failed live read is **503** `{ error: 'Desk ledger unavailable' }` — never yesterday’s copy.
+3. `PUT /internal/snapshot` is gone (405). The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
 
 **Show-me — role and tables.** Role `desk_public_reader` (`nologin`, granted to `authenticator`). `GRANT SELECT` + policy `desk_public_reader_select` on: `theses`, `thesis_symbols`, `thesis_evidence`, `thesis_scores`, `thesis_relations`, `runs`, `cloud_runs`, `cloud_tasks`, `codex_automations`, `catalysts`, `research_queue`, `research_lessons`, `postmortems`, `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts`, `agent_runs`, `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `trade_proposals`, `broker_fills`, `insights`, `predictions`, `risk_controls`, `ontology_themes`, `symbols`, `ontology_candidates`, `ontology_management_actions`, ODDSBORNE `pm_*`, BANDIT `meme_*`, Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts`. No INSERT/UPDATE/DELETE. No `dashboard_snapshots`. `anon` stays revoked on live tables. Never put `service_role` or `QUANTANAMO_DATABASE_URL` on this Worker.
 
-`pm_*` and `meme_*` rows map into the **same** Book / Theses / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for the publisher.
+`pm_*` and `meme_*` rows map into the **same** Book / Theses / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for QUANTANAMO.
 
 ### Deploy
 
-```sh
-# KV DESK_SNAPSHOT is already created (id in workers/desk/wrangler.jsonc).
-# Publish token and reader JWT are Worker secrets — never commit them.
-bun --cwd workers/desk wrangler secret put DESK_PUBLISH_TOKEN
-bun --cwd workers/desk wrangler secret put DESK_READER_APIKEY   # publishable/anon
-SUPABASE_JWT_SECRET=... bun scripts/mint-desk-reader-jwt.ts | bun --cwd workers/desk wrangler secret put DESK_READER_JWT
-bun run desk:deploy
-```
+Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.github/workflows/deploy-public-desk.yml`. That job mints the reader JWT and uploads Worker secrets the same way the other Workers already do (`wrangler-action` `secrets:`), then `wrangler deploy`. Merge turns live reads on. There is no human `wrangler secret put` step and no publish command.
 
-Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs that same build + `wrangler deploy` from `workers/desk` after `bun run desk:build` writes `workers/desk/dist`. Required GitHub Actions secrets (Settings → Secrets and variables → Actions):
+Required GitHub Actions secrets (Settings → Secrets and variables → Actions) — same values as operator `.env.local`, never committed:
 
 | Secret | Value |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Edit Cloudflare Workers** |
 | `CLOUDFLARE_ACCOUNT_ID` | `97af2e2312077d4689e9a012ef5dde75` |
+| `SUPABASE_JWT_SECRET` | Project JWT secret (mints `role=desk_public_reader`). Alias: `JWT_SECRET`. |
+| `DESK_READER_APIKEY` | Publishable/anon Kong key. Aliases: `SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_ANON_KEY`. |
 
-`DESK_PUBLISH_TOKEN` is already a Wrangler Worker secret (`wrangler secret put`). It is not a GitHub Actions secret and is not needed to deploy.
-
-The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787).
+The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
 
 ### Local operator vs public
 
 | | Operator (`bun run web:app`) | Public (`NEXT_PUBLIC_DESK_MODE=public` or the Worker) |
 |---|---|---|
 | Auth | Magic link / passkey; `ledger_operators` RLS | None. Worker reads as `desk_public_reader`. |
-| Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` live PostgREST, KV last-good cache |
+| Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` live PostgREST only |
 | Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys in the SPA. Reader JWT is a Worker secret. |
 | Writes | Retired 410s | 405 / 404 |
 | Chrome | Sign out / Passkey+ | Hidden |
@@ -253,8 +244,7 @@ The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is att
 Local public preview (same Next app, no Cloudflare):
 
 ```sh
-bun run web:public            # http://localhost:5173 — GET /api/desk (live postgres, file fallback)
-# bun run desk:publish        # optional local file cache / Worker KV warm
+bun run web:public            # http://localhost:5173 — GET /api/desk (live postgres)
 ```
 
 Env (see `.env.example`; never commit secrets):
@@ -263,14 +253,11 @@ Env (see `.env.example`; never commit secrets):
 |---|---|---|
 | `NEXT_PUBLIC_DESK_MODE=public` | Public client / `web:public` | Skip operator auth |
 | `NEXT_PUBLIC_DESK_URL` | Public metadata | Canonical public origin |
-| `PUBLIC_DESK_SNAPSHOT_PATH` | Local Next `/api/desk` | Snapshot file (default `workers/desk/.data/current.json`) |
-| `QUANTANAMO_DATABASE_URL` | Publisher + local `/api/desk` | Assemble the live desk |
-| `DESK_PUBLISH_URL` | Publisher | `https://<worker>/internal/snapshot` (optional KV warm) |
-| `DESK_PUBLISH_TOKEN` | Publisher + `wrangler secret` | Timing-safe ingest. Not `NEXT_PUBLIC_*`. |
-| `DESK_READER_APIKEY` | Worker secret | Publishable/anon key for Kong. Not in the SPA. |
-| `DESK_READER_JWT` | Worker secret | JWT `role=desk_public_reader`. Mint with `bun scripts/mint-desk-reader-jwt.ts`. |
+| `QUANTANAMO_DATABASE_URL` | Local `/api/desk` | Assemble the live desk (postgres.js). Not on the Worker. |
+| `DESK_READER_APIKEY` | Worker secret (CI) | Publishable/anon key for Kong. Not in the SPA. |
+| `DESK_READER_JWT` | Worker secret (CI mints) | JWT `role=desk_public_reader`. |
 
-Live `GET /api/desk` does not need `desk:publish`. Optional custom domain. Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
+Keep writing `pm_*` — do not add a second public app. The public URL has no sign-in; Face ID / passkey stays on the local operator desk.
 
 ```sh
 bun run --cwd apps/dashboard test

@@ -50,11 +50,12 @@ describe('desk load path', () => {
     expect(ledger).toContain('opened_at, closed_at');
   });
 
-  test('public /api/desk reads live postgres first, then the snapshot file', async () => {
+  test('public /api/desk reads live postgres only', async () => {
     const route = await readDashboard('app/api/desk/route.ts');
     expect(route).toContain('loadDeskFromPostgres');
     expect(route).toContain('toPublicDeskSnapshot');
-    expect(route).toContain('filePublicDesk');
-    expect(route).toContain('(await livePublicDesk()) ?? (await filePublicDesk())');
+    expect(route).not.toContain('filePublicDesk');
+    expect(route).not.toContain('current.json');
+    expect(route).toContain("headers: { 'Cache-Control': 'no-store' }");
   });
 });

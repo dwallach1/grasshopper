@@ -946,7 +946,7 @@ grant usage on schema public to quantanamo_worker;
 
 -- Domain lanes created outside this list (pm_*, meme_*) must GRANT SELECT to
 -- quantanamo_worker AND add policy quantanamo_worker_select using (true).
--- GRANT alone yields empty desk:publish arrays under RLS — no Postgres error.
+-- GRANT alone yields empty SELECT arrays under RLS — no Postgres error.
 
 do $$
 declare

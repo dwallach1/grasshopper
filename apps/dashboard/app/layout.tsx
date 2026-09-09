@@ -9,12 +9,12 @@ export const metadata: Metadata = {
   metadataBase: new URL(publicOrigin || 'http://localhost:5173'),
   title: 'Grasshopper',
   description: isPublicDesk()
-    ? 'Read-only Grasshopper desk. Published snapshot only — the site cannot write the ledger.'
+    ? 'Read-only Grasshopper desk. Live ledger — the site cannot write it.'
     : 'Local research/trading terminal over the Grasshopper ledger.',
   openGraph: {
     title: 'Grasshopper',
     description: isPublicDesk()
-      ? 'Read-only public desk over a published snapshot.'
+      ? 'Read-only public desk over the live ledger.'
       : 'Preregister. Break. Learn. Deploy.',
     type: 'website',
     images: [{ url: '/og.png', width: 1672, height: 941, alt: 'Grasshopper' }],
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Grasshopper',
     description: isPublicDesk()
-      ? 'Read-only public desk over a published snapshot.'
+      ? 'Read-only public desk over the live ledger.'
       : 'Preregister. Break. Learn. Deploy.',
     images: ['/og.png'],
   },

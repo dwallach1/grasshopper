@@ -46,9 +46,9 @@ describe('public desk snapshot contract', () => {
   });
 
   test('public errors stay generic', () => {
-    expect(publicDeskJsonError()).toEqual({ error: 'Desk snapshot unavailable' });
+    expect(publicDeskJsonError()).toEqual({ error: 'Desk ledger unavailable' });
     expect(publicDeskJsonError('permission denied for table theses')).toEqual({
-      error: 'Desk snapshot unavailable',
+      error: 'Desk ledger unavailable',
     });
     expect(DESK_PUBLIC_READER_ROLE).toBe('desk_public_reader');
   });

@@ -24,17 +24,11 @@
       "/mates"
     ]
   },
-  "kv_namespaces": [
-    {
-      "binding": "DESK_SNAPSHOT",
-      "id": "55a8dea844924c09a6a4c86db15ed8a0"
-    }
-  ],
   "vars": {
     "DESK_SUPABASE_URL": "https://xqungxapqicdmboniezz.supabase.co"
   },
   "secrets": {
-    "required": ["DESK_PUBLISH_TOKEN"]
+    "required": ["DESK_READER_APIKEY", "DESK_READER_JWT"]
   },
   "observability": {
     "enabled": true,

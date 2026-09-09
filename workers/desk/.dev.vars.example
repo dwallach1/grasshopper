@@ -1,10 +1,5 @@
-# Operator-only publish token. Never put this in the public SPA or NEXT_PUBLIC_*.
-# wrangler secret put DESK_PUBLISH_TOKEN
-DESK_PUBLISH_TOKEN=
-
-# Live read-only PostgREST path. DESK_READER_APIKEY is the project publishable/anon
-# key (Kong). DESK_READER_JWT is a JWT with role=desk_public_reader — mint with
-# `bun scripts/mint-desk-reader-jwt.ts`. Never service_role or QUANTANAMO_DATABASE_URL.
+# Live read-only PostgREST. Never service_role, never QUANTANAMO_DATABASE_URL.
+# Production: GitHub Actions mints DESK_READER_JWT and wrangler secret put on deploy.
 DESK_SUPABASE_URL=https://xqungxapqicdmboniezz.supabase.co
 DESK_READER_APIKEY=
 DESK_READER_JWT=

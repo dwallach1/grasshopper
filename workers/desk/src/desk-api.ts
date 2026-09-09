@@ -3,14 +3,12 @@ import {
   MAX_SNAPSHOT_BYTES,
   PUBLIC_DESK_REDIRECTS,
   publicDeskJsonError,
-  SNAPSHOT_KV_KEY,
 } from '@quantanamo/contracts/desk-snapshot';
-import { secretsEqual } from '@quantanamo/shared/secrets';
 
 import { liveReaderReady, loadPublicDeskLive } from './desk-live';
 
 export const DESK_API_HEADERS = {
-  'Cache-Control': 'public, max-age=15, stale-while-revalidate=60',
+  'Cache-Control': 'no-store',
   'Content-Type': 'application/json; charset=utf-8',
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -21,15 +19,9 @@ export const DESK_API_HEADERS = {
 } as const;
 
 export type DeskBindings = {
-  DESK_SNAPSHOT: KVNamespace;
-  DESK_PUBLISH_TOKEN?: string;
   DESK_SUPABASE_URL?: string;
   DESK_READER_APIKEY?: string;
   DESK_READER_JWT?: string;
-};
-
-export type DeskApiContext = {
-  waitUntil(promise: Promise<unknown>): void;
 };
 
 export type DeskLiveLoader = (env: DeskBindings) => Promise<unknown>;
@@ -62,7 +54,6 @@ export function isWriteMethod(method: string): boolean {
 export async function handleDeskApi(
   request: Request,
   env: DeskBindings,
-  ctx?: DeskApiContext,
   loadLive: DeskLiveLoader = loadPublicDeskLive,
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -76,17 +67,13 @@ export async function handleDeskApi(
     });
   }
 
-  if (path === '/internal/snapshot') {
-    return handlePublish(request, env);
-  }
-
   if (path === '/api/health' && request.method === 'GET') {
-    return handleHealth(env, ctx, loadLive);
+    return handleHealth(env, loadLive);
   }
 
   if (path === '/api/desk') {
     if (request.method !== 'GET') return publicError(405, 'Method not allowed');
-    return handleSnapshotGet(env, ctx, loadLive);
+    return handleLiveGet(env, loadLive);
   }
 
   if (path.startsWith('/api/') || path.startsWith('/internal/')) {
@@ -99,10 +86,9 @@ export async function handleDeskApi(
 
 async function handleHealth(
   env: DeskBindings,
-  ctx?: DeskApiContext,
-  loadLive: DeskLiveLoader = loadPublicDeskLive,
+  loadLive: DeskLiveLoader,
 ): Promise<Response> {
-  const served = await handleSnapshotGet(env, ctx, loadLive);
+  const served = await handleLiveGet(env, loadLive);
   if (served.status !== 200) return publicError(503);
   try {
     const parsed: unknown = await served.clone().json();
@@ -110,152 +96,43 @@ async function handleHealth(
     return jsonResponse(200, {
       ok: true,
       generated_at: parsed.generated_at,
-      source: 'snapshot',
-      live: liveReaderReady(env),
+      source: 'live',
     });
   } catch {
     return publicError(503);
   }
 }
 
-async function readCachedSnapshot(env: DeskBindings): Promise<unknown | null> {
-  const raw = await env.DESK_SNAPSHOT.get(SNAPSHOT_KV_KEY);
-  if (!raw) return null;
-  if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
-    console.error(JSON.stringify({ event: 'desk_snapshot_too_large' }));
-    return null;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isPublicSnapshot(parsed)) {
-      console.error(JSON.stringify({ event: 'desk_snapshot_rejected' }));
-      return null;
-    }
-    return parsed;
-  } catch {
-    console.error(JSON.stringify({ event: 'desk_snapshot_parse_failed' }));
-    return null;
-  }
-}
-
-async function persistSnapshot(
+async function handleLiveGet(
   env: DeskBindings,
-  payload: unknown,
-  ctx?: DeskApiContext,
-): Promise<void> {
-  const raw = JSON.stringify(payload);
-  if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
-    console.error(JSON.stringify({ event: 'desk_live_too_large' }));
-    return;
-  }
-  const write = env.DESK_SNAPSHOT.put(SNAPSHOT_KV_KEY, raw).catch((error: unknown) => {
-    console.error(JSON.stringify({
-      event: 'desk_cache_put_failed',
-      error: error instanceof Error ? error.message : 'unknown',
-    }));
-  });
-  if (ctx) ctx.waitUntil(write);
-  else await write;
-}
-
-async function handleSnapshotGet(
-  env: DeskBindings,
-  ctx?: DeskApiContext,
-  loadLive: DeskLiveLoader = loadPublicDeskLive,
+  loadLive: DeskLiveLoader,
 ): Promise<Response> {
-  const cached = await readCachedSnapshot(env);
-  if (liveReaderReady(env)) {
-    try {
-      const live = await loadLive(env);
-      if (!isPublicSnapshot(live)) {
-        console.error(JSON.stringify({ event: 'desk_live_rejected' }));
-      } else {
-        console.error(JSON.stringify({
-          event: 'desk_live_read',
-          generated_at: live.generated_at,
-        }));
-        await persistSnapshot(env, live, ctx);
-        return jsonResponse(200, live);
-      }
-    } catch (error) {
-      console.error(JSON.stringify({
-        event: 'desk_live_read_failed',
-        error: error instanceof Error ? error.message : 'unknown',
-      }));
-    }
+  if (!liveReaderReady(env)) {
+    console.error(JSON.stringify({ event: 'desk_reader_unconfigured' }));
+    return publicError(503);
   }
-  if (cached) return jsonResponse(200, cached);
-  return publicError(503);
-}
-
-async function handlePublish(request: Request, env: DeskBindings): Promise<Response> {
-  if (request.method !== 'PUT') return publicError(405, 'Method not allowed');
-  const expected = env.DESK_PUBLISH_TOKEN?.trim() || '';
-  if (!expected) {
-    console.error(JSON.stringify({ event: 'desk_publish_token_missing' }));
-    return publicError(404, 'Not found');
-  }
-  const provided = bearerToken(request.headers.get('authorization'));
-  if (!(await secretsEqual(provided, expected))) {
-    console.error(JSON.stringify({ event: 'desk_publish_unauthorized' }));
-    return publicError(404, 'Not found');
-  }
-
-  const declared = Number(request.headers.get('content-length') || 0);
-  if (declared > MAX_SNAPSHOT_BYTES) return publicError(404, 'Not found');
-
-  const raw = await readBoundedBody(request);
-  if (raw === null) return publicError(404, 'Not found');
-
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return publicError(404, 'Not found');
-  }
-  if (!isPublicSnapshot(parsed)) {
-    console.error(JSON.stringify({ event: 'desk_publish_invalid_payload' }));
-    return publicError(404, 'Not found');
-  }
-
-  await env.DESK_SNAPSHOT.put(SNAPSHOT_KV_KEY, JSON.stringify(parsed));
-  console.error(JSON.stringify({
-    event: 'desk_snapshot_published',
-    generated_at: parsed.generated_at,
-  }));
-  return jsonResponse(200, { ok: true, generated_at: parsed.generated_at });
-}
-
-function bearerToken(header: string | null): string {
-  if (!header) return '';
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match?.[1]?.trim() || '';
-}
-
-async function readBoundedBody(request: Request): Promise<string | null> {
-  if (!request.body) return null;
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > MAX_SNAPSHOT_BYTES) {
-        await reader.cancel('snapshot size limit exceeded');
-        return null;
-      }
-      chunks.push(value);
+    const live = await loadLive(env);
+    if (!isPublicSnapshot(live)) {
+      console.error(JSON.stringify({ event: 'desk_live_rejected' }));
+      return publicError(503);
     }
-  } finally {
-    reader.releaseLock();
+    const raw = JSON.stringify(live);
+    if (new TextEncoder().encode(raw).byteLength > MAX_SNAPSHOT_BYTES) {
+      console.error(JSON.stringify({ event: 'desk_live_too_large' }));
+      return publicError(503);
+    }
+    console.error(JSON.stringify({
+      event: 'desk_live_read',
+      generated_at: live.generated_at,
+    }));
+    return jsonResponse(200, live);
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'desk_live_read_failed',
+      error: error instanceof Error ? error.message : 'unknown',
+      configured: liveReaderReady(env),
+    }));
+    return publicError(503);
   }
-  const body = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(body);
 }

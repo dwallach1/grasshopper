@@ -5,15 +5,6 @@ import { toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 import { handleDeskApi, isWriteMethod, redirectFor } from './desk-api';
 import { jwtRole, liveReaderReady } from './desk-live';
 
-const sample = toPublicDeskSnapshot({
-  generated_at: '2026-09-05T12:00:00.000Z',
-  source: 'postgres',
-  theses: [{ id: 'neocloud_compute', status: 'hardening' }],
-  book: { current_nav: null, starting_nav: null, observed_at: null, names: [] },
-  routines: [{ id: 'market_scan', status: 'live' }],
-  ontology_actions: [{ id: 9, actor_id: 'secret-user', action: 'promote' }],
-});
-
 const liveSample = toPublicDeskSnapshot({
   generated_at: '2026-09-09T14:00:00.000Z',
   source: 'postgrest',
@@ -31,26 +22,12 @@ function fakeJwt(role: string): string {
   return `eyJhbGciOiJub25lIn0.${payload}.sig`;
 }
 
-class MemoryKv {
-  store = new Map<string, string>();
-  async get(key: string): Promise<string | null> {
-    return this.store.get(key) ?? null;
-  }
-  async put(key: string, value: string): Promise<void> {
-    this.store.set(key, value);
-  }
-}
-
-function env(kv = new MemoryKv(), token = 'publish-token', extra: {
+function env(extra: {
   DESK_SUPABASE_URL?: string;
   DESK_READER_APIKEY?: string;
   DESK_READER_JWT?: string;
 } = {}) {
-  return {
-    DESK_SNAPSHOT: kv as unknown as KVNamespace,
-    DESK_PUBLISH_TOKEN: token,
-    ...extra,
-  };
+  return extra;
 }
 
 const readerEnv = {
@@ -60,72 +37,51 @@ const readerEnv = {
 };
 
 describe('public desk Worker API', () => {
-  test('GET /api/desk serves only a curated snapshot', async () => {
-    const kv = new MemoryKv();
-    await kv.put('current', JSON.stringify(sample));
-    const response = await handleDeskApi(new Request('https://desk.test/api/desk'), env(kv));
-    expect(response.status).toBe(200);
-    const body = await response.json() as { source: string; ontology_actions: unknown[]; book: { current_nav: number | null } };
-    expect(body.source).toBe('snapshot');
-    expect(body.ontology_actions).toEqual([]);
-    expect(body.book.current_nav).toBeNull();
-    expect(response.headers.get('content-security-policy') || '').toContain("connect-src 'self'");
-  });
-
-  test('missing or live-shaped payloads stay generic 503', async () => {
-    const empty = await handleDeskApi(new Request('https://desk.test/api/desk'), env());
-    expect(empty.status).toBe(503);
-    expect(await empty.json()).toEqual({ error: 'Desk snapshot unavailable' });
-
-    const kv = new MemoryKv();
-    await kv.put('current', JSON.stringify({
-      ...sample,
-      source: 'postgres',
-    }));
-    const live = await handleDeskApi(new Request('https://desk.test/api/desk'), env(kv));
-    expect(live.status).toBe(503);
-    const text = await live.text();
-    expect(text).not.toContain('postgres');
-    expect(text).not.toContain('theses');
-  });
-
-  test('GET /api/desk returns live ledger without a prior snapshot PUT', async () => {
-    const kv = new MemoryKv();
+  test('GET /api/desk loads the live ledger only', async () => {
     const response = await handleDeskApi(
       new Request('https://desk.test/api/desk'),
-      env(kv, 'publish-token', readerEnv),
-      undefined,
+      env(readerEnv),
       async () => liveSample,
     );
     expect(response.status).toBe(200);
-    const body = await response.json() as { source: string; generated_at: string; book: { current_nav: number | null } };
+    const body = await response.json() as {
+      source: string;
+      generated_at: string;
+      ontology_actions: unknown[];
+      book: { current_nav: number | null };
+    };
     expect(body.source).toBe('snapshot');
     expect(body.generated_at).toBe('2026-09-09T14:00:00.000Z');
+    expect(body.ontology_actions).toEqual([]);
     expect(body.book.current_nav).toBe(5120);
-    expect(JSON.parse(kv.store.get('current') || '{}').generated_at).toBe('2026-09-09T14:00:00.000Z');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-security-policy') || '').toContain("connect-src 'self'");
   });
 
-  test('live read failure serves last-good cache and never a blank desk', async () => {
-    const kv = new MemoryKv();
-    await kv.put('current', JSON.stringify(sample));
+  test('live read failure is a 503, not a published copy', async () => {
     const response = await handleDeskApi(
       new Request('https://desk.test/api/desk'),
-      env(kv, 'publish-token', readerEnv),
-      undefined,
+      env(readerEnv),
       async () => {
         throw new Error('postgrest down');
       },
     );
-    expect(response.status).toBe(200);
-    const body = await response.json() as { generated_at: string };
-    expect(body.generated_at).toBe(sample.generated_at);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
   });
 
-  test('write methods never mutate the snapshot from public routes', async () => {
+  test('missing reader credentials are a 503, not a silent KV fallback', async () => {
+    const empty = await handleDeskApi(new Request('https://desk.test/api/desk'), env());
+    expect(empty.status).toBe(503);
+    expect(await empty.json()).toEqual({ error: 'Desk ledger unavailable' });
+  });
+
+  test('write methods never mutate ledger from public routes', async () => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
       const response = await handleDeskApi(
         new Request('https://desk.test/api/desk', { method }),
-        env(),
+        env(readerEnv),
+        async () => liveSample,
       );
       expect(response.status).toBe(405);
       expect(await response.json()).toEqual({ error: 'Method not allowed' });
@@ -133,29 +89,37 @@ describe('public desk Worker API', () => {
     expect(isWriteMethod('GET')).toBe(false);
   });
 
-  test('publish ingest is token-gated and hidden on failure', async () => {
-    const kv = new MemoryKv();
-    const denied = await handleDeskApi(
-      new Request('https://desk.test/internal/snapshot', {
-        method: 'PUT',
-        headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' },
-        body: JSON.stringify(sample),
-      }),
-      env(kv),
-    );
-    expect(denied.status).toBe(404);
-    expect(kv.store.size).toBe(0);
-
+  test('GET /api/health is live-only too', async () => {
     const ok = await handleDeskApi(
-      new Request('https://desk.test/internal/snapshot', {
-        method: 'PUT',
-        headers: { authorization: 'Bearer publish-token', 'content-type': 'application/json' },
-        body: JSON.stringify(sample),
-      }),
-      env(kv),
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => liveSample,
     );
     expect(ok.status).toBe(200);
-    expect(JSON.parse(kv.store.get('current') || '{}').source).toBe('snapshot');
+    expect(await ok.json()).toEqual({
+      ok: true,
+      generated_at: '2026-09-09T14:00:00.000Z',
+      source: 'live',
+    });
+    const down = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(),
+    );
+    expect(down.status).toBe(503);
+  });
+
+  test('publish ingest is gone', async () => {
+    const put = await handleDeskApi(
+      new Request('https://desk.test/internal/snapshot', {
+        method: 'PUT',
+        headers: { authorization: 'Bearer anything', 'content-type': 'application/json' },
+        body: JSON.stringify(liveSample),
+      }),
+      env(readerEnv),
+      async () => liveSample,
+    );
+    expect(put.status).toBe(405);
+    expect(await put.json()).toEqual({ error: 'Method not allowed' });
   });
 
   test('retired desk paths redirect', () => {
@@ -186,25 +150,30 @@ describe('public desk reader credentials', () => {
     })).toBe(false);
   });
 
-  test('service_role on the public Worker is refused and last-good cache still serves', async () => {
-    const kv = new MemoryKv();
-    await kv.put('current', JSON.stringify(sample));
+  test('wrangler config has no KV snapshot binding', async () => {
+    const wrangler = await Bun.file(new URL('../wrangler.jsonc', import.meta.url)).text();
+    expect(wrangler).not.toContain('kv_namespaces');
+    expect(wrangler).not.toContain('DESK_SNAPSHOT');
+    expect(wrangler).not.toContain('DESK_PUBLISH_TOKEN');
+    expect(wrangler).toContain('DESK_READER_APIKEY');
+    expect(wrangler).toContain('DESK_READER_JWT');
+  });
+
+  test('service_role on the public Worker is refused with an error', async () => {
     let liveCalls = 0;
     const response = await handleDeskApi(
       new Request('https://desk.test/api/desk'),
-      env(kv, 'publish-token', {
+      env({
         ...readerEnv,
         DESK_READER_JWT: fakeJwt('service_role'),
       }),
-      undefined,
       async () => {
         liveCalls += 1;
         return liveSample;
       },
     );
     expect(liveCalls).toBe(0);
-    expect(response.status).toBe(200);
-    const body = await response.json() as { generated_at: string };
-    expect(body.generated_at).toBe(sample.generated_at);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
   });
 });

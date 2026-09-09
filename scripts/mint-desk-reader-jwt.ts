@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 /**
  * Mint a long-lived PostgREST JWT for role `desk_public_reader`.
- * Run server-side with the project's JWT secret — never commit the output.
+ * CI (deploy-public-desk.yml) runs this with SUPABASE_JWT_SECRET and uploads
+ * the JWT as a Worker secret. Never commit the output. Never put this secret
+ * or service_role on the public Worker.
  *
  *   SUPABASE_JWT_SECRET=... bun scripts/mint-desk-reader-jwt.ts
- *   wrangler secret put DESK_READER_JWT --config workers/desk/wrangler.jsonc
  */
 import { createHmac } from 'node:crypto';
 

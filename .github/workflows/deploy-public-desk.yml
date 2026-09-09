@@ -1,4 +1,5 @@
 # Deploys Worker grasshopper-desk (same path as `bun run desk:deploy`).
+# Reader credentials are minted and uploaded here so merge turns live reads on.
 name: Deploy public desk
 
 on:
@@ -22,15 +23,54 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      - name: Mint desk_public_reader JWT
+        id: reader
+        env:
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DESK_READER_APIKEY: ${{ secrets.DESK_READER_APIKEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          jwt_secret="${SUPABASE_JWT_SECRET:-${JWT_SECRET:-}}"
+          apikey="${DESK_READER_APIKEY:-${SUPABASE_PUBLISHABLE_KEY:-${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-${SUPABASE_ANON_KEY:-}}}}"
+          if [ -z "$jwt_secret" ]; then
+            echo "Set GitHub Actions secret SUPABASE_JWT_SECRET (or JWT_SECRET)."
+            exit 1
+          fi
+          if [ -z "$apikey" ]; then
+            echo "Set GitHub Actions secret DESK_READER_APIKEY (or SUPABASE_PUBLISHABLE_KEY / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY / SUPABASE_ANON_KEY)."
+            exit 1
+          fi
+          export SUPABASE_JWT_SECRET="$jwt_secret"
+          jwt="$(bun scripts/mint-desk-reader-jwt.ts | tr -d '\n')"
+          echo "::add-mask::$apikey"
+          echo "::add-mask::$jwt"
+          {
+            echo 'apikey<<EOF'
+            echo "$apikey"
+            echo 'EOF'
+            echo 'jwt<<EOF'
+            echo "$jwt"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build public desk assets
         run: bun run desk:build
 
       - name: Deploy grasshopper-desk
         uses: cloudflare/wrangler-action@v4
+        env:
+          DESK_READER_APIKEY: ${{ steps.reader.outputs.apikey }}
+          DESK_READER_JWT: ${{ steps.reader.outputs.jwt }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/desk
           packageManager: bun
           wranglerVersion: "4.125.0"
+          secrets: |
+            DESK_READER_APIKEY
+            DESK_READER_JWT
           command: deploy

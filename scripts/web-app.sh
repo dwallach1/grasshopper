@@ -45,14 +45,18 @@ fi
 public_desk="$(printf '%s' "${NEXT_PUBLIC_DESK_MODE:-}" | tr '[:upper:]' '[:lower:]')"
 if [[ "$public_desk" == "public" ]]; then
   export NEXT_PUBLIC_DESK_MODE=public
-  echo "→ Public desk mode (snapshot only; no operator sign-in)"
-  echo "→ GET /api/desk reads PUBLIC_DESK_SNAPSHOT_PATH or workers/desk/.data/current.json"
+  echo "→ Public desk mode (live ledger; no operator sign-in)"
+  echo "→ GET /api/desk reads QUANTANAMO_DATABASE_URL (postgres)"
+  if [[ -z "$db_url" ]]; then
+    echo "Need QUANTANAMO_DATABASE_URL in root .env.local for the live public desk."
+    exit 1
+  fi
 elif [[ -z "$db_url" && -z "$secret_key" && -z "$publishable" && -z "$next_publishable" && -z "$next_anon" ]]; then
   echo "Need a Supabase credential in root .env.local:"
   echo "  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...  # required for operator sign-in"
   echo "  QUANTANAMO_DATABASE_URL=...               # optional, workers / postgres.js"
   echo "  or SUPABASE_SECRET_KEY=...                # service_role, server-only"
-  echo "  or NEXT_PUBLIC_DESK_MODE=public           # snapshot preview, no live ledger"
+  echo "  or NEXT_PUBLIC_DESK_MODE=public           # live public preview (needs DATABASE_URL)"
   exit 1
 fi
 

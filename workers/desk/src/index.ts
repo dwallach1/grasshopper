@@ -1,7 +1,7 @@
 import { DESK_API_HEADERS, handleDeskApi } from './desk-api';
 
 export default {
-  async fetch(request, env, ctx): Promise<Response> {
+  async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const workerFirst = path.startsWith('/api/')
@@ -21,13 +21,13 @@ export default {
     }
 
     try {
-      return await handleDeskApi(request, env, ctx);
+      return await handleDeskApi(request, env);
     } catch (error) {
       console.error(JSON.stringify({
         event: 'desk_worker_error',
         error: error instanceof Error ? error.message : 'unknown',
       }));
-      return new Response(JSON.stringify({ error: 'Desk snapshot unavailable' }), {
+      return new Response(JSON.stringify({ error: 'Desk ledger unavailable' }), {
         status: 503,
         headers: { ...DESK_API_HEADERS, 'Cache-Control': 'no-store' },
       });

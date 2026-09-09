@@ -21,8 +21,7 @@ export const DeskWireSchema = z
 
 export type DeskWire = z.infer<typeof DeskWireSchema>;
 
-export const PUBLIC_DESK_UNAVAILABLE = 'Desk snapshot unavailable';
-export const SNAPSHOT_KV_KEY = 'current';
+export const PUBLIC_DESK_UNAVAILABLE = 'Desk ledger unavailable';
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 /** PostgREST JWT `role` claim for the public Worker. SELECT only. */
 export const DESK_PUBLIC_READER_ROLE = 'desk_public_reader';
