@@ -11,7 +11,7 @@ import type { DeskPayload } from '../../lib/ledger-types';
 import { ledgerAmount } from '../../lib/money-units';
 import { CrtTape } from './crt-tape';
 import { DeskLiveline } from './desk-liveline';
-import { stewardMood } from '../../lib/desk-avatar';
+import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { StewardAvatar } from './steward-avatar';
 import { age, nyStamp, pct, pnlClass } from './format';
 
@@ -25,6 +25,7 @@ export function LeaderboardPanel({
   onOpenTeam?: () => void;
 }) {
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
+  const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const line = useMemo(() => assembleLiveline(desk), [desk]);
   const ranked = board.rows.filter((row) => row.ranked);
   const lead = ranked[0];
@@ -66,7 +67,7 @@ export function LeaderboardPanel({
                 name={row.steward}
                 size="board"
                 accent={row.accent}
-                mood={stewardMood(row.return_pct)}
+                {...(faces.get(row.slug) ?? QUIET_STEWARD_FACE)}
               />
               <span className="line-who">
                 <b>{row.steward}</b>

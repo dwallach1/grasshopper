@@ -11,19 +11,24 @@ import {
   type StewardEdge,
 } from '../../lib/book-edge-stats';
 import { assembleBookOpen } from '../../lib/book-open-strip';
-import { stewardMood } from '../../lib/desk-avatar';
+import { QUIET_STEWARD_FACE, stewardDeskFaces, type StewardFace } from '../../lib/steward-face';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { BookOpenStrip } from './book-open-strip';
 import { StewardAvatar } from './steward-avatar';
 
 export function BookPanel({
   desk,
+  nowIso,
 }: {
   desk: DeskPayload;
   nowIso?: string;
 }) {
   const edge = useMemo(() => assembleBookEdge(desk), [desk]);
   const open = useMemo(() => assembleBookOpen(desk), [desk]);
+  const faces = useMemo(
+    () => stewardDeskFaces(desk, nowIso ? Date.parse(nowIso) : Date.now()),
+    [desk, nowIso],
+  );
 
   return (
     <div className="line-stage crt-book">
@@ -39,15 +44,20 @@ export function BookPanel({
 
       <div className="crt-book-stack">
         {edge.rows.map((row) => (
-          <StewardEdgeCard key={row.id} row={row} />
+          <StewardEdgeCard key={row.id} row={row} face={faces.get(row.slug)} />
         ))}
       </div>
     </div>
   );
 }
 
-function StewardEdgeCard({ row }: { row: StewardEdge }) {
-  const mood = stewardMood(row.win_rate === null ? null : row.win_rate - 50);
+function StewardEdgeCard({
+  row,
+  face = QUIET_STEWARD_FACE,
+}: {
+  row: StewardEdge;
+  face?: StewardFace;
+}) {
   return (
     <article
       className={`crt-book-card${row.thin ? ' is-thin' : ''}`}
@@ -59,7 +69,7 @@ function StewardEdgeCard({ row }: { row: StewardEdge }) {
           name={row.steward}
           size="board"
           accent={row.accent}
-          mood={mood}
+          {...face}
         />
         <div className="crt-book-id">
           <b>{row.steward}</b>

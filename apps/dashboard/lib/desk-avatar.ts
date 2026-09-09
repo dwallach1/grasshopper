@@ -6,7 +6,7 @@ import { AVATAR_COLORS } from './desk-team';
 
 export type StewardAvatarSize = 'board' | 'card' | 'team';
 
-export type StewardBotKind = 'bandit' | 'grasshopper' | 'oddsborne' | 'quantanamo' | 'spark';
+export type StewardBotKind = 'bandit' | 'cointanamo' | 'grasshopper' | 'oddsborne' | 'quantanamo' | 'spark';
 
 export type StewardMood = 'down' | 'idle' | 'up';
 
@@ -86,6 +86,17 @@ const SPECIES = {
     leftBias: 0,
     rightBias: 0,
   },
+  cointanamo: {
+    fill: '#B4C2B0',
+    eye: '#F3EEE4',
+    gap: 0.26,
+    eyeY: -0.13,
+    restW: 0.1,
+    restH: 0.23,
+    restTilt: 0.06,
+    leftBias: -0.02,
+    rightBias: 0.05,
+  },
   spark: {
     fill: '#A9B6C0',
     eye: '#F3EEE4',
@@ -116,6 +127,7 @@ export function stewardBotKind(slug: string, name: string): StewardBotKind {
   const seed = stewardAvatarSeed(slug, name);
   switch (seed) {
     case 'bandit':
+    case 'cointanamo':
     case 'grasshopper':
     case 'oddsborne':
     case 'quantanamo':
@@ -127,6 +139,9 @@ export function stewardBotKind(slug: string, name: string): StewardBotKind {
 
 export function stewardBotPalette(input: StewardAvatarInput): StewardBotPalette {
   const kind = stewardBotKind(input.slug, input.name);
+  if (kind === 'cointanamo') {
+    return { kind, accent: input.accent || '#7d9b8a' };
+  }
   if (kind !== 'spark') {
     return { kind, accent: KNOWN_ACCENTS[kind] };
   }

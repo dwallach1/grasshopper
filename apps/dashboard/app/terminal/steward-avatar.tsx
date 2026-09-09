@@ -10,6 +10,7 @@ import {
   type StewardAvatarSize,
   type StewardMood,
 } from '../../lib/desk-avatar';
+import type { StewardExpression } from '../../lib/steward-motion';
 import { StewardLivingIcon } from './steward-living';
 import styles from './steward-avatar.module.css';
 
@@ -21,6 +22,8 @@ export function StewardAvatar({
   alive = false,
   mood = 'idle',
   thinking = false,
+  attending = false,
+  preview,
 }: {
   slug: string;
   name: string;
@@ -29,6 +32,8 @@ export function StewardAvatar({
   alive?: boolean;
   mood?: StewardMood;
   thinking?: boolean;
+  attending?: boolean;
+  preview?: StewardExpression;
 }) {
   const label = stewardAvatarLabel(name);
   const palette = stewardBotPalette({ slug, name, accent });
@@ -56,6 +61,9 @@ export function StewardAvatar({
       data-kind={kind}
       data-mood={mood}
       data-thinking={thinking ? '1' : '0'}
+      data-alive={alive ? '1' : '0'}
+      data-attending={attending ? '1' : '0'}
+      data-preview={preview ?? ''}
       data-runtime="icon"
       role="img"
       aria-label={label}
@@ -65,6 +73,8 @@ export function StewardAvatar({
         mood={mood}
         alive={alive}
         thinking={thinking}
+        attending={attending}
+        preview={preview}
         reducedMotion={reducedMotion}
         delayMs={delayMs}
       />

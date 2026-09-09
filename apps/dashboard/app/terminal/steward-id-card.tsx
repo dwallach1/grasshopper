@@ -9,6 +9,7 @@ import {
 } from '../../lib/steward-card-stock';
 import { isWebGL2Available } from '../../lib/steward-foil';
 import type { StewardIdCard as StewardIdCardModel } from '../../lib/steward-id';
+import { QUIET_STEWARD_FACE, type StewardFace } from '../../lib/steward-face';
 import { StewardAvatar } from './steward-avatar';
 import { StewardHeroCard } from './steward-hero-card';
 
@@ -16,10 +17,12 @@ export function StewardIdCard({
   card,
   reduceMotion,
   live = false,
+  face = QUIET_STEWARD_FACE,
 }: {
   card: StewardIdCardModel;
   reduceMotion: boolean;
   live?: boolean;
+  face?: StewardFace;
 }) {
   const stampRef = useRef<HTMLDivElement>(null);
   const [webgl, setWebgl] = useState(true);
@@ -56,6 +59,10 @@ export function StewardIdCard({
           name={card.display_name}
           size="card"
           accent={card.accent}
+          mood={face.mood}
+          alive={face.alive}
+          thinking={face.thinking}
+          attending={face.attending}
         />
       </div>
     </article>

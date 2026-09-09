@@ -9,9 +9,13 @@ import {
   stewardBreathe,
   stewardGlanceX,
   stewardMotion,
+  stewardExpressionPreview,
+  stewardExpressionWeights,
   stewardPulse,
+  stewardSpeakAmount,
   stewardThinkAmount,
   stewardToggleAmount,
+  STEWARD_EXPRESSIONS,
 } from './steward-motion';
 
 describe('steward motion curves', () => {
@@ -74,6 +78,7 @@ describe('steward motion curves', () => {
       alive: true,
       reducedMotion: true,
       thinking: false,
+      attending: false,
     });
     expect(stillUp.blink).toBe(0);
     expect(stillUp.glanceX).toBe(0);
@@ -82,6 +87,7 @@ describe('steward motion curves', () => {
     expect(stillUp.bang).toBe(0);
     expect(stillUp.breathe).toBe(0.5);
     expect(stillUp.pulse).toBe(1);
+    expect(stillUp.speak).toBeGreaterThan(0);
 
     const stillThink = stewardMotion({
       elapsedMs: 4000,
@@ -90,23 +96,38 @@ describe('steward motion curves', () => {
       alive: false,
       reducedMotion: true,
       thinking: true,
+      attending: false,
     });
     expect(stillThink.think).toBe(0.7);
     expect(stillThink.toggle).toBe(0.85);
     expect(stillThink.listen).toBe(0);
   });
 
-  test('live idle listens; up/down win over listen; glyphs mute blink', () => {
+  test('open ticket listens; live pulse speaks; up/down still win the face', () => {
     const listen = stewardMotion({
       elapsedMs: 0,
+      delayMs: 0,
+      mood: 'idle',
+      alive: false,
+      reducedMotion: false,
+      thinking: false,
+      attending: true,
+    });
+    expect(listen.listen).toBe(1);
+    expect(listen.speak).toBe(0);
+    const speak = stewardMotion({
+      elapsedMs: 330,
       delayMs: 0,
       mood: 'idle',
       alive: true,
       reducedMotion: false,
       thinking: false,
+      attending: false,
     });
-    expect(listen.listen).toBe(1);
-    expect(listen.up).toBe(0);
+    expect(speak.listen).toBe(0);
+    expect(speak.speak).toBeGreaterThan(0);
+    expect(stewardSpeakAmount(330, 0, true)).toBeGreaterThan(0);
+    expect(stewardSpeakAmount(330, 0, false)).toBe(0);
     const up = stewardMotion({
       elapsedMs: 7200 * 0.3,
       delayMs: 0,
@@ -114,11 +135,46 @@ describe('steward motion curves', () => {
       alive: true,
       reducedMotion: false,
       thinking: false,
+      attending: true,
     });
     expect(up.up).toBe(1);
-    expect(up.listen).toBe(0);
+    expect(up.listen).toBe(1);
     expect(up.bang).toBe(1);
     expect(up.blink).toBe(0);
+  });
+
+  test('expression family is the locked silhouette sheet', () => {
+    expect([...STEWARD_EXPRESSIONS]).toEqual([
+      'idle',
+      'glance',
+      'blink',
+      'listen',
+      'think',
+      'surprise',
+      'caution',
+      'speak',
+    ]);
+    const weights = stewardExpressionWeights(stewardMotion({
+      elapsedMs: 0,
+      delayMs: 0,
+      mood: 'down',
+      alive: true,
+      reducedMotion: true,
+      thinking: true,
+      attending: true,
+    }));
+    expect(weights.caution).toBe(1);
+    expect(weights.listen).toBe(1);
+    expect(weights.think).toBe(0.7);
+    expect(weights.speak).toBeGreaterThan(0);
+    expect(weights.blink).toBe(0);
+    expect(stewardExpressionPreview('blink').blink).toBe(1);
+    expect(stewardExpressionPreview('listen').listen).toBe(1);
+    expect(stewardExpressionPreview('think').think).toBeGreaterThan(0.5);
+    expect(stewardExpressionPreview('surprise').surprise).toBe(1);
+    expect(stewardExpressionPreview('caution').down).toBe(1);
+    expect(stewardExpressionPreview('speak').speak).toBeGreaterThan(0.5);
+    expect(stewardExpressionPreview('glance').glanceX).not.toBe(0);
   });
 
   test('approach eases toward the target instead of snapping', () => {

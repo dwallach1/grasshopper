@@ -26,6 +26,7 @@ describe('desk steward avatars', () => {
     expect(stewardBotKind('oddsborne', 'ODDSBORNE')).toBe('oddsborne');
     expect(stewardBotKind('bandit', 'BANDIT')).toBe('bandit');
     expect(stewardBotKind('grasshopper', 'GRASSHOPPER')).toBe('grasshopper');
+    expect(stewardBotKind('cointanamo', 'COINTANAMO')).toBe('cointanamo');
     expect(stewardBotKind('newcomer', 'NEWCOMER')).toBe('spark');
     expect(stewardBotPalette({ slug: 'grasshopper', name: 'GRASSHOPPER' }).accent).toBe(AVATAR_COLORS.brown);
     expect(stewardBotPalette({ slug: 'quantanamo', name: 'QUANTANAMO' }).accent).toBe(AVATAR_COLORS.green);
@@ -53,10 +54,10 @@ describe('desk steward avatars', () => {
   });
 
   test('species fills stay soft, distinct, and off the book P/L colors', () => {
-    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit', 'grasshopper'];
+    const kinds: StewardBotKind[] = ['quantanamo', 'oddsborne', 'bandit', 'grasshopper', 'cointanamo'];
     const faces = kinds.map(stewardSpecies);
-    expect(new Set(faces.map((face) => face.fill)).size).toBe(4);
-    expect(new Set(faces.map((face) => face.gap.toFixed(2))).size).toBe(4);
+    expect(new Set(faces.map((face) => face.fill)).size).toBe(5);
+    expect(new Set(faces.map((face) => face.gap.toFixed(2))).size).toBe(5);
     for (const face of faces) {
       expect(face.fill).not.toBe(AVATAR_COLORS.green);
       expect(face.fill).not.toBe(AVATAR_COLORS.blue);

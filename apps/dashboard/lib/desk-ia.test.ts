@@ -88,6 +88,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('asciiFillBar');
     expect(book).toContain('crt-book');
     expect(book).toContain('StewardAvatar');
+    expect(book).toContain('stewardDeskFaces');
     expect(book).toContain('GOOD');
     expect(book).toContain('HOLD');
     expect(book).not.toContain('CoinNote');
@@ -121,6 +122,8 @@ describe('desk IA smoke', () => {
     expect(team).not.toContain('pnl');
     expect(team).not.toContain('win_rate');
     expect(team).not.toContain('heartbeat');
+    expect(team).toContain('stewardDeskFaces');
+    expect(team).toContain('now=');
     expect(team).not.toContain('clipCharter');
     expect(team).not.toContain('Liveline');
     expect(idCard).toContain('data-finish="ledger"');
@@ -253,6 +256,7 @@ describe('desk IA smoke', () => {
     expect(avatarLib).not.toContain('@dicebear');
     expect(avatarLib).toContain('StewardBotKind');
     expect(avatarLib).toContain("case 'quantanamo'");
+    expect(avatarLib).toContain("case 'cointanamo'");
     expect(avatarLib).toContain('living icons');
     expect(avatarLib).toContain('stewardMood');
     expect(avatarLib).toContain('stewardSpecies');
@@ -261,6 +265,7 @@ describe('desk IA smoke', () => {
     expect(avatarLib).not.toContain("from 'three'");
     expect(living).toContain('requestAnimationFrame');
     expect(living).toContain('composeStewardPose');
+    expect(living).toContain('attending');
     expect(living).toContain('data-icon="circle-eyes"');
     expect(living).not.toContain('@rive-app');
     expect(living).not.toContain('.riv');
@@ -279,6 +284,9 @@ describe('desk IA smoke', () => {
     expect(motion).toContain('stewardBreathe');
     expect(motion).toContain('stewardGlanceX');
     expect(motion).toContain('stewardPulse');
+    expect(motion).toContain('stewardSpeakAmount');
+    expect(motion).toContain('STEWARD_EXPRESSIONS');
+    expect(motion).toContain('stewardExpressionWeights');
     expect(motion).toContain('stewardThinkAmount');
     expect(motion).toContain('pinchThenForm');
     expect(motion).toContain('stewardBangAmount');
@@ -290,6 +298,10 @@ describe('desk IA smoke', () => {
     expect(avatars).toContain('size === \'card\'');
     expect(avatars).not.toContain('from \'three\'');
     expect(avatars).toContain('mood=');
+    expect(avatars).toContain('attending');
+    expect(avatars).toContain('preview');
+    expect(avatars).toContain('data-alive');
+    expect(avatars).toContain('data-attending');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');
@@ -357,7 +369,7 @@ describe('desk IA smoke', () => {
     expect(board).toContain('assembleLiveline');
     expect(board).toContain('StewardAvatar');
     expect(board).toContain('size="board"');
-    expect(board).toContain('stewardMood');
+    expect(board).toContain('stewardDeskFaces');
     expect(board).toContain('DeskLiveline');
     expect(board).toContain('CrtTape');
     expect(board).not.toContain('line-foci');

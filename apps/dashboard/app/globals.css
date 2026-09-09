@@ -3827,6 +3827,7 @@ a:focus-visible {
   width: 36%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  overflow: visible;
 }
 
 .term-board-rules {

@@ -100,9 +100,23 @@ export function composeStewardPose(species: StewardSpecies, motion: StewardMotio
   const blink = motion.blink;
   const surprise = motion.surprise;
   const breathe = motion.breathe;
+  const listen = motion.listen;
+  const think = motion.think;
+  const speak = motion.speak;
+  const caution = motion.down;
 
-  const lookX = motion.glanceX + motion.up * 0.22 - motion.listen * 0.02 + motion.down * -0.08;
-  const lookY = motion.glanceY - motion.up * 0.28 + motion.down * 0.22 - motion.listen * 0.06;
+  const lookX = motion.glanceX
+    + motion.up * 0.22
+    - listen * 0.06
+    + caution * -0.1
+    + think * 0.16
+    + (speak - 0.36) * 0.04;
+  const lookY = motion.glanceY
+    - motion.up * 0.3
+    + caution * 0.24
+    - listen * 0.1
+    - think * 0.18
+    + (speak - 0.36) * 0.05;
 
   let leftW = species.restW;
   let leftH = species.restH;
@@ -115,11 +129,25 @@ export function composeStewardPose(species: StewardSpecies, motion: StewardMotio
   let rightOx = 0;
   let rightOy = 0;
 
-  const listen = motion.listen;
-  leftW = lerp(leftW, species.restW * 0.86, listen);
-  leftH = lerp(leftH, species.restH * 1.18, listen);
-  rightW = lerp(rightW, species.restW * 0.86, listen);
-  rightH = lerp(rightH, species.restH * 1.18, listen);
+  leftW = lerp(leftW, species.restW * 0.8, listen);
+  leftH = lerp(leftH, species.restH * 1.26, listen);
+  rightW = lerp(rightW, species.restW * 0.88, listen);
+  rightH = lerp(rightH, species.restH * 1.16, listen);
+  leftRot += listen * 0.08;
+  rightRot -= listen * 0.04;
+
+  leftW = lerp(leftW, species.restW * 0.86, think);
+  leftH = lerp(leftH, species.restH * 0.9, think);
+  rightW = lerp(rightW, species.restW * 1.04, think);
+  rightH = lerp(rightH, species.restH * 1.14, think);
+  leftRot += think * 0.14;
+  rightRot -= think * 0.06;
+
+  const talk = 0.86 + speak * 0.28;
+  leftW = lerp(leftW, species.restW * (0.94 + speak * 0.1), Math.min(1, speak * 1.15));
+  leftH = lerp(leftH, species.restH * talk, Math.min(1, speak * 1.15));
+  rightW = lerp(rightW, species.restW * (0.94 + speak * 0.1), Math.min(1, speak * 1.15));
+  rightH = lerp(rightH, species.restH * talk, Math.min(1, speak * 1.15));
 
   const grow = 1 + surprise * 0.42;
   leftW *= grow;
@@ -127,10 +155,12 @@ export function composeStewardPose(species: StewardSpecies, motion: StewardMotio
   rightW *= grow;
   rightH *= grow;
 
-  leftH = lerp(leftH, species.restH * 0.42, motion.down);
-  rightH = lerp(rightH, species.restH * 0.42, motion.down);
-  leftW = lerp(leftW, species.restW * 1.28, motion.down);
-  rightW = lerp(rightW, species.restW * 1.28, motion.down);
+  leftH = lerp(leftH, species.restH * 0.36, caution);
+  rightH = lerp(rightH, species.restH * 0.36, caution);
+  leftW = lerp(leftW, species.restW * 1.34, caution);
+  rightW = lerp(rightW, species.restW * 1.34, caution);
+  leftRot = lerp(leftRot, species.restTilt + species.leftBias + 0.28, caution);
+  rightRot = lerp(rightRot, species.restTilt + species.rightBias - 0.28, caution);
 
   const follow = lookX * 0.55 + lookY * 0.28;
   leftRot += follow;
@@ -170,7 +200,7 @@ export function composeStewardPose(species: StewardSpecies, motion: StewardMotio
   leftW = lerp(leftW, Math.max(leftW, species.restW * 1.45), blink);
   rightW = lerp(rightW, Math.max(rightW, species.restW * 1.45), blink);
 
-  const bodyR = 0.42 * motion.pulse * (1 + (breathe - 0.5) * 0.03);
+  const bodyR = Math.min(0.48, 0.42 * motion.pulse * (1 + (breathe - 0.5) * 0.028));
 
   return {
     bodyR,

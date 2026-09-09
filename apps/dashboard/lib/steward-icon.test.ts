@@ -18,6 +18,7 @@ function motion(partial: Partial<StewardMotion> = {}): StewardMotion {
     surprise: 0,
     bang: 0,
     toggle: 0,
+    speak: 0,
     ...partial,
   };
 }
@@ -100,6 +101,20 @@ describe('living steward icon', () => {
     expect(still.lookX).toBe(from.lookX);
   });
 
+  test('listen, think, caution, and speak stay two pills on one disk', () => {
+    const idle = composeStewardPose(stewardSpecies('quantanamo'), motion());
+    const listen = composeStewardPose(stewardSpecies('quantanamo'), motion({ listen: 1 }));
+    const think = composeStewardPose(stewardSpecies('oddsborne'), motion({ think: 1 }));
+    const caution = composeStewardPose(stewardSpecies('bandit'), motion({ down: 1 }));
+    const speak = composeStewardPose(stewardSpecies('cointanamo'), motion({ speak: 1 }));
+    expect(listen.left.h).toBeGreaterThan(idle.left.h);
+    expect(think.lookY).toBeLessThan(idle.lookY);
+    expect(caution.left.h).toBeLessThan(idle.left.h);
+    expect(caution.left.rot).toBeGreaterThan(idle.left.rot);
+    expect(speak.bodyR).toBeLessThan(0.49);
+    expect(speak.left.h).toBeGreaterThan(0);
+  });
+
   test('species keep distinct eye gaps on the same circle body', () => {
     const q = stewardDrawMarks(
       stewardSpecies('quantanamo'),
@@ -116,5 +131,13 @@ describe('living steward icon', () => {
     expect(qEyes.right.cx - qEyes.left.cx).toBeGreaterThan(oEyes.right.cx - oEyes.left.cx + 4);
     expect(q[0]?.part === 'body' && q[0].fill).toBe(stewardSpecies('quantanamo').fill);
     expect(o[0]?.part === 'body' && o[0].fill).toBe(stewardSpecies('oddsborne').fill);
+    const c = stewardDrawMarks(
+      stewardSpecies('cointanamo'),
+      composeStewardPose(stewardSpecies('cointanamo'), motion()),
+      100,
+    );
+    const cEyes = eyesOf(c);
+    expect(cEyes.right.cx - cEyes.left.cx).not.toBe(qEyes.right.cx - qEyes.left.cx);
+    expect(c[0]?.part === 'body' && c[0].fill).toBe(stewardSpecies('cointanamo').fill);
   });
 });
