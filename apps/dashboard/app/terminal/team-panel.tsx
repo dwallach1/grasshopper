@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import { clampDeckIndex, deckIndexFromThumb, deckThumbRatio, stepDeckIndex } from '../../lib/steward-deck';
+import { stewardDeskFaces } from '../../lib/steward-face';
 import { stewardIdCards } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { StewardIdCard } from './steward-id-card';
@@ -11,11 +12,14 @@ import { StewardIdCard } from './steward-id-card';
 export function TeamPanel({
   desk,
   reduceMotion = false,
+  now = null,
 }: {
   desk: DeskPayload;
   reduceMotion?: boolean;
+  now?: number | null;
 }) {
   const cards = stewardIdCards(desk);
+  const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const roster = cards.map((card) => card.slug).join('|');
   const [index, setIndex] = useState(0);
   const liveSlug = cards[clampDeckIndex(index, cards.length)]?.slug ?? '';
@@ -45,6 +49,7 @@ export function TeamPanel({
                     card={card}
                     reduceMotion={reduceMotion}
                     live={card.slug === liveSlug}
+                    face={faces.get(card.slug)}
                   />
                 </div>
               ))}

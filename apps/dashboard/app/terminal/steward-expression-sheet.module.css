@@ -1,0 +1,68 @@
+.sheet {
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  max-width: 390px;
+  background: #07080a;
+  color: #e8edf2;
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.sheet h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.sheet p,
+.sheet i {
+  color: #9aa3ad;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tree {
+  margin: 12px 0 20px;
+  padding-left: 18px;
+  color: #c5ccd3;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.row {
+  margin: 0 0 18px;
+  overflow: visible;
+}
+
+.row header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 8px;
+}
+
+.row ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 6px;
+  overflow: visible;
+}
+
+.row li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  overflow: visible;
+}
+
+.row li span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #9aa3ad;
+  text-transform: lowercase;
+}

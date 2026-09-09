@@ -241,7 +241,7 @@ export function TerminalApp({
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
               book: <BookPanel desk={desk} nowIso={nowIso} />,
-              team: <TeamPanel desk={desk} reduceMotion={reduceMotion} />,
+              team: <TeamPanel desk={desk} reduceMotion={reduceMotion} now={now} />,
             }}
           </DeskPager>
         )}
