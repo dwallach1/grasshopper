@@ -31,32 +31,46 @@ export function LeaderboardPanel({
   const ranked = board.rows.filter((row) => row.ranked);
   const lead = ranked[0];
   const [order, setOrder] = useState(() => board.rows.map((row) => row.id));
-  const drag = useRef<{ id: string; startY: number; origin: string[] } | null>(null);
+  const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
+  const orderRef = useRef(order);
+  orderRef.current = order;
 
   useEffect(() => {
     setOrder((prev) => applyStandingOrder(board.rows, prev).map((row) => row.id));
   }, [board.rows]);
 
+  useEffect(() => {
+    function onMove(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      setOrder(moveStanding(active.origin, active.id, standingShiftFromDrag(event.clientY - active.startY)));
+    }
+    function onUp(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      drag.current = null;
+    }
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
   const rows = useMemo(() => applyStandingOrder(board.rows, order), [board.rows, order]);
 
   function onPlaceDown(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { id, startY: event.clientY, origin: order };
-  }
-
-  function onPlaceMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (!drag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    event.stopPropagation();
-    event.preventDefault();
-    setOrder(moveStanding(drag.current.origin, drag.current.id, standingShiftFromDrag(event.clientY - drag.current.startY)));
-  }
-
-  function onPlaceUp(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // capture is optional; window listeners still drive the reorder
     }
-    drag.current = null;
+    drag.current = { id, pointerId: event.pointerId, startY: event.clientY, origin: orderRef.current };
   }
 
   return (
@@ -96,9 +110,6 @@ export function LeaderboardPanel({
                 data-card-dragger="1"
                 aria-label={`Reorder ${row.steward}`}
                 onPointerDown={(event) => onPlaceDown(event, row.id)}
-                onPointerMove={onPlaceMove}
-                onPointerUp={onPlaceUp}
-                onPointerCancel={onPlaceUp}
               >
                 {row.place ?? '—'}
               </button>

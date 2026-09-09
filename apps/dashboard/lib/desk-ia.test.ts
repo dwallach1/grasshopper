@@ -373,6 +373,7 @@ describe('desk IA smoke', () => {
     expect(board).toContain('assembleLiveline');
     expect(board).toContain('data-card-dragger');
     expect(board).toContain('applyStandingOrder');
+    expect(board).toContain("window.addEventListener('pointermove'");
     expect(board).toContain('StewardAvatar');
     expect(board).toContain('size="board"');
     expect(board).toContain('stewardDeskFaces');

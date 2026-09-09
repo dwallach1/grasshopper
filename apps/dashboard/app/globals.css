@@ -4174,6 +4174,8 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .line-who b {
