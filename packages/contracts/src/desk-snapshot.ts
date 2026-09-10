@@ -50,6 +50,63 @@ const PUBLIC_OMIT = new Set([
   'ontology_actions',
   'proposals',
 ]);
+
+/** Array fields the phone desk indexes (`tests[0]`, `.filter`, `.map`). Missing → []. */
+export const DESK_ARRAY_KEYS = [
+  'theses',
+  'evidence',
+  'scores',
+  'relations',
+  'runs',
+  'cloud_runs',
+  'cloud_tasks',
+  'automations',
+  'catalysts',
+  'queue',
+  'lessons',
+  'postmortems',
+  'cycles',
+  'tests',
+  'backtest_artifacts',
+  'scenarios',
+  'agent_runs',
+  'snapshots',
+  'positions',
+  'exposures',
+  'intents',
+  'proposals',
+  'fills',
+  'fill_log',
+  'insights',
+  'predictions',
+  'risk_controls',
+  'routines',
+  'ontology_themes',
+  'ontology_symbols',
+  'ontology_candidates',
+  'ontology_actions',
+] as const;
+
+const NESTED_ARRAYS = {
+  prediction_markets: ['markets', 'positions', 'orders', 'fills', 'pnl', 'notes'],
+  meme_coins: ['tokens', 'positions', 'orders', 'fills', 'pnl', 'notes'],
+  team: ['agents', 'domains', 'stewards', 'accounts'],
+} as const;
+
+const EMPTY_COUNTS = {
+  sources: 0,
+  symbols: 0,
+  open_research: 0,
+  tests_killed: 0,
+  tests_survived: 0,
+  scenario_cells: 0,
+  open_positions: 0,
+  queued_tasks: 0,
+};
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 /** PostgREST JWT `role` claim for the public Worker. SELECT only. */
 export const DESK_PUBLIC_READER_ROLE = 'desk_public_reader';
@@ -92,9 +149,48 @@ export function publicDeskJsonError(message = PUBLIC_DESK_UNAVAILABLE): { error:
 }
 
 /**
- * Mark a live desk payload as the public snapshot. Drops operator-only audit
- * rows so GET /api/desk stays JSON-healthy under Worker CPU. Book / Board /
- * Team keep `prediction_markets`, `meme_coins`, `team`, theses, and the book.
+ * Fill missing desk arrays so `tests[0]` / `.map` cannot throw. Does not invent
+ * marks — empty list means "not in this public envelope", not a fake row.
+ */
+export function hydratePublicDesk(desk: DeskWire): DeskWire {
+  const out: Record<string, unknown> = { ...desk };
+  for (const key of DESK_ARRAY_KEYS) {
+    out[key] = asArray(out[key]);
+  }
+  if (Array.isArray(out.theses)) {
+    out.theses = out.theses.map((row) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+      const item = row as Record<string, unknown>;
+      return {
+        ...item,
+        symbols: asArray(item.symbols),
+        lots: asArray(item.lots),
+      };
+    });
+  }
+  for (const [field, keys] of Object.entries(NESTED_ARRAYS)) {
+    const raw = out[field];
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const nested: Record<string, unknown> = { ...raw };
+    for (const key of keys) nested[key] = asArray(nested[key]);
+    out[field] = nested;
+  }
+  if (out.book && typeof out.book === 'object' && !Array.isArray(out.book)) {
+    const book: Record<string, unknown> = { ...out.book };
+    book.names = asArray(book.names);
+    out.book = book;
+  }
+  if (!out.counts || typeof out.counts !== 'object' || Array.isArray(out.counts)) {
+    out.counts = { ...EMPTY_COUNTS };
+  }
+  return out as DeskWire;
+}
+
+/**
+ * Mark a live desk payload as the public snapshot. Strips operator-only audit
+ * *rows* so GET /api/desk stays JSON-healthy under Worker CPU, then puts empty
+ * arrays back so the phone client can index `tests[0]`. Book / Board / Team
+ * keep `prediction_markets`, `meme_coins`, `team`, theses, and the book.
  * Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
@@ -103,6 +199,5 @@ export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
     if (key === 'source' || PUBLIC_OMIT.has(key)) continue;
     slim[key] = value;
   }
-  slim.ontology_actions = [];
-  return slim as DeskWire;
+  return hydratePublicDesk(slim as DeskWire);
 }

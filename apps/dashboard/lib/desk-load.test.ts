@@ -60,5 +60,10 @@ describe('desk load path', () => {
     expect(route).not.toContain('filePublicDesk');
     expect(route).not.toContain('current.json');
     expect(route).toContain("headers: { 'Cache-Control': 'no-store' }");
+    const client = await readDashboard('lib/desk-client.ts');
+    expect(client).toContain('hydratePublicDesk');
+    expect(client).toContain('deskFromWire');
+    const app = await readDashboard('app/terminal/app.tsx');
+    expect(app).toContain('initial.tests?.[0]');
   });
 });
