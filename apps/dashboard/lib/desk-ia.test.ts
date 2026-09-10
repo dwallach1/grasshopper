@@ -52,6 +52,8 @@ describe('desk IA smoke', () => {
     expect(book).not.toContain('VenueFilterBar');
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
+    expect(book).toContain('assembleStewardFreshness');
+    expect(book).toContain('marks {markAge}');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
@@ -89,6 +91,8 @@ describe('desk IA smoke', () => {
     expect(book).toContain('crt-book');
     expect(book).toContain('StewardAvatar');
     expect(book).toContain('stewardDeskFaces');
+    expect(book).toContain('assembleStewardFreshness');
+    expect(book).toContain('marks {markAge}');
     expect(book).toContain('GOOD');
     expect(book).toContain('HOLD');
     expect(book).not.toContain('CoinNote');

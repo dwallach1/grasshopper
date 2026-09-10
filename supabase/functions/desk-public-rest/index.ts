@@ -18,6 +18,16 @@ const ALLOWED_TABLES = new Set([
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
 const AGENTIC_LAST4 = '7638';
 
+const PUBLIC_KEYS = new Set([
+  'theses', 'symbols', 'runs',
+  'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
+  'themes',
+]);
+
+const PUBLIC_QUERY: Record<string, string> = {
+  runs: 'runs?select=id,run_type,started_at,completed_at,notes&order=started_at.desc,id.desc&limit=8',
+};
+
 const REQUIRED: Array<[string, string]> = [
   ['theses', 'theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc'],
   ['symbols', 'thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc'],
@@ -83,6 +93,9 @@ function restPath(url: URL): string | null {
   const marker = '/desk-public-rest';
   const idx = raw.indexOf(marker);
   const suffix = idx >= 0 ? raw.slice(idx + marker.length) : raw;
+  if (
+    suffix === '/bundle/public' || suffix === 'bundle/public' || raw.endsWith('/bundle/public')
+  ) return '/bundle/public';
   if (suffix === '/bundle' || suffix === 'bundle' || raw.endsWith('/bundle')) return '/bundle';
   const path = suffix.startsWith('/rest/v1/') ? suffix : `/rest/v1/${suffix.replace(/^\//, '')}`;
   return path === '/rest/v1' ? null : path;
@@ -116,9 +129,13 @@ async function objectFrom(pairs: Array<[string, string]>, optional = true): Prom
   return Object.fromEntries(entries);
 }
 
-async function handleBundle(): Promise<Response> {
+async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
   try {
-    const required = await Promise.all(REQUIRED.map(async ([key, query]) => [key, await restGet(query)] as const));
+    const tables = (mode === 'public'
+      ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key))
+      : REQUIRED
+    ).map(([key, query]) => [key, mode === 'public' && PUBLIC_QUERY[key] ? PUBLIC_QUERY[key] : query] as const);
+    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const));
     const [pm, meme, team] = await Promise.all([
       objectFrom(PM),
       objectFrom(MEME),
@@ -133,6 +150,7 @@ async function handleBundle(): Promise<Response> {
   } catch (error) {
     console.error(JSON.stringify({
       event: 'desk_public_rest_bundle_failed',
+      mode,
       error: error instanceof Error ? error.message : 'unknown',
     }));
     return Response.json({ error: 'Desk ledger unavailable' }, { status: 503 });
@@ -145,7 +163,8 @@ Deno.serve(async (req) => {
   }
   const url = new URL(req.url);
   const path = restPath(url);
-  if (path === '/bundle') return handleBundle();
+  if (path === '/bundle/public') return handleBundle('public');
+  if (path === '/bundle') return handleBundle('full');
   if (!path) return Response.json({ error: 'Not found' }, { status: 404 });
   const match = TABLE_RE.exec(path);
   const table = match?.[1];

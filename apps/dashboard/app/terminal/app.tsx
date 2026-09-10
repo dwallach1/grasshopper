@@ -1,6 +1,6 @@
 'use client';
 
-import { PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
+import { PUBLIC_DESK_REFRESH_FAILED, PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
@@ -336,9 +336,9 @@ async function refreshDesk(
     setDesk(await fetchDeskPayload());
     setNotice(null);
   } catch (error) {
-    if (cachedDesk()) return;
     const message = error instanceof Error ? error.message : PUBLIC_DESK_UNAVAILABLE;
-    setNotice(message.includes('Unexpected token') ? PUBLIC_DESK_UNAVAILABLE : message);
+    const shown = message.includes('Unexpected token') ? PUBLIC_DESK_UNAVAILABLE : message;
+    setNotice(cachedDesk() ? PUBLIC_DESK_REFRESH_FAILED : shown);
   }
 }
 

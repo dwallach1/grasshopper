@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { MARK_NOT_IN_LEDGER } from './book-performance';
-import { assembleDeskFreshness, freshnessTone, latestLedgerEventAt } from './desk-freshness';
+import {
+  assembleDeskFreshness,
+  assembleStewardFreshness,
+  freshnessTone,
+  latestLedgerEventAt,
+  oldestStewardMarkAt,
+} from './desk-freshness';
 import type { DeskPayload } from './ledger-types';
 
 const NOW = new Date('2026-09-07T22:00:00.000Z');
@@ -205,18 +211,134 @@ describe('latestLedgerEventAt', () => {
 });
 
 describe('assembleDeskFreshness', () => {
-  test('read chip is generated_at; no redundant snapshot or scan chip', () => {
+  test('read chip is generated_at; ledger chip follows the oldest steward mark', () => {
     const fresh = assembleDeskFreshness(
       desk({
         generated_at: '2026-09-07T20:00:00.000Z',
         source: 'snapshot',
-        fills: [{ id: 'f1', trade_intent_id: 'i1', quantity: 1, price: 1, executed_at: '2026-09-07T10:00:00.000Z' }],
+        book: {
+          account_label: 'robinhood_agentic_7638',
+          observed_at: '2026-09-07T19:00:00.000Z',
+          last4: '7638',
+          buying_power: null,
+          starting_nav: null,
+          current_nav: null,
+          cash: null,
+          deployed: null,
+          vs_start: null,
+          vs_start_note: MARK_NOT_IN_LEDGER,
+          day_pnl: null,
+          day_pnl_note: MARK_NOT_IN_LEDGER,
+          vs_cost: null,
+          vs_cost_note: MARK_NOT_IN_LEDGER,
+          names: [],
+        },
+        fills: [{ id: 'f1', trade_intent_id: 'i1', quantity: 1, price: 1, executed_at: '2026-09-07T19:30:00.000Z' }],
+        prediction_markets: {
+          desk: 'ODDSBORNE',
+          venue: 'prediction',
+          markets: [],
+          positions: [{
+            id: 'p1',
+            market_id: 'm',
+            account_key: 'pm',
+            thesis_id: null,
+            outcome: 'YES',
+            status: 'open',
+            quantity: 1,
+            average_cost: 0.4,
+            mark: 0.5,
+            mark_at: '2026-09-07T12:00:00.000Z',
+          }],
+          orders: [],
+          fills: [],
+          pnl: [{
+            id: 'pp1',
+            account_key: 'pm',
+            as_of: '2026-09-07T12:00:00.000Z',
+            realized: 0,
+            unrealized: 0,
+            fees: 0,
+            cash: 0,
+            equity: 0,
+            notes: null,
+          }],
+          notes: [{
+            id: 'n1',
+            market_id: null,
+            thesis_id: null,
+            note_type: 'lesson',
+            title: 'later note',
+            body: 'does not refresh marks',
+            created_at: '2026-09-07T19:50:00.000Z',
+          }],
+        },
       }),
     );
     expect(fresh.read_at).toBe('2026-09-07T20:00:00.000Z');
-    expect(fresh.ledger_at).toBe('2026-09-07T10:00:00.000Z');
+    expect(fresh.latest_any_at).toBe('2026-09-07T19:30:00.000Z');
+    expect(fresh.ledger_at).toBe('2026-09-07T12:00:00.000Z');
     expect(fresh.chips.map((c) => c.id)).toEqual(['read', 'ledger']);
     expect(fresh.chips.map((c) => c.label)).toEqual(['read', 'ledger']);
+    expect(fresh.chips.find((c) => c.id === 'ledger')?.title).toContain('ODD');
+    expect(freshnessTone(fresh.ledger_at, NOW)).toBe('warn');
+    expect(freshnessTone(fresh.latest_any_at, NOW)).toBe('live');
+  });
+});
+
+describe('steward freshness', () => {
+  test('Oddsborne notes and heartbeat do not move the Book mark clock', () => {
+    const payload = desk({
+      prediction_markets: {
+        desk: 'ODDSBORNE',
+        venue: 'prediction',
+        markets: [],
+        positions: [{
+          id: 'p1',
+          market_id: 'm',
+          account_key: 'pm',
+          thesis_id: null,
+          outcome: 'YES',
+          status: 'open',
+          quantity: 1,
+          average_cost: 0.4,
+          mark: 0.5,
+          mark_at: '2026-09-07T12:00:00.000Z',
+        }],
+        orders: [],
+        fills: [],
+        pnl: [{
+          id: 'pp1',
+          account_key: 'pm',
+          as_of: '2026-09-07T12:00:00.000Z',
+          realized: 0,
+          unrealized: 0,
+          fees: 0,
+          cash: 290,
+          equity: 500,
+          notes: null,
+        }],
+        notes: [{
+          id: 'n1',
+          market_id: null,
+          thesis_id: null,
+          note_type: 'lesson',
+          title: 'afternoon lesson',
+          body: 'hold',
+          created_at: '2026-09-07T21:00:00.000Z',
+        }],
+      },
+      team: {
+        agents: [{ slug: 'oddsborne', heartbeat_at: '2026-09-07T10:00:00.000Z' }],
+        domains: [],
+        stewards: [],
+        accounts: [],
+      },
+    });
+    const odds = assembleStewardFreshness(payload).find((row) => row.id === 'oddsborne');
+    expect(odds?.mark_at).toBe('2026-09-07T12:00:00.000Z');
+    expect(odds?.activity_at).toBe('2026-09-07T21:00:00.000Z');
+    expect(oldestStewardMarkAt(payload)).toBe('2026-09-07T12:00:00.000Z');
   });
 });
 

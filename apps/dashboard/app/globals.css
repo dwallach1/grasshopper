@@ -4665,11 +4665,20 @@ a:focus-visible {
 }
 
 .book-open-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
   margin: 0;
   color: var(--text-3);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.22em;
+}
+
+.book-open-age {
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .book-open-tickets {

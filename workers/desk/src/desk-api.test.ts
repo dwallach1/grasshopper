@@ -54,7 +54,9 @@ describe('public desk Worker API', () => {
     expect(body.generated_at).toBe('2026-09-09T14:00:00.000Z');
     expect(body.ontology_actions).toEqual([]);
     expect(body.book.current_nav).toBe(5120);
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=0, s-maxage=8, stale-while-revalidate=30',
+    );
     expect(response.headers.get('content-security-policy') || '').toContain("connect-src 'self'");
   });
 
@@ -152,15 +154,18 @@ describe('public desk reader credentials', () => {
 
   test('live load uses one /bundle request, not per-table PostgREST', async () => {
     const source = await Bun.file(new URL('./desk-live.ts', import.meta.url)).text();
-    expect(source).toContain('/bundle');
+    expect(source).toContain('/bundle/public');
+    expect(source).toContain("response.status === 404");
     expect(source).toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
     expect(source).toContain('LIVE_CACHE_MS');
     expect(source).not.toContain('await response.json()');
     expect(source).not.toContain('/rest/v1/');
     const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
+    expect(fn).toContain("path === '/bundle/public'");
     expect(fn).toContain("path === '/bundle'");
     expect(fn).toContain('handleBundle');
+    expect(fn).toContain("mode === 'public'");
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");
   });

@@ -149,7 +149,7 @@ describe('steward desk face', () => {
     });
     expect(faces.get('oddsborne')).toEqual({
       mood: 'idle',
-      alive: false,
+      alive: true,
       thinking: true,
       attending: true,
     });

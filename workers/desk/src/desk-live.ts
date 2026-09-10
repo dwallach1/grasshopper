@@ -81,15 +81,24 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!liveReaderReady(env) || !supabaseUrl || !apiKey || !accessToken) {
     throw new Error('desk_reader_unconfigured');
   }
-  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/bundle`, {
-    headers: {
-      apikey: apiKey,
-      Authorization: `Bearer ${apiKey}`,
-      Accept: 'application/json',
-    },
+  const headers = {
+    apikey: apiKey,
+    Authorization: `Bearer ${apiKey}`,
+    Accept: 'application/json',
+  };
+  const base = supabaseUrl.replace(/\/$/, '');
+  let response = await fetch(`${base}/bundle/public`, {
+    headers,
     cache: 'no-store',
     signal: AbortSignal.timeout(25_000),
   });
+  if (response.status === 404) {
+    response = await fetch(`${base}/bundle`, {
+      headers,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(25_000),
+    });
+  }
   if (!response.ok) {
     throw new Error(`desk_bundle_${response.status}`);
   }

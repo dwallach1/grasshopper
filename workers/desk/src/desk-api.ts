@@ -1,5 +1,6 @@
 import {
   isPublicSnapshot,
+  LIVE_JSON_CACHE_CONTROL,
   MAX_SNAPSHOT_BYTES,
   PUBLIC_DESK_REDIRECTS,
   publicDeskJsonError,
@@ -31,7 +32,9 @@ export function jsonResponse(status: number, body: unknown, extra?: HeadersInit)
     status,
     headers: {
       ...DESK_API_HEADERS,
-      ...(status >= 400 ? { 'Cache-Control': 'no-store' } : {}),
+      ...(status >= 400
+        ? { 'Cache-Control': 'no-store' }
+        : { 'Cache-Control': LIVE_JSON_CACHE_CONTROL }),
       ...extra,
     },
   });

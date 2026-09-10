@@ -41,6 +41,7 @@ describe('read-only operator desk', () => {
     expect(app).toContain('publicView');
     expect(app).toContain('cachedDesk');
     expect(app).toContain('PUBLIC_DESK_UNAVAILABLE');
+    expect(app).toContain('PUBLIC_DESK_REFRESH_FAILED');
     expect(app).not.toContain('SessionControls');
   });
 

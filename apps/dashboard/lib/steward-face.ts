@@ -8,6 +8,7 @@ import {
   stewardThinking,
   type StewardMood,
 } from './desk-avatar';
+import { assembleStewardFreshness, type StewardFreshnessId } from './desk-freshness';
 import { assembleLeaderboard } from './desk-leaderboard';
 import { deskTeam, isHeartbeatFresh, teamCards } from './desk-team';
 import type { DeskPayload } from './ledger-types';
@@ -33,13 +34,17 @@ export function stewardDeskFaces(desk: DeskPayload, nowMs: number): Map<string, 
   const open = assembleBookOpen(desk);
   const boardBySlug = new Map(board.rows.map((row) => [row.slug, row]));
   const openBySlug = new Map(open.rows.map((row) => [row.slug, row]));
+  const activityBySlug = new Map(
+    assembleStewardFreshness(desk).map((row) => [row.id, row.activity_at]),
+  );
 
   for (const card of cards) {
     const row = boardBySlug.get(card.slug);
     const tickets = openBySlug.get(card.slug);
+    const activity = activityBySlug.get(card.slug as StewardFreshnessId) ?? card.heartbeat_at;
     faces.set(card.slug, {
       mood: stewardMood(row?.return_pct),
-      alive: isHeartbeatFresh(card.heartbeat_at, nowMs),
+      alive: isHeartbeatFresh(activity, nowMs),
       thinking: stewardThinking(card.status),
       attending: (tickets?.tickets.length ?? 0) > 0 || (row?.open_lots ?? 0) > 0,
     });

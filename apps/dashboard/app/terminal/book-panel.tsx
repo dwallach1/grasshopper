@@ -11,9 +11,11 @@ import {
   type StewardEdge,
 } from '../../lib/book-edge-stats';
 import { assembleBookOpen } from '../../lib/book-open-strip';
+import { assembleStewardFreshness, type StewardFreshness } from '../../lib/desk-freshness';
 import { QUIET_STEWARD_FACE, stewardDeskFaces, type StewardFace } from '../../lib/steward-face';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { BookOpenStrip } from './book-open-strip';
+import { age } from './format';
 import { StewardAvatar } from './steward-avatar';
 
 export function BookPanel({
@@ -25,10 +27,12 @@ export function BookPanel({
 }) {
   const edge = useMemo(() => assembleBookEdge(desk), [desk]);
   const open = useMemo(() => assembleBookOpen(desk), [desk]);
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
   const faces = useMemo(
-    () => stewardDeskFaces(desk, nowIso ? Date.parse(nowIso) : Date.now()),
-    [desk, nowIso],
+    () => stewardDeskFaces(desk, nowMs),
+    [desk, nowMs],
   );
+  const marks = useMemo(() => assembleStewardFreshness(desk), [desk]);
 
   return (
     <div className="line-stage crt-book">
@@ -40,11 +44,17 @@ export function BookPanel({
         </p>
       </header>
 
-      <BookOpenStrip open={open} />
+      <BookOpenStrip open={open} now={nowIso ? Date.parse(nowIso) : null} />
 
       <div className="crt-book-stack">
         {edge.rows.map((row) => (
-          <StewardEdgeCard key={row.id} row={row} face={faces.get(row.slug)} />
+          <StewardEdgeCard
+            key={row.id}
+            row={row}
+            face={faces.get(row.slug)}
+            freshness={marks.find((item) => item.id === row.id)}
+            now={nowIso ? Date.parse(nowIso) : null}
+          />
         ))}
       </div>
     </div>
@@ -54,14 +64,19 @@ export function BookPanel({
 function StewardEdgeCard({
   row,
   face = QUIET_STEWARD_FACE,
+  freshness,
+  now,
 }: {
   row: StewardEdge;
   face?: StewardFace;
+  freshness?: StewardFreshness;
+  now: number | null;
 }) {
+  const markAge = age(freshness?.mark_at ?? undefined, now);
   return (
     <article
       className={`crt-book-card${row.thin ? ' is-thin' : ''}`}
-      aria-label={`${row.steward} edge`}
+      aria-label={`${row.steward} edge · marks ${markAge}`}
     >
       <header className="crt-book-who">
         <StewardAvatar
@@ -73,7 +88,7 @@ function StewardEdgeCard({
         />
         <div className="crt-book-id">
           <b>{row.steward}</b>
-          <i>{row.venue_label} · {row.unit}</i>
+          <i>{row.venue_label} · {row.unit} · marks {markAge}</i>
         </div>
       </header>
 
