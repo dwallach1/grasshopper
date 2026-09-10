@@ -23,7 +23,7 @@ export type DeskWire = z.infer<typeof DeskWireSchema>;
 
 export const PUBLIC_DESK_UNAVAILABLE = 'Desk ledger unavailable';
 export const PUBLIC_DESK_REFRESH_FAILED = 'Showing last good ledger — live read failed';
-export const LIVE_JSON_CACHE_CONTROL = 'public, max-age=0, s-maxage=8, stale-while-revalidate=30';
+export const LIVE_JSON_CACHE_CONTROL = 'public, max-age=0, s-maxage=15, stale-while-revalidate=45';
 
 const PUBLIC_OMIT = new Set([
   'evidence',

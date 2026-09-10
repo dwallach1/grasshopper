@@ -1,7 +1,7 @@
 import { DESK_API_HEADERS, handleDeskApi } from './desk-api';
 
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const workerFirst = path.startsWith('/api/')
@@ -21,7 +21,7 @@ export default {
     }
 
     try {
-      return await handleDeskApi(request, env);
+      return await handleDeskApi(request, env, undefined, ctx);
     } catch (error) {
       console.error(JSON.stringify({
         event: 'desk_worker_error',

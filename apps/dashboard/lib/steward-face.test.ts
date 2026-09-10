@@ -70,7 +70,7 @@ function desk(partial: Record<string, unknown> = {}): DeskPayload {
     snapshots: [],
     book: {
       account_label: 'robinhood_agentic_7638',
-      observed_at: '2026-09-04T20:06:00.000Z',
+      observed_at: '2026-09-06T13:10:00.000Z',
       last4: '7638',
       buying_power: null,
       starting_nav: 5000,
@@ -167,11 +167,11 @@ describe('steward desk face', () => {
     });
   });
 
-  test('stale pulse and a down book stay honest', () => {
+  test('a down book stays down when marks are fresh', () => {
     const down = desk({
       book: {
         account_label: 'robinhood_agentic_7638',
-        observed_at: '2026-09-04T20:06:00.000Z',
+        observed_at: '2026-09-06T13:10:00.000Z',
         last4: '7638',
         buying_power: null,
         starting_nav: 5000,
@@ -197,7 +197,35 @@ describe('steward desk face', () => {
     });
     expect(stewardDeskFace(down, 'quantanamo', NOW)).toEqual({
       mood: 'down',
-      alive: false,
+      alive: true,
+      thinking: false,
+      attending: false,
+    });
+  });
+
+  test('stale marks do not wear a winning face', () => {
+    const staleWin = desk({
+      book: {
+        account_label: 'robinhood_agentic_7638',
+        observed_at: '2026-09-06T04:00:00.000Z',
+        last4: '7638',
+        buying_power: null,
+        starting_nav: 5000,
+        current_nav: 6200,
+        cash: null,
+        deployed: null,
+        vs_start: 1200,
+        vs_start_note: MARK_NOT_IN_LEDGER,
+        day_pnl: null,
+        day_pnl_note: MARK_NOT_IN_LEDGER,
+        vs_cost: null,
+        vs_cost_note: MARK_NOT_IN_LEDGER,
+        names: [],
+      },
+    });
+    expect(stewardDeskFace(staleWin, 'quantanamo', NOW)).toEqual({
+      mood: 'idle',
+      alive: true,
       thinking: false,
       attending: false,
     });

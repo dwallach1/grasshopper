@@ -11,6 +11,7 @@ import {
   type StewardEdge,
 } from '../../lib/book-edge-stats';
 import { assembleBookOpen } from '../../lib/book-open-strip';
+import { assembleDeskBookHealth } from '../../lib/desk-book-health';
 import { assembleStewardFreshness, type StewardFreshness } from '../../lib/desk-freshness';
 import { QUIET_STEWARD_FACE, stewardDeskFaces, type StewardFace } from '../../lib/steward-face';
 import type { DeskPayload } from '../../lib/ledger-types';
@@ -33,6 +34,7 @@ export function BookPanel({
     [desk, nowMs],
   );
   const marks = useMemo(() => assembleStewardFreshness(desk), [desk]);
+  const health = useMemo(() => assembleDeskBookHealth(desk, nowMs), [desk, nowMs]);
 
   return (
     <div className="line-stage crt-book">
@@ -44,6 +46,7 @@ export function BookPanel({
         </p>
       </header>
 
+      <BookHealthStrip health={health} now={nowIso ? Date.parse(nowIso) : null} />
       <BookOpenStrip open={open} now={nowIso ? Date.parse(nowIso) : null} />
 
       <div className="crt-book-stack">
@@ -58,6 +61,32 @@ export function BookPanel({
         ))}
       </div>
     </div>
+  );
+}
+
+function BookHealthStrip({
+  health,
+  now,
+}: {
+  health: ReturnType<typeof assembleDeskBookHealth>;
+  now: number | null;
+}) {
+  if (health.alerts.length === 0) return null;
+  return (
+    <section className="book-health" aria-label="Book health">
+      <p className="book-open-kicker">HEALTH</p>
+      <ul className="book-health-alerts">
+        {health.alerts.map((alert) => (
+          <li key={alert.id}>
+            {alert.steward === 'oddsborne' ? 'ODD' : 'BND'} {alert.label}
+            {' · '}
+            {alert.detail}
+            {' · '}
+            {age(alert.at ?? undefined, now)}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

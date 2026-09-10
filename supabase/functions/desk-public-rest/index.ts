@@ -19,7 +19,7 @@ const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
 const AGENTIC_LAST4 = '7638';
 
 const PUBLIC_KEYS = new Set([
-  'theses', 'symbols', 'runs',
+  'theses', 'symbols',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
   'themes',
 ]);

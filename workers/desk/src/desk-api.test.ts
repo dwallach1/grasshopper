@@ -55,7 +55,7 @@ describe('public desk Worker API', () => {
     expect(body.ontology_actions).toEqual([]);
     expect(body.book.current_nav).toBe(5120);
     expect(response.headers.get('cache-control')).toBe(
-      'public, max-age=0, s-maxage=8, stale-while-revalidate=30',
+      'public, max-age=0, s-maxage=15, stale-while-revalidate=45',
     );
     expect(response.headers.get('content-security-policy') || '').toContain("connect-src 'self'");
   });
@@ -102,7 +102,12 @@ describe('public desk Worker API', () => {
       ok: true,
       generated_at: '2026-09-09T14:00:00.000Z',
       source: 'live',
+      marks_lagging: false,
+      stale_opens: 0,
+      resolved_still_open: 0,
+      stale_catalog: 0,
     });
+    expect(ok.headers.get('cache-control')).toBe('no-store');
     const down = await handleDeskApi(
       new Request('https://desk.test/api/health'),
       env(),
@@ -156,9 +161,11 @@ describe('public desk reader credentials', () => {
     const source = await Bun.file(new URL('./desk-live.ts', import.meta.url)).text();
     expect(source).toContain('/bundle/public');
     expect(source).toContain("response.status === 404");
-    expect(source).toContain('assembleDeskFromRestBag');
+    expect(source).toContain('assemblePublicDeskFromRestBag');
+    expect(source).not.toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
     expect(source).toContain('LIVE_CACHE_MS');
+    expect(source).toContain('JSON.stringify(published)');
     expect(source).not.toContain('await response.json()');
     expect(source).not.toContain('/rest/v1/');
     const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
@@ -168,6 +175,11 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("mode === 'public'");
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");
+    const api = await Bun.file(new URL('./desk-api.ts', import.meta.url)).text();
+    expect(api).toContain('assembleDeskBookHealth');
+    expect(api).toContain('waitUntil');
+    expect(api).not.toContain('.clone().json()');
+    expect(api).not.toContain('served.clone()');
   });
 
   test('wrangler config has no KV snapshot binding', async () => {

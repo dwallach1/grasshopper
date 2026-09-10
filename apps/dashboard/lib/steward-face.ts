@@ -8,7 +8,7 @@ import {
   stewardThinking,
   type StewardMood,
 } from './desk-avatar';
-import { assembleStewardFreshness, type StewardFreshnessId } from './desk-freshness';
+import { assembleStewardFreshness, isMarkFresh, type StewardFreshnessId } from './desk-freshness';
 import { assembleLeaderboard } from './desk-leaderboard';
 import { deskTeam, isHeartbeatFresh, teamCards } from './desk-team';
 import type { DeskPayload } from './ledger-types';
@@ -43,7 +43,7 @@ export function stewardDeskFaces(desk: DeskPayload, nowMs: number): Map<string, 
     const tickets = openBySlug.get(card.slug);
     const activity = activityBySlug.get(card.slug as StewardFreshnessId) ?? card.heartbeat_at;
     faces.set(card.slug, {
-      mood: stewardMood(row?.return_pct),
+      mood: isMarkFresh(row?.last_marked, nowMs) ? stewardMood(row?.return_pct) : 'idle',
       alive: isHeartbeatFresh(activity, nowMs),
       thinking: stewardThinking(card.status),
       attending: (tickets?.tickets.length ?? 0) > 0 || (row?.open_lots ?? 0) > 0,
@@ -53,7 +53,7 @@ export function stewardDeskFaces(desk: DeskPayload, nowMs: number): Map<string, 
   for (const row of board.rows) {
     if (faces.has(row.slug)) continue;
     faces.set(row.slug, {
-      mood: stewardMood(row.return_pct),
+      mood: isMarkFresh(row.last_marked, nowMs) ? stewardMood(row.return_pct) : 'idle',
       alive: false,
       thinking: false,
       attending: row.open_lots > 0,

@@ -53,7 +53,13 @@ describe('desk IA smoke', () => {
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
     expect(book).toContain('assembleStewardFreshness');
+    expect(book).toContain('assembleDeskBookHealth');
+    expect(book).toContain('BookHealthStrip');
     expect(book).toContain('marks {markAge}');
+    const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
+    expect(board).toContain('freshLead');
+    expect(board).toContain('is-stale-marks');
+    expect(board).toContain('isMarkStale');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {

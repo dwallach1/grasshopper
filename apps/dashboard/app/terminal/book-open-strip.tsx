@@ -1,5 +1,6 @@
 'use client';
 
+import { isMarkStale } from '../../lib/desk-freshness';
 import { DeskLiveline } from './desk-liveline';
 import { age } from './format';
 import type { BookOpen, BookOpenTicket } from '../../lib/book-open-strip';
@@ -46,7 +47,7 @@ function OpenTicket({
   const costLabel = ticket.cost === null ? undefined : formatAmount(ticket.cost, ticket.unit);
   const markAge = age(ticket.marked_at ?? undefined, now);
   return (
-    <div className="book-open-ticket" aria-label={`${ticket.steward} ${ticket.label} ${ticket.meta} marks ${markAge}`}>
+    <div className={`book-open-ticket${isMarkStale(ticket.marked_at, now ?? Date.now()) ? ' is-stale' : ''}`} aria-label={`${ticket.steward} ${ticket.label} ${ticket.meta} marks ${markAge}${isMarkStale(ticket.marked_at, now ?? Date.now()) ? ' stale' : ''}`}>
       <div className="book-open-ticket-id">
         <b>{ticket.label}</b>
         <span>{ticket.meta} · {markAge}</span>

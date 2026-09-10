@@ -5,6 +5,8 @@ import {
   assembleDeskFreshness,
   assembleStewardFreshness,
   freshnessTone,
+  isMarkFresh,
+  isMarkStale,
   latestLedgerEventAt,
   oldestStewardMarkAt,
 } from './desk-freshness';
@@ -211,7 +213,7 @@ describe('latestLedgerEventAt', () => {
 });
 
 describe('assembleDeskFreshness', () => {
-  test('read chip is generated_at; ledger chip follows the oldest steward mark', () => {
+  test('read chip is generated_at; steward chips keep Oddsborne lag visible', () => {
     const fresh = assembleDeskFreshness(
       desk({
         generated_at: '2026-09-07T20:00:00.000Z',
@@ -278,11 +280,14 @@ describe('assembleDeskFreshness', () => {
     expect(fresh.read_at).toBe('2026-09-07T20:00:00.000Z');
     expect(fresh.latest_any_at).toBe('2026-09-07T19:30:00.000Z');
     expect(fresh.ledger_at).toBe('2026-09-07T12:00:00.000Z');
-    expect(fresh.chips.map((c) => c.id)).toEqual(['read', 'ledger']);
-    expect(fresh.chips.map((c) => c.label)).toEqual(['read', 'ledger']);
-    expect(fresh.chips.find((c) => c.id === 'ledger')?.title).toContain('ODD');
+    expect(fresh.chips.map((c) => c.id)).toEqual(['read', 'quantanamo', 'oddsborne']);
+    expect(fresh.chips.map((c) => c.label)).toEqual(['read', 'QNT', 'ODD']);
+    expect(fresh.chips.find((c) => c.id === 'oddsborne')?.at).toBe('2026-09-07T12:00:00.000Z');
+    expect(fresh.chips.find((c) => c.id === 'quantanamo')?.title).toContain('ODD');
     expect(freshnessTone(fresh.ledger_at, NOW)).toBe('warn');
     expect(freshnessTone(fresh.latest_any_at, NOW)).toBe('live');
+    expect(isMarkFresh(fresh.chips.find((c) => c.id === 'oddsborne')?.at, NOW)).toBe(false);
+    expect(isMarkStale(fresh.chips.find((c) => c.id === 'oddsborne')?.at, NOW)).toBe(true);
   });
 });
 

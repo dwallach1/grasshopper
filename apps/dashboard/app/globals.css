@@ -2263,6 +2263,8 @@ a:focus-visible {
 
 .term-fresh {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
   margin-left: auto;
@@ -4170,6 +4172,12 @@ a:focus-visible {
   color: var(--text);
 }
 
+.line-row.is-stale-marks .line-pct.up,
+.line-row.is-stale-marks .line-pct.down,
+.line-row.is-stale-marks .line-pct {
+  color: var(--text-3);
+}
+
 .line-who {
   display: flex;
   flex-direction: column;
@@ -4679,6 +4687,29 @@ a:focus-visible {
 .book-open-age {
   letter-spacing: 0.04em;
   text-transform: none;
+}
+
+.book-health {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.book-health-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--warn);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.book-open-ticket.is-stale .book-open-ticket-id span {
+  color: var(--warn);
 }
 
 .book-open-tickets {

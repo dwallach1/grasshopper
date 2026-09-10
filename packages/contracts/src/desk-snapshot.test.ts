@@ -45,7 +45,7 @@ describe('public desk snapshot contract', () => {
     expect(published).not.toHaveProperty('evidence');
     expect(published).not.toHaveProperty('runs');
     expect(published.prediction_markets).toEqual({ markets: [] });
-    expect(LIVE_JSON_CACHE_CONTROL).toContain('s-maxage=8');
+    expect(LIVE_JSON_CACHE_CONTROL).toContain('s-maxage=15');
     expect(PUBLIC_DESK_REFRESH_FAILED).toContain('last good ledger');
     expect(published.meme_coins).toEqual({ tokens: [] });
     expect(published.team).toEqual(sample.team);

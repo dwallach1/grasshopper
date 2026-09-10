@@ -5,8 +5,8 @@ import { latestPredictionPnl, predictionDesk } from './prediction-book';
 export type FreshnessTone = 'live' | 'warn' | 'stale';
 
 export type FreshnessChip = {
-  id: 'read' | 'ledger';
-  label: 'read' | 'ledger';
+  id: 'read' | StewardFreshnessId;
+  label: string;
   at: string | null;
   title: string;
 };
@@ -32,7 +32,8 @@ export type DeskFreshness = {
   stewards: StewardFreshness[];
 };
 
-const FRESH_MS = 6 * 60 * 60 * 1000;
+/** Open marks / pnl.as_of older than this are not a live book. */
+export const MARK_FRESH_MS = 6 * 60 * 60 * 1000;
 const WARN_MS = 48 * 60 * 60 * 1000;
 
 const STEWARD_META: Record<StewardFreshnessId, StewardFreshness['label']> = {
@@ -215,9 +216,19 @@ export function freshnessTone(at: string | null | undefined, now: Date): Freshne
   if (!Number.isFinite(ms)) return 'stale';
   const age = now.getTime() - ms;
   if (age < 0) return 'live';
-  if (age < FRESH_MS) return 'live';
+  if (age < MARK_FRESH_MS) return 'live';
   if (age < WARN_MS) return 'warn';
   return 'stale';
+}
+
+/** True when the stamp is inside the 6h live window. Missing stamps are stale. */
+export function isMarkFresh(at: string | null | undefined, now: Date | number): boolean {
+  const clock = typeof now === 'number' ? new Date(now) : now;
+  return freshnessTone(at, clock) === 'live';
+}
+
+export function isMarkStale(at: string | null | undefined, now: Date | number): boolean {
+  return !isMarkFresh(at, now);
 }
 
 function stewardMarkTitle(stewards: readonly StewardFreshness[]): string {
@@ -244,14 +255,12 @@ export function assembleDeskFreshness(desk: DeskPayload): DeskFreshness {
         at: read_at,
         title: read_at ? `Last successful ledger read ${read_at}` : 'No ledger read timestamp',
       },
-      {
-        id: 'ledger',
-        label: 'ledger',
-        at: ledger_at,
-        title: ledger_at
-          ? `Oldest steward book mark ${ledger_at} (${stewardMarkTitle(stewards)})`
-          : 'No steward marks on the desk',
-      },
+      ...stewards.filter((row) => row.mark_at).map((row) => ({
+        id: row.id,
+        label: row.label,
+        at: row.mark_at,
+        title: `${row.label} book mark ${row.mark_at} (oldest ${ledger_at ?? 'none'}; ${stewardMarkTitle(stewards)})`,
+      })),
     ],
   };
 }
