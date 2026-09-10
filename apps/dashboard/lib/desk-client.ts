@@ -1,4 +1,4 @@
-import { DeskWireSchema, PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
+import { DeskWireSchema, hydratePublicDesk, PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
 import { z } from 'zod';
 
 import { isPublicDesk } from './desk-mode';
@@ -36,6 +36,18 @@ export function parseDeskResponseText(text: string): unknown {
   }
 }
 
+/** Schema-check a wire body and fill omitted arrays. Used by /api/desk fetch. */
+export function deskFromWire(body: unknown): DeskPayload {
+  const parsed = DeskWireSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new Error('Ledger payload failed schema checks');
+  }
+  // SAFETY: /api/ledger and /api/desk serialize DeskPayload; envelope checked above.
+  // hydratePublicDesk fills omitted operator arrays (`tests`, `queue`, …) so
+  // TerminalApp can read tests[0] without throwing on a slim snapshot.
+  return hydratePublicDesk(parsed.data) as DeskPayload;
+}
+
 export async function fetchDeskPayload(): Promise<DeskPayload> {
   if (inflight) return inflight;
   inflight = (async () => {
@@ -47,12 +59,7 @@ export async function fetchDeskPayload(): Promise<DeskPayload> {
     if (!response.ok) {
       throw new Error(ErrorSchema.safeParse(body).data?.error || PUBLIC_DESK_UNAVAILABLE);
     }
-    const parsed = DeskWireSchema.safeParse(body);
-    if (!parsed.success) {
-      throw new Error('Ledger payload failed schema checks');
-    }
-    // SAFETY: /api/ledger and /api/desk serialize DeskPayload; envelope checked above.
-    const desk = parsed.data as DeskPayload;
+    const desk = deskFromWire(body);
     memory = desk;
     return desk;
   })();

@@ -65,8 +65,8 @@ export function TerminalApp({
   const [now, setNow] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selectedThesisId, setSelectedThesisId] = useState(initial.theses[0]?.id ?? '');
-  const [selectedTestId, setSelectedTestId] = useState(initial.tests[0]?.id ?? null);
+  const [selectedThesisId, setSelectedThesisId] = useState(initial.theses?.[0]?.id ?? '');
+  const [selectedTestId, setSelectedTestId] = useState(initial.tests?.[0]?.id ?? null);
   const [goArmed, setGoArmed] = useState(false);
   const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -181,7 +181,7 @@ export function TerminalApp({
       if (event.key === 'Escape') setHelp(false);
       if (event.key === 'j' || event.key === 'k') {
         if (surface === 'backtests') {
-          const ids = desk.tests.map((row) => row.id);
+          const ids = (desk.tests ?? []).map((row) => row.id);
           const index = ids.indexOf(selectedTestId ?? -1);
           const next = event.key === 'j' ? Math.min(ids.length - 1, Math.max(0, index) + 1) : Math.max(0, index - 1);
           if (ids[next] !== undefined) setSelectedTestId(ids[next]);
