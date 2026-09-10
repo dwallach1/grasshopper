@@ -168,6 +168,9 @@ describe('assembleBookOpen', () => {
     expect(ticket?.overlays[0]?.value).toBe(0.22);
     expect(ticket?.overlays[0]?.data.every((point) => point.value === 0.22)).toBe(true);
     expect(ticket?.drawable).toBe(true);
+    expect(ticket?.marked_at).toBe(markAt);
+    expect(open.rows[0]?.marked_at).toBe(markAt);
+    expect(open.as_of).toBe(markAt);
   });
 
   test('published fills join the mark clocks — never invented ticks', () => {

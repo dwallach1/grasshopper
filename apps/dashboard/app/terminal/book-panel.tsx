@@ -11,9 +11,12 @@ import {
   type StewardEdge,
 } from '../../lib/book-edge-stats';
 import { assembleBookOpen } from '../../lib/book-open-strip';
+import { assembleDeskBookHealth } from '../../lib/desk-book-health';
+import { assembleStewardFreshness, type StewardFreshness } from '../../lib/desk-freshness';
 import { QUIET_STEWARD_FACE, stewardDeskFaces, type StewardFace } from '../../lib/steward-face';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { BookOpenStrip } from './book-open-strip';
+import { age } from './format';
 import { StewardAvatar } from './steward-avatar';
 
 export function BookPanel({
@@ -25,10 +28,13 @@ export function BookPanel({
 }) {
   const edge = useMemo(() => assembleBookEdge(desk), [desk]);
   const open = useMemo(() => assembleBookOpen(desk), [desk]);
+  const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
   const faces = useMemo(
-    () => stewardDeskFaces(desk, nowIso ? Date.parse(nowIso) : Date.now()),
-    [desk, nowIso],
+    () => stewardDeskFaces(desk, nowMs),
+    [desk, nowMs],
   );
+  const marks = useMemo(() => assembleStewardFreshness(desk), [desk]);
+  const health = useMemo(() => assembleDeskBookHealth(desk, nowMs), [desk, nowMs]);
 
   return (
     <div className="line-stage crt-book">
@@ -40,28 +46,66 @@ export function BookPanel({
         </p>
       </header>
 
-      <BookOpenStrip open={open} />
+      <BookHealthStrip health={health} now={nowIso ? Date.parse(nowIso) : null} />
+      <BookOpenStrip open={open} now={nowIso ? Date.parse(nowIso) : null} />
 
       <div className="crt-book-stack">
         {edge.rows.map((row) => (
-          <StewardEdgeCard key={row.id} row={row} face={faces.get(row.slug)} />
+          <StewardEdgeCard
+            key={row.id}
+            row={row}
+            face={faces.get(row.slug)}
+            freshness={marks.find((item) => item.id === row.id)}
+            now={nowIso ? Date.parse(nowIso) : null}
+          />
         ))}
       </div>
     </div>
   );
 }
 
+function BookHealthStrip({
+  health,
+  now,
+}: {
+  health: ReturnType<typeof assembleDeskBookHealth>;
+  now: number | null;
+}) {
+  if (health.alerts.length === 0) return null;
+  return (
+    <section className="book-health" aria-label="Book health">
+      <p className="book-open-kicker">HEALTH</p>
+      <ul className="book-health-alerts">
+        {health.alerts.map((alert) => (
+          <li key={alert.id}>
+            {alert.steward === 'oddsborne' ? 'ODD' : 'BND'} {alert.label}
+            {' · '}
+            {alert.detail}
+            {' · '}
+            {age(alert.at ?? undefined, now)}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function StewardEdgeCard({
   row,
   face = QUIET_STEWARD_FACE,
+  freshness,
+  now,
 }: {
   row: StewardEdge;
   face?: StewardFace;
+  freshness?: StewardFreshness;
+  now: number | null;
 }) {
+  const markAge = age(freshness?.mark_at ?? undefined, now);
   return (
     <article
       className={`crt-book-card${row.thin ? ' is-thin' : ''}`}
-      aria-label={`${row.steward} edge`}
+      aria-label={`${row.steward} edge · marks ${markAge}`}
     >
       <header className="crt-book-who">
         <StewardAvatar
@@ -73,7 +117,7 @@ function StewardEdgeCard({
         />
         <div className="crt-book-id">
           <b>{row.steward}</b>
-          <i>{row.venue_label} · {row.unit}</i>
+          <i>{row.venue_label} · {row.unit} · marks {markAge}</i>
         </div>
       </header>
 

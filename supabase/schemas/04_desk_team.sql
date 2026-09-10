@@ -112,3 +112,30 @@ on public.desk_accounts
 for select
 to authenticated
 using (true);
+
+-- Oddsborne worker heartbeat: table grant + callable RPC. The statement
+-- trigger `touch_oddsborne_heartbeat` returns TRIGGER / null if invoked as
+-- RPC — workers must call `oddsborne_touch_heartbeat()` instead.
+grant select on public.desk_agents to oddsborne_worker;
+grant update (status, heartbeat_at, updated_at, meta) on public.desk_agents to oddsborne_worker;
+
+create or replace function public.oddsborne_touch_heartbeat()
+returns timestamptz
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  touched timestamptz;
+begin
+  update public.desk_agents
+  set heartbeat_at = now(),
+      updated_at = now()
+  where slug = 'oddsborne'
+  returning heartbeat_at into touched;
+  return touched;
+end;
+$$;
+
+revoke all on function public.oddsborne_touch_heartbeat() from public, anon;
+grant execute on function public.oddsborne_touch_heartbeat() to oddsborne_worker, service_role;

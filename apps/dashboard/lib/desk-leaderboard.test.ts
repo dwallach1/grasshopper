@@ -4,6 +4,7 @@ import { MARK_NOT_IN_LEDGER } from './book-performance';
 import {
   assembleLeaderboard,
   daysLive,
+  freshLead,
   hasDeskLevelBook,
   LEADERBOARD_RULES,
   LEADERBOARD_SUBTITLE,
@@ -431,5 +432,12 @@ describe('desk leaderboard', () => {
     expect(stocks?.max_drawdown_pct).toBeCloseTo(10);
     expect(board.rows.map((row) => row.id)).toEqual(['bandit', 'oddsborne', 'quantanamo']);
     expect(LEADERBOARD_RULES).toMatch(/Ties go to lower drawdown/);
+  });
+
+  test('freshLead skips a stale first-place book', () => {
+    const board = assembleLeaderboard(liveDesk());
+    const now = Date.parse('2026-09-06T15:58:03.496Z');
+    expect(freshLead(board.rows, now)?.id).toBe('bandit');
+    expect(freshLead(board.rows, Date.parse('2026-09-07T12:00:00.000Z'))).toBeNull();
   });
 });

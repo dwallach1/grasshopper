@@ -7,13 +7,21 @@ import {
 import { readBoundedJson } from '@quantanamo/shared/http';
 import { isPublishableKey } from '../../../apps/dashboard/lib/auth-public';
 import { assembleTeam } from '../../../apps/dashboard/lib/desk-team';
-import { assembleDeskFromRestBag } from '../../../apps/dashboard/lib/ledger-live';
+import { assemblePublicDeskFromRestBag } from '../../../apps/dashboard/lib/ledger-live';
 import type { JsonObjectRow } from '../../../apps/dashboard/lib/ledger-map';
 import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
 import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
 
-const LIVE_CACHE_MS = 8_000;
-let liveCache: { at: number; value: unknown } | null = null;
+/** Match the phone poll so a 15s GET does not re-assemble under 1102. */
+export const LIVE_CACHE_MS = 15_000;
+
+export type PublicDeskServe = {
+  desk: unknown;
+  json: string;
+  generated_at: string;
+};
+
+let liveCache: { at: number; serve: PublicDeskServe } | null = null;
 
 export function resetPublicDeskLiveCache(): void {
   liveCache = null;
@@ -70,10 +78,10 @@ export function liveReaderReady(env: DeskReaderEnv): boolean {
   return true;
 }
 
-export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
+export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
   const now = Date.now();
   if (liveCache && now - liveCache.at < LIVE_CACHE_MS) {
-    return liveCache.value;
+    return liveCache.serve;
   }
   const supabaseUrl = env.DESK_SUPABASE_URL?.trim() || '';
   const apiKey = env.DESK_READER_APIKEY?.trim() || '';
@@ -81,15 +89,24 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!liveReaderReady(env) || !supabaseUrl || !apiKey || !accessToken) {
     throw new Error('desk_reader_unconfigured');
   }
-  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/bundle`, {
-    headers: {
-      apikey: apiKey,
-      Authorization: `Bearer ${apiKey}`,
-      Accept: 'application/json',
-    },
+  const headers = {
+    apikey: apiKey,
+    Authorization: `Bearer ${apiKey}`,
+    Accept: 'application/json',
+  };
+  const base = supabaseUrl.replace(/\/$/, '');
+  let response = await fetch(`${base}/bundle/public`, {
+    headers,
     cache: 'no-store',
     signal: AbortSignal.timeout(25_000),
   });
+  if (response.status === 404) {
+    response = await fetch(`${base}/bundle`, {
+      headers,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(25_000),
+    });
+  }
   if (!response.ok) {
     throw new Error(`desk_bundle_${response.status}`);
   }
@@ -134,39 +151,16 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
     meme?: { tokens?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; notes?: unknown[] };
     team?: { agents?: unknown[]; domains?: unknown[]; stewards?: unknown[]; accounts?: unknown[] };
   };
-  const live = assembleDeskFromRestBag({
+  const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
     symbols: asJsonRows(bag.symbols),
-    evidence: asJsonRows(bag.evidence),
-    scores: asJsonRows(bag.scores),
-    relations: asJsonRows(bag.relations),
-    runs: asJsonRows(bag.runs),
-    cloudRuns: asJsonRows(bag.cloudRuns),
-    cloudTasks: asJsonRows(bag.cloudTasks),
-    automations: asJsonRows(bag.automations),
-    catalysts: asJsonRows(bag.catalysts),
-    queue: asJsonRows(bag.queue),
-    lessons: asJsonRows(bag.lessons),
-    postmortems: asJsonRows(bag.postmortems),
-    cycles: asJsonRows(bag.cycles),
-    tests: asJsonRows(bag.tests),
-    artifacts: asJsonRows(bag.artifacts),
-    scenarios: asJsonRows(bag.scenarios),
-    agentRuns: asJsonRows(bag.agentRuns),
     accountLatest: asJsonRows(bag.accountLatest),
     accountFirst: asJsonRows(bag.accountFirst),
     positions: asJsonRows(bag.positions),
     exposures: asJsonRows(bag.exposures),
     intents: asJsonRows(bag.intents),
-    proposals: asJsonRows(bag.proposals),
     fills: asJsonRows(bag.fills),
-    insights: asJsonRows(bag.insights),
-    predictions: asJsonRows(bag.predictions),
-    riskControls: asJsonRows(bag.riskControls),
     themes: asJsonRows(bag.themes),
-    ontologySymbols: asJsonRows(bag.ontologySymbols),
-    candidates: asJsonRows(bag.candidates),
-    actions: asJsonRows(bag.actions),
     prediction: mapPredictionMarkets({
       markets: asObjectRows(bag.pm?.markets),
       positions: asObjectRows(bag.pm?.positions),
@@ -197,6 +191,12 @@ export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   if (!isPublicSnapshot(published)) {
     throw new Error('desk_live_rejected');
   }
-  liveCache = { at: Date.now(), value: published };
-  return published;
+  const json = JSON.stringify(published);
+  const serve = { desk: published, json, generated_at: published.generated_at };
+  liveCache = { at: Date.now(), serve };
+  return serve;
+}
+
+export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
+  return (await loadPublicDeskServe(env)).desk;
 }

@@ -5,6 +5,7 @@
  */
 import { agenticSnapshots } from './book-performance';
 import { assembleDeskBookRollup } from './desk-book-rollup';
+import { isMarkFresh } from './desk-freshness';
 import { deskTeam, teamCards, type AvatarShape, type DeskTeamCard } from './desk-team';
 import type { DeskVenue } from './desk-venue';
 import { venueShort } from './desk-venue';
@@ -112,6 +113,14 @@ export function riskNote(row: Pick<LeaderboardRow, 'max_drawdown_pct' | 'days_li
   if (row.open_lots > 0) return `${row.open_lots} open`;
   if (!row.ranked) return 'not in ledger';
   return 'open risk not in ledger';
+}
+
+/** First ranked book whose marks are still inside the live window. Stale % is not a lead. */
+export function freshLead(
+  rows: readonly LeaderboardStanding[],
+  now: Date | number,
+): LeaderboardStanding | null {
+  return rows.find((row) => row.ranked && isMarkFresh(row.last_marked, now)) ?? null;
 }
 
 export function assembleLeaderboard(desk: DeskPayload): DeskLeaderboard {

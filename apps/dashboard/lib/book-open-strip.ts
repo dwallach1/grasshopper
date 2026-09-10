@@ -48,6 +48,8 @@ export type BookOpenTicket = {
   color: string;
   points: LivelineClock[];
   value: number | null;
+  /** Latest published clock on this ticket — never generated_at. */
+  marked_at: string | null;
   /** Average cost → Liveline `referenceLine`. */
   cost: number | null;
   /** Published kill mid → optional second overlay. */
@@ -67,6 +69,7 @@ export type BookOpenSteward = {
   venue_label: string;
   unit: MoneyUnit;
   tickets: BookOpenTicket[];
+  marked_at: string | null;
 };
 
 export type BookOpen = {
@@ -143,7 +146,7 @@ export function assembleBookOpen(desk: DeskPayload): BookOpen {
   ].filter((row) => row.tickets.length > 0);
   return {
     rows,
-    as_of: desk.generated_at ?? desk.book.observed_at ?? null,
+    as_of: oldestTicketMark(rows),
   };
 }
 
@@ -166,6 +169,7 @@ function finishSteward(
     venue_label: venueShort(venue),
     unit,
     tickets,
+    marked_at: oldestTicketMark([{ tickets }]),
   };
 }
 
@@ -210,6 +214,7 @@ function predictionTickets(payload: PredictionMarketsPayload): BookOpenTicket[] 
       size: row.quantity,
       color: AVATAR_COLORS.blue,
       points,
+      marked_at: latestMarkAt(marks),
       cost: finiteOrNull(row.average_cost),
       kill_mid: publishedKillMid(row) ?? publishedKillMid(market),
       source: `${fields.join(' · ')} · pm_positions.average_cost`,
@@ -255,6 +260,7 @@ function memeTickets(payload: MemeCoinsPayload): BookOpenTicket[] {
       size: row.quantity,
       color: AVATAR_COLORS.red,
       points,
+      marked_at: latestMarkAt(marks),
       cost: finiteOrNull(row.average_cost_sol),
       kill_mid: publishedKillMid(row) ?? publishedKillMid(token),
       source: `${uniqueFields(marks).join(' · ')} · meme_positions.average_cost_sol`,
@@ -302,6 +308,7 @@ function equityTickets(desk: DeskPayload): BookOpenTicket[] {
       size: Math.abs(lot.quantity),
       color: AVATAR_COLORS.green,
       points: clocks,
+      marked_at: latestExposureAt(desk.exposures ?? [], symbol),
       cost: finiteOrNull(lot.average_cost),
       kill_mid: lot.kill_mid,
       source: 'portfolio_exposure.last_price · book.names.average_cost',
@@ -337,6 +344,7 @@ function ticket(input: {
   size: number;
   color: string;
   points: LivelineClock[];
+  marked_at: string | null;
   cost: number | null;
   kill_mid: number | null;
   source: string;
@@ -366,6 +374,7 @@ function ticket(input: {
     color: input.color,
     points: input.points,
     value,
+    marked_at: input.marked_at,
     cost: input.cost,
     kill_mid: input.kill_mid,
     source: input.kill_mid === null ? input.source : `${input.source} · kill_mid`,
@@ -386,6 +395,41 @@ function killClocks(points: readonly LivelineClock[], killMid: number): Liveline
 
 function uniqueFields(marks: ReadonlyArray<{ field: string }>): string[] {
   return [...new Set(marks.map((row) => row.field))];
+}
+
+function latestMarkAt(marks: ReadonlyArray<{ as_of: string }>): string | null {
+  let best: string | null = null;
+  let bestMs = Number.NEGATIVE_INFINITY;
+  for (const row of marks) {
+    const ms = Date.parse(row.as_of);
+    if (!Number.isFinite(ms) || ms <= bestMs) continue;
+    bestMs = ms;
+    best = row.as_of;
+  }
+  return best;
+}
+
+function latestExposureAt(rows: readonly ExposureRow[], symbol: string): string | null {
+  return latestMarkAt(
+    rows
+      .filter((row) => row.symbol.trim() === symbol)
+      .map((row) => ({ as_of: row.observed_at })),
+  );
+}
+
+function oldestTicketMark(rows: ReadonlyArray<{ tickets: readonly BookOpenTicket[] }>): string | null {
+  let best: string | null = null;
+  let bestMs = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    for (const ticket of row.tickets) {
+      if (!ticket.marked_at) continue;
+      const ms = Date.parse(ticket.marked_at);
+      if (!Number.isFinite(ms) || ms >= bestMs) continue;
+      bestMs = ms;
+      best = ticket.marked_at;
+    }
+  }
+  return best;
 }
 
 function finiteOrNull(value: number | null | undefined): number | null {

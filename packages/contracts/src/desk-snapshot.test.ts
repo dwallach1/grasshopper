@@ -3,8 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   DESK_PUBLIC_READER_ROLE,
   isPublicSnapshot,
+  LIVE_JSON_CACHE_CONTROL,
   parseDeskWire,
   PUBLIC_DESK_REDIRECTS,
+  PUBLIC_DESK_REFRESH_FAILED,
   publicDeskJsonError,
   toPublicDeskSnapshot,
 } from './desk-snapshot';
@@ -21,6 +23,8 @@ const sample = {
   },
   routines: [{ id: 'market_scan', status: 'live' }],
   ontology_actions: [{ id: 1, actor_id: 'user-uuid', action: 'promote' }],
+  evidence: [{ id: 1 }],
+  runs: [{ id: 1 }],
   prediction_markets: { markets: [] },
   meme_coins: { tokens: [] },
   team: {
@@ -38,7 +42,11 @@ describe('public desk snapshot contract', () => {
     const published = toPublicDeskSnapshot(live);
     expect(published.source).toBe('snapshot');
     expect(published.ontology_actions).toEqual([]);
+    expect(published).not.toHaveProperty('evidence');
+    expect(published).not.toHaveProperty('runs');
     expect(published.prediction_markets).toEqual({ markets: [] });
+    expect(LIVE_JSON_CACHE_CONTROL).toContain('s-maxage=15');
+    expect(PUBLIC_DESK_REFRESH_FAILED).toContain('last good ledger');
     expect(published.meme_coins).toEqual({ tokens: [] });
     expect(published.team).toEqual(sample.team);
     expect(published.book.current_nav).toBeNull();

@@ -22,6 +22,34 @@ export const DeskWireSchema = z
 export type DeskWire = z.infer<typeof DeskWireSchema>;
 
 export const PUBLIC_DESK_UNAVAILABLE = 'Desk ledger unavailable';
+export const PUBLIC_DESK_REFRESH_FAILED = 'Showing last good ledger — live read failed';
+export const LIVE_JSON_CACHE_CONTROL = 'public, max-age=0, s-maxage=15, stale-while-revalidate=45';
+
+const PUBLIC_OMIT = new Set([
+  'evidence',
+  'scores',
+  'relations',
+  'runs',
+  'cloud_runs',
+  'cloud_tasks',
+  'automations',
+  'catalysts',
+  'queue',
+  'lessons',
+  'postmortems',
+  'cycles',
+  'tests',
+  'backtest_artifacts',
+  'scenarios',
+  'agent_runs',
+  'insights',
+  'predictions',
+  'risk_controls',
+  'ontology_symbols',
+  'ontology_candidates',
+  'ontology_actions',
+  'proposals',
+]);
 export const MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024;
 /** PostgREST JWT `role` claim for the public Worker. SELECT only. */
 export const DESK_PUBLIC_READER_ROLE = 'desk_public_reader';
@@ -65,17 +93,16 @@ export function publicDeskJsonError(message = PUBLIC_DESK_UNAVAILABLE): { error:
 
 /**
  * Mark a live desk payload as the public snapshot. Drops operator-only audit
- * rows. `prediction_markets` (ODDSBORNE `pm_*`), `meme_coins` (BANDIT `meme_*`),
- * and `team` (desk_agents) pass through when present. Never invent marks.
+ * rows so GET /api/desk stays JSON-healthy under Worker CPU. Book / Board /
+ * Team keep `prediction_markets`, `meme_coins`, `team`, theses, and the book.
+ * Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
-  const {
-    ontology_actions: _ontologyActions,
-    ...rest
-  } = desk;
-  return {
-    ...rest,
-    source: 'snapshot',
-    ontology_actions: [],
-  };
+  const slim: Record<string, unknown> = { source: 'snapshot' };
+  for (const [key, value] of Object.entries(desk)) {
+    if (key === 'source' || PUBLIC_OMIT.has(key)) continue;
+    slim[key] = value;
+  }
+  slim.ontology_actions = [];
+  return slim as DeskWire;
 }

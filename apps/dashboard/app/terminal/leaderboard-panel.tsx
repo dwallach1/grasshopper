@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { applyStandingOrder, moveStanding, standingShiftFromDrag } from '../../lib/desk-board-order';
+import { isMarkStale } from '../../lib/desk-freshness';
 import {
   assembleLeaderboard,
+  freshLead,
   NOT_RANKED,
 } from '../../lib/desk-leaderboard';
 import { assembleLiveline } from '../../lib/desk-liveline';
@@ -28,8 +30,8 @@ export function LeaderboardPanel({
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const line = useMemo(() => assembleLiveline(desk), [desk]);
-  const ranked = board.rows.filter((row) => row.ranked);
-  const lead = ranked[0];
+  const clock = now ?? Date.now();
+  const lead = freshLead(board.rows, clock);
   const [order, setOrder] = useState<string[]>(() => board.rows.map((row) => row.id));
   const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
   const orderRef = useRef(order);
@@ -99,7 +101,7 @@ export function LeaderboardPanel({
         {rows.map((row) => (
           <li
             key={row.id}
-            className={`line-row${row.ranked ? '' : ' is-empty'}${row.place === 1 ? ' is-lead' : ''}`}
+            className={`line-row${row.ranked ? '' : ' is-empty'}${lead && row.id === lead.id ? ' is-lead' : ''}${row.ranked && isMarkStale(row.last_marked, clock) ? ' is-stale-marks' : ''}`}
             // SAFETY: CSS custom property for the shared steward accent token.
             style={{ '--team-accent': row.accent } as CSSProperties}
           >
@@ -124,7 +126,7 @@ export function LeaderboardPanel({
                 <b>{row.steward}</b>
                 <i>{row.venue_label} · {row.unit ?? '—'}</i>
               </span>
-              <span className={`line-pct ${row.ranked ? pnlClass(row.return_pct) : 'muted'}`}>
+              <span className={`line-pct ${row.ranked && !isMarkStale(row.last_marked, clock) ? pnlClass(row.return_pct) : 'muted'}`}>
                 {row.ranked ? pct(row.return_pct, 2) : NOT_RANKED}
               </span>
             </div>

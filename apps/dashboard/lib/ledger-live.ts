@@ -215,6 +215,63 @@ export type RestDeskBag = {
   team: DeskTeamPayload;
 };
 
+/** Phone Worker path — skip operator tables the public snapshot already drops. */
+export function assemblePublicDeskFromRestBag(bag: Pick<
+  RestDeskBag,
+  | 'theses'
+  | 'symbols'
+  | 'accountLatest'
+  | 'accountFirst'
+  | 'positions'
+  | 'exposures'
+  | 'intents'
+  | 'fills'
+  | 'themes'
+  | 'prediction'
+  | 'meme'
+  | 'team'
+>): DeskPayload {
+  return assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
+    evidence: [],
+    scores: [],
+    relations: [],
+    runs: [],
+    cloud_runs: [],
+    cloud_tasks: [],
+    automations: [],
+    catalysts: [],
+    queue: [],
+    lessons: [],
+    postmortems: [],
+    cycles: [],
+    tests: [],
+    backtest_artifacts: [],
+    scenarios: [],
+    agent_runs: [],
+    ...bookFields(bag.accountLatest, bag.accountFirst, bag.positions, bag.exposures),
+    intents: mapIntents(bag.intents),
+    proposals: [],
+    fills: mapFills(bag.fills),
+    insights: [],
+    predictions: [],
+    risk_controls: [],
+    ontology_themes: mapThemes(bag.themes),
+    ontology_symbols: [],
+    ontology_candidates: [],
+    ontology_actions: [],
+    counts: {
+      sources: 0,
+      symbols: 0,
+      open_research: 0,
+      tests_killed: 0,
+      tests_survived: 0,
+      scenario_cells: 0,
+      open_positions: 0,
+      queued_tasks: 0,
+    },
+  }, bag.prediction, bag.meme, bag.team));
+}
+
 export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
   const mappedTests = mapTests(bag.tests);
   const mappedArtifacts = mapBacktestArtifacts(bag.artifacts);
