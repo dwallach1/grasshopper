@@ -6,7 +6,7 @@ name: Deploy public desk
 
 on:
   push:
-    branches: [main, cursor/ship-public-desk-live-a3d2]
+    branches: [main, cursor/ship-public-desk-live-a3d2, cursor/desk-hydrate-missing-arrays-ba42]
   workflow_dispatch:
 
 jobs:
