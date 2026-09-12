@@ -289,6 +289,42 @@ describe('assembleDeskFreshness', () => {
     expect(isMarkFresh(fresh.chips.find((c) => c.id === 'oddsborne')?.at, NOW)).toBe(false);
     expect(isMarkStale(fresh.chips.find((c) => c.id === 'oddsborne')?.at, NOW)).toBe(true);
   });
+
+  test('QNT chip can be a later snapshot than the Board book mark', () => {
+    const payload = desk({
+      generated_at: '2026-09-12T14:21:00.000Z',
+      book: {
+        account_label: 'robinhood_agentic_7638',
+        observed_at: '2026-09-11T20:05:00.000Z',
+        last4: '7638',
+        buying_power: null,
+        starting_nav: 5000,
+        current_nav: 5157.1302,
+        cash: null,
+        deployed: null,
+        vs_start: 157.1302,
+        vs_start_note: MARK_NOT_IN_LEDGER,
+        day_pnl: null,
+        day_pnl_note: MARK_NOT_IN_LEDGER,
+        vs_cost: null,
+        vs_cost_note: MARK_NOT_IN_LEDGER,
+        names: [],
+      },
+      snapshots: [{
+        observed_at: '2026-09-12T13:17:42.000Z',
+        account_label: 'robinhood_agentic_7638',
+        total_value: 5201.769,
+        equity_value: null,
+        cash: null,
+        buying_power: null,
+        source: 'heartbeat',
+      }],
+    });
+    const fresh = assembleDeskFreshness(payload);
+    expect(fresh.chips.find((c) => c.id === 'read')?.at).toBe('2026-09-12T14:21:00.000Z');
+    expect(fresh.chips.find((c) => c.id === 'quantanamo')?.at).toBe('2026-09-12T13:17:42.000Z');
+    expect(payload.book.observed_at).toBe('2026-09-11T20:05:00.000Z');
+  });
 });
 
 describe('steward freshness', () => {

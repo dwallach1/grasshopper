@@ -60,6 +60,10 @@ describe('desk IA smoke', () => {
     expect(board).toContain('freshLead');
     expect(board).toContain('is-stale-marks');
     expect(board).toContain('isMarkStale');
+    expect(board).toContain('row.ranked ? pnlClass(row.return_pct) : \'muted\'');
+    expect(board).not.toContain('!isMarkStale(row.last_marked, clock) ? pnlClass');
+    const css = await readDashboard('app/globals.css');
+    expect(css).not.toContain('.line-row.is-stale-marks .line-pct');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
