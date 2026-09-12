@@ -5019,11 +5019,11 @@ a:focus-visible {
   --shadow-card: 0 10px 24px rgba(70, 50, 24, 0.07);
   background-color: var(--paper);
   background-image:
-    radial-gradient(ellipse 120% 72% at 50% -8%, rgba(255, 252, 244, 0.96) 0%, transparent 58%),
-    radial-gradient(ellipse 70% 48% at 4% 100%, rgba(176, 156, 118, 0.22) 0%, transparent 54%),
-    radial-gradient(ellipse 58% 38% at 100% 18%, rgba(198, 176, 138, 0.18) 0%, transparent 50%),
-    radial-gradient(ellipse 48% 28% at 78% 108%, rgba(154, 168, 132, 0.12) 0%, transparent 48%),
-    linear-gradient(180deg, #f6f0e2 0%, #f3ead8 46%, #eadfc8 100%);
+    radial-gradient(ellipse 90% 50% at 50% -6%, rgba(255, 248, 232, 0.7) 0%, transparent 62%),
+    radial-gradient(ellipse 80% 42% at 8% 100%, rgba(168, 146, 108, 0.28) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 36% at 100% 12%, rgba(186, 160, 118, 0.2) 0%, transparent 48%),
+    radial-gradient(ellipse 70% 28% at 70% 108%, rgba(142, 158, 120, 0.16) 0%, transparent 46%),
+    linear-gradient(180deg, #f4ecda 0%, #f3ead8 42%, #e4d3b4 100%);
   background-attachment: fixed;
   color: var(--ink);
 }
@@ -5176,7 +5176,7 @@ a:focus-visible {
 }
 
 .term.is-line .crt-tape-glyphs {
-  color: rgba(44, 38, 30, 0.35);
+  display: none;
 }
 
 .term.is-line .crt-book {
@@ -5204,6 +5204,14 @@ a:focus-visible {
   font-size: 15px;
   letter-spacing: -0.02em;
   text-transform: none;
+}
+
+.term.is-line .book-health {
+  padding: 10px 12px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .term.is-line .book-health-alerts {
