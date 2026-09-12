@@ -4683,6 +4683,126 @@ a:focus-visible {
   text-transform: none;
 }
 
+.book-holdings-table {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--elevated);
+}
+
+.book-holdings-head,
+.book-holdings-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1.3fr) 40px minmax(0, 0.9fr) minmax(0, 0.9fr) 56px 52px minmax(0, 0.9fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.book-holdings-head {
+  padding: 8px 10px 6px;
+  color: var(--text-3);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.book-holdings-body {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.book-holdings-row {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.book-holdings-row.is-open {
+  background: var(--elevated-2);
+}
+
+.holding-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.book-holdings-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.book-holdings-name b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.book-holdings-name i {
+  color: var(--text-3);
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.book-holdings-book {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.book-holdings-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.book-holdings-pct {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.book-holdings-detail {
+  padding: 4px 10px 10px 48px;
+  border-top: 0;
+}
+
+.book-holdings-detail p {
+  margin: 0 0 8px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .book-holdings-head,
+  .book-holdings-row {
+    grid-template-columns: 36px minmax(0, 1fr) 64px;
+  }
+
+  .book-holdings-book,
+  .book-holdings-head span:nth-child(3),
+  .book-holdings-head span:nth-child(4),
+  .book-holdings-head span:nth-child(5),
+  .book-holdings-head span:nth-child(7),
+  .book-holdings-head span:nth-child(8),
+  .book-holdings-row > .book-holdings-num:not(.book-holdings-pct) {
+    display: none;
+  }
+
+  .book-holdings-name b {
+    font-size: 12px;
+  }
+}
+
 .book-health {
   display: flex;
   flex-direction: column;
@@ -4983,5 +5103,406 @@ a:focus-visible {
 
   .thesis-page p {
     font-size: 24px;
+  }
+}
+
+/* ——— Parchment field (phone Board + Book) ———
+   Levla warmth: cream field, cards floating on a quiet wash, serif titles.
+   Not a town, not runes, not phosphor as the mood. Theses cream #f3ead8 is the paper.
+   Standing % stays .up / .down by sign — weekend-stale books do not grey the number. */
+
+.term-public,
+.term.is-line,
+.term.is-swipe {
+  --paper: #f3ead8;
+  --paper-deep: #e7d9bf;
+  --card: #fffaf1;
+  --card-line: rgba(58, 46, 30, 0.1);
+  --ink: #2c261e;
+  --ink-2: #6a6156;
+  --ink-3: #8a8074;
+  --gold: #b8892d;
+  --gold-dim: rgba(184, 137, 45, 0.14);
+  --green: #1b8a4a;
+  --green-dim: rgba(27, 138, 74, 0.12);
+  --down: #c4332a;
+  --warn: #b8892d;
+  --amber: #b8892d;
+  --canvas: var(--paper);
+  --elevated: var(--card);
+  --elevated-2: #f6eee0;
+  --line: var(--card-line);
+  --text: var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --r-card: 14px;
+  --shadow-card: 0 10px 24px rgba(70, 50, 24, 0.07);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(ellipse 90% 50% at 50% -6%, rgba(255, 248, 232, 0.7) 0%, transparent 62%),
+    radial-gradient(ellipse 80% 42% at 8% 100%, rgba(168, 146, 108, 0.28) 0%, transparent 52%),
+    radial-gradient(ellipse 55% 36% at 100% 12%, rgba(186, 160, 118, 0.2) 0%, transparent 48%),
+    radial-gradient(ellipse 70% 28% at 70% 108%, rgba(142, 158, 120, 0.16) 0%, transparent 46%),
+    linear-gradient(180deg, #f4ecda 0%, #f3ead8 42%, #e4d3b4 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+}
+
+.paper-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 8vw, 40px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink, var(--text));
+}
+
+.term-public .term-top,
+.term.is-line .term-top,
+.term.is-swipe .term-top {
+  background: rgba(243, 234, 216, 0.88);
+  border-bottom-color: var(--card-line);
+  backdrop-filter: blur(10px);
+}
+
+.term-public .term-brand,
+.term.is-line .term-brand,
+.term.is-swipe .term-brand {
+  color: var(--ink);
+}
+
+.term-public .term-nav a,
+.term.is-line .term-nav a {
+  color: var(--ink-2);
+}
+
+.term-public .term-nav a.on,
+.term-public .term-nav a:hover,
+.term.is-line .term-nav a.on,
+.term.is-line .term-nav a:hover {
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+
+.term-public .term-chip,
+.term.is-line .term-chip {
+  border-color: var(--card-line);
+  background: var(--card);
+  color: var(--ink-2);
+}
+
+.term-public .term-banner,
+.term.is-line .term-banner {
+  background: rgba(196, 51, 42, 0.08);
+}
+
+.term.is-line .line-stage,
+.term.is-swipe .line-stage {
+  max-width: 430px;
+}
+
+.term.is-line .line-caption,
+.term.is-line .line-rules,
+.term.is-line .line-meta {
+  color: var(--ink-3);
+}
+
+.term.is-line .line-hero.line-art {
+  margin-top: 2px;
+  padding: 6px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: #0c0e12;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.term.is-line .line-hero.line-art .line-frame > div:has(canvas) {
+  border-radius: 10px;
+}
+
+.term.is-line .line-standings {
+  gap: 8px;
+}
+
+.term.is-line .line-row {
+  gap: 6px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .line-row.is-lead {
+  border-color: rgba(184, 137, 45, 0.28);
+}
+
+.term.is-line .line-place {
+  color: var(--ink-3);
+}
+
+.term.is-line .line-row.is-lead .line-place {
+  color: var(--gold);
+}
+
+.term.is-line .line-who b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.term.is-line .line-who i {
+  color: var(--ink-3);
+}
+
+.term.is-line .line-pct {
+  font-size: clamp(20px, 5.6vw, 30px);
+}
+
+.term.is-line .line-meta a {
+  color: var(--ink-2);
+}
+
+.term.is-line .crt-tape {
+  --crt: var(--ink);
+  --crt-dim: var(--paper-deep);
+  --crt-ink: var(--card);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .crt-tape::after {
+  box-shadow: none;
+}
+
+.term.is-line .crt-tape-hud {
+  color: var(--gold);
+}
+
+.term.is-line .crt-tape-hud span,
+.term.is-line .crt-tape-hud i,
+.term.is-line .crt-tape-head,
+.term.is-line .crt-tape-scroll,
+.term.is-line .crt-tape-static {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.term.is-line .crt-tape-glyphs {
+  display: none;
+}
+
+.term.is-line .crt-book {
+  --crt: var(--ink);
+  --crt-dim: var(--paper-deep);
+  --crt-ink: var(--card);
+}
+
+.term.is-line .crt-book-kicker.paper-title {
+  color: var(--ink);
+  text-shadow: none;
+  letter-spacing: -0.03em;
+  text-transform: none;
+}
+
+.term.is-line .crt-book-lede,
+.term.is-line .book-open-kicker,
+.term.is-line .book-open-age {
+  color: var(--ink-3);
+  text-shadow: none;
+}
+
+.term.is-line .book-open-kicker {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+.term.is-line .book-health {
+  padding: 10px 12px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .book-health-alerts {
+  color: var(--gold);
+}
+
+.term.is-line .book-open-ticket {
+  padding: 10px 12px 8px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .book-open-ticket-id b {
+  color: var(--ink);
+}
+
+.term.is-line .book-open-ticket-id span {
+  color: var(--ink-3);
+}
+
+.term.is-line .book-open-ticket.is-stale .book-open-ticket-id span {
+  color: var(--gold);
+}
+
+.term.is-line .book-holdings-table {
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .book-holdings-head {
+  color: var(--ink-3);
+}
+
+.term.is-line .book-holdings-row {
+  border-top-color: var(--card-line);
+}
+
+.term.is-line .book-holdings-row.is-open {
+  background: var(--elevated-2);
+}
+
+.term.is-line .book-holdings-name b {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.term.is-line .book-holdings-detail p {
+  color: var(--ink-3);
+}
+
+.term.is-line .crt-book-card {
+  padding: 12px 12px 10px;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-line .crt-book-id b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.term.is-line .crt-book-id i {
+  color: var(--ink-3);
+}
+
+.term.is-line .crt-book-tube {
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(58, 46, 30, 0.035) 0 1px,
+      transparent 1px 4px
+    ),
+    var(--card);
+  color: var(--ink);
+  text-shadow: none;
+}
+
+.term.is-line .crt-book-tube::after {
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(184, 137, 45, 0.05) 50%,
+    transparent 60%
+  );
+}
+
+.term.is-line .crt-book-card.is-thin .crt-book-tube {
+  color: var(--ink-2);
+}
+
+.term.is-line .crt-boot-corner {
+  border-color: rgba(184, 137, 45, 0.45);
+}
+
+.term.is-swipe .desk-page[data-clone="1"],
+.term.is-line .desk-page[data-clone="1"] {
+  background: transparent;
+}
+
+.term.is-swipe .steward-stage {
+  background: transparent;
+}
+
+.term-public .term-dock,
+.term.is-line .term-dock,
+.term.is-swipe .term-dock,
+.term.is-theses .term-dock {
+  background: rgba(243, 234, 216, 0.92);
+  border-top-color: var(--card-line);
+}
+
+.term-public .term-dock a,
+.term.is-swipe .term-dock a,
+.term.is-theses .term-dock a {
+  color: var(--ink-2);
+}
+
+.term-public .term-dock a.on,
+.term.is-swipe .term-dock a.on,
+.term.is-theses .term-dock a.on {
+  color: var(--gold);
+  background: transparent;
+}
+
+.term-public .term-dock.is-indicator a,
+.term.is-swipe .term-dock.is-indicator a {
+  color: var(--ink-3);
+}
+
+.term-public .term-dock.is-indicator a.on,
+.term.is-swipe .term-dock.is-indicator a.on {
+  color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+@media (max-width: 720px) {
+  .term-public .term-top,
+  .term.is-line .term-top,
+  .term.is-swipe .term-top {
+    background: rgba(243, 234, 216, 0.9);
+  }
+
+  .term-public .term-dock,
+  .term.is-line .term-dock,
+  .term.is-swipe .term-dock,
+  .term.is-theses .term-dock {
+    background: rgba(243, 234, 216, 0.94);
+    border-top-color: var(--card-line);
+  }
+
+  .term.is-line .paper-title {
+    font-size: 32px;
+  }
+
+  .term.is-line .line-hero.line-art .line-frame > div:has(canvas) {
+    height: min(40dvh, 300px);
+    min-height: 200px;
   }
 }

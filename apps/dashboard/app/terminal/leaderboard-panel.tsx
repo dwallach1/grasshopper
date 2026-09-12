@@ -78,10 +78,11 @@ export function LeaderboardPanel({
   return (
     <div className="line-stage line-board">
       <h1 className="visually-hidden">Board</h1>
+      <p className="paper-title">Board</p>
 
       <CrtTape desk={desk} now={now} />
 
-      <section className="line-hero" aria-label="Desk sport line">
+      <section className="line-hero line-art" aria-label="Desk sport line">
         <DeskLiveline
           key="all"
           series={line.all_pct}

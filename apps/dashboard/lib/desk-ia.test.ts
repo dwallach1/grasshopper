@@ -52,6 +52,7 @@ describe('desk IA smoke', () => {
     expect(book).not.toContain('VenueFilterBar');
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
+    expect(book).toContain('assembleBookHoldings');
     expect(book).toContain('assembleStewardFreshness');
     expect(book).toContain('assembleDeskBookHealth');
     expect(book).toContain('BookHealthStrip');
@@ -64,6 +65,13 @@ describe('desk IA smoke', () => {
     expect(board).not.toContain('!isMarkStale(row.last_marked, clock) ? pnlClass');
     const css = await readDashboard('app/globals.css');
     expect(css).not.toContain('.line-row.is-stale-marks .line-pct');
+    expect(css).toContain('--paper: #f3ead8');
+    expect(css).toContain('--card: #fffaf1');
+    expect(css).toContain('.paper-title');
+    expect(css).toContain('.line-art');
+    expect(board).toContain('paper-title');
+    expect(board).toContain('line-art');
+    expect(board).toContain('row.ranked ? pnlClass(row.return_pct) : \'muted\'');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
@@ -372,6 +380,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
     expect(book).toContain('<BookOpenStrip');
+    expect(book).toContain('holdings={holdings.rows}');
     expect(book).toContain('crt-book-readout');
     expect(book).not.toContain('<DeskLiveline');
     expect(book).not.toContain('<BookTable');
@@ -393,6 +402,14 @@ describe('desk IA smoke', () => {
     expect(board).toContain('stewardDeskFaces');
     expect(board).toContain('DeskLiveline');
     expect(board).toContain('CrtTape');
+    expect(board).toContain('paper-title');
+    expect(board).toContain('line-art');
+    expect(book).toContain('paper-title');
+    expect(css).toContain('--paper: #f3ead8');
+    expect(css).toContain('--card: #fffaf1');
+    expect(css).toContain('.paper-title');
+    expect(css).toContain('.line-art');
+    expect(css).not.toContain('.line-row.is-stale-marks .line-pct');
     expect(board).not.toContain('line-foci');
     expect(board).not.toContain("label: 'ALL'");
     expect(board).not.toContain('setFocus');
@@ -411,6 +428,8 @@ describe('desk IA smoke', () => {
     expect(book).toContain('BOOK // EDGE');
     expect(css).toContain('.crt-book');
     expect(css).toContain('.book-open');
+    expect(css).toContain('.book-holdings');
+    expect(css).toContain('.holding-icon');
     expect(css).toContain('.crt-book .book-open-line.line-frame > div:has(canvas)');
     expect(css).toContain('crt-book-sweep');
     expect(css).toContain('.term-fresh');
@@ -421,6 +440,9 @@ describe('desk IA smoke', () => {
     expect(wrap).toContain("compact ? () => ''");
     expect(openStrip).toContain('referenceLine');
     expect(openStrip).toContain('compact');
+    expect(openStrip).toContain('HoldingIcon');
+    expect(openStrip).toContain('book-holdings');
+    expect(openStrip).toContain('pnlClass(row.change_pct)');
     expect(openStrip).not.toContain('StewardAvatar');
     expect(openStrip).not.toContain('book-open-lede');
     expect(openStrip).not.toContain('book-open-who');
