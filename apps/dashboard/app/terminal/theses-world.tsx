@@ -4,15 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
-import { pagerScrollBehavior } from '../../lib/desk-swipe';
 import {
-  assembleThesisDistricts,
-  districtForThesis,
-  districtPlaceWord,
-  type ThesisBuilding,
-  type ThesisDistrict,
-} from '../../lib/thesis-districts';
-import { ThesisIslandPoster, ThesisIslandView } from './thesis-island-view';
+  assembleThesisRoster,
+  thesisForId,
+  type ThesisRosterRow,
+} from '../../lib/thesis-roster';
+import { HoldingIcon } from './holding-icon';
+import { toneForStatus } from './format';
 
 export function ThesesWorld({
   desk,
@@ -25,78 +23,49 @@ export function ThesesWorld({
   selectedId?: string;
   onSelect?: (id: string) => void;
 }) {
-  const districts = assembleThesisDistricts(desk);
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const programmatic = useRef(false);
+  const roster = assembleThesisRoster(desk).rows;
   const firstPaint = useRef(true);
-  const roster = districts.map((row) => row.id).join('|');
-  const [liveId, setLiveId] = useState(districts[0]?.id ?? '');
-  const [reading, setReading] = useState<ThesisBuilding | null>(null);
+  const [readingId, setReadingId] = useState<string | null>(null);
+  const reading = readingId ? thesisForId(roster, readingId) ?? null : null;
 
   useEffect(() => {
-    setLiveId(roster.split('|')[0] ?? '');
-    setReading(null);
-  }, [roster]);
-
-  useEffect(() => {
-    const root = scrollerRef.current;
-    if (!root) return undefined;
-    const slots = [...root.querySelectorAll<HTMLElement>('[data-district]')];
-    const io = new IntersectionObserver((entries) => {
-      if (programmatic.current) return;
-      const hit = entries
-        .filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.55)
-        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-      const id = hit?.target.getAttribute('data-district');
-      if (id) setLiveId(id);
-    }, { root, threshold: [0.55, 0.9] });
-    for (const slot of slots) io.observe(slot);
-    return () => io.disconnect();
+    setReadingId((prev) => (prev && roster.some((row) => row.id === prev) ? prev : null));
   }, [roster]);
 
   useEffect(() => {
     if (!selectedId) return;
-    const next = districtForThesis(districts, selectedId);
-    if (!next) return;
-    const root = scrollerRef.current;
-    const pane = root?.querySelector<HTMLElement>(`[data-district="${next.id}"]`);
-    if (!pane || !root) return;
-    programmatic.current = true;
-    const behavior = firstPaint.current ? 'auto' : pagerScrollBehavior(reduceMotion);
+    const node = document.querySelector<HTMLElement>(`[data-thesis="${selectedId}"]`);
+    if (!node) return;
+    node.scrollIntoView({
+      block: 'nearest',
+      behavior: firstPaint.current || reduceMotion ? 'auto' : 'smooth',
+    });
     firstPaint.current = false;
-    pane.scrollIntoView({ block: 'start', inline: 'nearest', behavior });
-    setLiveId(next.id);
-    const id = window.setTimeout(() => {
-      programmatic.current = false;
-    }, reduceMotion ? 20 : 420);
-    return () => window.clearTimeout(id);
-  }, [reduceMotion, roster, selectedId]);
+  }, [reduceMotion, selectedId]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.key === 'Escape') {
-        setReading(null);
+        setReadingId(null);
         return;
       }
       if (event.key !== 'Enter' || reading) return;
-      const district = districts.find((row) => row.id === liveId) ?? districts[0];
-      const building = district?.buildings.find((row) => row.id === selectedId)
-        ?? district?.buildings[0];
-      if (building) {
+      const row = thesisForId(roster, selectedId ?? '') ?? roster[0];
+      if (row) {
         event.preventDefault();
-        onSelect?.(building.id);
-        setReading(building);
+        onSelect?.(row.id);
+        setReadingId(row.id);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [districts, liveId, onSelect, reading, selectedId]);
+  }, [onSelect, reading, roster, selectedId]);
 
-  function openBuilding(building: ThesisBuilding) {
-    onSelect?.(building.id);
-    setReading(building);
+  function openRow(row: ThesisRosterRow) {
+    onSelect?.(row.id);
+    setReadingId(row.id);
   }
 
   return (
@@ -106,114 +75,81 @@ export function ThesesWorld({
       data-reading={reading ? '1' : '0'}
     >
       <h1 className="visually-hidden">Theses</h1>
-      {districts.length ? (
-        <div
-          ref={scrollerRef}
-          className="thesis-districts"
-          data-axis="y"
-          aria-label="Thesis districts"
-          aria-hidden={reading ? true : undefined}
-        >
-          {districts.map((district, index) => (
-            <DistrictPane
-              key={district.id}
-              district={district}
-              peek={districts[(index + 1) % districts.length] ?? null}
-              live={district.id === liveId && !reading}
-              index={index}
-              total={districts.length}
-              onOpen={openBuilding}
-              reduceMotion={reduceMotion}
-            />
+      <header className="thesis-mast">
+        <p className="paper-title">Theses</p>
+        <p className="thesis-lede">
+          Claims on the ledger. Stance, status, and evidence — not book marks.
+        </p>
+      </header>
+      {roster.length ? (
+        <ul className="thesis-list" aria-label="Theses" aria-hidden={reading ? true : undefined}>
+          {roster.map((row) => (
+            <li key={row.id}>
+              <button
+                type="button"
+                className={`thesis-card${selectedId === row.id ? ' is-on' : ''}${row.live ? '' : ' is-historic'}`}
+                data-thesis={row.id}
+                aria-current={selectedId === row.id ? 'true' : undefined}
+                onClick={() => openRow(row)}
+              >
+                <HoldingIcon name={row.name} venue={row.venue} seed={row.id} />
+                <span className="thesis-card-copy">
+                  <b>{row.name}</b>
+                  <i>{row.domain} · {row.steward_name}</i>
+                </span>
+                <span className="thesis-card-meta">
+                  <span className="thesis-chip">{row.stance}</span>
+                  <span className={`thesis-chip ${toneForStatus(row.status)}`}>{row.status}</span>
+                  <span className="thesis-conf">{row.confidence}</span>
+                </span>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <p className="empty thesis-empty">{NOT_IN_LEDGER}</p>
       )}
       {reading && (
-        <ThesisPage building={reading} onClose={() => setReading(null)} />
+        <ThesisPage row={reading} onClose={() => setReadingId(null)} />
       )}
     </div>
   );
 }
 
-function DistrictPane({
-  district,
-  peek,
-  live,
-  index,
-  total,
-  onOpen,
-  reduceMotion,
-}: {
-  district: ThesisDistrict;
-  peek: ThesisDistrict | null;
-  live: boolean;
-  index: number;
-  total: number;
-  onOpen: (building: ThesisBuilding) => void;
-  reduceMotion: boolean;
-}) {
-  const word = districtPlaceWord(district.place);
-  const mark = String(index + 1).padStart(2, '0');
-  return (
-    <section
-      className="thesis-district"
-      data-district={district.id}
-      data-place={district.place}
-      data-count={district.buildings.length}
-      data-live={live ? '1' : '0'}
-      aria-label={district.name}
-    >
-      {live ? (
-        <ThesisIslandView
-          district={district}
-          peek={peek && peek.id !== district.id ? peek : null}
-          reduceMotion={reduceMotion}
-          onOpen={onOpen}
-        />
-      ) : (
-        <ThesisIslandPoster district={district} />
-      )}
-      <ol className="thesis-dots" aria-hidden="true">
-        {Array.from({ length: total }, (_, slot) => (
-          <li key={slot} className={slot === index ? 'is-on' : undefined} />
-        ))}
-      </ol>
-      <p className="thesis-place-index" aria-hidden="true">{mark} / {word}</p>
-      {district.buildings.map((building) => (
-        <button
-          key={building.id}
-          type="button"
-          className="visually-hidden"
-          onClick={() => onOpen(building)}
-        >
-          {building.name}
-        </button>
-      ))}
-    </section>
-  );
-}
-
 function ThesisPage({
-  building,
+  row,
   onClose,
 }: {
-  building: ThesisBuilding;
+  row: ThesisRosterRow;
   onClose: () => void;
 }) {
   return (
-    <article
-      className="thesis-page"
-      aria-label={building.name}
-    >
+    <article className="thesis-page" aria-label={row.name}>
       <button type="button" className="thesis-page-back" onClick={onClose}>
-        Back to the district
+        Back to theses
       </button>
-      <h2>{building.name}</h2>
-      <p>{building.summary}</p>
-      {building.falsifier && (
-        <p className="thesis-page-falsifier">{building.falsifier}</p>
+      <p className="thesis-page-kicker">
+        {row.stance} · {row.status} · {row.confidence}
+        {' · '}
+        {row.domain} · {row.steward_name}
+      </p>
+      <h2>{row.name}</h2>
+      <p>{row.summary}</p>
+      {row.falsifier && (
+        <p className="thesis-page-falsifier">{row.falsifier}</p>
+      )}
+      {row.evidence.length ? (
+        <ul className="thesis-evidence">
+          {row.evidence.map((note) => (
+            <li key={note.id}>
+              <b className={toneForStatus(note.direction)}>{note.direction}</b>
+              <span>{note.evidence_type} · {note.confidence}</span>
+              <p>{note.summary}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="thesis-page-empty">{NOT_IN_LEDGER}</p>
       )}
     </article>
   );

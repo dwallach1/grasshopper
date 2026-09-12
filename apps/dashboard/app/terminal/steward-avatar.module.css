@@ -23,6 +23,10 @@
   --steward-size: 128px;
 }
 
+.glyph {
+  --steward-size: 22px;
+}
+
 .icon {
   width: 100%;
   height: 100%;

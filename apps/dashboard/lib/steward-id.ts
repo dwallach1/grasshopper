@@ -2,7 +2,7 @@
  * Team ID-card face. Ledger roster only — never the fallback identity cast.
  * Domain is one of Stocks / Predictions / Coins / Crypto. No P/L, hold, or beat.
  */
-import { currentStewards, teamCards } from './desk-team';
+import { currentStewards, deskTeam, teamCards } from './desk-team';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 
 export const STEWARD_ID_DOMAINS = ['Stocks', 'Predictions', 'Coins', 'Crypto'] as const;
@@ -13,6 +13,10 @@ export type StewardIdCard = {
   display_name: string;
   domain: StewardIdDomain;
   accent: string;
+};
+
+export type TeamRosterCard = StewardIdCard & {
+  heartbeat_at: string | null;
 };
 
 export function stewardDomainFace(slug: string, name = ''): StewardIdDomain | null {
@@ -71,6 +75,18 @@ function ledgerRoster(desk: Pick<DeskPayload, 'team'>): DeskTeamPayload | null {
     stewards: currentStewards(raw.stewards ?? []),
     accounts: raw.accounts ?? [],
   };
+}
+
+/** Published `desk_agents` plus heartbeat age. Empty roster → no cards. */
+export function assembleTeamRoster(desk: Pick<DeskPayload, 'team'>): TeamRosterCard[] {
+  const cards = stewardIdCards(desk);
+  const heartbeats = new Map(
+    teamCards(deskTeam(desk)).map((row) => [row.slug, row.heartbeat_at]),
+  );
+  return cards.map((card) => ({
+    ...card,
+    heartbeat_at: heartbeats.get(card.slug) ?? null,
+  }));
 }
 
 /** Published `desk_agents` only. Empty roster → no cards. */

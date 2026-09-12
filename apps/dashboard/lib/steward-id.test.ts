@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { assembleTeam, emptyTeam, fallbackTeam } from './desk-team';
-import { stewardDomainFace, stewardIdCards, stewardSlugFace } from './steward-id';
+import { assembleTeamRoster, stewardDomainFace, stewardIdCards, stewardSlugFace } from './steward-id';
 
 function ledgerRoster() {
   return assembleTeam({
@@ -152,5 +152,18 @@ describe('steward ID card face', () => {
     expect(card).not.toHaveProperty('heartbeat_at');
     expect(card).not.toHaveProperty('charter');
     expect(card).not.toHaveProperty('role_title');
+  });
+
+  test('team roster keeps pulse age and still omits book facts', () => {
+    const roster = assembleTeamRoster({ team: ledgerRoster() });
+    expect(roster.map((row) => row.slug)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+    expect(roster[0]).toMatchObject({
+      display_name: 'QUANTANAMO',
+      domain: 'Stocks',
+      heartbeat_at: '2026-09-06T12:00:00.000Z',
+    });
+    expect(roster[0]).not.toHaveProperty('pnl');
+    expect(roster[0]).not.toHaveProperty('win_rate');
+    expect(assembleTeamRoster({ team: fallbackTeam() })).toEqual([]);
   });
 });

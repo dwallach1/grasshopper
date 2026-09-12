@@ -42,7 +42,7 @@ export function StewardAvatar({
   const reducedMotion = usePrefersReducedMotion();
   const className = [
     styles.steward,
-    size === 'board' ? styles.board : size === 'card' ? styles.card : styles.team,
+    size === 'board' ? styles.board : size === 'card' ? styles.card : size === 'glyph' ? styles.glyph : styles.team,
     alive ? styles.alive : '',
   ]
     .filter(Boolean)

@@ -86,7 +86,7 @@ On **Board** (`/`) Liveline draws each steward’s ledger series (Agentic NAV, `
 
 Each thesis with an open lot shows that lot from the **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position** on Theses.
 
-On **Theses** the operator table still lists the live theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`, plus orphans such as `earnings_gap_structure`) with statuses `forming` or `hardening`, plus held/candidate symbols and a lessons pane. The public phone desk paints those same rows as districts (theme as the place, thesis as the building). Tap a door for the sentence. No invented themes or empty cities.
+On **Theses** the operator table still lists the live theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`, plus orphans such as `earnings_gap_structure`) with statuses `forming` or `hardening`, plus held/candidate symbols and a lessons pane. The public phone desk paints those same rows as parchment cards (name, stance/status, confidence, domain/steward). Tap for the sentence, falsifier, and evidence. No Book/Board marks on the card.
 
 On **Events** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue` (not AI-filtered). `/catalysts` redirects here.
 
