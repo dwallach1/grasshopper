@@ -64,6 +64,13 @@ describe('desk IA smoke', () => {
     expect(board).not.toContain('!isMarkStale(row.last_marked, clock) ? pnlClass');
     const css = await readDashboard('app/globals.css');
     expect(css).not.toContain('.line-row.is-stale-marks .line-pct');
+    expect(css).toContain('--paper: #f3ead8');
+    expect(css).toContain('--card: #fffaf1');
+    expect(css).toContain('.paper-title');
+    expect(css).toContain('.line-art');
+    expect(board).toContain('paper-title');
+    expect(board).toContain('line-art');
+    expect(board).toContain('row.ranked ? pnlClass(row.return_pct) : \'muted\'');
   });
 
   test('product chrome is grasshopper; venue shorts are STOCKS / PREDICTIONS / COINS', async () => {
@@ -393,6 +400,14 @@ describe('desk IA smoke', () => {
     expect(board).toContain('stewardDeskFaces');
     expect(board).toContain('DeskLiveline');
     expect(board).toContain('CrtTape');
+    expect(board).toContain('paper-title');
+    expect(board).toContain('line-art');
+    expect(book).toContain('paper-title');
+    expect(css).toContain('--paper: #f3ead8');
+    expect(css).toContain('--card: #fffaf1');
+    expect(css).toContain('.paper-title');
+    expect(css).toContain('.line-art');
+    expect(css).not.toContain('.line-row.is-stale-marks .line-pct');
     expect(board).not.toContain('line-foci');
     expect(board).not.toContain("label: 'ALL'");
     expect(board).not.toContain('setFocus');

@@ -40,7 +40,7 @@ export function BookPanel({
     <div className="line-stage crt-book">
       <h1 className="visually-hidden">Book</h1>
       <header className="crt-book-mast">
-        <p className="crt-book-kicker">BOOK // EDGE</p>
+        <p className="crt-book-kicker paper-title">BOOK // EDGE</p>
         <p className="crt-book-lede">
           Closed lots only. Native units. Missing exits stay unmarked.
         </p>
