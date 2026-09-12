@@ -13,7 +13,24 @@ export async function GET() {
   if (!isPublicDesk()) {
     return NextResponse.json(publicDeskJsonError('Not found'), { status: 404 });
   }
+  const upstream = (process.env.DESK_UPSTREAM_URL || '').trim();
   if (!hasDatabaseUrl()) {
+    if (upstream) {
+      try {
+        const res = await fetch(`${upstream.replace(/\/$/, '')}/api/desk`, { cache: 'no-store' });
+        const body = await res.text();
+        return new NextResponse(body, {
+          status: res.status,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: 'desk_upstream_read_failed',
+          error: error instanceof Error ? error.message : 'unknown',
+        }));
+        return NextResponse.json(publicDeskJsonError(), { status: 503 });
+      }
+    }
     return NextResponse.json(publicDeskJsonError(), { status: 503 });
   }
   try {
