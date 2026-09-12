@@ -126,7 +126,7 @@ export function LeaderboardPanel({
                 <b>{row.steward}</b>
                 <i>{row.venue_label} · {row.unit ?? '—'}</i>
               </span>
-              <span className={`line-pct ${row.ranked && !isMarkStale(row.last_marked, clock) ? pnlClass(row.return_pct) : 'muted'}`}>
+              <span className={`line-pct ${row.ranked ? pnlClass(row.return_pct) : 'muted'}`}>
                 {row.ranked ? pct(row.return_pct, 2) : NOT_RANKED}
               </span>
             </div>
