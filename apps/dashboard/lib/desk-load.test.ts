@@ -56,6 +56,7 @@ describe('desk load path', () => {
   test('public /api/desk reads live postgres only', async () => {
     const route = await readDashboard('app/api/desk/route.ts');
     expect(route).toContain('loadDeskFromPostgres');
+    expect(route).toContain('DESK_UPSTREAM_URL');
     expect(route).toContain('toPublicDeskSnapshot');
     expect(route).not.toContain('filePublicDesk');
     expect(route).not.toContain('current.json');

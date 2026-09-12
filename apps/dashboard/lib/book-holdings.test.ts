@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { MARK_NOT_IN_LEDGER } from './book-performance';
-import { assembleBookHoldings, holdingChangePct, holdingTicket, holdingUpl } from './book-holdings';
+import {
+  assembleBookHoldings,
+  holdingChangePct,
+  holdingLifeLabel,
+  holdingTicket,
+  holdingUpl,
+} from './book-holdings';
 import { assembleBookOpen } from './book-open-strip';
 import { fallbackTeam } from './desk-team';
 import type { DeskPayload } from './ledger-types';
@@ -135,6 +141,10 @@ describe('assembleBookHoldings', () => {
     expect(holdings.rows).toHaveLength(3);
     const nbis = holdings.rows.find((row) => row.id === 'eq:NBIS');
     expect(nbis?.book_short).toBe('QNT');
+    expect(nbis?.steward).toBe('QUANTANAMO');
+    expect(nbis?.steward_slug).toBe('quantanamo');
+    expect(nbis?.life).toBe('live');
+    expect(holdingLifeLabel(nbis!.life)).toBe('LIVE');
     expect(nbis?.change_pct).toBeGreaterThan(0);
     expect(nbis?.upl).toBe(42.4);
     const open = assembleBookOpen(desk());
@@ -142,7 +152,7 @@ describe('assembleBookHoldings', () => {
     expect(holdingTicket(nbis!, open.rows.flatMap((row) => row.tickets))).toBeUndefined();
   });
 
-  test('closed and zero-size lots stay off the table', () => {
+  test('zero-size open lots stay off; closed Stocks / Predictions / Coins join as historic', () => {
     const holdings = assembleBookHoldings(desk({
       book: {
         ...desk().book,
@@ -160,6 +170,17 @@ describe('assembleBookHoldings', () => {
           },
         ],
       },
+      positions: [{
+        id: 'ep-cifr',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'CIFR',
+        status: 'closed',
+        quantity: 63,
+        average_cost: 15.82,
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: '2026-09-01T00:00:00.000Z',
+        next_review_at: null,
+      }],
       prediction_markets: {
         ...desk().prediction_markets,
         positions: [
@@ -179,8 +200,46 @@ describe('assembleBookHoldings', () => {
           },
         ],
       },
+      meme_coins: {
+        ...desk().meme_coins,
+        positions: [
+          ...(desk().meme_coins?.positions ?? []),
+          {
+            id: 'pos-done',
+            token_id: 'tok-baton',
+            account_key: BANDIT_PRIMARY_ACCOUNT,
+            thesis_id: null,
+            status: 'closed',
+            quantity: 100,
+            average_cost_sol: 0.0002,
+            mark_sol: 0.00011,
+            mark_at: '2026-09-10T00:00:00.000Z',
+            thesis_text: null,
+          },
+        ],
+      },
     }));
-    expect(holdings.rows.map((row) => row.name)).not.toContain('ZERO');
-    expect(holdings.rows).toHaveLength(3);
+    const names = holdings.rows.map((row) => row.name);
+    expect(names).not.toContain('ZERO');
+    const cifr = holdings.rows.find((row) => row.id === 'eq-closed:ep-cifr');
+    expect(cifr).toMatchObject({
+      name: 'CIFR',
+      life: 'closed',
+      steward: 'QUANTANAMO',
+      steward_slug: 'quantanamo',
+      mark: null,
+      change_pct: null,
+      upl: null,
+    });
+    expect(holdingLifeLabel(cifr!.life)).toBe('CLOSED');
+    const pmClosed = holdings.rows.find((row) => row.id === 'pm:p-closed');
+    expect(pmClosed?.life).toBe('closed');
+    expect(pmClosed?.steward).toBe('ODDSBORNE');
+    expect(pmClosed?.change_pct).not.toBeNull();
+    const memeClosed = holdings.rows.find((row) => row.id === 'meme:pos-done');
+    expect(memeClosed?.life).toBe('closed');
+    expect(memeClosed?.steward).toBe('BANDIT');
+    expect(holdings.rows.filter((row) => row.life === 'live')).toHaveLength(3);
+    expect(holdings.rows.filter((row) => row.life === 'closed')).toHaveLength(3);
   });
 });

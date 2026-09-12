@@ -109,7 +109,7 @@ a:focus-visible {
   .desk-pager,
   .steward-deck,
   .steward-deck-track,
-  .thesis-districts {
+  .thesis-list {
     scroll-behavior: auto;
   }
 
@@ -3659,11 +3659,133 @@ a:focus-visible {
 .steward-stage {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 14px;
   min-height: 100%;
-  height: 100%;
-  background:
-    radial-gradient(80% 60% at 50% 42%, #12161c 0%, #07080a 70%);
+  height: auto;
+  padding: 18px 16px 32px;
+  max-width: 430px;
+  margin: 0 auto;
+  background: transparent;
+}
+
+.team-mast,
+.thesis-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-lede,
+.thesis-lede {
+  margin: 0;
+  color: var(--ink-3, var(--text-3));
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.team-roster,
+.thesis-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.team-card,
+.thesis-card {
+  width: 100%;
+  margin: 0;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: var(--r-card, 14px);
+  background: var(--card, var(--elevated));
+  box-shadow: var(--shadow-card, none);
+  color: inherit;
+  text-align: left;
+}
+
+.team-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.thesis-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 12px;
+}
+
+.team-card-copy,
+.thesis-card-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.team-card-copy b,
+.thesis-card-copy b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink, var(--text));
+}
+
+.team-card-copy i,
+.thesis-card-copy i,
+.team-card-copy span {
+  color: var(--ink-3, var(--text-3));
+  font-style: normal;
+  font-size: 12px;
+}
+
+.thesis-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  grid-column: 2;
+}
+
+.thesis-chip,
+.book-life {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 999px;
+  background: var(--elevated-2, #f6eee0);
+  color: var(--ink-2, var(--text-2));
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.book-life.is-live {
+  color: var(--green);
+}
+
+.book-life.is-closed,
+.thesis-card.is-historic {
+  color: var(--ink-3, var(--text-3));
+}
+
+.thesis-conf {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2, var(--text-2));
+}
+
+.thesis-card.is-on {
+  border-color: rgba(184, 137, 45, 0.28);
 }
 
 .steward-deck {
@@ -4692,7 +4814,7 @@ a:focus-visible {
 .book-holdings-head,
 .book-holdings-row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1.3fr) 40px minmax(0, 0.9fr) minmax(0, 0.9fr) 56px 52px minmax(0, 0.9fr);
+  grid-template-columns: 36px minmax(0, 1.3fr) 36px 52px minmax(0, 0.8fr) minmax(0, 0.8fr) 56px 52px minmax(0, 0.8fr);
   gap: 6px;
   align-items: center;
 }
@@ -4747,13 +4869,18 @@ a:focus-visible {
   font-weight: 500;
 }
 
-.book-holdings-name i {
+.book-holdings-name i,
+.book-holdings-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-3);
   font-style: normal;
   font-size: 10px;
   letter-spacing: 0.04em;
 }
 
+.book-holdings-steward,
 .book-holdings-book {
   color: var(--text-3);
   font-size: 11px;
@@ -4785,15 +4912,16 @@ a:focus-visible {
 @media (max-width: 720px) {
   .book-holdings-head,
   .book-holdings-row {
-    grid-template-columns: 36px minmax(0, 1fr) 64px;
+    grid-template-columns: 36px minmax(0, 1fr) 52px 56px;
   }
 
+  .book-holdings-steward,
   .book-holdings-book,
   .book-holdings-head span:nth-child(3),
-  .book-holdings-head span:nth-child(4),
   .book-holdings-head span:nth-child(5),
-  .book-holdings-head span:nth-child(7),
+  .book-holdings-head span:nth-child(6),
   .book-holdings-head span:nth-child(8),
+  .book-holdings-head span:nth-child(9),
   .book-holdings-row > .book-holdings-num:not(.book-holdings-pct) {
     display: none;
   }
@@ -4903,146 +5031,37 @@ a:focus-visible {
   }
 }
 
-/* ——— Theses world: one miniature district in a cream void ——— */
+/* ——— Theses: parchment list, not a 3D world ——— */
 
 .thesis-world {
   position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
+  gap: 14px;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
-  background: #f3ead8;
-}
-
-.thesis-districts {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  padding: 18px 16px 32px;
   overflow-x: hidden;
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
-  overscroll-behavior-x: none;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  background: transparent;
 }
 
-.thesis-districts::-webkit-scrollbar {
-  display: none;
-}
-
-.thesis-world[data-reduce-motion="1"] .thesis-districts {
-  scroll-behavior: auto;
-}
-
-.thesis-world[data-reading="1"] .thesis-districts {
+.thesis-world[data-reading="1"] .thesis-list,
+.thesis-world[data-reading="1"] .thesis-mast,
+.thesis-world[data-reading="1"] .thesis-empty {
   pointer-events: none;
   visibility: hidden;
-}
-
-.thesis-district {
-  position: relative;
-  flex: 0 0 100%;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 100%;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-  background: #f3ead8;
-}
-
-.thesis-district[data-place="campus"] {
-  background: #cfd6e4;
-}
-
-.thesis-district[data-place="hangar"] {
-  background: #e6e2d8;
-}
-
-.thesis-district[data-place="lab"] {
-  background: #e4eaf0;
-}
-
-.thesis-island,
-.thesis-island-poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-width: 8px;
-  min-height: 8px;
-  display: block;
-  background: inherit;
-  touch-action: pan-y;
-}
-
-.thesis-island canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  touch-action: pan-y;
-}
-
-.thesis-island-poster {
-  z-index: 0;
-}
-
-.thesis-island canvas:not(.thesis-island-poster) {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-}
-
-.thesis-dots {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.thesis-dots li {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #c9c0b2;
-}
-
-.thesis-dots li.is-on {
-  background: #e4b23c;
-}
-
-.thesis-place-index {
-  position: absolute;
-  left: 16px;
-  bottom: 22px;
-  z-index: 2;
-  margin: 0;
-  color: #6a6256;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  pointer-events: none;
 }
 
 .thesis-empty {
   margin: auto;
   padding: 48px 20px;
   text-align: center;
-  color: #6a6256;
+  color: var(--ink-2, #6a6256);
 }
 
 .thesis-page {
@@ -5051,25 +5070,34 @@ a:focus-visible {
   z-index: 4;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 28px 22px 36px;
-  background: #f4eee3;
+  justify-content: flex-start;
+  padding: 22px 18px 36px;
+  overflow-y: auto;
+  background: var(--paper, #f4eee3);
 }
 
 .thesis-page-back {
   align-self: flex-start;
-  margin: 0 0 28px;
+  margin: 0 0 18px;
   padding: 0;
   border: 0;
   background: none;
-  color: #6a6256;
+  color: var(--ink-2, #6a6256);
   font-size: 13px;
+}
+
+.thesis-page-kicker {
+  margin: 0 0 10px !important;
+  color: var(--ink-3, #6a6256) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
 }
 
 .thesis-page h2 {
   margin: 0 0 16px;
   max-width: 22rem;
-  color: #1f1b16;
+  color: var(--ink, #1f1b16);
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 400;
@@ -5080,16 +5108,59 @@ a:focus-visible {
 .thesis-page p {
   margin: 0;
   max-width: 28rem;
-  color: #2a241c;
+  color: var(--ink, #2a241c);
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.4;
 }
 
 .thesis-page-falsifier {
   margin-top: 18px !important;
-  color: #6a6256 !important;
-  font-size: 16px !important;
+  color: var(--ink-2, #6a6256) !important;
+  font-size: 15px !important;
+}
+
+.thesis-page-empty {
+  margin-top: 18px !important;
+  color: var(--ink-3, #8a8074) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 13px !important;
+}
+
+.thesis-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thesis-evidence li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--card-line, rgba(58, 46, 30, 0.1));
+  border-radius: var(--r-card, 14px);
+  background: var(--card, #fffaf1);
+}
+
+.thesis-evidence b {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.thesis-evidence span {
+  color: var(--ink-3, #8a8074);
+  font-size: 11px;
+}
+
+.thesis-evidence p {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 @media (min-width: 720px) {
@@ -5102,7 +5173,7 @@ a:focus-visible {
   }
 
   .thesis-page p {
-    font-size: 24px;
+    font-size: 22px;
   }
 }
 
@@ -5113,7 +5184,8 @@ a:focus-visible {
 
 .term-public,
 .term.is-line,
-.term.is-swipe {
+.term.is-swipe,
+.term.is-theses {
   --paper: #f3ead8;
   --paper-deep: #e7d9bf;
   --card: #fffaf1;
@@ -5160,7 +5232,8 @@ a:focus-visible {
 
 .term-public .term-top,
 .term.is-line .term-top,
-.term.is-swipe .term-top {
+.term.is-swipe .term-top,
+.term.is-theses .term-top {
   background: rgba(243, 234, 216, 0.88);
   border-bottom-color: var(--card-line);
   backdrop-filter: blur(10px);
@@ -5168,7 +5241,8 @@ a:focus-visible {
 
 .term-public .term-brand,
 .term.is-line .term-brand,
-.term.is-swipe .term-brand {
+.term.is-swipe .term-brand,
+.term.is-theses .term-brand {
   color: var(--ink);
 }
 
@@ -5446,8 +5520,31 @@ a:focus-visible {
   background: transparent;
 }
 
-.term.is-swipe .steward-stage {
+.term.is-swipe .steward-stage,
+.term.is-theses .thesis-world {
   background: transparent;
+}
+
+.term.is-swipe .team-card,
+.term.is-theses .thesis-card,
+.term.is-theses .thesis-evidence li {
+  border-color: var(--card-line);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+.term.is-theses .thesis-card.is-on {
+  border-color: rgba(184, 137, 45, 0.28);
+}
+
+.term.is-line .book-life.is-live {
+  color: var(--green);
+  border-color: var(--green-dim);
+  background: var(--green-dim);
+}
+
+.term.is-line .book-life.is-closed {
+  color: var(--ink-3);
 }
 
 .term-public .term-dock,
