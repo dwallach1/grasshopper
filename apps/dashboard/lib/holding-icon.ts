@@ -13,19 +13,19 @@ export type HoldingTilePaint = {
 };
 
 const STOCK_TILES: readonly HoldingTilePaint[] = [
-  { fill: '#e8edd9', ink: '#3a4634', rule: '#c5cbb4' },
-  { fill: '#e7e4d4', ink: '#3d3a2e', rule: '#c8c3ae' },
-  { fill: '#e9e8de', ink: '#3a3d38', rule: '#c6c5ba' },
+  { fill: '#d5debf', ink: '#2f3a2a', rule: '#b4be9a' },
+  { fill: '#ddd6be', ink: '#3a3426', rule: '#c0b89a' },
+  { fill: '#d8d6c8', ink: '#33362f', rule: '#b7b5a6' },
 ];
 
 const CONTRACT_TILES: readonly HoldingTilePaint[] = [
-  { fill: '#e4e6ee', ink: '#353a48', rule: '#c3c6d2' },
-  { fill: '#e6e4ea', ink: '#3a3644', rule: '#c5c2cc' },
+  { fill: '#cfd4e4', ink: '#2c3140', rule: '#a8adbf' },
+  { fill: '#d4d0de', ink: '#322e3c', rule: '#b0abbc' },
 ];
 
 const TOKEN_TILES: readonly HoldingTilePaint[] = [
-  { fill: '#eee3d6', ink: '#4a3830', rule: '#d2c2b2' },
-  { fill: '#eadfd4', ink: '#46362e', rule: '#d0bbaa' },
+  { fill: '#e4c9b0', ink: '#3f2d24', rule: '#c4a88e' },
+  { fill: '#e0c4b4', ink: '#3c2a24', rule: '#c2a090' },
 ];
 
 export function holdingIconKind(venue: DeskVenue): HoldingIconKind {

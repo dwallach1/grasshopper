@@ -22,8 +22,8 @@ describe('holding icon tiles', () => {
     const a = holdingTilePaint('NBIS', 'equity');
     const b = holdingTilePaint('NBIS', 'equity');
     expect(a).toEqual(b);
-    expect(a.fill.startsWith('#e')).toBe(true);
-    expect(a.ink.startsWith('#3') || a.ink.startsWith('#4')).toBe(true);
+    expect(a.fill.startsWith('#d') || a.fill.startsWith('#e') || a.fill.startsWith('#c')).toBe(true);
+    expect(a.ink.startsWith('#2') || a.ink.startsWith('#3') || a.ink.startsWith('#4')).toBe(true);
   });
 
   test('SVG tile is code-drawn — no loot art or steward faces', async () => {
