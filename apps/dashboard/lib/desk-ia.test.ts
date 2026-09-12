@@ -52,6 +52,7 @@ describe('desk IA smoke', () => {
     expect(book).not.toContain('VenueFilterBar');
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
+    expect(book).toContain('assembleBookHoldings');
     expect(book).toContain('assembleStewardFreshness');
     expect(book).toContain('assembleDeskBookHealth');
     expect(book).toContain('BookHealthStrip');
@@ -379,6 +380,7 @@ describe('desk IA smoke', () => {
     expect(book).toContain('assembleBookEdge');
     expect(book).toContain('assembleBookOpen');
     expect(book).toContain('<BookOpenStrip');
+    expect(book).toContain('holdings={holdings.rows}');
     expect(book).toContain('crt-book-readout');
     expect(book).not.toContain('<DeskLiveline');
     expect(book).not.toContain('<BookTable');
@@ -426,6 +428,8 @@ describe('desk IA smoke', () => {
     expect(book).toContain('BOOK // EDGE');
     expect(css).toContain('.crt-book');
     expect(css).toContain('.book-open');
+    expect(css).toContain('.book-holdings');
+    expect(css).toContain('.holding-icon');
     expect(css).toContain('.crt-book .book-open-line.line-frame > div:has(canvas)');
     expect(css).toContain('crt-book-sweep');
     expect(css).toContain('.term-fresh');
@@ -436,6 +440,9 @@ describe('desk IA smoke', () => {
     expect(wrap).toContain("compact ? () => ''");
     expect(openStrip).toContain('referenceLine');
     expect(openStrip).toContain('compact');
+    expect(openStrip).toContain('HoldingIcon');
+    expect(openStrip).toContain('book-holdings');
+    expect(openStrip).toContain('pnlClass(row.change_pct)');
     expect(openStrip).not.toContain('StewardAvatar');
     expect(openStrip).not.toContain('book-open-lede');
     expect(openStrip).not.toContain('book-open-who');

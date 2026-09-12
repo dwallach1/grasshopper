@@ -10,6 +10,7 @@ import {
   formatHold,
   type StewardEdge,
 } from '../../lib/book-edge-stats';
+import { assembleBookHoldings } from '../../lib/book-holdings';
 import { assembleBookOpen } from '../../lib/book-open-strip';
 import { assembleDeskBookHealth } from '../../lib/desk-book-health';
 import { assembleStewardFreshness, type StewardFreshness } from '../../lib/desk-freshness';
@@ -28,6 +29,7 @@ export function BookPanel({
 }) {
   const edge = useMemo(() => assembleBookEdge(desk), [desk]);
   const open = useMemo(() => assembleBookOpen(desk), [desk]);
+  const holdings = useMemo(() => assembleBookHoldings(desk), [desk]);
   const nowMs = nowIso ? Date.parse(nowIso) : Date.now();
   const faces = useMemo(
     () => stewardDeskFaces(desk, nowMs),
@@ -42,12 +44,16 @@ export function BookPanel({
       <header className="crt-book-mast">
         <p className="crt-book-kicker paper-title">BOOK // EDGE</p>
         <p className="crt-book-lede">
-          Closed lots only. Native units. Missing exits stay unmarked.
+          Open names in the table. Edge is closed lots. Native units. Missing marks stay unmarked.
         </p>
       </header>
 
+      <BookOpenStrip
+        open={open}
+        holdings={holdings.rows}
+        now={nowIso ? Date.parse(nowIso) : null}
+      />
       <BookHealthStrip health={health} now={nowIso ? Date.parse(nowIso) : null} />
-      <BookOpenStrip open={open} now={nowIso ? Date.parse(nowIso) : null} />
 
       <div className="crt-book-stack">
         {edge.rows.map((row) => (
