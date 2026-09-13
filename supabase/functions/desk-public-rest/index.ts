@@ -19,6 +19,7 @@ const ALLOWED_TABLES = new Set([
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
 const AGENTIC_LAST4 = '7638';
 
+/** Slim /bundle/public keys. Omit beliefs/lessons here and the Worker hydrates []. */
 const PUBLIC_KEYS = new Set([
   'theses', 'symbols', 'beliefs', 'lessons',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
@@ -116,7 +117,10 @@ function restHeaders(): HeadersInit {
 async function restGet(query: string, optional = false): Promise<unknown[]> {
   const supabaseUrl = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '');
   const table = query.split('?')[0];
-  if (!table || !ALLOWED_TABLES.has(table)) return [];
+  if (!table || !ALLOWED_TABLES.has(table)) {
+    if (optional) return [];
+    throw new Error(`${table || 'unknown'}:not_allowed`);
+  }
   const response = await fetch(`${supabaseUrl}/rest/v1/${query}`, { headers: restHeaders() });
   if (!response.ok) {
     if (optional) return [];
@@ -137,7 +141,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key))
       : REQUIRED
     ).map(([key, query]) => [key, mode === 'public' && PUBLIC_QUERY[key] ? PUBLIC_QUERY[key] : query] as const);
-    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query, key === 'beliefs')] as const));
+    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const));
     const [pm, meme, team] = await Promise.all([
       objectFrom(PM),
       objectFrom(MEME),
