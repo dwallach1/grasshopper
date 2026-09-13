@@ -13,13 +13,14 @@ const ALLOWED_TABLES = new Set([
   'pm_markets', 'pm_positions', 'pm_orders', 'pm_fills', 'pm_pnl', 'pm_notes',
   'meme_tokens', 'meme_positions', 'meme_orders', 'meme_fills', 'meme_pnl', 'meme_notes',
   'desk_agents', 'desk_domains', 'desk_domain_stewards', 'desk_accounts',
+  'belief_updates', 'thesis_domains',
 ]);
 
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
 const AGENTIC_LAST4 = '7638';
 
 const PUBLIC_KEYS = new Set([
-  'theses', 'symbols',
+  'theses', 'symbols', 'beliefs', 'lessons',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
   'themes',
 ]);
@@ -31,6 +32,7 @@ const PUBLIC_QUERY: Record<string, string> = {
 const REQUIRED: Array<[string, string]> = [
   ['theses', 'theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc'],
   ['symbols', 'thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc'],
+  ['beliefs', 'belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&order=observed_at.desc,id.desc&limit=80'],
   ['evidence', 'thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200'],
   ['scores', 'thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400'],
   ['relations', 'thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale'],
@@ -135,7 +137,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key))
       : REQUIRED
     ).map(([key, query]) => [key, mode === 'public' && PUBLIC_QUERY[key] ? PUBLIC_QUERY[key] : query] as const);
-    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const));
+    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query, key === 'beliefs')] as const));
     const [pm, meme, team] = await Promise.all([
       objectFrom(PM),
       objectFrom(MEME),

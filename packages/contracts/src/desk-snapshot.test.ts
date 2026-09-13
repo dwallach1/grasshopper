@@ -71,6 +71,34 @@ describe('public desk snapshot contract', () => {
     expect(published.team).toEqual(sample.team);
     expect(published.book.current_nav).toBeNull();
     expect(isPublicSnapshot(published)).toBe(true);
+    expect(published.beliefs).toEqual([]);
+    expect(published.lessons).toEqual([]);
+  });
+
+  test('public snapshot keeps lean beliefs and lessons', () => {
+    const published = toPublicDeskSnapshot({
+      ...sample,
+      beliefs: [{
+        id: '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
+        thesis_id: 'earnings_gap_structure',
+        kind: 'playbook_rule',
+        rules: ['never_pltr'],
+      }],
+      lessons: [{ id: 36, thesis_id: 'earnings_gap_structure', summary: 'Soft RTH is not confirmation.' }],
+    });
+    expect(published.beliefs).toEqual([{
+      id: '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
+      thesis_id: 'earnings_gap_structure',
+      kind: 'playbook_rule',
+      rules: ['never_pltr'],
+    }]);
+    expect(published.lessons).toEqual([{
+      id: 36,
+      thesis_id: 'earnings_gap_structure',
+      summary: 'Soft RTH is not confirmation.',
+    }]);
+    expect(published.evidence).toEqual([]);
+    expect(isPublicSnapshot(published)).toBe(true);
   });
 
   test('hydrate fills missing arrays so tests[0] does not throw', () => {

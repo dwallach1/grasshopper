@@ -29,7 +29,8 @@ begin
     'ontology_candidates','ontology_management_actions',
     'pm_markets','pm_positions','pm_orders','pm_fills','pm_pnl','pm_notes',
     'meme_tokens','meme_positions','meme_orders','meme_fills','meme_pnl','meme_notes',
-    'desk_agents','desk_domains','desk_domain_stewards','desk_accounts'
+    'desk_agents','desk_domains','desk_domain_stewards','desk_accounts',
+    'belief_updates','thesis_domains'
   ]
   loop
     if to_regclass(format('public.%I', target_table)) is null then

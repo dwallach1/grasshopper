@@ -3,6 +3,13 @@
  * Missing cost/mark stay unmarked. Never invent a % or UPL.
  * Closed rows come from position episodes / pm_positions / meme_positions only.
  */
+import {
+  clipNoteFor,
+  domainIdForSteward,
+  rulesInForceFor,
+  thesisForHolding,
+  type ClipNote,
+} from './beliefs';
 import { OPEN_POSITION, type BookOpenTicket } from './book-open-strip';
 import { venueLabel, type DeskVenue } from './desk-venue';
 import type { DeskPayload } from './ledger-types';
@@ -33,6 +40,10 @@ export type BookHolding = {
   size: number | null;
   upl: number | null;
   note: string;
+  thesis_id: string | null;
+  thesis_name: string | null;
+  rules_in_force: string[];
+  clip_note: ClipNote | null;
 };
 
 export type BookHoldings = {
@@ -105,6 +116,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Math.abs(row.quantity),
       upl: finiteOrNull(row.pnl),
       note: row.note,
+      ...bindHolding(desk, { symbol, life: 'live' }),
     }));
   }
   for (const row of desk.positions ?? []) {
@@ -126,6 +138,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
         size: Math.abs(row.quantity),
         upl: null,
         note: '',
+        ...bindHolding(desk, { symbol, life: 'live' }),
       }));
       continue;
     }
@@ -141,6 +154,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Number.isFinite(row.quantity) ? Math.abs(row.quantity) : null,
       upl: null,
       note: '',
+      ...bindHolding(desk, { symbol, life: 'closed' }),
     }));
   }
   return rows;
@@ -171,6 +185,12 @@ function predictionHoldings(desk: DeskPayload): BookHolding[] {
       size,
       upl: holdingUpl(cost, mark, size),
       note: row.mark === null ? 'mark not in ledger' : '',
+      ...bindHolding(desk, {
+        symbol: market?.slug?.trim() || row.outcome,
+        thesisId: row.thesis_id ?? market?.thesis_id ?? null,
+        life: closed ? 'closed' : 'live',
+        steward: 'oddsborne',
+      }),
     }));
   }
   return rows;
@@ -202,9 +222,48 @@ function memeHoldings(desk: DeskPayload): BookHolding[] {
       size,
       upl: holdingUpl(cost, mark, size),
       note: row.mark_sol === null ? 'mark not in ledger' : '',
+      ...bindHolding(desk, {
+        symbol: token?.symbol?.trim() || name,
+        thesisId: row.thesis_id ?? token?.thesis_id ?? null,
+        life: closed ? 'closed' : 'live',
+        steward: 'bandit',
+      }),
     }));
   }
   return rows;
+}
+
+function bindHolding(
+  desk: DeskPayload,
+  input: {
+    symbol: string;
+    thesisId?: string | null;
+    life: BookHoldingLife;
+    steward?: BookHoldingStewardSlug;
+  },
+): Pick<BookHolding, 'thesis_id' | 'thesis_name' | 'rules_in_force' | 'clip_note'> {
+  const thesis = thesisForHolding(desk.theses ?? [], {
+    symbol: input.symbol,
+    thesisId: input.thesisId,
+  });
+  const steward = input.steward ?? 'quantanamo';
+  const rules = rulesInForceFor({
+    thesisId: thesis?.id ?? null,
+    domainId: domainIdForSteward(desk.team, steward),
+    beliefs: desk.beliefs ?? [],
+  });
+  return {
+    thesis_id: thesis?.id ?? null,
+    thesis_name: thesis?.name ?? null,
+    rules_in_force: rules,
+    clip_note: input.life === 'closed'
+      ? clipNoteFor({
+        thesisId: thesis?.id ?? null,
+        beliefs: desk.beliefs ?? [],
+        lessons: desk.lessons ?? [],
+      })
+      : null,
+  };
 }
 
 function holdingRow(input: {
@@ -218,6 +277,10 @@ function holdingRow(input: {
   size: number | null;
   upl: number | null;
   note: string;
+  thesis_id: string | null;
+  thesis_name: string | null;
+  rules_in_force: string[];
+  clip_note: ClipNote | null;
 }): BookHolding {
   const book = venueLabel(input.venue) as BookHoldingBook;
   const steward_slug: BookHoldingStewardSlug = book === 'ODDSBORNE'
@@ -242,6 +305,10 @@ function holdingRow(input: {
     size: input.size,
     upl: input.upl,
     note: input.note,
+    thesis_id: input.thesis_id,
+    thesis_name: input.thesis_name,
+    rules_in_force: input.rules_in_force,
+    clip_note: input.clip_note,
   };
 }
 

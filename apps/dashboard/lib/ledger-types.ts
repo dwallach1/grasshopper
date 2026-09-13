@@ -593,6 +593,8 @@ export type DeskPayload = {
   /** `desk_agents` / `desk_domains` roster. Empty object when those tables are missing. */
   team?: DeskTeamPayload;
   theses: ThesisRow[];
+  /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
+  beliefs: import('./beliefs').BeliefUpdateRow[];
   evidence: ThesisEvidenceRow[];
   scores: ThesisScoreRow[];
   relations: ThesisRelationRow[];

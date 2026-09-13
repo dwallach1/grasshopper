@@ -53,6 +53,7 @@ import {
   type PredictionMarketsPayload,
 } from './prediction-book';
 import { assembleRoutines } from './routines';
+import { mapBeliefs } from './beliefs';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
@@ -98,6 +99,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
   const [
     theses,
     symbols,
+    beliefs,
     evidence,
     scores,
     relations,
@@ -131,6 +133,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
   ] = await Promise.all([
     restRows('theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', auth),
     restRows('thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc', auth),
+    restOptional('belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&order=observed_at.desc,id.desc&limit=80', auth),
     restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200', auth),
     restRows('thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400', auth),
     restRows('thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale', auth),
@@ -169,7 +172,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     loadTeamRest(auth),
   ]);
   return assembleDeskFromRestBag({
-    theses, symbols, evidence, scores, relations, runs, cloudRuns, cloudTasks,
+    theses, symbols, beliefs, evidence, scores, relations, runs, cloudRuns, cloudTasks,
     automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
     scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
     intents, proposals, fills, insights, predictions, riskControls, themes,
@@ -180,6 +183,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
 export type RestDeskBag = {
   theses: JsonObjectRow[];
   symbols: JsonObjectRow[];
+  beliefs: JsonObjectRow[];
   evidence: JsonObjectRow[];
   scores: JsonObjectRow[];
   relations: JsonObjectRow[];
@@ -220,6 +224,8 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   RestDeskBag,
   | 'theses'
   | 'symbols'
+  | 'beliefs'
+  | 'lessons'
   | 'accountLatest'
   | 'accountFirst'
   | 'positions'
@@ -232,6 +238,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'team'
 >): DeskPayload {
   return assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
+    beliefs: mapBeliefs(bag.beliefs),
     evidence: [],
     scores: [],
     relations: [],
@@ -241,7 +248,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
     automations: [],
     catalysts: [],
     queue: [],
-    lessons: [],
+    lessons: mapLessons(bag.lessons),
     postmortems: [],
     cycles: [],
     tests: [],
@@ -283,6 +290,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
     ontologySymbols, candidates, actions, prediction, meme, team,
   } = bag;
   return assembleDesk('postgrest', decorateDesk(theses, symbols, {
+    beliefs: mapBeliefs(bag.beliefs),
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),
     relations: mapRelations(relations),

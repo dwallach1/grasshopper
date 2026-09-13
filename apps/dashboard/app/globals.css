@@ -4909,6 +4909,43 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.book-rule-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 999px;
+  background: var(--gold-dim, rgba(184, 137, 45, 0.14));
+  color: var(--ink-2, var(--text-2));
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+}
+
+.book-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.book-rules li {
+  color: var(--ink-2, var(--text-2));
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.book-clip {
+  margin: 0 0 8px !important;
+  max-width: 28rem;
+}
+
+.book-clip.is-empty {
+  color: var(--ink-3, var(--text-3)) !important;
+}
+
 @media (max-width: 720px) {
   .book-holdings-head,
   .book-holdings-row {
@@ -5127,6 +5164,7 @@ a:focus-visible {
   font-size: 13px !important;
 }
 
+.thesis-beliefs,
 .thesis-evidence {
   display: flex;
   flex-direction: column;
@@ -5136,6 +5174,7 @@ a:focus-visible {
   list-style: none;
 }
 
+.thesis-beliefs li,
 .thesis-evidence li {
   display: flex;
   flex-direction: column;
@@ -5146,17 +5185,20 @@ a:focus-visible {
   background: var(--card, #fffaf1);
 }
 
+.thesis-beliefs b,
 .thesis-evidence b {
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
+.thesis-beliefs span,
 .thesis-evidence span {
   color: var(--ink-3, #8a8074);
   font-size: 11px;
 }
 
+.thesis-beliefs p,
 .thesis-evidence p {
   font-family: var(--font-ui);
   font-size: 13px;

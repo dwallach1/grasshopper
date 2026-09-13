@@ -117,6 +117,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
   const bag = raw as {
     theses?: unknown;
     symbols?: unknown;
+    beliefs?: unknown;
     evidence?: unknown;
     scores?: unknown;
     relations?: unknown;
@@ -154,6 +155,8 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
   const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
     symbols: asJsonRows(bag.symbols),
+    beliefs: asJsonRows(bag.beliefs),
+    lessons: asJsonRows(bag.lessons),
     accountLatest: asJsonRows(bag.accountLatest),
     accountFirst: asJsonRows(bag.accountFirst),
     positions: asJsonRows(bag.positions),

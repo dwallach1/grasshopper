@@ -216,6 +216,9 @@ describe('desk IA smoke', () => {
     expect(world).toContain('NOT_IN_LEDGER');
     expect(world).toContain('row.falsifier');
     expect(world).toContain('row.evidence');
+    expect(world).toContain('row.beliefs');
+    expect(world).toContain('thesis-beliefs');
+    expect(world).toContain('Belief trail');
     expect(world).not.toContain('ThesisIslandView');
     expect(world).not.toContain('ThesisIslandPoster');
     expect(world).not.toContain('assembleThesisDistricts');
@@ -429,6 +432,12 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('holdingLifeLabel');
     expect(openStrip).toContain('book-life');
     expect(openStrip).toContain('row.steward');
+    expect(openStrip).toContain('rules_in_force');
+    expect(openStrip).toContain('Rules in force');
+    expect(openStrip).toContain('clip_note');
+    expect(openStrip).toContain('no lesson on close');
+    expect(css).toContain('.book-rules');
+    expect(css).toContain('.thesis-beliefs');
     expect(openStrip).not.toContain('book-open-lede');
     expect(openStrip).not.toContain('venue_label');
     expect(openStrip).not.toContain('PREDICTIONS');
