@@ -16,6 +16,7 @@ import type {
   ThesisRow,
 } from './ledger-types';
 import { asFiniteNumber, asOptionalNumber, requireIso } from './numbers';
+import { leanUntagged } from './position-thesis';
 
 export type MemeTokenRow = {
   id: string;
@@ -46,6 +47,7 @@ export type MemePositionRow = {
   opened_at?: string | null;
   closed_at?: string | null;
   thesis_text: string | null;
+  untagged?: string | null;
 };
 
 export type MemeOrderRow = {
@@ -442,6 +444,7 @@ export function mapMemeCoins(input: {
       opened_at: row.opened_at == null ? null : requireIso(row.opened_at as string | Date, 'meme_positions.opened_at'),
       closed_at: row.closed_at == null ? null : requireIso(row.closed_at as string | Date, 'meme_positions.closed_at'),
       thesis_text: optionalText(row, 'thesis_text'),
+      untagged: leanUntagged(row),
     })),
     orders: (input.orders ?? []).map((row) => ({
       id: text(row, 'id'),

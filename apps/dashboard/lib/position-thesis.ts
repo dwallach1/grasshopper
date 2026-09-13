@@ -33,6 +33,11 @@ export function untaggedReason(meta: unknown): string | null {
   return textOrNull(asMetaObject(meta)[UNTAGGED_META_KEY]);
 }
 
+/** Lean public field, or meta.untagged. Never infer a reason from a missing thesis. */
+export function leanUntagged(input: { untagged?: unknown; meta?: unknown }): string | null {
+  return textOrNull(input.untagged) ?? untaggedReason(input.meta);
+}
+
 export function positionThesisGate(input: {
   thesis_id?: string | null;
   meta?: unknown;

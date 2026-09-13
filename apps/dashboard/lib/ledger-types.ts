@@ -366,6 +366,7 @@ export type PositionRow = {
   closed_at: string | null;
   next_review_at: string | null;
   thesis_id: string | null;
+  untagged?: string | null;
 };
 
 export type ExposureRow = {

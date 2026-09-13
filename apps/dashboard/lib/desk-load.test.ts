@@ -57,6 +57,8 @@ describe('desk load path', () => {
     expect(live).toContain('mapBeliefs(bag.beliefs)');
     expect(live).toContain("mapLessons(bag.lessons)");
     expect(live).toContain('mapCandidates(bag.candidates)');
+    expect(ledger).toContain("meta->>'untagged'");
+    expect(live).toContain('untagged:meta->>untagged');
   });
 
   test('public /api/desk reads live postgres only', async () => {

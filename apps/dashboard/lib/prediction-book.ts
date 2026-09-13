@@ -19,6 +19,7 @@ import type {
 } from './ledger-types';
 import { emptyMemeCoins, memeBookNames, memeDesk, memeEvents, memeLessons, workingMemeOrders } from './meme-book';
 import { asFiniteNumber, asOptionalNumber, requireIso } from './numbers';
+import { leanUntagged } from './position-thesis';
 
 export type { DeskLessonLine, DeskTapeEvent } from './ledger-types';
 
@@ -50,6 +51,7 @@ export type PredictionPositionRow = {
   opened_at?: string | null;
   closed_at?: string | null;
   thesis_text: string | null;
+  untagged?: string | null;
 };
 
 export type PredictionOrderRow = {
@@ -494,6 +496,7 @@ export function mapPredictionMarkets(input: {
       opened_at: row.opened_at == null ? null : requireIso(row.opened_at as string | Date, 'pm_positions.opened_at'),
       closed_at: row.closed_at == null ? null : requireIso(row.closed_at as string | Date, 'pm_positions.closed_at'),
       thesis_text: optionalText(row, 'thesis_text'),
+      untagged: leanUntagged(row),
     })),
     orders: (input.orders ?? []).map((row) => ({
       id: text(row, 'id'),

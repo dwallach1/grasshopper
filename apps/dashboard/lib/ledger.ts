@@ -275,7 +275,8 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       optionalRows(
         'position_episodes',
         sql`
-        select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at, thesis_id
+        select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at, thesis_id,
+               nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.position_episodes
         where status in ('proposed', 'open', 'closing', 'closed')
         order by opened_at desc nulls last, symbol
@@ -441,7 +442,8 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
       `,
       sql`
         select id, market_id, account_key, thesis_id, outcome, status, quantity,
-               average_cost, mark, mark_at, opened_at, closed_at, thesis_text
+               average_cost, mark, mark_at, opened_at, closed_at, thesis_text,
+               nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.pm_positions
         order by updated_at desc
         limit 200
@@ -551,7 +553,8 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
       `,
       sql`
         select id, token_id, account_key, thesis_id, status, quantity,
-               average_cost_sol, mark_sol, mark_at, opened_at, closed_at, thesis_text
+               average_cost_sol, mark_sol, mark_at, opened_at, closed_at, thesis_text,
+               nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.meme_positions
         order by updated_at desc
         limit 200

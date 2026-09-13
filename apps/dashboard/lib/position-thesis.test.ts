@@ -6,6 +6,7 @@ import {
   SYNC_MISSING_THESIS,
   bindPositionThesisWrite,
   isConservativeLaxWeatherSlug,
+  leanUntagged,
   positionThesisGate,
   unambiguousThesisId,
 } from './position-thesis';
@@ -26,6 +27,10 @@ describe('position thesis write gate', () => {
       untagged: 'paper_lot',
     });
     expect(positionThesisGate({ thesis_id: '  ', meta: { untagged: '' } }).ok).toBe(false);
+    expect(leanUntagged({ untagged: 'historical' })).toBe(HISTORICAL_UNTAGGED);
+    expect(leanUntagged({ meta: { untagged: 'paper_lot' } })).toBe('paper_lot');
+    expect(leanUntagged({ untagged: '  ', meta: { untagged: 'historical' } })).toBe(HISTORICAL_UNTAGGED);
+    expect(leanUntagged({})).toBeNull();
   });
 
   test('write path keeps a thesis, else stamps sync_missing_thesis', () => {

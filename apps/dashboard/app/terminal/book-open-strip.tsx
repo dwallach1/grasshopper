@@ -84,9 +84,9 @@ export function BookOpenStrip({
                       {row.steward}
                       {row.thesis_id ? (
                         <span className="book-thesis-chip">{humanizeRule(row.thesis_id)}</span>
-                      ) : (
+                      ) : row.untagged ? (
                         <span className="book-untagged">untagged</span>
-                      )}
+                      ) : null}
                       {row.rules_in_force.length ? (
                         <span className="book-rule-chip">
                           {row.rules_in_force.length} {row.rules_in_force.length === 1 ? 'rule' : 'rules'}
@@ -133,7 +133,7 @@ function HoldingDetail({
     <div className="book-holdings-detail">
       <p>
         {row.steward} · {holdingLifeLabel(row.life)} · {row.unit}
-        {row.thesis_name ? ` · ${row.thesis_name}` : ' · untagged'}
+        {row.thesis_name ? ` · ${row.thesis_name}` : row.untagged ? ' · untagged' : ''}
         {row.note ? ` · ${row.note}` : ''}
         {ticket ? ` · marks ${markAge}` : ''}
       </p>
