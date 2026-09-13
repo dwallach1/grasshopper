@@ -51,6 +51,11 @@ describe('desk load path', () => {
     expect(ledger).toContain("ended_at is null");
     expect(ledger).toContain('to_regclass');
     expect(ledger).toContain('opened_at, closed_at');
+    expect(ledger).toContain('belief_updates');
+    expect(ledger).toContain('mapBeliefs');
+    expect(live).toContain('belief_updates');
+    expect(live).toContain('mapBeliefs(bag.beliefs)');
+    expect(live).toContain("mapLessons(bag.lessons)");
   });
 
   test('public /api/desk reads live postgres only', async () => {

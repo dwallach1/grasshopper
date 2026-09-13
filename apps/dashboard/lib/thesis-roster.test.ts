@@ -136,6 +136,7 @@ describe('thesis roster', () => {
     expect(roster.rows[0]?.evidence).toEqual([
       expect.objectContaining({ summary: 'GPU rents are sticky.' }),
     ]);
+    expect(roster.rows[0]?.beliefs).toEqual([]);
     expect(roster.rows[0]).not.toHaveProperty('nav');
     expect(roster.rows[0]).not.toHaveProperty('win_rate');
     expect(roster.rows[0]).not.toHaveProperty('lots');
@@ -185,5 +186,35 @@ describe('thesis roster', () => {
     expect(thesisForId(painted.rows, 'missing')).toBeUndefined();
     expect(isLiveThesis(thesis('x'))).toBe(true);
     expect(isLiveThesis(thesis('x', { status: 'killed' }))).toBe(false);
+  });
+
+  test('thesis detail carries a truncated belief trail, not book marks', () => {
+    const roster = assembleThesisRoster({
+      theses: [thesis('earnings_gap_structure', { name: 'Earnings gap structure', confidence: 84 })],
+      ontology_themes: [],
+      evidence: [],
+      beliefs: [{
+        id: 'b-new',
+        thesis_id: 'earnings_gap_structure',
+        domain_id: null,
+        agent_id: null,
+        prior_confidence: 82,
+        new_confidence: 84,
+        rationale: `${'x'.repeat(200)} leftover`,
+        observed_at: '2026-09-11T21:06:12.917Z',
+        kind: 'playbook_rule',
+        rules: ['never_pltr'],
+        steward: 'quantanamo',
+        research_lesson_id: null,
+      }],
+    });
+    expect(roster.rows[0]?.beliefs).toHaveLength(1);
+    expect(roster.rows[0]?.beliefs[0]).toMatchObject({
+      prior_confidence: 82,
+      new_confidence: 84,
+      kind: 'playbook_rule',
+    });
+    expect(roster.rows[0]?.beliefs[0]?.rationale.endsWith('…')).toBe(true);
+    expect(roster.rows[0]).not.toHaveProperty('change_pct');
   });
 });

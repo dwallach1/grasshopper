@@ -138,6 +138,21 @@ function ThesisPage({
       {row.falsifier && (
         <p className="thesis-page-falsifier">{row.falsifier}</p>
       )}
+      {row.beliefs.length ? (
+        <ul className="thesis-beliefs" aria-label="Belief trail">
+          {row.beliefs.map((note) => (
+            <li key={note.id}>
+              <b>
+                {note.prior_confidence === null && note.new_confidence === null
+                  ? 'belief'
+                  : `${note.prior_confidence ?? '—'} → ${note.new_confidence ?? '—'}`}
+              </b>
+              <span>{note.kind} · {note.observed_at.slice(0, 10)}</span>
+              {note.rationale ? <p>{note.rationale}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {row.evidence.length ? (
         <ul className="thesis-evidence">
           {row.evidence.map((note) => (
@@ -148,7 +163,7 @@ function ThesisPage({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : row.beliefs.length ? null : (
         <p className="thesis-page-empty">{NOT_IN_LEDGER}</p>
       )}
     </article>

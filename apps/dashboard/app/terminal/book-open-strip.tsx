@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
+import { humanizeRule } from '../../lib/beliefs';
 import { holdingLifeLabel, holdingTicket, type BookHolding } from '../../lib/book-holdings';
 import { isMarkStale } from '../../lib/desk-freshness';
 import { formatAmount, ledgerAmount } from '../../lib/money-units';
@@ -81,6 +82,11 @@ export function BookOpenStrip({
                         {...face}
                       />
                       {row.steward}
+                      {row.rules_in_force.length ? (
+                        <span className="book-rule-chip">
+                          {row.rules_in_force.length} {row.rules_in_force.length === 1 ? 'rule' : 'rules'}
+                        </span>
+                      ) : null}
                     </i>
                   </span>
                   <span className="book-holdings-steward">{row.book_short}</span>
@@ -122,9 +128,28 @@ function HoldingDetail({
     <div className="book-holdings-detail">
       <p>
         {row.steward} · {holdingLifeLabel(row.life)} · {row.unit}
+        {row.thesis_name ? ` · ${row.thesis_name}` : ''}
         {row.note ? ` · ${row.note}` : ''}
         {ticket ? ` · marks ${markAge}` : ''}
       </p>
+      {row.rules_in_force.length ? (
+        <ul className="book-rules" aria-label="Rules in force">
+          {row.rules_in_force.map((rule) => (
+            <li key={rule}>{humanizeRule(rule)}</li>
+          ))}
+        </ul>
+      ) : null}
+      {row.life === 'closed' ? (
+        row.clip_note ? (
+          <p className="book-clip">
+            {row.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}
+            {' · '}
+            {row.clip_note.summary}
+          </p>
+        ) : (
+          <p className="book-clip is-empty">no lesson on close</p>
+        )
+      ) : null}
       {ticket?.drawable ? (
         <OpenTicket ticket={ticket} now={now} costLabel={costLabel} />
       ) : null}

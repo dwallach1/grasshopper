@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { MARK_NOT_IN_LEDGER } from './book-performance';
+import { PLAYBOOK_RULE_KIND } from './beliefs';
 import {
   assembleBookHoldings,
   holdingChangePct,
@@ -241,5 +242,127 @@ describe('assembleBookHoldings', () => {
     expect(memeClosed?.steward).toBe('BANDIT');
     expect(holdings.rows.filter((row) => row.life === 'live')).toHaveLength(3);
     expect(holdings.rows.filter((row) => row.life === 'closed')).toHaveLength(3);
+  });
+
+  test('open rows bind thesis + rules in force; closed rows show a linked lesson', () => {
+    const holdings = assembleBookHoldings(desk({
+      book: {
+        ...desk().book,
+        names: [
+          ...desk().book.names,
+          {
+            symbol: 'CIFR',
+            quantity: 63,
+            average_cost: 15.82,
+            cost: 1000,
+            mark: 16.88,
+            pnl: 67,
+            note: '',
+            venue: 'equity',
+          },
+        ],
+      },
+      theses: [{
+        id: 'earnings_gap_structure',
+        name: 'Earnings gap structure',
+        summary: '',
+        status: 'hardening',
+        confidence: 84,
+        time_horizon: 'short',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-11T00:00:00.000Z',
+        symbols: ['NBIS'],
+        lots: [{
+          symbol: 'NBIS',
+          side: 'buy',
+          quantity: 4.65,
+          average_cost: 214.91,
+          invested: 1000,
+          mark: 224.02,
+          pnl: 42.4,
+          note: '',
+        }],
+      }, {
+        id: 'neocloud_compute',
+        name: 'Neocloud',
+        summary: '',
+        status: 'hardening',
+        confidence: 85,
+        time_horizon: 'medium',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-12T00:00:00.000Z',
+        symbols: ['CIFR'],
+        lots: [{
+          symbol: 'CIFR',
+          side: 'buy',
+          quantity: 63,
+          average_cost: 15.82,
+          invested: 1000,
+          mark: 16.88,
+          pnl: 67,
+          note: '',
+        }],
+      }],
+      beliefs: [{
+        id: 'b-egs',
+        thesis_id: 'earnings_gap_structure',
+        domain_id: null,
+        agent_id: null,
+        prior_confidence: 82,
+        new_confidence: 84,
+        rationale: 'No chase leftovers already printed.',
+        observed_at: '2026-09-11T21:06:12.917Z',
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['no_chase_already_printed_leftovers', 'never_pltr', 'ignored_mcap_floor_50_100m'],
+        steward: 'quantanamo',
+        research_lesson_id: '36',
+      }],
+      lessons: [{
+        id: 36,
+        cycle_id: 1,
+        test_id: null,
+        thesis_id: 'earnings_gap_structure',
+        lesson_type: 'autopsy',
+        summary: 'Soft RTH is not confirmation for retail.',
+        market_regime: null,
+        incorporated: false,
+        created_at: '2026-09-10T20:31:00.000Z',
+      }],
+      positions: [{
+        id: 'ep-cifr',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'NBIS',
+        status: 'closed',
+        quantity: 1,
+        average_cost: 200,
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: '2026-09-01T00:00:00.000Z',
+        next_review_at: null,
+      }],
+    }));
+    const live = holdings.rows.find((row) => row.id === 'eq:NBIS');
+    expect(live).toMatchObject({
+      thesis_id: 'earnings_gap_structure',
+      thesis_name: 'Earnings gap structure',
+      rules_in_force: [
+        'no_chase_already_printed_leftovers',
+        'never_pltr',
+        'ignored_mcap_floor_50_100m',
+      ],
+      clip_note: null,
+    });
+    const closed = holdings.rows.find((row) => row.id === 'eq-closed:ep-cifr');
+    expect(closed?.clip_note).toMatchObject({
+      kind: 'lesson',
+      summary: 'Soft RTH is not confirmation for retail.',
+    });
+    expect(closed?.thesis_id).toBe('earnings_gap_structure');
+    expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.rules_in_force).toEqual([]);
   });
 });

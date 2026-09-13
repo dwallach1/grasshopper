@@ -51,6 +51,7 @@ import {
   mapPredictionMarkets,
   type PredictionMarketsPayload,
 } from './prediction-book';
+import { mapBeliefs } from './beliefs';
 import {
   assembleDesk,
   bookFields,
@@ -89,6 +90,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
     const [
       theses,
       symbols,
+      beliefs,
       evidence,
       scores,
       relations,
@@ -139,6 +141,16 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         from public.thesis_symbols
         order by weight_hint desc, symbol
       `,
+      optionalRows(
+        'belief_updates',
+        sql`
+        select id, thesis_id, domain_id, agent_id, prior_confidence, new_confidence,
+               rationale, observed_at, meta
+        from public.belief_updates
+        order by observed_at desc, id desc
+        limit 80
+      `,
+      ),
       sql`
         select id, thesis_id, evidence_type, direction, summary, source_url, confidence, created_at
         from public.thesis_evidence
@@ -371,6 +383,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       loadTeam(sql),
     ]);
     return assembleDesk('postgres', decorateDesk(theses, symbols, {
+      beliefs: mapBeliefs(beliefs),
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
       relations: mapRelations(relations),

@@ -2,6 +2,7 @@
  * Phone Theses surface. Ledger theses as a parchment list — not a 3D world.
  * No Book/Board marks, NAV, or win rate on the lot.
  */
+import { beliefTrailFor, type BeliefUpdateRow } from './beliefs';
 import { AVATAR_COLORS } from './desk-team';
 import type { DeskVenue } from './desk-venue';
 import { rowVenue } from './desk-venue';
@@ -41,6 +42,7 @@ export type ThesisRosterRow = {
   venue: DeskVenue;
   live: boolean;
   evidence: ThesisEvidenceNote[];
+  beliefs: BeliefUpdateRow[];
 };
 
 export type ThesisRoster = {
@@ -102,12 +104,13 @@ export function thesisForId(
 }
 
 export function assembleThesisRoster(
-  desk: Pick<DeskPayload, 'theses' | 'ontology_themes' | 'team' | 'evidence'>,
+  desk: Pick<DeskPayload, 'theses' | 'ontology_themes' | 'team' | 'evidence' | 'beliefs'>,
 ): ThesisRoster {
   const themes = desk.ontology_themes ?? [];
   const evidence = desk.evidence ?? [];
+  const beliefs = desk.beliefs ?? [];
   const rows = (desk.theses ?? [])
-    .map((thesis) => rowFrom(thesis, themes, evidence, desk))
+    .map((thesis) => rowFrom(thesis, themes, evidence, beliefs, desk))
     .sort((a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   return { rows };
 }
@@ -150,6 +153,7 @@ function rowFrom(
   thesis: ThesisRow,
   themes: readonly OntologyThemeRow[],
   evidence: readonly ThesisEvidenceRow[],
+  beliefs: readonly BeliefUpdateRow[],
   desk?: Pick<DeskPayload, 'team'>,
 ): ThesisRosterRow {
   const venues = thesisVenues(thesis);
@@ -170,5 +174,6 @@ function rowFrom(
     venue: thesisVenue(venues),
     live: isLiveThesis(thesis),
     evidence: evidenceFor(thesis.id, evidence),
+    beliefs: beliefTrailFor(thesis.id, beliefs),
   };
 }

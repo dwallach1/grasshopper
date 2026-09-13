@@ -162,6 +162,8 @@ describe('public desk reader credentials', () => {
     expect(source).toContain('/bundle/public');
     expect(source).toContain("response.status === 404");
     expect(source).toContain('assemblePublicDeskFromRestBag');
+    expect(source).toContain('beliefs: asJsonRows(bag.beliefs)');
+    expect(source).toContain('lessons: asJsonRows(bag.lessons)');
     expect(source).not.toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
     expect(source).toContain('LIVE_CACHE_MS');

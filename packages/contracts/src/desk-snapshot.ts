@@ -35,7 +35,6 @@ const PUBLIC_OMIT = new Set([
   'automations',
   'catalysts',
   'queue',
-  'lessons',
   'postmortems',
   'cycles',
   'tests',
@@ -54,6 +53,7 @@ const PUBLIC_OMIT = new Set([
 /** Array fields the phone desk indexes (`tests[0]`, `.filter`, `.map`). Missing → []. */
 export const DESK_ARRAY_KEYS = [
   'theses',
+  'beliefs',
   'evidence',
   'scores',
   'relations',
@@ -190,7 +190,7 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
  * Mark a live desk payload as the public snapshot. Strips operator-only audit
  * *rows* so GET /api/desk stays JSON-healthy under Worker CPU, then puts empty
  * arrays back so the phone client can index `tests[0]`. Book / Board / Team
- * keep `prediction_markets`, `meme_coins`, `team`, theses, and the book.
+ * keep `prediction_markets`, `meme_coins`, `team`, theses, beliefs, lessons, and the book.
  * Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
