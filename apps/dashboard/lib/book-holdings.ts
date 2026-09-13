@@ -253,11 +253,13 @@ function bindHolding(
     })
     : null;
   const steward = input.steward ?? 'quantanamo';
-  const rules = rulesInForceFor({
-    thesisId: thesis?.id ?? null,
-    domainId: domainIdForSteward(desk.team, steward),
-    beliefs: desk.beliefs ?? [],
-  });
+  const rules = thesis
+    ? rulesInForceFor({
+      thesisId: thesis.id,
+      domainId: domainIdForSteward(desk.team, steward),
+      beliefs: desk.beliefs ?? [],
+    })
+    : [];
   return {
     thesis_id: thesis?.id ?? null,
     thesis_name: thesis?.name ?? null,

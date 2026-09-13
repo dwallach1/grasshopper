@@ -381,6 +381,33 @@ describe('assembleBookHoldings', () => {
 
   test('Book chips stay untagged unless the lot has an explicit thesis_id', () => {
     const holdings = assembleBookHoldings(desk({
+      beliefs: [{
+        id: 'b-domain-equity',
+        thesis_id: 'desk_generic',
+        domain_id: 'fallback-equity',
+        agent_id: null,
+        prior_confidence: 70,
+        new_confidence: 70,
+        rationale: 'Do not leak domain rules onto untagged lots.',
+        observed_at: '2026-09-12T13:00:00.000Z',
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['never_size_untagged'],
+        steward: 'quantanamo',
+        research_lesson_id: null,
+      }, {
+        id: 'b-domain-prediction',
+        thesis_id: 'desk_generic',
+        domain_id: 'fallback-prediction',
+        agent_id: null,
+        prior_confidence: 70,
+        new_confidence: 70,
+        rationale: 'Domain weather rule stays off untagged Fed lots.',
+        observed_at: '2026-09-12T13:00:00.000Z',
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['kill_into_no_bid_close_ledger_immediately'],
+        steward: 'oddsborne',
+        research_lesson_id: null,
+      }],
       theses: [{
         id: 'weather_same_day_high',
         name: 'Same-day city-high weather',
@@ -475,6 +502,8 @@ describe('assembleBookHoldings', () => {
       thesis_name: 'Same-day city-high weather',
     });
     expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.rules_in_force).toEqual([]);
     expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.rules_in_force).toEqual([]);
   });
 });
