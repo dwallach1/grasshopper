@@ -180,6 +180,13 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain('status=eq.pending');
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");
+    expect(fn).toContain("'belief_updates'");
+    expect(fn).toContain("'beliefs'");
+    expect(fn).toContain("'lessons'");
+    expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]beliefs['"]/);
+    expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]lessons['"]/s);
+    expect(fn).toContain('not_allowed');
+    expect(fn).not.toContain("key === 'beliefs'");
     const api = await Bun.file(new URL('./desk-api.ts', import.meta.url)).text();
     expect(api).toContain('assembleDeskBookHealth');
     expect(api).toContain('waitUntil');

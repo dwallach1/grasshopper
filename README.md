@@ -226,7 +226,7 @@ Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.g
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Edit Cloudflare Workers** |
 | `CLOUDFLARE_ACCOUNT_ID` | `97af2e2312077d4689e9a012ef5dde75` |
 
-Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_reader` JWT claim). Live PostgREST SELECTs go through the GET-only `desk-public-rest` function so merge does not wait on a JWT secret in Actions. There is no publish command and no KV.
+Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_reader` JWT claim). Live PostgREST SELECTs go through the GET-only `desk-public-rest` function so merge does not wait on a JWT secret in Actions. **This workflow deploys the Worker only.** When `/bundle/public` keys change (`beliefs`, `lessons`, …), redeploy `supabase/functions/desk-public-rest` on Quantanamo — a stale function returns a bag without those tables and the Worker hydrates empty arrays. There is no publish command and no KV.
 
 The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
 
