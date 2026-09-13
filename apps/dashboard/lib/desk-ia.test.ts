@@ -195,6 +195,9 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('isSwipeWrap');
     expect(pager).toContain('pageSwipeConsumesTarget');
     expect(pager).toContain('setPointerCapture');
+    expect(pager).toContain('shouldCapturePagerPointer');
+    expect(pager).toContain('captureIfLocked');
+    expect(pager).not.toContain('capturePointer(event.pointerId)');
     expect(pager).toContain('isCompatMouseSuppressed');
     expect(pager).toContain('data-circular');
     expect(pager).toContain('data-desk-pane-scroll');
@@ -452,12 +455,14 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('rules_in_force');
     expect(openStrip).toContain('book-thesis-chip');
     expect(openStrip).toContain('book-untagged');
+    expect(openStrip).toContain('row.untagged');
     expect(openStrip).toContain('humanizeRule(row.thesis_id)');
     expect(openStrip).toContain('Rules in force');
     expect(openStrip).toContain('clip_note');
     expect(openStrip).toContain('no lesson on close');
     expect(css).toContain('.book-thesis-chip');
     expect(css).toContain('.book-untagged');
+    expect(css).toMatch(/\.book-untagged \{[\s\S]*?border-radius: 999px/);
     expect(css).toContain('.book-rules');
     expect(css).toContain('.thesis-beliefs');
     expect(openStrip).not.toContain('book-open-lede');

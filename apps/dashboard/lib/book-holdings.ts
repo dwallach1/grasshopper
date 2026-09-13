@@ -15,6 +15,7 @@ import { venueLabel, type DeskVenue } from './desk-venue';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk, tokenLabel } from './meme-book';
 import { unitForRow, type MoneyUnit } from './money-units';
+import { leanUntagged } from './position-thesis';
 import { marketLabel, predictionDesk } from './prediction-book';
 
 export type BookHoldingBook = 'QUANTANAMO' | 'ODDSBORNE' | 'BANDIT';
@@ -42,6 +43,7 @@ export type BookHolding = {
   note: string;
   thesis_id: string | null;
   thesis_name: string | null;
+  untagged: string | null;
   rules_in_force: string[];
   clip_note: ClipNote | null;
 };
@@ -118,7 +120,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       note: row.note,
       ...bindHolding(desk, {
         symbol,
-        thesisId: equityThesisId(desk, symbol),
+        ...equityLot(desk, symbol),
         life: 'live',
       }),
     }));
@@ -142,7 +144,12 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
         size: Math.abs(row.quantity),
         upl: null,
         note: '',
-        ...bindHolding(desk, { symbol, thesisId: row.thesis_id, life: 'live' }),
+        ...bindHolding(desk, {
+          symbol,
+          thesisId: row.thesis_id,
+          untagged: leanUntagged(row),
+          life: 'live',
+        }),
       }));
       continue;
     }
@@ -158,7 +165,12 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Number.isFinite(row.quantity) ? Math.abs(row.quantity) : null,
       upl: null,
       note: '',
-      ...bindHolding(desk, { symbol, thesisId: row.thesis_id, life: 'closed' }),
+      ...bindHolding(desk, {
+        symbol,
+        thesisId: row.thesis_id,
+        untagged: leanUntagged(row),
+        life: 'closed',
+      }),
     }));
   }
   return rows;
@@ -191,7 +203,8 @@ function predictionHoldings(desk: DeskPayload): BookHolding[] {
       note: row.mark === null ? 'mark not in ledger' : '',
       ...bindHolding(desk, {
         symbol: market?.slug?.trim() || row.outcome,
-        thesisId: row.thesis_id ?? market?.thesis_id ?? null,
+        thesisId: row.thesis_id ?? (leanUntagged(row) ? null : market?.thesis_id ?? null),
+        untagged: leanUntagged(row),
         life: closed ? 'closed' : 'live',
         steward: 'oddsborne',
       }),
@@ -228,7 +241,8 @@ function memeHoldings(desk: DeskPayload): BookHolding[] {
       note: row.mark_sol === null ? 'mark not in ledger' : '',
       ...bindHolding(desk, {
         symbol: token?.symbol?.trim() || name,
-        thesisId: row.thesis_id ?? token?.thesis_id ?? null,
+        thesisId: row.thesis_id ?? (leanUntagged(row) ? null : token?.thesis_id ?? null),
+        untagged: leanUntagged(row),
         life: closed ? 'closed' : 'live',
         steward: 'bandit',
       }),
@@ -242,10 +256,11 @@ function bindHolding(
   input: {
     symbol: string;
     thesisId?: string | null;
+    untagged?: string | null;
     life: BookHoldingLife;
     steward?: BookHoldingStewardSlug;
   },
-): Pick<BookHolding, 'thesis_id' | 'thesis_name' | 'rules_in_force' | 'clip_note'> {
+): Pick<BookHolding, 'thesis_id' | 'thesis_name' | 'untagged' | 'rules_in_force' | 'clip_note'> {
   const thesis = input.thesisId
     ? thesisForHolding(desk.theses ?? [], {
       symbol: input.symbol,
@@ -263,6 +278,7 @@ function bindHolding(
   return {
     thesis_id: thesis?.id ?? null,
     thesis_name: thesis?.name ?? null,
+    untagged: thesis ? null : leanUntagged({ untagged: input.untagged }),
     rules_in_force: rules,
     clip_note: input.life === 'closed'
       ? clipNoteFor({
@@ -287,6 +303,7 @@ function holdingRow(input: {
   note: string;
   thesis_id: string | null;
   thesis_name: string | null;
+  untagged: string | null;
   rules_in_force: string[];
   clip_note: ClipNote | null;
 }): BookHolding {
@@ -315,21 +332,28 @@ function holdingRow(input: {
     note: input.note,
     thesis_id: input.thesis_id,
     thesis_name: input.thesis_name,
+    untagged: input.untagged,
     rules_in_force: input.rules_in_force,
     clip_note: input.clip_note,
   };
 }
 
-function equityThesisId(desk: DeskPayload, symbol: string): string | null {
+function equityLot(
+  desk: DeskPayload,
+  symbol: string,
+): { thesisId: string | null; untagged: string | null } {
   const wanted = symbol.trim();
-  if (!wanted) return null;
+  if (!wanted) return { thesisId: null, untagged: null };
   const open = (desk.positions ?? []).find((row) => {
     const status = row.status.toLowerCase();
     return row.symbol.trim() === wanted
-      && (OPEN_POSITION.has(status) || status === 'closing')
-      && Boolean(row.thesis_id);
+      && (OPEN_POSITION.has(status) || status === 'closing');
   });
-  return open?.thesis_id ?? null;
+  if (!open) return { thesisId: null, untagged: null };
+  return {
+    thesisId: open.thesis_id ?? null,
+    untagged: leanUntagged(open),
+  };
 }
 
 function finiteOrNull(value: number | null | undefined): number | null {

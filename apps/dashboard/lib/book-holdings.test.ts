@@ -496,14 +496,155 @@ describe('assembleBookHoldings', () => {
       },
     }));
     expect(holdings.rows.find((row) => row.id === 'eq:NBIS')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'eq:NBIS')?.untagged).toBeNull();
     expect(holdings.rows.find((row) => row.id === 'eq:NBIS')?.rules_in_force).toEqual([]);
     expect(holdings.rows.find((row) => row.id === 'pm:p-lax')).toMatchObject({
       thesis_id: 'weather_same_day_high',
       thesis_name: 'Same-day city-high weather',
+      untagged: null,
     });
     expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.untagged).toBeNull();
     expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.rules_in_force).toEqual([]);
     expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.untagged).toBeNull();
     expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.rules_in_force).toEqual([]);
+  });
+
+  test('LIVE/CLOSED lots with meta.untagged keep a quiet chip; thesis wins', () => {
+    const holdings = assembleBookHoldings(desk({
+      book: {
+        ...desk().book,
+        names: [
+          {
+            symbol: 'CODA',
+            quantity: 10,
+            average_cost: 20,
+            cost: 200,
+            mark: 21,
+            pnl: 10,
+            note: '',
+            venue: 'equity',
+          },
+          {
+            symbol: 'CIFR',
+            quantity: 63,
+            average_cost: 15.82,
+            cost: 1000,
+            mark: 16.88,
+            pnl: 67,
+            note: '',
+            venue: 'equity',
+          },
+        ],
+      },
+      theses: [{
+        id: 'earnings_gap_structure',
+        name: 'Earnings gap structure',
+        summary: '',
+        status: 'hardening',
+        confidence: 84,
+        time_horizon: 'short',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-13T00:00:00.000Z',
+        symbols: ['CODA'],
+        lots: [],
+      }],
+      positions: [{
+        id: 'ep-coda',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'CODA',
+        status: 'open',
+        quantity: 10,
+        average_cost: 20,
+        opened_at: '2026-09-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: 'earnings_gap_structure',
+      }, {
+        id: 'ep-cifr',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'CIFR',
+        status: 'open',
+        quantity: 63,
+        average_cost: 15.82,
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+        untagged: 'historical',
+      }, {
+        id: 'ep-iren',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'IREN',
+        status: 'closed',
+        quantity: 20,
+        average_cost: 40,
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: '2026-09-01T00:00:00.000Z',
+        next_review_at: null,
+        thesis_id: null,
+        meta: { untagged: 'historical' },
+      }],
+      prediction_markets: {
+        ...desk().prediction_markets,
+        positions: [{
+          id: 'p-hike',
+          market_id: 'm-hike',
+          account_key: 'polymarket-us-primary',
+          thesis_id: null,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 42,
+          average_cost: 0.462,
+          mark: 0.785,
+          mark_at: '2026-09-12T13:00:00.000Z',
+          thesis_text: null,
+          untagged: 'historical',
+        }],
+      },
+      meme_coins: {
+        ...desk().meme_coins,
+        positions: [{
+          id: 'pos-baton',
+          token_id: 'tok-baton',
+          account_key: BANDIT_PRIMARY_ACCOUNT,
+          thesis_id: null,
+          status: 'closed',
+          quantity: 3446,
+          average_cost_sol: 0.00013,
+          mark_sol: 0.00011,
+          mark_at: '2026-09-12T20:40:00.000Z',
+          thesis_text: null,
+          untagged: 'historical',
+        }],
+      },
+    }));
+    expect(holdings.rows.find((row) => row.id === 'eq:CODA')).toMatchObject({
+      life: 'live',
+      thesis_id: 'earnings_gap_structure',
+      untagged: null,
+    });
+    expect(holdings.rows.find((row) => row.id === 'eq:CIFR')).toMatchObject({
+      life: 'live',
+      thesis_id: null,
+      untagged: 'historical',
+    });
+    expect(holdings.rows.find((row) => row.id === 'eq-closed:ep-iren')).toMatchObject({
+      life: 'closed',
+      thesis_id: null,
+      untagged: 'historical',
+    });
+    expect(holdings.rows.find((row) => row.id === 'pm:p-hike')).toMatchObject({
+      life: 'live',
+      untagged: 'historical',
+    });
+    expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')).toMatchObject({
+      life: 'closed',
+      untagged: 'historical',
+    });
   });
 });

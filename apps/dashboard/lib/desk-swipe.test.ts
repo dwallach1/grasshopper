@@ -16,6 +16,7 @@ import {
   pagerScrollBehavior,
   pagerScrollToBehavior,
   pagerSlotKey,
+  shouldCapturePagerPointer,
   swipeAxis,
   swipeHitFromEvent,
   swipeSurfaceAt,
@@ -141,6 +142,10 @@ describe('desk swipe deck', () => {
     expect(pageSwipeConsumesTarget(pane)).toBe(true);
     expect(pageSwipeConsumesTarget(null)).toBe(true);
     expect(swipeHitFromEvent(null)).toBeNull();
+    expect(shouldCapturePagerPointer(null, false)).toBe(false);
+    expect(shouldCapturePagerPointer('y', false)).toBe(false);
+    expect(shouldCapturePagerPointer('y', true)).toBe(true);
+    expect(shouldCapturePagerPointer('x', false)).toBe(true);
   });
 
   test('a touch swipe does not re-arm on the compatibility mouse down', () => {

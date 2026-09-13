@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { parseDeskAuthMethods } from './auth-methods';
 import { isPublishableKey } from './auth-public';
 import { deskAuthErrorMessage, firstSearchParam, isLoopbackIpHost } from './auth-search';
-import { mapAccounts, mapExposures } from './ledger-map';
+import { mapAccounts, mapExposures, mapPositions } from './ledger-map';
 import { asFiniteNumber, asOptionalNumber, asSmallint } from './numbers';
 import { isPostgresPermissionDenied, isPostgresUndefinedRelation } from './postgres';
 import { encodeRunNotes, parseRunNotes } from './run-notes';
@@ -50,6 +50,54 @@ describe('mapAccounts', () => {
     expect(rows[0]?.equity_value).toBeCloseTo(4907.771);
     expect(rows[0]?.cash).toBeCloseTo(148.5);
     expect(rows[0]?.buying_power).toBeCloseTo(148.5);
+  });
+});
+
+describe('mapPositions', () => {
+  test('keeps the lean untagged field from meta or the alias', () => {
+    const rows = mapPositions([
+      {
+        id: 'ep-coda',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'CODA',
+        status: 'open',
+        quantity: '10',
+        average_cost: '20',
+        opened_at: '2026-09-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: 'earnings_gap_structure',
+      },
+      {
+        id: 'ep-cifr',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'CIFR',
+        status: 'open',
+        quantity: '63',
+        average_cost: '15.82',
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+        untagged: 'historical',
+      },
+      {
+        id: 'ep-dg',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'DG',
+        status: 'open',
+        quantity: '14',
+        average_cost: '132.25',
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+        meta: { untagged: 'historical' },
+      },
+    ]);
+    expect(rows[0]).toMatchObject({ symbol: 'CODA', thesis_id: 'earnings_gap_structure', untagged: null });
+    expect(rows[1]).toMatchObject({ symbol: 'CIFR', thesis_id: null, untagged: 'historical' });
+    expect(rows[2]).toMatchObject({ symbol: 'DG', thesis_id: null, untagged: 'historical' });
   });
 });
 

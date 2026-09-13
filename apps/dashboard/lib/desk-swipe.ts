@@ -176,6 +176,12 @@ export function pageSwipeConsumesTarget(target: SwipeHitTarget | null): boolean 
   return !isCardDraggerTarget(target);
 }
 
+/** Capture only after the rail locks to a tab swipe or a top-of-pane pull. A tap must reach Book rows. */
+export function shouldCapturePagerPointer(axis: SwipeAxisLock, pulling: boolean): boolean {
+  if (axis === 'x') return true;
+  return axis === 'y' && pulling;
+}
+
 export function isCompatMouseSuppressed(
   pointerType: string,
   now: number,

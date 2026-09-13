@@ -24,6 +24,7 @@ import {
   pageSwipeFromDrag,
   pagerScrollToBehavior,
   pagerSlotKey,
+  shouldCapturePagerPointer,
   swipeHitFromEvent,
   swipeTabLabel,
   type SwipeAxisLock,
@@ -168,6 +169,7 @@ function bindPagerSwipe(
   const gesture = {
     armed: false,
     dragging: false,
+    captured: false,
     axis: null as SwipeAxisLock,
     from: currentSurface(),
     originX: 0,
@@ -187,9 +189,16 @@ function bindPagerSwipe(
     if (id < 0) return;
     try {
       pager.setPointerCapture(id);
+      gesture.captured = true;
     } catch {
       // pointer already gone
     }
+  }
+
+  function captureIfLocked(pulling: boolean) {
+    if (gesture.captured) return;
+    if (!shouldCapturePagerPointer(gesture.axis, pulling)) return;
+    capturePointer(gesture.pointerId);
   }
 
   function releaseCapture() {
@@ -205,6 +214,7 @@ function bindPagerSwipe(
   function disarm() {
     gesture.armed = false;
     gesture.dragging = false;
+    gesture.captured = false;
     gesture.axis = null;
     holding.current = false;
     pager.dataset.axis = '';
@@ -236,7 +246,7 @@ function bindPagerSwipe(
     gesture.originY = event.clientY;
     gesture.startLeft = pager.scrollLeft;
     gesture.pointerId = event.pointerId;
-    capturePointer(event.pointerId);
+    gesture.captured = false;
     pager.dataset.swipe = `down:${gesture.from}`;
   }
 
@@ -273,6 +283,7 @@ function bindPagerSwipe(
       if (canBeginPull(paneScrollTop(root.scrollTop), dx, dy)) {
         gesture.axis = 'y';
         pager.dataset.axis = 'y';
+        captureIfLocked(true);
         event.preventDefault();
         const travel = pullTravel(dy);
         paintPull(pager, mark, travel, false);
@@ -287,6 +298,7 @@ function bindPagerSwipe(
     gesture.axis = 'x';
     gesture.dragging = true;
     pager.dataset.axis = 'x';
+    captureIfLocked(false);
     event.preventDefault();
     const next = pageSwipeFromDrag(gesture.from, dx, dy);
     pager.dataset.swipe = `move:${gesture.from}:${Math.round(dx)}:${next ?? 'none'}`;

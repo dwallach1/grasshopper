@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { asFiniteNumber, asOptionalNumber, asSmallint, requireIso } from './numbers';
+import { leanUntagged } from './position-thesis';
 import { parseRunNotes } from './run-notes';
 import { parseThesisStatus } from './thesis-status';
 import type {
@@ -449,11 +450,16 @@ const PositionSchema = z
       const trimmed = value.trim();
       return trimmed ? trimmed : null;
     }),
+    untagged: z.union([z.string(), z.null()]).optional(),
+    meta: z.unknown().optional(),
   })
   .passthrough();
 
 export function mapPositions(rows: JsonObjectRow[]): PositionRow[] {
-  return z.array(PositionSchema).parse(rows);
+  return z.array(PositionSchema).parse(rows).map((row) => ({
+    ...row,
+    untagged: leanUntagged(row),
+  }));
 }
 
 const ExposureSchema = z
