@@ -1,5 +1,5 @@
 /**
- * Board / Book / Team are one horizontal deck. Labels are an indicator.
+ * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
  * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
  * lands on Board. Card-deck motion is a separate control (`data-card-dragger`).
  * Reduced motion snaps with no travel animation.
@@ -22,11 +22,12 @@ export const COMPAT_MOUSE_SUPPRESS_MS = 700;
 
 export type SwipeAxisLock = 'x' | 'y' | null;
 
-/** Clone the ends so native snap can wrap: Team | Board | Book | Team | Board */
+/** Clone the ends so native snap can wrap: Team | Board | Book | Theses | Team | Board */
 export const DESK_PAGER_SLOTS = [
   { id: 'team', clone: true },
   { id: 'leaderboard', clone: false },
   { id: 'book', clone: false },
+  { id: 'theses', clone: false },
   { id: 'team', clone: false },
   { id: 'leaderboard', clone: true },
 ] as const satisfies readonly { id: DeskSwipeSurface; clone: boolean }[];
@@ -61,8 +62,13 @@ export function wrapSwipeSurface(id: DeskSwipeSurface, delta: number): DeskSwipe
   return DESK_SWIPE_SURFACES[next] ?? id;
 }
 
+/** First ↔ last only. A two-step hop (Board → Theses) is not a wrap. */
 export function isSwipeWrap(from: DeskSwipeSurface, to: DeskSwipeSurface): boolean {
-  return Math.abs(swipeSurfaceIndex(from) - swipeSurfaceIndex(to)) > 1;
+  const a = swipeSurfaceIndex(from);
+  const b = swipeSurfaceIndex(to);
+  const last = DESK_SWIPE_SURFACES.length - 1;
+  if (a < 0 || b < 0 || last < 1) return false;
+  return (a === 0 && b === last) || (a === last && b === 0);
 }
 
 export function pagerScrollBehavior(reduceMotion: boolean): ScrollBehavior {

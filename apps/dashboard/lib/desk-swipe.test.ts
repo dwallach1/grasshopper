@@ -30,24 +30,26 @@ import {
 } from './desk-swipe';
 
 describe('desk swipe deck', () => {
-  test('Board / Book / Team stay one rail in that order', () => {
-    expect([...DESK_SWIPE_SURFACES]).toEqual(['leaderboard', 'book', 'team']);
-    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
-    expect(DESK_SWIPE_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/team']);
+  test('Board / Book / Theses / Team stay one rail in that order', () => {
+    expect([...DESK_SWIPE_SURFACES]).toEqual(['leaderboard', 'book', 'theses', 'team']);
+    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Theses', 'Team']);
+    expect(DESK_SWIPE_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/theses', '/team']);
     expect(swipeSurfaceIndex('leaderboard')).toBe(0);
     expect(swipeSurfaceIndex('book')).toBe(1);
-    expect(swipeSurfaceIndex('team')).toBe(2);
+    expect(swipeSurfaceIndex('theses')).toBe(2);
+    expect(swipeSurfaceIndex('team')).toBe(3);
     expect(swipeSurfaceAt(1)).toBe('book');
     expect(swipeSurfaceAt(-1)).toBeNull();
-    expect(swipeSurfaceAt(3)).toBeNull();
+    expect(swipeSurfaceAt(4)).toBeNull();
     expect(swipeTabLabel('team')).toBe('Team');
+    expect(swipeTabLabel('theses')).toBe('Theses');
   });
 
-  test('operator tabs are not on the phone deck', () => {
+  test('operator Events / Tests stay off the phone deck', () => {
     expect(isSwipeSurface('leaderboard')).toBe(true);
     expect(isSwipeSurface('book')).toBe(true);
+    expect(isSwipeSurface('theses')).toBe(true);
     expect(isSwipeSurface('team')).toBe(true);
-    expect(isSwipeSurface('theses')).toBe(false);
     expect(isSwipeSurface('events')).toBe(false);
     expect(isSwipeSurface('backtests')).toBe(false);
     expect(DESK_TABS.map((tab) => tab.id)).toEqual([
@@ -63,30 +65,38 @@ describe('desk swipe deck', () => {
   });
 
   test('the rail is circular both ways', () => {
-    expect(wrapSwipeIndex(0, -1)).toBe(2);
-    expect(wrapSwipeIndex(2, 1)).toBe(0);
+    expect(wrapSwipeIndex(0, -1)).toBe(3);
+    expect(wrapSwipeIndex(3, 1)).toBe(0);
     expect(wrapSwipeIndex(1, 1)).toBe(2);
+    expect(wrapSwipeIndex(2, 1)).toBe(3);
     expect(wrapSwipeIndex(1, -1)).toBe(0);
     expect(wrapSwipeSurface('leaderboard', -1)).toBe('team');
     expect(wrapSwipeSurface('team', 1)).toBe('leaderboard');
-    expect(wrapSwipeSurface('book', 1)).toBe('team');
-    expect(wrapSwipeSurface('team', -1)).toBe('book');
+    expect(wrapSwipeSurface('book', 1)).toBe('theses');
+    expect(wrapSwipeSurface('theses', 1)).toBe('team');
+    expect(wrapSwipeSurface('theses', -1)).toBe('book');
+    expect(wrapSwipeSurface('team', -1)).toBe('theses');
     expect(wrapFromEdgeDrag('leaderboard', 80, 8)).toBe('team');
     expect(wrapFromEdgeDrag('team', -80, 8)).toBe('leaderboard');
     expect(wrapFromEdgeDrag('book', 80, 8)).toBeNull();
+    expect(wrapFromEdgeDrag('theses', 80, 8)).toBeNull();
     expect(wrapFromEdgeDrag('leaderboard', 20, 4)).toBeNull();
     expect(wrapFromEdgeDrag('leaderboard', 80, 90)).toBeNull();
     expect(pageSwipeFromDrag('leaderboard', 80, 8)).toBe('team');
     expect(pageSwipeFromDrag('team', -80, 8)).toBe('leaderboard');
     expect(pageSwipeFromDrag('leaderboard', -80, 10)).toBe('book');
+    expect(pageSwipeFromDrag('book', -80, 10)).toBe('theses');
+    expect(pageSwipeFromDrag('theses', -80, 10)).toBe('team');
     expect(pageSwipeFromDrag('leaderboard', -300, 12)).toBe('book');
     expect(pageSwipeFromDrag('leaderboard', 12, 140)).toBeNull();
     expect(DESK_PAGER_SLOTS.map((slot) => pagerSlotKey(slot.id, slot.clone))).toEqual([
-      'team-clone', 'leaderboard', 'book', 'team', 'leaderboard-clone',
+      'team-clone', 'leaderboard', 'book', 'theses', 'team', 'leaderboard-clone',
     ]);
     expect(isSwipeWrap('leaderboard', 'team')).toBe(true);
     expect(isSwipeWrap('team', 'leaderboard')).toBe(true);
     expect(isSwipeWrap('leaderboard', 'book')).toBe(false);
+    expect(isSwipeWrap('leaderboard', 'theses')).toBe(false);
+    expect(isSwipeWrap('book', 'theses')).toBe(false);
     expect(isSwipeWrap('book', 'team')).toBe(false);
   });
 

@@ -116,6 +116,11 @@ a:focus-visible {
   .id-card {
     animation: none;
   }
+
+  .desk-pull-mark,
+  .desk-pull[data-state="refreshing"] .desk-pull-mark {
+    animation: none;
+  }
 }
 
 .money {
@@ -2574,6 +2579,15 @@ a:focus-visible {
   height: auto;
 }
 
+.desk-pager-shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 .desk-pager {
   display: flex;
   flex: 1 1 auto;
@@ -2600,8 +2614,63 @@ a:focus-visible {
   scroll-behavior: auto;
 }
 
-.desk-pager[data-axis="x"] {
+.desk-pager[data-axis="x"],
+.desk-pager[data-axis="y"] {
   touch-action: none;
+}
+
+.desk-pull {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 6;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.desk-pull-mark {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(184, 137, 45, 0.28);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(184, 137, 45, calc(var(--pull, 0) * 0.55)) 0 42%,
+      transparent 46%
+    );
+  box-shadow: 0 0 0 6px rgba(243, 234, 216, 0.55);
+  opacity: 0;
+  transform: translateY(0) scale(0.72);
+}
+
+.desk-pull[data-state="pulling"] .desk-pull-mark,
+.desk-pull[data-state="armed"] .desk-pull-mark,
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  opacity: calc(0.28 + var(--pull, 0) * 0.72);
+  transform: translateY(calc(8px + var(--pull, 0) * 22px)) scale(calc(0.72 + var(--pull, 0) * 0.28));
+}
+
+.desk-pull[data-state="armed"] .desk-pull-mark,
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  border-color: rgba(184, 137, 45, 0.55);
+}
+
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  animation: desk-pull-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes desk-pull-breathe {
+  50% {
+    opacity: 0.55;
+    transform: translateY(30px) scale(1);
+  }
 }
 
 .desk-page {
@@ -2619,6 +2688,10 @@ a:focus-visible {
   -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+
+.desk-page:has([data-desk-nested-scroll]) {
+  overflow-y: hidden;
 }
 
 .desk-page[data-clone="1"] {
@@ -5695,7 +5768,14 @@ a:focus-visible {
   background: transparent;
 }
 
+.term.is-swipe .thesis-world {
+  height: 100%;
+  min-height: 0;
+}
+
 .term.is-swipe .team-card,
+.term.is-swipe .thesis-card,
+.term.is-swipe .review-card,
 .term.is-theses .thesis-card,
 .term.is-theses .review-card,
 .term.is-theses .thesis-evidence li {
