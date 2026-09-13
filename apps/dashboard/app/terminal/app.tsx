@@ -135,6 +135,8 @@ export function TerminalApp({
     go(hrefForSurface(next));
   }, [go]);
 
+  const reloadLedger = useCallback(() => refreshDesk(setDesk, setNotice), []);
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       const target = event.target;
@@ -229,25 +231,26 @@ export function TerminalApp({
             surface={surface}
             reduceMotion={reduceMotion}
             onSnap={onPagerSnap}
+            onRefresh={reloadLedger}
           >
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
               book: <BookPanel desk={desk} nowIso={nowIso} />,
+              theses: (
+                <ThesesWorld
+                  desk={desk}
+                  reduceMotion={reduceMotion}
+                  selectedId={selectedThesisId}
+                  onSelect={setSelectedThesisId}
+                  canReview={!publicView}
+                  onReviewed={publicView ? undefined : () => {
+                    void refreshDesk(setDesk, setNotice);
+                  }}
+                />
+              ),
               team: <TeamPanel desk={desk} reduceMotion={reduceMotion} now={now} />,
             }}
           </DeskPager>
-        )}
-        {surface === 'theses' && (
-          <ThesesWorld
-            desk={desk}
-            reduceMotion={reduceMotion}
-            selectedId={selectedThesisId}
-            onSelect={setSelectedThesisId}
-            canReview={!publicView}
-            onReviewed={publicView ? undefined : () => {
-              void refreshDesk(setDesk, setNotice);
-            }}
-          />
         )}
         {surface === 'backtests' && (
           <BacktestsPanel

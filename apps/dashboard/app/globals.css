@@ -116,6 +116,11 @@ a:focus-visible {
   .id-card {
     animation: none;
   }
+
+  .desk-pull-mark,
+  .desk-pull[data-state="refreshing"] .desk-pull-mark {
+    animation: none;
+  }
 }
 
 .money {
@@ -2574,10 +2579,22 @@ a:focus-visible {
   height: auto;
 }
 
+.desk-pager-shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .desk-pager {
   display: flex;
   flex: 1 1 auto;
   width: 100%;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   overflow-x: auto;
@@ -2600,8 +2617,63 @@ a:focus-visible {
   scroll-behavior: auto;
 }
 
-.desk-pager[data-axis="x"] {
+.desk-pager[data-axis="x"],
+.desk-pager[data-axis="y"] {
   touch-action: none;
+}
+
+.desk-pull {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 6;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.desk-pull-mark {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(184, 137, 45, 0.42);
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(255, 248, 232, 0.95) 0 34%,
+      rgba(184, 137, 45, calc(0.22 + var(--pull, 0) * 0.5)) 38% 100%
+    );
+  box-shadow: 0 0 0 7px rgba(243, 234, 216, 0.72);
+  opacity: 0;
+  transform: translateY(0) scale(0.78);
+}
+
+.desk-pull[data-state="pulling"] .desk-pull-mark,
+.desk-pull[data-state="armed"] .desk-pull-mark,
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  opacity: calc(0.62 + var(--pull, 0) * 0.38);
+  transform: translateY(calc(10px + var(--pull, 0) * 26px)) scale(calc(0.82 + var(--pull, 0) * 0.2));
+}
+
+.desk-pull[data-state="armed"] .desk-pull-mark,
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  border-color: rgba(184, 137, 45, 0.72);
+}
+
+.desk-pull[data-state="refreshing"] .desk-pull-mark {
+  animation: desk-pull-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes desk-pull-breathe {
+  50% {
+    opacity: 0.55;
+    transform: translateY(30px) scale(1);
+  }
 }
 
 .desk-page {
@@ -2619,6 +2691,10 @@ a:focus-visible {
   -webkit-overflow-scrolling: touch;
   scroll-snap-align: start;
   scroll-snap-stop: always;
+}
+
+.desk-page:has([data-desk-nested-scroll]) {
+  overflow-y: hidden;
 }
 
 .desk-page[data-clone="1"] {
@@ -5695,7 +5771,14 @@ a:focus-visible {
   background: transparent;
 }
 
+.term.is-swipe .thesis-world {
+  height: 100%;
+  min-height: 0;
+}
+
 .term.is-swipe .team-card,
+.term.is-swipe .thesis-card,
+.term.is-swipe .review-card,
 .term.is-theses .thesis-card,
 .term.is-theses .review-card,
 .term.is-theses .thesis-evidence li {

@@ -76,6 +76,7 @@ export function ThesesWorld({
   return (
     <div
       className="thesis-world"
+      data-desk-nested-scroll="1"
       data-reduce-motion={reduceMotion ? '1' : '0'}
       data-reading={reading ? '1' : '0'}
     >
@@ -130,7 +131,7 @@ function ThesisPage({
   onClose: () => void;
 }) {
   return (
-    <article className="thesis-page" aria-label={row.name}>
+    <article className="thesis-page" data-desk-nested-scroll="1" aria-label={row.name}>
       <button type="button" className="thesis-page-back" onClick={onClose}>
         Back to theses
       </button>
