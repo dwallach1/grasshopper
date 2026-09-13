@@ -335,6 +335,17 @@ describe('assembleBookHoldings', () => {
         created_at: '2026-09-10T20:31:00.000Z',
       }],
       positions: [{
+        id: 'ep-nbis-open',
+        account_key: 'robinhood_agentic_7638',
+        symbol: 'NBIS',
+        status: 'open',
+        quantity: 4.65,
+        average_cost: 214.91,
+        opened_at: '2026-08-01T00:00:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: 'earnings_gap_structure',
+      }, {
         id: 'ep-cifr',
         account_key: 'robinhood_agentic_7638',
         symbol: 'NBIS',
@@ -344,6 +355,7 @@ describe('assembleBookHoldings', () => {
         opened_at: '2026-08-01T00:00:00.000Z',
         closed_at: '2026-09-01T00:00:00.000Z',
         next_review_at: null,
+        thesis_id: 'earnings_gap_structure',
       }],
     }));
     const live = holdings.rows.find((row) => row.id === 'eq:NBIS');
@@ -364,5 +376,134 @@ describe('assembleBookHoldings', () => {
     });
     expect(closed?.thesis_id).toBe('earnings_gap_structure');
     expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.rules_in_force).toEqual([]);
+    expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.thesis_id).toBeNull();
+  });
+
+  test('Book chips stay untagged unless the lot has an explicit thesis_id', () => {
+    const holdings = assembleBookHoldings(desk({
+      beliefs: [{
+        id: 'b-domain-equity',
+        thesis_id: 'desk_generic',
+        domain_id: 'fallback-equity',
+        agent_id: null,
+        prior_confidence: 70,
+        new_confidence: 70,
+        rationale: 'Do not leak domain rules onto untagged lots.',
+        observed_at: '2026-09-12T13:00:00.000Z',
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['never_size_untagged'],
+        steward: 'quantanamo',
+        research_lesson_id: null,
+      }, {
+        id: 'b-domain-prediction',
+        thesis_id: 'desk_generic',
+        domain_id: 'fallback-prediction',
+        agent_id: null,
+        prior_confidence: 70,
+        new_confidence: 70,
+        rationale: 'Domain weather rule stays off untagged Fed lots.',
+        observed_at: '2026-09-12T13:00:00.000Z',
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['kill_into_no_bid_close_ledger_immediately'],
+        steward: 'oddsborne',
+        research_lesson_id: null,
+      }],
+      theses: [{
+        id: 'weather_same_day_high',
+        name: 'Same-day city-high weather',
+        summary: '',
+        status: 'hardening',
+        confidence: 78,
+        time_horizon: 'short',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-13T00:00:00.000Z',
+        symbols: [],
+        lots: [],
+      }, {
+        id: 'neocloud_compute',
+        name: 'Neocloud',
+        summary: '',
+        status: 'hardening',
+        confidence: 85,
+        time_horizon: 'medium',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-12T00:00:00.000Z',
+        symbols: ['NBIS'],
+        lots: [{
+          symbol: 'NBIS',
+          side: 'buy',
+          quantity: 4.65,
+          average_cost: 214.91,
+          invested: 1000,
+          mark: 224.02,
+          pnl: 42.4,
+          note: '',
+        }],
+      }],
+      prediction_markets: {
+        ...desk().prediction_markets,
+        markets: [{
+          id: 'm-lax',
+          slug: 'tc-temp-laxhigh-2026-09-13-gte76lt77f',
+          question: 'LAX high',
+          status: 'open',
+          close_time: null,
+          last_yes: 0.12,
+          last_no: 0.88,
+          last_marked_at: '2026-09-13T16:21:00.000Z',
+          thesis_id: 'weather_same_day_high',
+        }, {
+          id: 'm-hike',
+          slug: 'rdc-usfed-fomc-2026-09-16-hike25',
+          question: 'Fed hike 25',
+          status: 'open',
+          close_time: null,
+          last_yes: 0.78,
+          last_no: 0.22,
+          last_marked_at: '2026-09-12T13:00:00.000Z',
+        }],
+        positions: [{
+          id: 'p-lax',
+          market_id: 'm-lax',
+          account_key: 'polymarket-us-primary',
+          thesis_id: 'weather_same_day_high',
+          outcome: 'yes',
+          status: 'open',
+          quantity: 200,
+          average_cost: 0.12,
+          mark: 0.13,
+          mark_at: '2026-09-13T16:21:00.000Z',
+          thesis_text: null,
+        }, {
+          id: 'p-hike',
+          market_id: 'm-hike',
+          account_key: 'polymarket-us-primary',
+          thesis_id: null,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 42,
+          average_cost: 0.462,
+          mark: 0.785,
+          mark_at: '2026-09-12T13:00:00.000Z',
+          thesis_text: null,
+        }],
+      },
+    }));
+    expect(holdings.rows.find((row) => row.id === 'eq:NBIS')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'eq:NBIS')?.rules_in_force).toEqual([]);
+    expect(holdings.rows.find((row) => row.id === 'pm:p-lax')).toMatchObject({
+      thesis_id: 'weather_same_day_high',
+      thesis_name: 'Same-day city-high weather',
+    });
+    expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'pm:p-hike')?.rules_in_force).toEqual([]);
+    expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.thesis_id).toBeNull();
+    expect(holdings.rows.find((row) => row.id === 'meme:pos-baton')?.rules_in_force).toEqual([]);
   });
 });

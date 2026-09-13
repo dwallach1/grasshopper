@@ -10,6 +10,7 @@ import {
   parsePositionConfiguration,
   parseTheses,
   parseThesisAiOutput,
+  unambiguousThesisId,
 } from './schemas';
 
 describe('research cloud-control schemas', () => {
@@ -135,5 +136,16 @@ describe('research cloud-control schemas', () => {
     });
     expect(task.kind).toBe('thesis_research');
     expect(() => parseCloudTask({ kind: 'unknown', runId: 'x' })).toThrow();
+  });
+
+  test('unambiguous thesis id is one symbol match only', () => {
+    const theses = [
+      { id: 'earnings_gap_structure', symbols: ['CODA'] },
+      { id: 'neocloud_compute', symbols: ['CIFR', 'NBIS'] },
+      { id: 'semis_photonics', symbols: ['NBIS'] },
+    ];
+    expect(unambiguousThesisId('CODA', theses)).toBe('earnings_gap_structure');
+    expect(unambiguousThesisId('NBIS', theses)).toBeNull();
+    expect(unambiguousThesisId('NONE', theses)).toBeNull();
   });
 });

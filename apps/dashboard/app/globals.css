@@ -4948,6 +4948,7 @@ a:focus-visible {
 .book-holdings-name i,
 .book-holdings-who {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   color: var(--text-3);
@@ -4985,7 +4986,8 @@ a:focus-visible {
   font-size: 11px;
 }
 
-.book-rule-chip {
+.book-rule-chip,
+.book-thesis-chip {
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
@@ -4996,6 +4998,20 @@ a:focus-visible {
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: lowercase;
+}
+
+.book-thesis-chip {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--elevated-2, #f6eee0);
+}
+
+.book-untagged {
+  color: var(--ink-3, var(--text-3));
+  font-size: 9px;
+  letter-spacing: 0.04em;
 }
 
 .book-rules {

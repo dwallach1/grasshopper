@@ -116,7 +116,11 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Math.abs(row.quantity),
       upl: finiteOrNull(row.pnl),
       note: row.note,
-      ...bindHolding(desk, { symbol, life: 'live' }),
+      ...bindHolding(desk, {
+        symbol,
+        thesisId: equityThesisId(desk, symbol),
+        life: 'live',
+      }),
     }));
   }
   for (const row of desk.positions ?? []) {
@@ -138,7 +142,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
         size: Math.abs(row.quantity),
         upl: null,
         note: '',
-        ...bindHolding(desk, { symbol, life: 'live' }),
+        ...bindHolding(desk, { symbol, thesisId: row.thesis_id, life: 'live' }),
       }));
       continue;
     }
@@ -154,7 +158,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Number.isFinite(row.quantity) ? Math.abs(row.quantity) : null,
       upl: null,
       note: '',
-      ...bindHolding(desk, { symbol, life: 'closed' }),
+      ...bindHolding(desk, { symbol, thesisId: row.thesis_id, life: 'closed' }),
     }));
   }
   return rows;
@@ -242,16 +246,20 @@ function bindHolding(
     steward?: BookHoldingStewardSlug;
   },
 ): Pick<BookHolding, 'thesis_id' | 'thesis_name' | 'rules_in_force' | 'clip_note'> {
-  const thesis = thesisForHolding(desk.theses ?? [], {
-    symbol: input.symbol,
-    thesisId: input.thesisId,
-  });
+  const thesis = input.thesisId
+    ? thesisForHolding(desk.theses ?? [], {
+      symbol: input.symbol,
+      thesisId: input.thesisId,
+    })
+    : null;
   const steward = input.steward ?? 'quantanamo';
-  const rules = rulesInForceFor({
-    thesisId: thesis?.id ?? null,
-    domainId: domainIdForSteward(desk.team, steward),
-    beliefs: desk.beliefs ?? [],
-  });
+  const rules = thesis
+    ? rulesInForceFor({
+      thesisId: thesis.id,
+      domainId: domainIdForSteward(desk.team, steward),
+      beliefs: desk.beliefs ?? [],
+    })
+    : [];
   return {
     thesis_id: thesis?.id ?? null,
     thesis_name: thesis?.name ?? null,
@@ -310,6 +318,18 @@ function holdingRow(input: {
     rules_in_force: input.rules_in_force,
     clip_note: input.clip_note,
   };
+}
+
+function equityThesisId(desk: DeskPayload, symbol: string): string | null {
+  const wanted = symbol.trim();
+  if (!wanted) return null;
+  const open = (desk.positions ?? []).find((row) => {
+    const status = row.status.toLowerCase();
+    return row.symbol.trim() === wanted
+      && (OPEN_POSITION.has(status) || status === 'closing')
+      && Boolean(row.thesis_id);
+  });
+  return open?.thesis_id ?? null;
 }
 
 function finiteOrNull(value: number | null | undefined): number | null {

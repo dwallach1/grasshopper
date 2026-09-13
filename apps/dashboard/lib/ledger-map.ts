@@ -444,6 +444,11 @@ const PositionSchema = z
     opened_at: OptionalTimestamp,
     closed_at: OptionalTimestamp.optional().transform((value) => value ?? null),
     next_review_at: OptionalTimestamp,
+    thesis_id: z.union([z.string(), z.null()]).optional().transform((value) => {
+      if (value == null) return null;
+      const trimmed = value.trim();
+      return trimmed ? trimmed : null;
+    }),
   })
   .passthrough();
 

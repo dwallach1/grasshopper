@@ -450,9 +450,14 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('book-life');
     expect(openStrip).toContain('row.steward');
     expect(openStrip).toContain('rules_in_force');
+    expect(openStrip).toContain('book-thesis-chip');
+    expect(openStrip).toContain('book-untagged');
+    expect(openStrip).toContain('humanizeRule(row.thesis_id)');
     expect(openStrip).toContain('Rules in force');
     expect(openStrip).toContain('clip_note');
     expect(openStrip).toContain('no lesson on close');
+    expect(css).toContain('.book-thesis-chip');
+    expect(css).toContain('.book-untagged');
     expect(css).toContain('.book-rules');
     expect(css).toContain('.thesis-beliefs');
     expect(openStrip).not.toContain('book-open-lede');

@@ -31,6 +31,7 @@ import {
   parsePositionConfiguration,
   parsePositionEpisodeRows,
   parseTheses,
+  unambiguousThesisId,
   type ApprovedTradeProposal,
   type CloudTask,
   type PositionConfiguration,
@@ -347,6 +348,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           symbol: position.symbol,
           quantity: position.quantity,
           average_buy_price: position.averageBuyPrice,
+          thesis_id: unambiguousThesisId(position.symbol, theses),
           monitor_policy: {
             policy_version: 'autonomous-position-v1',
             hard_loss_limit_percent: 8,
