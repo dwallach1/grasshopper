@@ -86,13 +86,13 @@ On **Board** (`/`) Liveline draws each steward’s ledger series (Agentic NAV, `
 
 Each thesis with an open lot shows that lot from the **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position** on Theses.
 
-On **Theses** the operator table still lists the live theses (`neocloud_compute`, `ai_power_nuclear`, `defense_drones_space`, `semis_photonics`, `quantum`, `software_ai_apps`, `crypto`, `biotech_royalty`, plus orphans such as `earnings_gap_structure`) with statuses `forming` or `hardening`, plus held/candidate symbols and a lessons pane. The public phone desk paints those same rows as parchment cards (name, stance/status, confidence, domain/steward). Tap for the sentence, falsifier, and evidence. No Book/Board marks on the card.
+On **Theses** both desks use the parchment list (name, stance/status, confidence, domain/steward). Tap for the sentence, falsifier, belief trail, and evidence. No Book/Board marks on the card. A **To review** queue lists high-score pending `ontology_candidates` (ledger score, cap 40). The public phone is read-only. The local operator desk can promote / reject / merge; that path writes `ontology_management_actions` via `review_ontology_candidate`. See [`docs/ontology-review.md`](docs/ontology-review.md).
 
 On **Events** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue` (not AI-filtered). `/catalysts` redirects here.
 
 On **Tests** you should see every `strategy_tests` row (including old seed keys like `ai-power-base`). Selecting a row opens a detail pane on the same tab: `summary_json`, equity curve (`chart_svg` or `equity_curve`), trades, params, and Financial Datasets `price_source`. Rows with no `backtest_artifacts` say **no artifacts in ledger** — the desk never draws a fake curve. Null metrics say **not in ledger**.
 
-The desk is **read-only**. QUANTANAMO writes the ledger. Sign-in stays as the operator gate. There are no thesis status buttons, evidence/lesson forms, or other operator RPCs that insert/update/delete ledger rows.
+The desk stays read-only for thesis status, evidence, lessons, and trading. QUANTANAMO writes those. The one operator write is ontology candidate review (`POST /api/ontology/review`), gated by `ledger_operators`. Public phone has no write chrome.
 
 The **public phone desk** is a different build: `NEXT_PUBLIC_DESK_MODE=public` or the Cloudflare Worker `grasshopper-desk`. It reads the live ledger as `desk_public_reader` (`/api/desk`) and never signs in. See the README **Public phone desk** section. Do not point the public SPA at PostgREST. QUANTANAMO reads `meme_*` / `pm_*` as `quantanamo_worker` — those tables need `quantanamo_worker_select` RLS, not just `GRANT SELECT`. The public Worker needs the matching `desk_public_reader_select` policy.
 
@@ -103,7 +103,8 @@ The **public phone desk** is a different build: `NEXT_PUBLIC_DESK_MODE=public` o
 - It does not place trades or call Robinhood.
 - It does not ingest X bookmarks or run Workers AI.
 - `/api/x/authorize` is retired (410). QUANTANAMO reads X via the X connector.
-- `POST /api/system/run`, `/api/system/refresh-account`, and `/api/ontology/manage` return 410. The desk does not write.
+- `POST /api/system/run`, `/api/system/refresh-account`, and `/api/ontology/manage` return 410.
+- `POST /api/ontology/review` is the operator candidate review path (not on the public build).
 
 ## Tests
 
@@ -119,4 +120,4 @@ Auth gate checklist:
 4. Book / Theses / Events load live rows. Header shows your email. **Sign out** returns to the gate.
 5. Tab switches (1–5 or click) paint immediately from cached data; the filter box is gone.
 6. **Passkey+** then sign out and **Passkey** sign-in.
-7. Theses have no write controls. Status, evidence, and lessons are ledger reads.
+7. Thesis status, evidence, and lessons stay ledger reads. Candidate promote/reject/merge is operator-only.

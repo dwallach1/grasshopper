@@ -5089,9 +5089,137 @@ a:focus-visible {
 
 .thesis-world[data-reading="1"] .thesis-list,
 .thesis-world[data-reading="1"] .thesis-mast,
+.thesis-world[data-reading="1"] .review-queue,
 .thesis-world[data-reading="1"] .thesis-empty {
   pointer-events: none;
   visibility: hidden;
+}
+
+.review-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: var(--r-card, 14px);
+  background: var(--card, var(--elevated));
+  box-shadow: var(--shadow-card, none);
+}
+
+.review-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.review-card-copy b {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink, var(--text));
+}
+
+.review-card-copy i,
+.review-hint,
+.review-src {
+  color: var(--ink-3, var(--text-3));
+  font-style: normal;
+  font-size: 12px;
+}
+
+.review-card-copy p,
+.review-hint,
+.review-notice {
+  margin: 0;
+}
+
+.review-card-copy p {
+  color: var(--ink-2, var(--text-2));
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.review-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.review-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-thesis {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink-3, var(--text-3));
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.review-thesis select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 10px;
+  background: var(--paper, #f3ead8);
+  color: var(--ink, var(--text));
+  font: inherit;
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.review-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-buttons button {
+  padding: 7px 12px;
+  border: 1px solid rgba(184, 137, 45, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink, var(--text));
+  font-size: 13px;
+}
+
+.review-buttons button:disabled {
+  opacity: 0.5;
+}
+
+.review-notice {
+  color: var(--ink-2, var(--text-2));
+  font-size: 12px;
 }
 
 .thesis-empty {
@@ -5569,6 +5697,7 @@ a:focus-visible {
 
 .term.is-swipe .team-card,
 .term.is-theses .thesis-card,
+.term.is-theses .review-card,
 .term.is-theses .thesis-evidence li {
   border-color: var(--card-line);
   background: var(--card);

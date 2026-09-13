@@ -164,6 +164,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
     intents: asJsonRows(bag.intents),
     fills: asJsonRows(bag.fills),
     themes: asJsonRows(bag.themes),
+    candidates: asJsonRows(bag.candidates),
     prediction: mapPredictionMarkets({
       markets: asObjectRows(bag.pm?.markets),
       positions: asObjectRows(bag.pm?.positions),

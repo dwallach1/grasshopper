@@ -269,9 +269,9 @@ create index idx_ontology_candidate_evidence_source on public.ontology_candidate
 create table public.ontology_management_actions (
   id bigint generated always as identity primary key,
   actor_id text not null,
-  entity_type text not null check (entity_type in ('theme', 'symbol')),
+  entity_type text not null check (entity_type in ('theme', 'symbol', 'candidate')),
   entity_key text not null,
-  action text not null check (action in ('promote', 'demote', 'blacklist', 'restore')),
+  action text not null check (action in ('promote', 'demote', 'blacklist', 'restore', 'reject', 'merge')),
   previous_state jsonb not null,
   next_state jsonb not null,
   created_at timestamptz not null default now()

@@ -30,6 +30,16 @@ describe('exposed SECURITY DEFINER RPCs', () => {
     expect(functionBlock(sql, 'private.is_ledger_operator()')).toContain('security definer');
     expect(functionBlock(sql, 'private.claim_first_ledger_operator()')).toContain('security definer');
   });
+
+  test('ontology review RPC is an invoker wrapper over a private definer', async () => {
+    const sql = await readFile(join(schemaDir, '07_ontology_review.sql'), 'utf8');
+    expect(functionBlock(sql, 'public.review_ontology_candidate(')).toContain('security invoker');
+    expect(functionBlock(sql, 'private.review_ontology_candidate(')).toContain('security definer');
+    expect(sql).toContain("grant execute on function public.review_ontology_candidate");
+    expect(sql).not.toMatch(/grant execute on function public\.review_ontology_candidate[\s\S]*to anon/);
+    expect(sql).toContain("entity_type in ('theme', 'symbol', 'candidate')");
+    expect(sql).toContain("'reject', 'merge'");
+  });
 });
 
 const supabaseReady = await isSupabaseReady();

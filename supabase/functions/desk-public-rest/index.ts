@@ -22,11 +22,12 @@ const AGENTIC_LAST4 = '7638';
 const PUBLIC_KEYS = new Set([
   'theses', 'symbols', 'beliefs', 'lessons',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
-  'themes',
+  'themes', 'candidates',
 ]);
 
 const PUBLIC_QUERY: Record<string, string> = {
   runs: 'runs?select=id,run_type,started_at,completed_at,notes&order=started_at.desc,id.desc&limit=8',
+  candidates: 'ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&status=eq.pending&source_count=gte.2&order=score.desc,source_count.desc,id.desc&limit=40',
 };
 
 const REQUIRED: Array<[string, string]> = [

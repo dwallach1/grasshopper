@@ -43,6 +43,19 @@ describe('read-only operator desk', () => {
     expect(app).toContain('PUBLIC_DESK_UNAVAILABLE');
     expect(app).toContain('PUBLIC_DESK_REFRESH_FAILED');
     expect(app).not.toContain('SessionControls');
+    expect(pub).not.toContain('/api/ontology/review');
+    const world = await readDashboard('app/terminal/theses-world.tsx');
+    expect(world).toContain('canReview={canReview}');
+    expect(world).not.toContain('canReview={true}');
+  });
+
+  test('ontology review writes only through the operator route', async () => {
+    const review = await readDashboard('app/api/ontology/review/route.ts');
+    const retired = await readDashboard('app/api/ontology/manage/route.ts');
+    expect(review).toContain('operatorOrError');
+    expect(review).toContain("rpc('review_ontology_candidate'");
+    expect(review).toContain('isPublicDesk()');
+    expect(retired).toContain('retired-write');
   });
 
   test('ledger mutation routes are gone and do not post', async () => {

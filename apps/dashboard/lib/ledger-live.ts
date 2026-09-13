@@ -233,6 +233,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'intents'
   | 'fills'
   | 'themes'
+  | 'candidates'
   | 'prediction'
   | 'meme'
   | 'team'
@@ -264,7 +265,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
     risk_controls: [],
     ontology_themes: mapThemes(bag.themes),
     ontology_symbols: [],
-    ontology_candidates: [],
+    ontology_candidates: mapCandidates(bag.candidates),
     ontology_actions: [],
     counts: {
       sources: 0,
