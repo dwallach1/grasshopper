@@ -261,6 +261,8 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.desk-pull-mark');
     expect(css).toContain('desk-pull-breathe');
     expect(css).toContain('.desk-page:has([data-desk-nested-scroll])');
+    expect(css).toMatch(/\.desk-pager-shell \{[\s\S]*?min-width: 0/);
+    expect(css).toMatch(/\.desk-pager \{[\s\S]*?min-width: 0/);
     expect(css).toContain('.line-place');
     expect(css).toContain('100dvh');
     expect(css).not.toContain('.thesis-bldg');
