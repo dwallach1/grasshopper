@@ -82,8 +82,8 @@ export function BookOpenStrip({
                         {...face}
                       />
                       {row.steward}
-                      {row.thesis_name ? (
-                        <span className="book-thesis-chip">{row.thesis_name}</span>
+                      {row.thesis_id ? (
+                        <span className="book-thesis-chip">{humanizeRule(row.thesis_id)}</span>
                       ) : (
                         <span className="book-untagged">untagged</span>
                       )}

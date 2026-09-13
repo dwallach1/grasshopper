@@ -4925,12 +4925,11 @@ a:focus-visible {
 }
 
 .book-thesis-chip {
-  max-width: 11rem;
+  max-width: 14rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: var(--elevated-2, #f6eee0);
-  text-transform: none;
 }
 
 .book-untagged {
