@@ -246,6 +246,22 @@ describe('assembleBookHoldings', () => {
 
   test('open rows bind thesis + rules in force; closed rows show a linked lesson', () => {
     const holdings = assembleBookHoldings(desk({
+      book: {
+        ...desk().book,
+        names: [
+          ...desk().book.names,
+          {
+            symbol: 'CIFR',
+            quantity: 63,
+            average_cost: 15.82,
+            cost: 1000,
+            mark: 16.88,
+            pnl: 67,
+            note: '',
+            venue: 'equity',
+          },
+        ],
+      },
       theses: [{
         id: 'earnings_gap_structure',
         name: 'Earnings gap structure',
@@ -267,6 +283,29 @@ describe('assembleBookHoldings', () => {
           invested: 1000,
           mark: 224.02,
           pnl: 42.4,
+          note: '',
+        }],
+      }, {
+        id: 'neocloud_compute',
+        name: 'Neocloud',
+        summary: '',
+        status: 'hardening',
+        confidence: 85,
+        time_horizon: 'medium',
+        stance: 'long',
+        variant_perception: null,
+        falsifier: null,
+        created_at: '2026-09-01T00:00:00.000Z',
+        updated_at: '2026-09-12T00:00:00.000Z',
+        symbols: ['CIFR'],
+        lots: [{
+          symbol: 'CIFR',
+          side: 'buy',
+          quantity: 63,
+          average_cost: 15.82,
+          invested: 1000,
+          mark: 16.88,
+          pnl: 67,
           note: '',
         }],
       }],
@@ -324,5 +363,6 @@ describe('assembleBookHoldings', () => {
       summary: 'Soft RTH is not confirmation for retail.',
     });
     expect(closed?.thesis_id).toBe('earnings_gap_structure');
+    expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.rules_in_force).toEqual([]);
   });
 });

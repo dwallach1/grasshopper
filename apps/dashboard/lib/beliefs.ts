@@ -149,8 +149,9 @@ export function rulesInForceFor(input: {
 }): string[] {
   const cap = input.cap ?? RULES_IN_FORCE_CAP;
   const rules = assemblePlaybookRules(input.beliefs);
-  const match = rules.find((row) => input.thesisId && row.thesis_id === input.thesisId)
-    ?? rules.find((row) => input.domainId && row.domain_id === input.domainId);
+  const match = input.thesisId
+    ? rules.find((row) => row.thesis_id === input.thesisId)
+    : rules.find((row) => input.domainId && row.domain_id === input.domainId);
   if (!match) return [];
   return match.rules.filter(Boolean).slice(0, cap);
 }

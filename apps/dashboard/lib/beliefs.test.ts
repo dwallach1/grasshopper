@@ -128,6 +128,20 @@ describe('belief mapping', () => {
       domainId: null,
       beliefs,
     })).toEqual([]);
+    expect(rulesInForceFor({
+      thesisId: 'neocloud_compute',
+      domainId: '271d5741-8058-4273-a28f-aa0961c0152d',
+      beliefs,
+    })).toEqual([]);
+    expect(rulesInForceFor({
+      thesisId: null,
+      domainId: '271d5741-8058-4273-a28f-aa0961c0152d',
+      beliefs,
+    })).toEqual([
+      'no_chase_already_printed_leftovers',
+      'ignored_mcap_floor_50_100m',
+      'never_pltr',
+    ]);
     expect(humanizeRule('no_chase_already_printed_leftovers')).toBe('no chase already printed leftovers');
   });
 
