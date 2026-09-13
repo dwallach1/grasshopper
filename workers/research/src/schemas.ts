@@ -474,6 +474,17 @@ export function parsePositionEpisodeRows(value: unknown): PositionEpisodeRow[] {
   return rows;
 }
 
+/** One matching thesis only. Multi-thesis symbols stay untagged. */
+export function unambiguousThesisId(
+  symbol: string,
+  theses: readonly { id: string; symbols: readonly string[] }[],
+): string | null {
+  const wanted = symbol.trim();
+  if (!wanted) return null;
+  const matches = theses.filter((row) => row.symbols.includes(wanted));
+  return matches.length === 1 ? matches[0].id : null;
+}
+
 export const BrokerFillSchema = z.object({
   id: z.string().optional(),
   quantity: z.coerce.number().positive(),

@@ -743,6 +743,8 @@ create table public.position_episodes (
   next_review_at timestamptz,
   monitor_policy jsonb not null default '{}'::jsonb,
   last_recommendation jsonb,
+  thesis_id text references public.theses(id) on delete set null,
+  meta jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -750,6 +752,7 @@ create unique index idx_position_episodes_one_open on public.position_episodes(a
   where status in ('proposed', 'open', 'closing');
 create index idx_position_episodes_review on public.position_episodes(next_review_at) where status = 'open';
 create index idx_position_episodes_symbol on public.position_episodes(symbol);
+create index idx_position_episodes_thesis_id on public.position_episodes(thesis_id) where thesis_id is not null;
 
 create table public.position_monitor_events (
   id bigint generated always as identity primary key,

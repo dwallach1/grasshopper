@@ -230,7 +230,7 @@ Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_rea
 
 The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
 
-CI **Deploy public desk** ships the Cloudflare Worker only. New `/bundle/public` keys also need `supabase functions deploy desk-public-rest` — Worker CI alone is not enough (beliefs/`candidates` lesson from #50/#52).
+CI **Deploy public desk** ships the Cloudflare Worker only. New `/bundle/public` keys **or new SELECT fields** (e.g. `position_episodes.thesis_id`) also need `supabase functions deploy desk-public-rest` — Worker CI alone is not enough (beliefs/`candidates` lesson from #50/#52).
 
 ### Local operator vs public
 

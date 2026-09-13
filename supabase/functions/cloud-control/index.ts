@@ -83,6 +83,31 @@ function isObject(value: unknown): value is JsonObject {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function textOrNull(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function bindEpisodeThesis(position: JsonObject, current: JsonObject | undefined): {
+  thesis_id: string | null;
+  meta: JsonObject;
+} {
+  const thesisId = textOrNull(position.thesis_id) ?? textOrNull(current?.thesis_id);
+  const meta: JsonObject = {
+    ...(isObject(current?.meta) ? current.meta : {}),
+    ...(isObject(position.meta) ? position.meta : {}),
+  };
+  if (thesisId) {
+    delete meta.untagged;
+    return { thesis_id: thesisId, meta };
+  }
+  if (typeof meta.untagged !== 'string' || !meta.untagged.trim()) {
+    meta.untagged = 'sync_missing_thesis';
+  }
+  return { thesis_id: null, meta };
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 }
@@ -434,6 +459,7 @@ async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
       }),
     });
     const current = existing.find((row) => row.symbol === symbol);
+    const thesis = bindEpisodeThesis(position, current);
     const episodePatch = {
       account_key: accountKey,
       symbol,
@@ -444,6 +470,8 @@ async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
       closed_at: null,
       next_review_at: position.next_review_at || null,
       monitor_policy: isObject(position.monitor_policy) ? position.monitor_policy : {},
+      thesis_id: thesis.thesis_id,
+      meta: thesis.meta,
       updated_at: observedAt,
     };
     if (current && typeof current.id === 'string') {
@@ -500,7 +528,7 @@ async function recordPositionMonitorEvent(payload: unknown): Promise<unknown> {
 async function patchPositionEpisode(payload: unknown): Promise<unknown> {
   const record = PatchPositionEpisodeSchema.parse(payload);
   const patch: JsonObject = {};
-  for (const key of ['status', 'quantity', 'average_cost', 'closed_at', 'next_review_at', 'last_recommendation', 'monitor_policy', 'updated_at']) {
+  for (const key of ['status', 'quantity', 'average_cost', 'closed_at', 'next_review_at', 'last_recommendation', 'monitor_policy', 'thesis_id', 'meta', 'updated_at']) {
     if (key in record) patch[key] = record[key];
   }
   return rest(`position_episodes?id=eq.${encodeURIComponent(record.id)}`, {

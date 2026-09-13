@@ -275,7 +275,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       optionalRows(
         'position_episodes',
         sql`
-        select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at
+        select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at, thesis_id
         from public.position_episodes
         where status in ('proposed', 'open', 'closing', 'closed')
         order by opened_at desc nulls last, symbol

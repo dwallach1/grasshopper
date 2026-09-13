@@ -2,6 +2,55 @@
 
 Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book shows up to three of those rules on a holding; Theses shows the confidence trail. This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
+## Open with thesis_id
+
+New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot shows a quiet “untagged” chip and no rules in force. The ontology cannot learn from that money.
+
+```sql
+-- Gate (also a CHECK on the three position tables)
+select public.position_has_thesis_or_untagged('earnings_gap_structure', '{}'::jsonb);
+select public.position_has_thesis_or_untagged(null, '{"untagged":"paper_lot"}'::jsonb);
+```
+
+```sql
+insert into public.position_episodes (
+  account_key, symbol, status, quantity, average_cost, opened_at, thesis_id, meta
+) values (
+  'agentic-7638',
+  'CODA',
+  'open',
+  250,
+  10.10,
+  now(),
+  'earnings_gap_structure',
+  '{}'::jsonb
+);
+
+insert into public.pm_positions (
+  market_id, account_key, thesis_id, outcome, status, quantity, average_cost, meta
+) values (
+  $market_id,
+  'polymarket-us-primary',
+  'weather_same_day_high',
+  'yes',
+  'open',
+  200,
+  0.12,
+  '{}'::jsonb
+);
+```
+
+If the clip is intentionally off-thesis, write the reason — do not leave `thesis_id` null:
+
+```sql
+meta = jsonb_build_object('untagged', 'paper_lot')
+-- or 'sync_missing_thesis' from QUANTANAMO broker sync when no single thesis matches
+```
+
+Book LIVE/CLOSED rows show a thesis chip when `thesis_id` is set, and a quiet “untagged” when it is not. Do not infer a thesis from `thesis_symbols` on the Book. QUANTANAMO `sync_position_episodes` keeps an existing `thesis_id`; a brand-new episode without one stamps `meta.untagged = 'sync_missing_thesis'`. Pass `thesis_id` when exactly one thesis lists the symbol.
+
+Conservative backfill (do not extend): `CODA` → `earnings_gap_structure`; `tc-temp-laxhigh-*` PM lots → `weather_same_day_high`. Fed hike, Chicago weather, multi-thesis names (NBIS/CIFR/IREN), and all meme lots stayed untagged. `desk-public-rest` **v7** selects `position_episodes.thesis_id` — Worker CI alone is not enough after that field lands.
+
 ## Read before size
 
 Newest playbook rule per thesis + domain:
@@ -33,7 +82,7 @@ order by thesis_id, domain_id, observed_at desc, created_at desc, id desc;
 
 `/api/desk` includes a lean `beliefs[]` (id, thesis, domain, confidences, rationale, observed_at, kind, rules, steward). Newest-first, cap 80. Public snapshot keeps this field. Do not size from BIDNESS chat.
 
-## Write on close
+## Close with belief / lesson
 
 When an equity episode, `pm_positions`, or `meme_positions` row goes closed / settled / resolved, the steward **must** write one of:
 

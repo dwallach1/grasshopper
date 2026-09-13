@@ -183,6 +183,8 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("'belief_updates'");
     expect(fn).toContain("'beliefs'");
     expect(fn).toContain("'lessons'");
+    expect(fn).toContain('position_episodes?select=');
+    expect(fn).toContain('next_review_at,thesis_id');
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]beliefs['"]/);
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]lessons['"]/s);
     expect(fn).toContain('not_allowed');
