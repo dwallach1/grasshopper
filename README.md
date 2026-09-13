@@ -176,8 +176,9 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker SELECT as `desk_public_reader`) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
+| Ontology review | `ontology_candidates` + `review_ontology_candidate` (operator write; public phone SELECT only) |
 
-The desk is read-only. QUANTANAMO writes the ledger. See [`LOCAL.md`](LOCAL.md).
+The desk is read-only except operator ontology review. QUANTANAMO writes the rest of the ledger. See [`LOCAL.md`](LOCAL.md) and [`docs/ontology-review.md`](docs/ontology-review.md).
 
 ---
 
@@ -208,7 +209,7 @@ That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and
 
 ### How the public Worker reads (no write credentials)
 
-1. `GET /api/desk` always loads the same assembler as the operator desk (`loadDeskFromRest`) against Supabase PostgREST. Kong `apikey` is the **publishable/anon** key. `Authorization` is a JWT with `role=desk_public_reader` (SELECT-only RLS). `toPublicDeskSnapshot()` sets `source: 'snapshot'` (sanitized public envelope) and drops operator audit rows (`ontology_actions`).
+1. `GET /api/desk` always loads the same assembler as the operator desk (`loadDeskFromRest`) against Supabase PostgREST. Kong `apikey` is the **publishable/anon** key. `Authorization` is a JWT with `role=desk_public_reader` (SELECT-only RLS). `toPublicDeskSnapshot()` sets `source: 'snapshot'` (sanitized public envelope), keeps lean pending `ontology_candidates`, and drops operator audit rows (`ontology_actions`).
 2. HTTP `Cache-Control: no-store`. A failed live read is **503** `{ error: 'Desk ledger unavailable' }` — never yesterday’s copy.
 3. `PUT /internal/snapshot` is gone (405). The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
 
@@ -229,6 +230,8 @@ Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_rea
 
 The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
 
+CI **Deploy public desk** ships the Cloudflare Worker only. New `/bundle/public` keys also need `supabase functions deploy desk-public-rest` — Worker CI alone is not enough (beliefs/`candidates` lesson from #50/#52).
+
 ### Local operator vs public
 
 | | Operator (`bun run web:app`) | Public (`NEXT_PUBLIC_DESK_MODE=public` or the Worker) |
@@ -236,7 +239,7 @@ The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is att
 | Auth | Magic link / passkey; `ledger_operators` RLS | None. Worker reads as `desk_public_reader`. |
 | Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` live PostgREST only |
 | Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys in the SPA. Reader JWT is a Worker secret. |
-| Writes | Retired 410s | 405 / 404 |
+| Writes | Retired 410s except `POST /api/ontology/review` | 405 / 404 |
 | Chrome | Sign out / Passkey+ | Hidden |
 
 Local public preview (same Next app, no Cloudflare):

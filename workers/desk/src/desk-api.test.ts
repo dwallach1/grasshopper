@@ -164,6 +164,7 @@ describe('public desk reader credentials', () => {
     expect(source).toContain('assemblePublicDeskFromRestBag');
     expect(source).toContain('beliefs: asJsonRows(bag.beliefs)');
     expect(source).toContain('lessons: asJsonRows(bag.lessons)');
+    expect(source).toContain('candidates: asJsonRows(bag.candidates)');
     expect(source).not.toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
     expect(source).toContain('LIVE_CACHE_MS');
@@ -175,6 +176,8 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("path === '/bundle'");
     expect(fn).toContain('handleBundle');
     expect(fn).toContain("mode === 'public'");
+    expect(fn).toContain("'candidates'");
+    expect(fn).toContain('status=eq.pending');
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");
     const api = await Bun.file(new URL('./desk-api.ts', import.meta.url)).text();

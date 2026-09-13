@@ -219,6 +219,10 @@ describe('desk IA smoke', () => {
     expect(world).toContain('row.beliefs');
     expect(world).toContain('thesis-beliefs');
     expect(world).toContain('Belief trail');
+    expect(world).toContain('CandidateReviewQueue');
+    expect(world).toContain('canReview={canReview}');
+    expect(css).toContain('.review-queue');
+    expect(css).toContain('.review-card');
     expect(world).not.toContain('ThesisIslandView');
     expect(world).not.toContain('ThesisIslandPoster');
     expect(world).not.toContain('assembleThesisDistricts');

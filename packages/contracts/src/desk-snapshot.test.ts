@@ -75,6 +75,22 @@ describe('public desk snapshot contract', () => {
     expect(published.lessons).toEqual([]);
   });
 
+  test('public snapshot keeps lean pending candidates and drops actions', () => {
+    const published = toPublicDeskSnapshot({
+      ...sample,
+      ontology_candidates: [
+        { id: 3, status: 'promoted', score: 99, source_count: 8, proposed_label: 'old' },
+        { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low' },
+        { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN' },
+      ],
+    });
+    expect(published.ontology_candidates).toEqual([
+      { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN' },
+      { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low' },
+    ]);
+    expect(published.ontology_actions).toEqual([]);
+  });
+
   test('public snapshot keeps lean beliefs and lessons', () => {
     const published = toPublicDeskSnapshot({
       ...sample,

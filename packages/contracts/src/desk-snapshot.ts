@@ -45,10 +45,33 @@ const PUBLIC_OMIT = new Set([
   'predictions',
   'risk_controls',
   'ontology_symbols',
-  'ontology_candidates',
   'ontology_actions',
   'proposals',
 ]);
+
+export const PUBLIC_CANDIDATE_CAP = 40;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Pending only, ledger score then source_count. Does not invent or rewrite scores. */
+export function publicPendingCandidates(rows: unknown): unknown[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .filter((row) => isRecord(row) && row.status === 'pending')
+    .slice()
+    .sort((left, right) => {
+      const a = left as Record<string, unknown>;
+      const b = right as Record<string, unknown>;
+      const score = Number(b.score ?? 0) - Number(a.score ?? 0);
+      if (score !== 0) return score;
+      const sources = Number(b.source_count ?? 0) - Number(a.source_count ?? 0);
+      if (sources !== 0) return sources;
+      return Number(b.id ?? 0) - Number(a.id ?? 0);
+    })
+    .slice(0, PUBLIC_CANDIDATE_CAP);
+}
 
 /** Array fields the phone desk indexes (`tests[0]`, `.filter`, `.map`). Missing → []. */
 export const DESK_ARRAY_KEYS = [
@@ -190,14 +213,14 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
  * Mark a live desk payload as the public snapshot. Strips operator-only audit
  * *rows* so GET /api/desk stays JSON-healthy under Worker CPU, then puts empty
  * arrays back so the phone client can index `tests[0]`. Book / Board / Team
- * keep `prediction_markets`, `meme_coins`, `team`, theses, beliefs, lessons, and the book.
- * Never invent marks.
+ * keep `prediction_markets`, `meme_coins`, `team`, theses, beliefs, lessons,
+ * pending ontology candidates, and the book. Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const slim: Record<string, unknown> = { source: 'snapshot' };
   for (const [key, value] of Object.entries(desk)) {
     if (key === 'source' || PUBLIC_OMIT.has(key)) continue;
-    slim[key] = value;
+    slim[key] = key === 'ontology_candidates' ? publicPendingCandidates(value) : value;
   }
   return hydratePublicDesk(slim as DeskWire);
 }

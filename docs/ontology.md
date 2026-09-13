@@ -52,7 +52,9 @@ Themes and ticker baskets are data, not Python constants. Supabase owns:
 
 The knowledge Worker sends bounded bookmark batches and the active ontology to Workers AI. The model reasons about market relevance, claims, explicitly stated symbols, theme matches, supporting or contradictory direction, and proposed themes, vocabulary, and memberships. Its structured output is rejected unless every bookmark is present, every existing theme ID is valid, and every claim, match, or candidate cites an exact contiguous source excerpt. There is no keyword, regex, n-gram, or co-occurrence fallback for semantic classification.
 
-Validated model proposals enter the candidate queue. Only LLM-origin candidates with sufficiently strong, multi-source evidence can auto-promote; membership promotion additionally requires a verified symbol, and vocabulary promotion requires source distinctiveness. Prompt/model versions and validated output are stored on each bookmark, so unchanged inputs skip inference while a prompt or model upgrade triggers bounded backfill. Managers can promote, demote, restore, or blacklist themes and symbols through the hosted ontology manager.
+Validated model proposals enter the candidate queue. Only LLM-origin candidates with sufficiently strong, multi-source evidence can auto-promote; membership promotion additionally requires a verified symbol, and vocabulary promotion requires source distinctiveness. Prompt/model versions and validated output are stored on each bookmark, so unchanged inputs skip inference while a prompt or model upgrade triggers bounded backfill.
+
+Operators review the rest on Theses (parchment **To review**). Promote / reject / merge write `ontology_management_actions` and update candidate status through `review_ontology_candidate` — see [`docs/ontology-review.md`](ontology-review.md). The public phone shows the pending queue and does not write.
 
 ```sh
 bun run --cwd workers/knowledge types
