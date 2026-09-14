@@ -230,8 +230,18 @@ describe('desk IA smoke', () => {
     expect(world).toContain('Belief trail');
     expect(world).toContain('CandidateReviewQueue');
     expect(world).toContain('canReview={canReview}');
+    expect(world).toContain('LessonQueue');
+    expect(world).toContain('canIncorporate={canIncorporate}');
     expect(css).toContain('.review-queue');
     expect(css).toContain('.review-card');
+    expect(css).toContain('.lesson-queue');
+    const lessons = await readDashboard('app/terminal/lesson-queue.tsx');
+    expect(lessons).toContain('rankLessonsForDesk');
+    expect(lessons).toContain('Incorporate');
+    expect(lessons).toContain('in playbook');
+    expect(lessons).toContain('Public phone is read-only.');
+    expect(lessons).not.toContain('/api/lessons/incorporate');
+    expect(app).toContain('canIncorporate={!publicView}');
     const review = await readDashboard('app/terminal/candidate-review.tsx');
     expect(review).toContain('reviewThesisHint');
     expect(review).toContain('data-candidate-type');

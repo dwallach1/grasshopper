@@ -46,6 +46,17 @@ describe('exposed SECURITY DEFINER RPCs', () => {
     expect(sql).toContain("grant execute on function public.reject_junk_ontology_candidates");
     expect(sql).not.toMatch(/grant execute on function public\.reject_junk_ontology_candidates[\s\S]*to anon/);
   });
+
+  test('lesson incorporate RPC is an invoker wrapper over a private definer', async () => {
+    const sql = await readFile(join(schemaDir, '09_lesson_incorporate.sql'), 'utf8');
+    expect(functionBlock(sql, 'public.incorporate_research_lesson(')).toContain('security invoker');
+    expect(functionBlock(sql, 'private.incorporate_research_lesson(')).toContain('security definer');
+    expect(sql).toContain("grant execute on function public.incorporate_research_lesson");
+    expect(sql).not.toMatch(/grant execute on function public\.incorporate_research_lesson[\s\S]*to anon/);
+    expect(sql).toContain("'source', 'operator_incorporate'");
+    expect(sql).toContain("meta->>'kind', '') = 'playbook_rule'");
+    expect(sql).toContain('belief_updates_playbook_lesson_idx');
+  });
 });
 
 const supabaseReady = await isSupabaseReady();

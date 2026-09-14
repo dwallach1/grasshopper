@@ -177,8 +177,9 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker SELECT as `desk_public_reader`) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
 | Ontology review | `ontology_candidates` + `review_ontology_candidate` / `reject_junk_ontology_candidates` (operator write; public phone SELECT only) |
+| Lesson incorporate | `research_lessons` + `incorporate_research_lesson` (operator write → `belief_updates` playbook_rule; public phone SELECT only) |
 
-The desk is read-only except operator ontology review. QUANTANAMO writes the rest of the ledger. See [`LOCAL.md`](LOCAL.md) and [`docs/ontology-review.md`](docs/ontology-review.md).
+The desk is read-only except operator ontology review and lesson incorporate. QUANTANAMO writes the rest of the ledger. See [`LOCAL.md`](LOCAL.md), [`docs/ontology-review.md`](docs/ontology-review.md), and [`docs/lesson-incorporate.md`](docs/lesson-incorporate.md).
 
 ---
 
@@ -250,7 +251,7 @@ The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is att
 | Auth | Magic link / passkey; `ledger_operators` RLS | None. Worker reads as `desk_public_reader`. |
 | Data | `/api/ledger` as the signed-in JWT (or postgres.js server-side) | `/api/desk` live PostgREST only |
 | Keys | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the browser | No Supabase keys in the SPA. Reader JWT is a Worker secret. |
-| Writes | Retired 410s except `POST /api/ontology/review` | 405 / 404 |
+| Writes | Retired 410s except `POST /api/ontology/review` and `POST /api/lessons/incorporate` | 405 / 404 |
 | Chrome | Sign out / Passkey+ | Hidden |
 
 Local public preview (same Next app, no Cloudflare):

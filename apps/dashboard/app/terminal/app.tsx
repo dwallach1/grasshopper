@@ -243,6 +243,7 @@ export function TerminalApp({
                   selectedId={selectedThesisId}
                   onSelect={setSelectedThesisId}
                   canReview={!publicView}
+                  canIncorporate={!publicView}
                   onReviewed={publicView ? undefined : () => {
                     void refreshDesk(setDesk, setNotice);
                   }}

@@ -28,7 +28,7 @@ Every strategy idea can move through `research → code → backtest → live �
 - Risk limits are stored as code-enforced controls, never prompt-only guidance.
 - Every tested variant and scenario survives as data, including killed variants and their autopsies.
 - Postmortems create persistent lessons tagged with the market regime where the failure occurred.
-- A lesson remains an open loop until it has been incorporated into the next research cycle.
+- A lesson remains an open loop until an operator incorporates it into a playbook rule (`belief_updates` / `active_playbook_rules`). See [`lesson-incorporate.md`](lesson-incorporate.md).
 
 The graph should answer:
 

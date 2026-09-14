@@ -5188,15 +5188,21 @@ a:focus-visible {
 .thesis-world[data-reading="1"] .thesis-list,
 .thesis-world[data-reading="1"] .thesis-mast,
 .thesis-world[data-reading="1"] .review-queue,
+.thesis-world[data-reading="1"] .lesson-queue,
 .thesis-world[data-reading="1"] .thesis-empty {
   pointer-events: none;
   visibility: hidden;
 }
 
-.review-queue {
+.review-queue,
+.lesson-queue {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.lesson-queue .review-card[data-incorporated="1"] {
+  opacity: 0.72;
 }
 
 .review-mast {

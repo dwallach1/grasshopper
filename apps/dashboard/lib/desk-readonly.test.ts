@@ -44,9 +44,12 @@ describe('read-only operator desk', () => {
     expect(app).toContain('PUBLIC_DESK_REFRESH_FAILED');
     expect(app).not.toContain('SessionControls');
     expect(pub).not.toContain('/api/ontology/review');
+    expect(pub).not.toContain('/api/lessons/incorporate');
     const world = await readDashboard('app/terminal/theses-world.tsx');
     expect(world).toContain('canReview={canReview}');
+    expect(world).toContain('canIncorporate={canIncorporate}');
     expect(world).not.toContain('canReview={true}');
+    expect(world).not.toContain('canIncorporate={true}');
   });
 
   test('ontology review writes only through the operator route', async () => {
@@ -56,6 +59,15 @@ describe('read-only operator desk', () => {
     expect(review).toContain("rpc('review_ontology_candidate'");
     expect(review).toContain('isPublicDesk()');
     expect(retired).toContain('retired-write');
+  });
+
+  test('lesson incorporate writes only through the operator route', async () => {
+    const incorporate = await readDashboard('app/api/lessons/incorporate/route.ts');
+    expect(incorporate).toContain('operatorOrError');
+    expect(incorporate).toContain("rpc('incorporate_research_lesson'");
+    expect(incorporate).toContain('isPublicDesk()');
+    const queue = await readDashboard('app/terminal/lesson-queue.tsx');
+    expect(queue).not.toContain('/api/lessons/incorporate');
   });
 
   test('ledger mutation routes are gone and do not post', async () => {
