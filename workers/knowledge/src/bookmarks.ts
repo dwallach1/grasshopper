@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isJunkOntologyLabel } from '@quantanamo/contracts/desk-snapshot';
+
 import type { Database } from './database';
 import {
   INVESTIGATION_AI_MODEL,
@@ -440,6 +442,7 @@ async function persistOntologyEvidence(
         && candidate.themeId
         && catalog.termsByTheme.get(candidate.themeId)?.has(normalizePhrase(candidate.label))
       ) continue;
+      if (isJunkOntologyLabel(candidate.label, candidate.candidateType)) continue;
       const keyTheme = candidate.themeId || 'new';
       candidates.push({
         candidate_type: candidate.candidateType,

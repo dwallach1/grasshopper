@@ -86,7 +86,7 @@ On **Board** (`/`) Liveline draws each steward’s ledger series (Agentic NAV, `
 
 Each thesis with an open lot shows that lot from the **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position** on Theses.
 
-On **Theses** both desks use the parchment list (name, stance/status, confidence, domain/steward). Tap for the sentence, falsifier, belief trail, and evidence. No Book/Board marks on the card. A **To review** queue lists high-score pending `ontology_candidates` (ledger score, cap 40). The public phone is read-only. The local operator desk can promote / reject / merge; that path writes `ontology_management_actions` via `review_ontology_candidate`. See [`docs/ontology-review.md`](docs/ontology-review.md).
+On **Theses** both desks use the parchment list (name, stance/status, confidence, domain/steward). Tap for the sentence, falsifier, belief trail, and evidence. No Book/Board marks on the card. A **To review** queue lists pending `ontology_candidates` (membership first, ledger score, cap 40; deny-list junk is omitted). The public phone is read-only. The local operator desk can promote / reject / merge; that path writes `ontology_management_actions` via `review_ontology_candidate`. See [`docs/ontology-review.md`](docs/ontology-review.md).
 
 On **Events** you should see the NVDA / IREN / MRVL / CRDO catalysts and the open `research_queue` (not AI-filtered). `/catalysts` redirects here.
 

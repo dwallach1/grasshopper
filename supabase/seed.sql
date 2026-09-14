@@ -125,7 +125,8 @@ select token, 'candidate_stopword', 0, 'active', 'Low-information language token
 from unnest(array[
   'about','after','again','also','because','before','being','could','from','have','into','just','more','most',
   'other','over','should','than','that','their','there','these','they','this','those','through','under','very',
-  'what','when','where','which','while','will','with','would','your'
+  'what','when','where','which','while','will','with','would','your',
+  'http','https','www','t.co','url','stock','stocks','price','results','popular'
 ]::text[]) token
 on conflict (token, token_type) do nothing;
 

@@ -4,12 +4,17 @@ import {
   DESK_ARRAY_KEYS,
   DESK_PUBLIC_READER_ROLE,
   hydratePublicDesk,
+  isJunkOntologyLabel,
   isPublicSnapshot,
   LIVE_JSON_CACHE_CONTROL,
+  ONTOLOGY_JUNK_LABELS,
   parseDeskWire,
+  PUBLIC_CANDIDATE_CAP,
+  PUBLIC_CANDIDATE_FETCH,
   PUBLIC_DESK_REDIRECTS,
   PUBLIC_DESK_REFRESH_FAILED,
   publicDeskJsonError,
+  publicPendingCandidates,
   toPublicDeskSnapshot,
 } from './desk-snapshot';
 
@@ -79,16 +84,48 @@ describe('public desk snapshot contract', () => {
     const published = toPublicDeskSnapshot({
       ...sample,
       ontology_candidates: [
-        { id: 3, status: 'promoted', score: 99, source_count: 8, proposed_label: 'old' },
-        { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low' },
-        { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN' },
+        { id: 3, status: 'promoted', score: 99, source_count: 8, proposed_label: 'old', candidate_type: 'term' },
+        { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low', candidate_type: 'term' },
+        { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN', candidate_type: 'membership' },
       ],
     });
     expect(published.ontology_candidates).toEqual([
-      { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN' },
-      { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low' },
+      { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN', candidate_type: 'membership' },
+      { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low', candidate_type: 'term' },
     ]);
     expect(published.ontology_actions).toEqual([]);
+  });
+
+  test('review ranking prefers memberships, drops deny-list junk, keeps ledger scores', () => {
+    expect(PUBLIC_CANDIDATE_CAP).toBe(40);
+    expect(PUBLIC_CANDIDATE_FETCH).toBe(200);
+    expect(ONTOLOGY_JUNK_LABELS).toContain('https');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('stocks');
+    expect(isJunkOntologyLabel('https t.co', 'term')).toBe(true);
+    expect(isJunkOntologyLabel('STOCKS', 'membership')).toBe(true);
+    expect(isJunkOntologyLabel('DOCN', 'membership')).toBe(false);
+    expect(isJunkOntologyLabel('power', 'term')).toBe(false);
+
+    const ranked = publicPendingCandidates([
+      { id: 351, status: 'pending', score: 95, source_count: 3, proposed_label: 'https', candidate_type: 'term' },
+      { id: 402, status: 'pending', score: 95, source_count: 2, proposed_label: 'stocks', candidate_type: 'term' },
+      { id: 444, status: 'pending', score: 85, source_count: 2, proposed_label: 'STOCKS', candidate_type: 'membership' },
+      { id: 448, status: 'pending', score: 95, source_count: 2, proposed_label: 'price', candidate_type: 'term' },
+      { id: 960, status: 'pending', score: 85, source_count: 2, proposed_label: 'URL', candidate_type: 'membership' },
+      { id: 1947, status: 'pending', score: 65, source_count: 4, proposed_label: 'Another', candidate_type: 'theme' },
+      { id: 1771, status: 'pending', score: 84, source_count: 5, proposed_label: 'power', candidate_type: 'term' },
+      { id: 4667, status: 'pending', score: 100, source_count: 2, proposed_label: 'DOCN', candidate_type: 'membership' },
+      { id: 458, status: 'pending', score: 100, source_count: 2, proposed_label: 'AEHR', candidate_type: 'membership' },
+      { id: 9, status: 'rejected', score: 90, source_count: 2, proposed_label: 'popular', candidate_type: 'term' },
+      { id: 10, status: 'pending', score: 90, source_count: 2, proposed_label: 'popular', candidate_type: 'term' },
+    ], 5);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'DOCN',
+      'AEHR',
+      'power',
+      'Another',
+    ]);
+    expect((ranked[0] as { score: number }).score).toBe(100);
   });
 
   test('public snapshot keeps lean beliefs and lessons', () => {

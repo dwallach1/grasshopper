@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import {
+  isJunkOntologyLabel,
   leanPendingCandidates,
+  ONTOLOGY_JUNK_LABELS,
   parseReviewRequest,
   REVIEW_QUEUE_CAP,
   reviewHttpError,
+  reviewThesisHint,
   suggestedThesisId,
 } from './candidate-review';
 import type { OntologyCandidateRow, OntologyThemeRow, ThesisRow } from './ledger-types';
@@ -60,17 +65,21 @@ function thesis(id: string, extra: Partial<ThesisRow> = {}): ThesisRow {
 }
 
 describe('ontology candidate review queue', () => {
-  test('keeps pending high-score rows and does not invent scores', () => {
+  test('prefers memberships over terms and drops deny-list junk', () => {
     const rows = [
-      candidate(1, { score: 40, source_count: 9, status: 'pending' }),
-      candidate(2, { score: 100, source_count: 2, status: 'pending' }),
+      candidate(351, { candidate_type: 'term', proposed_label: 'https', score: 95, source_count: 3 }),
+      candidate(448, { candidate_type: 'term', proposed_label: 'price', score: 95, source_count: 2 }),
+      candidate(1771, { candidate_type: 'term', proposed_label: 'power', score: 84, source_count: 5 }),
+      candidate(4667, { candidate_type: 'membership', proposed_label: 'DOCN', score: 100, source_count: 2 }),
+      candidate(458, { candidate_type: 'membership', proposed_label: 'AEHR', score: 100, source_count: 2 }),
       candidate(3, { score: 99, source_count: 8, status: 'promoted' }),
-      candidate(4, { score: 100, source_count: 5, status: 'pending' }),
     ];
-    const queue = leanPendingCandidates(rows, 2);
-    expect(queue.map((row) => row.id)).toEqual([4, 2]);
+    const queue = leanPendingCandidates(rows, 3);
+    expect(queue.map((row) => row.proposed_label)).toEqual(['DOCN', 'AEHR', 'power']);
     expect(queue[0]?.score).toBe(100);
-    expect(queue[1]?.score).toBe(100);
+    expect(queue.every((row) => row.status === 'pending')).toBe(true);
+    expect(isJunkOntologyLabel('https t.co')).toBe(true);
+    expect(isJunkOntologyLabel('POPULAR', 'membership')).toBe(true);
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
@@ -80,7 +89,7 @@ describe('ontology candidate review queue', () => {
       candidate(1, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
       [theme('photonics'), theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
       theses,
-    )).toBeNull();
+    )).toBe('semis_photonics');
     expect(suggestedThesisId(
       candidate(2, { proposed_theme_id: 'semis_photonics', proposed_label: 'DOCN' }),
       [theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
@@ -91,6 +100,26 @@ describe('ontology candidate review queue', () => {
       [],
       theses,
     )).toBe('semis_photonics');
+    expect(reviewThesisHint(
+      candidate(1, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
+      [theme('photonics'), theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
+      theses,
+    )).toBe('Unlinked concept · fits Semiconductors and photonics');
+    expect(reviewThesisHint(
+      candidate(9, { candidate_type: 'term', proposed_theme_id: 'photonics', proposed_label: 'https' }),
+      [theme('photonics')],
+      theses,
+    )).toBeNull();
+    expect(suggestedThesisId(
+      candidate(4, { proposed_theme_id: 'nuclear', proposed_label: 'GEV' }),
+      [theme('nuclear', { name: 'Nuclear energy' })],
+      [thesis('ai_power_nuclear', { name: 'AI power bottleneck beneficiaries' })],
+    )).toBe('ai_power_nuclear');
+    expect(suggestedThesisId(
+      candidate(5, { proposed_theme_id: 'ipo_events', proposed_label: 'Files', candidate_type: 'theme' }),
+      [theme('ipo_events', { name: 'IPO events' })],
+      theses,
+    )).toBeNull();
   });
 
   test('parses operator review bodies and rejects invented actions', () => {
@@ -108,5 +137,14 @@ describe('ontology candidate review queue', () => {
     expect(parseReviewRequest({ candidate_id: 1.5, action: 'reject' })).toBeNull();
     expect(reviewHttpError('thesis_required')).toMatchObject({ status: 400 });
     expect(reviewHttpError('not_operator').status).toBe(403);
+  });
+
+  test('SQL deny-list stays in sync with the documented labels', async () => {
+    const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
+    expect(sql).toContain('private.ontology_label_is_junk');
+    expect(sql).toContain("review_note = 'junk_deny_list'");
+    for (const label of ONTOLOGY_JUNK_LABELS) {
+      expect(sql).toContain(`'${label}'`);
+    }
   });
 });

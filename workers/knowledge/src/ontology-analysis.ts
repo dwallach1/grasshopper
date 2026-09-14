@@ -1,3 +1,4 @@
+import { isJunkOntologyLabel } from '@quantanamo/contracts/desk-snapshot';
 import { z } from 'zod';
 
 import { AI_MODELS, jsonSchemaResponseFormat, parseAiJsonObject, runAiRole } from '@quantanamo/shared/ai';
@@ -179,12 +180,14 @@ function validatedCandidates(
     let label = item.label.slice(0, 120);
     if (item.candidate_type === 'membership') {
       label = label.toUpperCase();
+      if (isJunkOntologyLabel(label, 'membership')) continue;
       if (!symbols.includes(label)) {
         throw new Error('A membership candidate must reference a classified symbol');
       }
     } else {
       label = normalizePhrase(label);
       if (!label) throw new Error('Ontology AI output contains an empty normalized candidate label');
+      if (isJunkOntologyLabel(label, item.candidate_type) || catalog.candidateStopwords.has(label)) continue;
     }
 
     const candidate: SemanticCandidate = {

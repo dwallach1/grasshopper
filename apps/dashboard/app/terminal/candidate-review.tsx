@@ -6,6 +6,7 @@ import {
   leanPendingCandidates,
   liveThesesForLink,
   reviewOntologyCandidate,
+  reviewThesisHint,
   suggestedThesisId,
   type ReviewAction,
 } from '../../lib/candidate-review';
@@ -32,7 +33,7 @@ export function CandidateReviewQueue({
         <p className="paper-title">To review</p>
         <p className="thesis-lede">
           {queue.length
-            ? `${queue.length} pending · ledger score, not invented`
+            ? `${queue.length} pending · membership first, ledger score`
             : 'No pending candidates on this desk.'}
           {canReview
             ? ' Promote, reject, or merge writes the ledger.'
@@ -71,6 +72,7 @@ function CandidateReviewCard({
   onReviewed?: () => void;
 }) {
   const suggested = suggestedThesisId(row, desk.ontology_themes ?? [], theses);
+  const hint = reviewThesisHint(row, desk.ontology_themes ?? [], theses);
   const [thesisId, setThesisId] = useState(suggested ?? '');
   const [busy, setBusy] = useState<ReviewAction | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -102,7 +104,7 @@ function CandidateReviewCard({
   }
 
   return (
-    <li className="review-card" data-candidate={row.id} data-status={row.status}>
+    <li className="review-card" data-candidate={row.id} data-status={row.status} data-candidate-type={row.candidate_type}>
       <span className="review-card-copy">
         <b>{row.proposed_label}</b>
         <i>
@@ -146,9 +148,8 @@ function CandidateReviewCard({
           </div>
           {notice ? <p className="review-notice" role="status">{notice}</p> : null}
         </div>
-      ) : suggestedName ? (
-        <p className="review-hint">Fits {suggestedName}</p>
       ) : null}
+      {hint ? <p className="review-hint">{hint}</p> : null}
     </li>
   );
 }

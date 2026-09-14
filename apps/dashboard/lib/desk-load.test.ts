@@ -57,6 +57,7 @@ describe('desk load path', () => {
     expect(live).toContain('mapBeliefs(bag.beliefs)');
     expect(live).toContain("mapLessons(bag.lessons)");
     expect(live).toContain('mapCandidates(bag.candidates)');
+    expect(live).toContain('score.desc,source_count.desc,id.desc&limit=200');
     expect(ledger).toContain("meta->>'untagged'");
     expect(live).toContain('untagged:meta->>untagged');
   });

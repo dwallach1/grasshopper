@@ -1,7 +1,17 @@
+import {
+  PUBLIC_CANDIDATE_CAP,
+  publicPendingCandidates,
+} from '@quantanamo/contracts/desk-snapshot';
+
 import type { OntologyCandidateRow, OntologyThemeRow, ThesisRow } from './ledger-types';
 import { isLiveThesis } from './thesis-status';
 
-export const REVIEW_QUEUE_CAP = 40;
+export const REVIEW_QUEUE_CAP = PUBLIC_CANDIDATE_CAP;
+export {
+  isJunkOntologyLabel,
+  ONTOLOGY_JUNK_LABELS,
+  PUBLIC_CANDIDATE_FETCH,
+} from '@quantanamo/contracts/desk-snapshot';
 export const REVIEW_ACTIONS = ['promote', 'reject', 'merge'] as const;
 export type ReviewAction = (typeof REVIEW_ACTIONS)[number];
 
@@ -23,16 +33,12 @@ export type ReviewResult = {
   created_thesis_stub: boolean;
 };
 
-/** Pending only, ledger score/source_count descending. Does not invent or rewrite scores. */
+/** Pending only. Membership / real theme first, then ledger score. Drops deny-list junk. */
 export function leanPendingCandidates(
   rows: readonly OntologyCandidateRow[],
   cap = REVIEW_QUEUE_CAP,
 ): OntologyCandidateRow[] {
-  return rows
-    .filter((row) => row.status === 'pending')
-    .slice()
-    .sort((a, b) => b.score - a.score || b.source_count - a.source_count || b.id - a.id)
-    .slice(0, Math.max(0, cap));
+  return publicPendingCandidates(rows, cap) as OntologyCandidateRow[];
 }
 
 export function liveThesesForLink(theses: readonly ThesisRow[]): ThesisRow[] {
@@ -40,6 +46,23 @@ export function liveThesesForLink(theses: readonly ThesisRow[]): ThesisRow[] {
     .filter((row) => isLiveThesis(row))
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+function idHasToken(haystack: string, needle: string): boolean {
+  if (!needle || needle.length < 4) return false;
+  return haystack === needle
+    || haystack.startsWith(`${needle}_`)
+    || haystack.endsWith(`_${needle}`)
+    || haystack.includes(`_${needle}_`);
+}
+
+function thesisFitsUnlinkedTheme(theme: OntologyThemeRow, thesis: ThesisRow): boolean {
+  if (idHasToken(thesis.id, theme.id) || idHasToken(theme.id, thesis.id)) return true;
+  const themeName = theme.name.trim().toLowerCase();
+  if (themeName.length >= 4 && thesis.name.trim().toLowerCase().includes(themeName)) return true;
+  const themeHead = theme.id.split('_')[0] ?? '';
+  const thesisHead = thesis.id.split('_')[0] ?? '';
+  return themeHead.length >= 6 && themeHead === thesisHead;
 }
 
 /** Prefer an existing thesis already bound to the proposed theme. Never invents an id. */
@@ -52,10 +75,33 @@ export function suggestedThesisId(
   const theme = themes.find((row) => row.id === candidate.proposed_theme_id);
   if (theme?.thesis_id && ids.has(theme.thesis_id)) return theme.thesis_id;
   if (theme && ids.has(theme.id)) return theme.id;
+  if (theme && !theme.thesis_id) {
+    const fitted = theses
+      .filter((row) => thesisFitsUnlinkedTheme(theme, row))
+      .slice()
+      .sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    if (fitted[0]) return fitted[0].id;
+  }
   const label = candidate.proposed_label.trim().toLowerCase();
   if (!label) return null;
   const named = theses.find((row) => row.name.trim().toLowerCase() === label || row.id === label);
   return named?.id ?? null;
+}
+
+/** Calm parchment line for membership/theme that already maps to a live thesis. */
+export function reviewThesisHint(
+  candidate: Pick<OntologyCandidateRow, 'candidate_type' | 'proposed_theme_id' | 'proposed_label'>,
+  themes: readonly OntologyThemeRow[],
+  theses: readonly ThesisRow[],
+): string | null {
+  if (candidate.candidate_type !== 'membership' && candidate.candidate_type !== 'theme') return null;
+  const suggested = suggestedThesisId(candidate, themes, theses);
+  if (!suggested) return null;
+  const name = theses.find((row) => row.id === suggested)?.name;
+  if (!name) return null;
+  const theme = themes.find((row) => row.id === candidate.proposed_theme_id);
+  if (theme && !theme.thesis_id) return `Unlinked concept · fits ${name}`;
+  return `Fits ${name}`;
 }
 
 export function parseReviewRequest(value: unknown): ReviewRequest | null {

@@ -146,6 +146,43 @@ describe('worker knowledge primitives', () => {
     expect(fromObjectEnvelope[0]?.symbols).toEqual(['VST']);
   });
 
+  test('drops deny-list ontology candidates instead of failing the bookmark', () => {
+    const catalog = new OntologyCatalog({
+      themes: [{ id: 'power', thesisId: 'power', kind: 'theme', name: 'Power', description: '', matchThreshold: 35, autoPromoteSources: 4 }],
+      terms: [],
+      memberships: [],
+      lexicon: [{ token: 'about', token_type: 'candidate_stopword', weight: 0 }],
+      symbols: ['VST', 'STOCKS'],
+    });
+    const bookmark = { id: 'bookmark-1', text: 'https t.co and STOCKS after earnings about VST.' };
+    const classified = parseOntologyAiOutput({ analyses: [{
+      bookmark_id: bookmark.id,
+      market_relevance: 40,
+      claim_type: 'none',
+      claim_summary: '',
+      claim_confidence: 0,
+      claim_evidence_excerpt: '',
+      symbols: ['VST', 'STOCKS'],
+      themes: [],
+      candidates: [{
+        candidate_type: 'term', theme_id: 'power', label: 'https t.co',
+        description: 'URL fragment.',
+        confidence: 90, evidence_excerpt: 'https t.co',
+      }, {
+        candidate_type: 'membership', theme_id: 'power', label: 'STOCKS',
+        description: 'Not a ticker.',
+        confidence: 85, evidence_excerpt: 'STOCKS after',
+      }, {
+        candidate_type: 'term', theme_id: 'power', label: 'about',
+        description: 'Stopword.',
+        confidence: 40, evidence_excerpt: 'about VST',
+      }],
+    }] }, [{
+      id: bookmark.id, text: bookmark.text, contextAnnotations: [], bookmark, createdAt: '2026-08-24T12:00:00Z',
+    }], catalog);
+    expect(classified[0]?.candidates).toEqual([]);
+  });
+
   test('fails closed when ontology AI omits analyses', () => {
     const catalog = new OntologyCatalog({
       themes: [], terms: [], memberships: [], lexicon: [],
