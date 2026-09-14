@@ -58,10 +58,10 @@ Promote prefers an existing thesis already bound to the proposed theme, or a the
 
 ## Public phone
 
-Read-only. `desk-public-rest` `/bundle/public` selects pending candidates (`PUBLIC_KEYS` includes `candidates`, fetch 200 then rank to 40). Worker CI deploys Cloudflare only — after a public-key **or SELECT/order/limit** change, also:
+Read-only. `desk-public-rest` `/bundle/public` selects pending candidates (`PUBLIC_KEYS` includes `candidates`, fetch 200 then rank to 40). Worker deploy ≠ Edge Function deploy. CI deploys `desk-public-rest` when `supabase/functions/desk-public-rest/**` changes (or `workflow_dispatch`), with `verify_jwt=false`. Manual fallback:
 
 ```sh
-supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz
+supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --no-verify-jwt
 ```
 
 `POST /api/desk` stays 405. Anon cannot execute the review RPC or the junk sweep.

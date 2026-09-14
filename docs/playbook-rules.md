@@ -49,7 +49,7 @@ meta = jsonb_build_object('untagged', 'paper_lot')
 
 Book LIVE/CLOSED rows show a thesis chip when `thesis_id` is set, and a quiet “untagged” when it is not. Do not infer a thesis from `thesis_symbols` on the Book. QUANTANAMO `sync_position_episodes` keeps an existing `thesis_id`; a brand-new episode without one stamps `meta.untagged = 'sync_missing_thesis'`. Pass `thesis_id` when exactly one thesis lists the symbol.
 
-Conservative backfill (do not extend): `CODA` → `earnings_gap_structure`; `tc-temp-laxhigh-*` PM lots → `weather_same_day_high`. Fed hike, Chicago weather, multi-thesis names (NBIS/CIFR/IREN), and all meme lots stayed untagged. `desk-public-rest` **v7** selects `position_episodes.thesis_id` — Worker CI alone is not enough after that field lands.
+Conservative backfill (do not extend): `CODA` → `earnings_gap_structure`; `tc-temp-laxhigh-*` PM lots → `weather_same_day_high`. Fed hike, Chicago weather, multi-thesis names (NBIS/CIFR/IREN), and all meme lots stayed untagged. `desk-public-rest` **v7** selects `position_episodes.thesis_id` — that ships with the Edge Function job, not the Worker.
 
 ## Read before size
 
