@@ -1,7 +1,16 @@
-# Deploys Worker grasshopper-desk (same path as `bun run desk:deploy`).
-# CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID are the only GitHub secrets this
-# job needs — the path that already shipped #38. Do not gate deploy on minting
-# a JWT from secrets that are not in Actions.
+# Public phone desk has two deploy paths. They are independent:
+#   1) Cloudflare Worker grasshopper-desk (this first job — same as `bun run desk:deploy`)
+#   2) Supabase Edge Function desk-public-rest (second job, path-filtered)
+# Worker deploy ≠ Edge Function deploy. A SPA/Worker-only push must not wait on
+# bun+wrangler for the function, and must not skip a function source change.
+#
+# Job 1 secrets (unchanged from #38): CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID.
+# Do not gate the Worker job on minting a JWT from secrets that are not in Actions.
+#
+# Job 2 secret: SUPABASE_ACCESS_TOKEN (Supabase personal access token with
+# permission to deploy Edge Functions on project xqungxapqicdmboniezz).
+# Create at https://supabase.com/dashboard/account/tokens and store as a GitHub
+# Actions repository secret with that exact name — do not invent a colliding name.
 name: Deploy public desk
 
 on:
@@ -37,3 +46,75 @@ jobs:
           packageManager: bun
           wranglerVersion: "4.125.0"
           command: deploy
+
+  # Public Worker calls this function without a user JWT. verify_jwt MUST stay
+  # false — supabase/config.toml [functions.desk-public-rest] already sets it,
+  # and --no-verify-jwt is passed so this deploy cannot silently re-enable JWT.
+  # Deploy this function only; do not `supabase functions deploy` with no name
+  # (that would also ship dashboard-publication / cloud-control).
+  deploy-desk-public-rest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: xqungxapqicdmboniezz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect desk-public-rest source changes
+        id: gate
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "desk-public-rest: workflow_dispatch — always deploy"
+            exit 0
+          fi
+          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "desk-public-rest: no previous SHA — deploy"
+            exit 0
+          fi
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --prune --depth=1 origin "$BEFORE"
+          fi
+          if git diff --name-only "$BEFORE" "$AFTER" -- supabase/functions/desk-public-rest/ | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "desk-public-rest: sources changed — deploy"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "desk-public-rest: no source changes — skip (Worker-only push; Worker job is independent)"
+          fi
+
+      - name: Skip Edge Function deploy
+        if: steps.gate.outputs.changed != 'true'
+        run: echo "Worker-only push; desk-public-rest unchanged."
+
+      - uses: supabase/setup-cli@v1
+        if: steps.gate.outputs.changed == 'true'
+        with:
+          version: latest
+
+      - name: Require SUPABASE_ACCESS_TOKEN
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
+            echo "Missing GitHub secret SUPABASE_ACCESS_TOKEN."
+            echo "Add a Supabase personal access token (Account → Access Tokens) so CI can deploy desk-public-rest."
+            exit 1
+          fi
+
+      - name: Deploy desk-public-rest (verify_jwt=false)
+        if: steps.gate.outputs.changed == 'true'
+        run: |
+          supabase functions deploy desk-public-rest \
+            --project-ref "$SUPABASE_PROJECT_REF" \
+            --no-verify-jwt

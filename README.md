@@ -219,18 +219,29 @@ That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and
 
 ### Deploy
 
-Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.github/workflows/deploy-public-desk.yml`: `desk:build` then `wrangler-action deploy`. That is the same Cloudflare path that shipped before #39. It needs only:
+Push to `main` (or **Actions → Deploy public desk → Run workflow**) runs `.github/workflows/deploy-public-desk.yml`. Two independent jobs — **Worker deploy ≠ Edge Function deploy**:
 
-| Secret | Value |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Edit Cloudflare Workers** |
-| `CLOUDFLARE_ACCOUNT_ID` | `97af2e2312077d4689e9a012ef5dde75` |
+```mermaid
+flowchart LR
+  push["push main / workflow_dispatch"]
+  push --> w["job deploy<br/>grasshopper-desk"]
+  push --> g{"desk-public-rest<br/>sources changed?"}
+  g -->|"yes or dispatch"| e["job deploy-desk-public-rest<br/>verify_jwt=false"]
+  g -->|no| s["skip function"]
+```
 
-Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_reader` JWT claim). Live PostgREST SELECTs go through the GET-only `desk-public-rest` function so merge does not wait on a JWT secret in Actions. **This workflow deploys the Worker only.** When `/bundle/public` keys change (`beliefs`, `lessons`, …), redeploy `supabase/functions/desk-public-rest` on Quantanamo — a stale function returns a bag without those tables and the Worker hydrates empty arrays. There is no publish command and no KV.
+1. **Worker** `grasshopper-desk` — `desk:build` then `wrangler-action deploy` on every push (same Cloudflare path as before #39).
+2. **Edge Function** `desk-public-rest` — only when `supabase/functions/desk-public-rest/**` changes, or on `workflow_dispatch`. `verify_jwt` stays **false** (the public Worker calls it without a user JWT). `supabase/config.toml` already sets that; CI also passes `--no-verify-jwt`.
+
+| Secret | Job | Value |
+|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Worker | Cloudflare API token with **Edit Cloudflare Workers** |
+| `CLOUDFLARE_ACCOUNT_ID` | Worker | `97af2e2312077d4689e9a012ef5dde75` |
+| `SUPABASE_ACCESS_TOKEN` | Edge Function | Supabase personal access token (Account → Access Tokens). Function job only; not used by the Worker job. |
+
+Reader credentials are Worker `vars` (publishable apikey + `role=desk_public_reader` JWT claim). Live PostgREST SELECTs go through the GET-only `desk-public-rest` function so merge does not wait on a JWT secret in Actions. A SPA/Worker-only push still skips the function. A stale function returns a bag without new `/bundle/public` keys and the Worker hydrates empty arrays (beliefs/`candidates` lesson from #50/#52). There is no publish command and no KV.
 
 The Worker is `grasshopper-desk` on `*.workers.dev` until a custom domain is attached. No sign-in on the public URL. Face ID / passkey stays on `bun run web:app` only. Local Worker preview: `bun run desk:build && bun run desk:dev` (port 8787) with `workers/desk/.dev.vars`.
-
-CI **Deploy public desk** ships the Cloudflare Worker only. New `/bundle/public` keys **or new SELECT fields** (e.g. `position_episodes.thesis_id`) also need `supabase functions deploy desk-public-rest` — Worker CI alone is not enough (beliefs/`candidates` lesson from #50/#52).
 
 ### Local operator vs public
 
