@@ -45,6 +45,11 @@ describe('exposed SECURITY DEFINER RPCs', () => {
     expect(sql).toContain("'url', 'stock', 'stocks', 'price', 'results', 'popular'");
     expect(sql).toContain("grant execute on function public.reject_junk_ontology_candidates");
     expect(sql).not.toMatch(/grant execute on function public\.reject_junk_ontology_candidates[\s\S]*to anon/);
+    expect(functionBlock(sql, 'private.ontology_theme_thesis_alias(')).toContain('security invoker');
+    expect(sql).toContain("when 'neocloud' then 'neocloud_compute'");
+    expect(sql).toContain("when 'earnings_events' then 'earnings_gap_structure'");
+    expect(sql).not.toMatch(/when 'ipo_events' then/);
+    expect(sql).not.toMatch(/grant execute on function private\.ontology_theme_thesis_alias[\s\S]*to anon/);
   });
 
   test('lesson incorporate RPC is an invoker wrapper over a private definer', async () => {
@@ -60,6 +65,42 @@ describe('exposed SECURITY DEFINER RPCs', () => {
 });
 
 const supabaseReady = await isSupabaseReady();
+
+describe.skipIf(!supabaseReady)('ontology theme thesis alias', () => {
+  test('Postgres resolves documented aliases and leaves ipo_events unmapped', async () => {
+    const present = await withDatabase(LOCAL.databaseUrl, (database) =>
+      database.query<{ ok: boolean }>(
+        "select to_regprocedure('private.ontology_theme_thesis_alias(text)') is not null as ok",
+      ),
+    );
+    if (!present[0]?.ok) {
+      throw new Error('private.ontology_theme_thesis_alias is missing — apply 20260914234500_ontology_theme_thesis_alias');
+    }
+    const rows = await withDatabase(LOCAL.databaseUrl, (database) =>
+      database.query<{ theme_id: string; alias: string | null }>(`
+        select x.theme_id, private.ontology_theme_thesis_alias(x.theme_id) as alias
+        from (values
+          ('neocloud'),
+          ('nuclear'),
+          ('ai_power'),
+          ('photonics'),
+          ('crypto_ai'),
+          ('earnings_events'),
+          ('ipo_events')
+        ) as x(theme_id)
+      `),
+    );
+    expect(Object.fromEntries(rows.map((row) => [row.theme_id, row.alias]))).toEqual({
+      neocloud: 'neocloud_compute',
+      nuclear: 'ai_power_nuclear',
+      ai_power: 'ai_power_nuclear',
+      photonics: 'semis_photonics',
+      crypto_ai: 'crypto',
+      earnings_events: 'earnings_gap_structure',
+      ipo_events: null,
+    });
+  });
+});
 
 describe.skipIf(!supabaseReady)('local rpc grants', () => {
   test('anon cannot call the retired ontology write RPC', async () => {

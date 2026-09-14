@@ -6,6 +6,9 @@ import {
   isJunkOntologyLabel,
   leanPendingCandidates,
   ONTOLOGY_JUNK_LABELS,
+  ONTOLOGY_THEME_THESIS_ALIASES,
+  ONTOLOGY_THEME_THESIS_UNALIASED,
+  ontologyThemeThesisAlias,
   parseReviewRequest,
   REVIEW_QUEUE_CAP,
   reviewHttpError,
@@ -83,42 +86,100 @@ describe('ontology candidate review queue', () => {
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
-  test('suggests an existing thesis on the proposed theme, never a new id', () => {
-    const theses = [thesis('semis_photonics', { name: 'Semiconductors and photonics' })];
+  test('resolves unlinked concept themes through the stable alias map', () => {
+    const live = [
+      thesis('neocloud_compute', { name: 'Neocloud and GPU compute' }),
+      thesis('ai_power_nuclear', { name: 'AI power bottleneck beneficiaries' }),
+      thesis('semis_photonics', { name: 'Semiconductors and photonics' }),
+      thesis('crypto', { name: 'Crypto and decentralized AI' }),
+      thesis('earnings_gap_structure', { name: 'Earnings gap structure' }),
+    ];
+    const themes = [
+      theme('neocloud'),
+      theme('neocloud_compute', { thesis_id: 'neocloud_compute', kind: 'theme' }),
+      theme('nuclear', { name: 'Nuclear energy' }),
+      theme('ai_power', { name: 'AI power' }),
+      theme('ai_power_nuclear', { thesis_id: 'ai_power_nuclear', kind: 'theme' }),
+      theme('photonics'),
+      theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' }),
+      theme('crypto_ai', { name: 'Crypto AI' }),
+      theme('crypto', { thesis_id: 'crypto', kind: 'theme' }),
+      theme('earnings_events', { name: 'Earnings events' }),
+      theme('earnings_gap_structure', { thesis_id: 'earnings_gap_structure', kind: 'theme' }),
+      theme('ipo_events', { name: 'IPO events' }),
+    ];
+    expect(ontologyThemeThesisAlias('neocloud')).toBe('neocloud_compute');
+    expect(ontologyThemeThesisAlias('nuclear')).toBe('ai_power_nuclear');
+    expect(ontologyThemeThesisAlias('ai_power')).toBe('ai_power_nuclear');
+    expect(ontologyThemeThesisAlias('photonics')).toBe('semis_photonics');
+    expect(ontologyThemeThesisAlias('crypto_ai')).toBe('crypto');
+    expect(ontologyThemeThesisAlias('earnings_events')).toBe('earnings_gap_structure');
+    expect(ontologyThemeThesisAlias('ipo_events')).toBeNull();
+    expect(ONTOLOGY_THEME_THESIS_UNALIASED).toEqual(['ipo_events']);
     expect(suggestedThesisId(
-      candidate(1, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
-      [theme('photonics'), theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
-      theses,
-    )).toBe('semis_photonics');
+      candidate(1, { proposed_theme_id: 'neocloud', proposed_label: 'SNDK' }),
+      themes,
+      live,
+    )).toBe('neocloud_compute');
     expect(suggestedThesisId(
-      candidate(2, { proposed_theme_id: 'semis_photonics', proposed_label: 'DOCN' }),
-      [theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
-      theses,
-    )).toBe('semis_photonics');
-    expect(suggestedThesisId(
-      candidate(3, { proposed_theme_id: null, proposed_label: 'Semiconductors and photonics' }),
-      [],
-      theses,
-    )).toBe('semis_photonics');
-    expect(reviewThesisHint(
-      candidate(1, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
-      [theme('photonics'), theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
-      theses,
-    )).toBe('Unlinked concept · fits Semiconductors and photonics');
-    expect(reviewThesisHint(
-      candidate(9, { candidate_type: 'term', proposed_theme_id: 'photonics', proposed_label: 'https' }),
-      [theme('photonics')],
-      theses,
-    )).toBeNull();
-    expect(suggestedThesisId(
-      candidate(4, { proposed_theme_id: 'nuclear', proposed_label: 'GEV' }),
-      [theme('nuclear', { name: 'Nuclear energy' })],
-      [thesis('ai_power_nuclear', { name: 'AI power bottleneck beneficiaries' })],
+      candidate(2, { proposed_theme_id: 'nuclear', proposed_label: 'GEV' }),
+      themes,
+      live,
     )).toBe('ai_power_nuclear');
     expect(suggestedThesisId(
-      candidate(5, { proposed_theme_id: 'ipo_events', proposed_label: 'Files', candidate_type: 'theme' }),
-      [theme('ipo_events', { name: 'IPO events' })],
-      theses,
+      candidate(3, { proposed_theme_id: 'ai_power', proposed_label: 'VST' }),
+      themes,
+      live,
+    )).toBe('ai_power_nuclear');
+    expect(suggestedThesisId(
+      candidate(4, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
+      themes,
+      live,
+    )).toBe('semis_photonics');
+    expect(suggestedThesisId(
+      candidate(5, { proposed_theme_id: 'crypto_ai', proposed_label: 'TAO-USD' }),
+      themes,
+      live,
+    )).toBe('crypto');
+    expect(suggestedThesisId(
+      candidate(6, { proposed_theme_id: 'earnings_events', proposed_label: 'DG' }),
+      themes,
+      live,
+    )).toBe('earnings_gap_structure');
+    expect(suggestedThesisId(
+      candidate(7, { proposed_theme_id: 'ipo_events', proposed_label: 'Files', candidate_type: 'theme' }),
+      themes,
+      live,
+    )).toBeNull();
+    expect(reviewThesisHint(
+      candidate(1, { proposed_theme_id: 'neocloud', proposed_label: 'SNDK' }),
+      themes,
+      live,
+    )).toBe('Unlinked concept · fits Neocloud and GPU compute');
+    expect(reviewThesisHint(
+      candidate(7, { proposed_theme_id: 'ipo_events', proposed_label: 'Files', candidate_type: 'theme' }),
+      themes,
+      live,
+    )).toBeNull();
+    expect(suggestedThesisId(
+      candidate(8, { proposed_theme_id: 'photonics', proposed_label: 'DOCN' }),
+      [theme('photonics', { thesis_id: 'quantum' }), theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
+      [thesis('quantum', { name: 'Quantum computing' }), ...live],
+    )).toBe('quantum');
+    expect(suggestedThesisId(
+      candidate(9, { proposed_theme_id: 'semis_photonics', proposed_label: 'DOCN' }),
+      [theme('semis_photonics', { thesis_id: 'semis_photonics', kind: 'theme' })],
+      live,
+    )).toBe('semis_photonics');
+    expect(suggestedThesisId(
+      candidate(10, { proposed_theme_id: null, proposed_label: 'Semiconductors and photonics' }),
+      [],
+      live,
+    )).toBe('semis_photonics');
+    expect(reviewThesisHint(
+      candidate(11, { candidate_type: 'term', proposed_theme_id: 'photonics', proposed_label: 'https' }),
+      themes,
+      live,
     )).toBeNull();
   });
 
@@ -145,6 +206,22 @@ describe('ontology candidate review queue', () => {
     expect(sql).toContain("review_note = 'junk_deny_list'");
     for (const label of ONTOLOGY_JUNK_LABELS) {
       expect(sql).toContain(`'${label}'`);
+    }
+  });
+
+  test('SQL alias map stays in sync with the documented pairs', async () => {
+    const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
+    const migration = await readFile(
+      join(import.meta.dir, '../../../supabase/migrations/20260914234500_ontology_theme_thesis_alias.sql'),
+      'utf8',
+    );
+    for (const source of [sql, migration]) {
+      expect(source).toContain('private.ontology_theme_thesis_alias');
+      expect(source).toContain('v_alias := private.ontology_theme_thesis_alias(v_theme_id)');
+      expect(source).not.toMatch(/when 'ipo_events' then/);
+      for (const [from, to] of Object.entries(ONTOLOGY_THEME_THESIS_ALIASES)) {
+        expect(source).toContain(`when '${from}' then '${to}'`);
+      }
     }
   });
 });

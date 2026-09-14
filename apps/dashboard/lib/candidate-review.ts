@@ -48,21 +48,38 @@ export function liveThesesForLink(theses: readonly ThesisRow[]): ThesisRow[] {
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
-function idHasToken(haystack: string, needle: string): boolean {
-  if (!needle || needle.length < 4) return false;
-  return haystack === needle
-    || haystack.startsWith(`${needle}_`)
-    || haystack.endsWith(`_${needle}`)
-    || haystack.includes(`_${needle}_`);
+/**
+ * Unlinked concept theme → sibling theme whose thesis already exists.
+ * `ontology_themes.thesis_id` is UNIQUE, so the concept cannot bind that
+ * thesis. Keep in sync with `private.ontology_theme_thesis_alias`.
+ */
+export const ONTOLOGY_THEME_THESIS_ALIASES = {
+  neocloud: 'neocloud_compute',
+  nuclear: 'ai_power_nuclear',
+  ai_power: 'ai_power_nuclear',
+  photonics: 'semis_photonics',
+  crypto_ai: 'crypto',
+  earnings_events: 'earnings_gap_structure',
+} as const;
+
+/** Concept themes with no live sibling — leave for a human. Do not invent. */
+export const ONTOLOGY_THEME_THESIS_UNALIASED = ['ipo_events'] as const;
+
+export function ontologyThemeThesisAlias(themeId: string | null | undefined): string | null {
+  const id = String(themeId ?? '').trim();
+  if (!id) return null;
+  if ((ONTOLOGY_THEME_THESIS_UNALIASED as readonly string[]).includes(id)) return null;
+  return ONTOLOGY_THEME_THESIS_ALIASES[id as keyof typeof ONTOLOGY_THEME_THESIS_ALIASES] ?? null;
 }
 
-function thesisFitsUnlinkedTheme(theme: OntologyThemeRow, thesis: ThesisRow): boolean {
-  if (idHasToken(thesis.id, theme.id) || idHasToken(theme.id, thesis.id)) return true;
-  const themeName = theme.name.trim().toLowerCase();
-  if (themeName.length >= 4 && thesis.name.trim().toLowerCase().includes(themeName)) return true;
-  const themeHead = theme.id.split('_')[0] ?? '';
-  const thesisHead = thesis.id.split('_')[0] ?? '';
-  return themeHead.length >= 6 && themeHead === thesisHead;
+function thesisIdFromTheme(
+  theme: Pick<OntologyThemeRow, 'id' | 'thesis_id'> | undefined,
+  liveIds: ReadonlySet<string>,
+): string | null {
+  if (!theme) return null;
+  if (theme.thesis_id && liveIds.has(theme.thesis_id)) return theme.thesis_id;
+  if (liveIds.has(theme.id)) return theme.id;
+  return null;
 }
 
 /** Prefer an existing thesis already bound to the proposed theme. Never invents an id. */
@@ -73,14 +90,13 @@ export function suggestedThesisId(
 ): string | null {
   const ids = new Set(theses.map((row) => row.id));
   const theme = themes.find((row) => row.id === candidate.proposed_theme_id);
-  if (theme?.thesis_id && ids.has(theme.thesis_id)) return theme.thesis_id;
-  if (theme && ids.has(theme.id)) return theme.id;
-  if (theme && !theme.thesis_id) {
-    const fitted = theses
-      .filter((row) => thesisFitsUnlinkedTheme(theme, row))
-      .slice()
-      .sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-    if (fitted[0]) return fitted[0].id;
+  const bound = thesisIdFromTheme(theme, ids);
+  if (bound) return bound;
+  const alias = ontologyThemeThesisAlias(candidate.proposed_theme_id);
+  if (alias) {
+    const aliased = thesisIdFromTheme(themes.find((row) => row.id === alias), ids);
+    if (aliased) return aliased;
+    if (ids.has(alias)) return alias;
   }
   const label = candidate.proposed_label.trim().toLowerCase();
   if (!label) return null;
