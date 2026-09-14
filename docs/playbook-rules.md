@@ -111,3 +111,17 @@ insert into public.belief_updates (
 ```
 
 `meta.rules` is a jsonb string array of ledger slugs (snake_case). Optional `research_lesson_id` links a close to an existing lesson. QUANTANAMO, ODDSBORNE, and BANDIT worker roles may INSERT. `desk_public_reader` is SELECT only.
+
+## Incorporate an open lesson
+
+Theses shows open `research_lessons` first. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
+
+```ts
+{ "lesson_id": 37 }
+```
+
+```sql
+select public.incorporate_research_lesson(37);
+```
+
+The RPC sets `research_lessons.incorporated = true` and writes one `belief_updates` row with `meta.kind = 'playbook_rule'`, `meta.research_lesson_id`, `meta.source = 'operator_incorporate'`, and `meta.rules = [lesson_type]`. Rationale is the lesson summary. Confidence is left null — do not invent a move. Re-runnable: a second call returns the existing belief (`replayed: true`) and does not insert another. See [`docs/lesson-incorporate.md`](lesson-incorporate.md).

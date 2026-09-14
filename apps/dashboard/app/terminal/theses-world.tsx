@@ -11,6 +11,7 @@ import {
 } from '../../lib/thesis-roster';
 import { CandidateReviewQueue } from './candidate-review';
 import { HoldingIcon } from './holding-icon';
+import { LessonQueue } from './lesson-queue';
 import { toneForStatus } from './format';
 
 export function ThesesWorld({
@@ -19,6 +20,7 @@ export function ThesesWorld({
   selectedId,
   onSelect,
   canReview = false,
+  canIncorporate = false,
   onReviewed,
 }: {
   desk: DeskPayload;
@@ -26,6 +28,7 @@ export function ThesesWorld({
   selectedId?: string;
   onSelect?: (id: string) => void;
   canReview?: boolean;
+  canIncorporate?: boolean;
   onReviewed?: () => void;
 }) {
   const roster = assembleThesisRoster(desk).rows;
@@ -87,6 +90,7 @@ export function ThesesWorld({
           Claims on the ledger. Stance, status, and evidence — not book marks.
         </p>
       </header>
+      <LessonQueue desk={desk} canIncorporate={canIncorporate} onIncorporated={onReviewed} />
       <CandidateReviewQueue desk={desk} canReview={canReview} onReviewed={onReviewed} />
       {roster.length ? (
         <ul className="thesis-list" aria-label="Theses" aria-hidden={reading ? true : undefined}>
