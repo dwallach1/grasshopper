@@ -353,8 +353,8 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
                last_seen_at, review_note
         from public.ontology_candidates
         where source_count >= 2
-        order by status, source_count desc, score desc
-        limit 100
+        order by status, score desc, source_count desc, id desc
+        limit 200
       `,
       sql`
         select id, actor_id, entity_type, entity_key, action, created_at

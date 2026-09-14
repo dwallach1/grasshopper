@@ -50,27 +50,83 @@ const PUBLIC_OMIT = new Set([
 ]);
 
 export const PUBLIC_CANDIDATE_CAP = 40;
+/** Fetch window before ranking. Must stay ≥ cap so memberships are not crowded out. */
+export const PUBLIC_CANDIDATE_FETCH = 200;
+
+/** Exact normalized labels that are not ontology. Keep in sync with `private.ontology_label_is_junk`. */
+export const ONTOLOGY_JUNK_LABELS = [
+  'http',
+  'https',
+  'www',
+  't.co',
+  'url',
+  'stock',
+  'stocks',
+  'price',
+  'results',
+  'popular',
+] as const;
+
+const ONTOLOGY_URL_LABEL_RE = /(^| )(http|https|www|t\.co)( |$)/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Pending only, ledger score then source_count. Does not invent or rewrite scores. */
-export function publicPendingCandidates(rows: unknown): unknown[] {
+export function normalizeOntologyLabel(value: unknown): string {
+  return String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** URL fragments, ticker-shaped junk, and documented stop labels. Does not invent a score. */
+export function isJunkOntologyLabel(label: unknown, _candidateType?: unknown): boolean {
+  const normalized = normalizeOntologyLabel(label);
+  if (!normalized) return true;
+  if (ONTOLOGY_URL_LABEL_RE.test(normalized)) return true;
+  return (ONTOLOGY_JUNK_LABELS as readonly string[]).includes(normalized);
+}
+
+/** Membership, then theme bound to an existing theme id, then terms, then unbound theme clusters. */
+export function ontologyReviewTypeRank(row: Record<string, unknown>): number {
+  const type = String(row.candidate_type ?? '');
+  if (type === 'membership') return 0;
+  if (type === 'theme' && String(row.proposed_theme_id ?? '').trim()) return 1;
+  if (type === 'theme') return 3;
+  return 2;
+}
+
+function ontologyReviewKey(row: Record<string, unknown>): string {
+  return `${row.candidate_type ?? ''}:${normalizeOntologyLabel(row.proposed_label)}`;
+}
+
+function compareOntologyReviewRows(left: Record<string, unknown>, right: Record<string, unknown>): number {
+  const type = ontologyReviewTypeRank(left) - ontologyReviewTypeRank(right);
+  if (type !== 0) return type;
+  const score = Number(right.score ?? 0) - Number(left.score ?? 0);
+  if (score !== 0) return score;
+  const sources = Number(right.source_count ?? 0) - Number(left.source_count ?? 0);
+  if (sources !== 0) return sources;
+  return Number(right.id ?? 0) - Number(left.id ?? 0);
+}
+
+/**
+ * Pending only. Drops deny-list junk and already-rejected labels in the same
+ * payload, then membership / real theme before terms. Ledger score is unchanged.
+ */
+export function publicPendingCandidates(rows: unknown, cap = PUBLIC_CANDIDATE_CAP): unknown[] {
   if (!Array.isArray(rows)) return [];
-  return rows
-    .filter((row) => isRecord(row) && row.status === 'pending')
+  const records = rows.filter(isRecord);
+  const rejected = new Set(
+    records
+      .filter((row) => row.status === 'rejected')
+      .map((row) => ontologyReviewKey(row)),
+  );
+  return records
+    .filter((row) => row.status === 'pending')
+    .filter((row) => !isJunkOntologyLabel(row.proposed_label, row.candidate_type))
+    .filter((row) => !rejected.has(ontologyReviewKey(row)))
     .slice()
-    .sort((left, right) => {
-      const a = left as Record<string, unknown>;
-      const b = right as Record<string, unknown>;
-      const score = Number(b.score ?? 0) - Number(a.score ?? 0);
-      if (score !== 0) return score;
-      const sources = Number(b.source_count ?? 0) - Number(a.source_count ?? 0);
-      if (sources !== 0) return sources;
-      return Number(b.id ?? 0) - Number(a.id ?? 0);
-    })
-    .slice(0, PUBLIC_CANDIDATE_CAP);
+    .sort(compareOntologyReviewRows)
+    .slice(0, Math.max(0, cap));
 }
 
 /** Array fields the phone desk indexes (`tests[0]`, `.filter`, `.map`). Missing → []. */

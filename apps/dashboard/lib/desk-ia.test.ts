@@ -232,6 +232,10 @@ describe('desk IA smoke', () => {
     expect(world).toContain('canReview={canReview}');
     expect(css).toContain('.review-queue');
     expect(css).toContain('.review-card');
+    const review = await readDashboard('app/terminal/candidate-review.tsx');
+    expect(review).toContain('reviewThesisHint');
+    expect(review).toContain('data-candidate-type');
+    expect(review).not.toContain('/api/ontology/review');
     expect(world).not.toContain('ThesisIslandView');
     expect(world).not.toContain('ThesisIslandPoster');
     expect(world).not.toContain('assembleThesisDistricts');

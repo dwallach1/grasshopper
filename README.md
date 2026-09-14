@@ -176,7 +176,7 @@ Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), 
 | Tests | `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts` (Financial Datasets prices) |
 | Team | `desk_domains`, `desk_agents`, `desk_domain_stewards`, `desk_accounts` (soft stewardship; public Worker SELECT as `desk_public_reader`) |
 | Operators | `ledger_operators` + `is_ledger_operator()` (private DEFINER, public INVOKER wrapper) |
-| Ontology review | `ontology_candidates` + `review_ontology_candidate` (operator write; public phone SELECT only) |
+| Ontology review | `ontology_candidates` + `review_ontology_candidate` / `reject_junk_ontology_candidates` (operator write; public phone SELECT only) |
 
 The desk is read-only except operator ontology review. QUANTANAMO writes the rest of the ledger. See [`LOCAL.md`](LOCAL.md) and [`docs/ontology-review.md`](docs/ontology-review.md).
 
