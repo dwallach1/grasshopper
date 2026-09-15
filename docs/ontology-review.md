@@ -8,7 +8,7 @@ Theses (parchment) has a **To review** queue: pending candidates, **membership**
 
 Promote / reject / merge buttons render only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 
-Memberships on unlinked concept themes (`photonics`, `neocloud`, `nuclear`, `ai_power`, …) get a calm parchment hint when they already fit a live thesis. Promote still uses `review_ontology_candidate` rules — it does not invent a thesis for junk.
+Memberships on unlinked concept themes (`photonics`, `neocloud`, `nuclear`, `ai_power`, …) get a calm parchment hint when the stable alias map already points at a live thesis. Promote still uses `review_ontology_candidate` rules — it does not invent a thesis for junk.
 
 ## Deny-list (safe auto-reject)
 
@@ -54,7 +54,19 @@ Each review call updates `ontology_candidates.status` and inserts one `ontology_
 
 ## Theme ↔ thesis
 
-Promote prefers an existing thesis already bound to the proposed theme, or a thesis whose id/name matches the label. Unlinked concepts also nudge toward a live thesis whose id contains the concept (`photonics` → `semis_photonics`, `neocloud` → `neocloud_compute`) or whose name contains the concept name. `ontology_themes.thesis_id` is unique — a concept such as `photonics` is not forced onto `semis_photonics` if that thesis is already taken. A thin `forming` thesis stub is created only for a **theme** candidate with no match (same pattern as knowledge auto-promote). Merge requires an existing thesis id. Do not invent theses for junk clusters (`Another`, `Files`, `Github`).
+Promote prefers an existing thesis already bound to the proposed theme (`ontology_themes.thesis_id`), then a thesis whose id/name matches the label. Unlinked concept themes resolve through a **stable alias map** (`private.ontology_theme_thesis_alias`, same pairs as the parchment hint / operator promote suggestion):
+
+| Concept theme | Live thesis |
+| --- | --- |
+| `neocloud` | `neocloud_compute` |
+| `nuclear` | `ai_power_nuclear` |
+| `ai_power` | `ai_power_nuclear` |
+| `photonics` | `semis_photonics` |
+| `crypto_ai` | `crypto` |
+| `earnings_events` | `earnings_gap_structure` |
+| `ipo_events` | *(none — skip / leave for a human)* |
+
+`thesis_id` is unique on themes, so the concept is **not** bound to the sibling thesis. A promote of `neocloud:SNDK` still writes membership on `neocloud` and returns `thesis_id = neocloud_compute` when that thesis exists. A thin `forming` thesis stub is created only for a **theme** candidate with no match (same pattern as knowledge auto-promote). Merge requires an existing thesis id. Do not invent theses for junk clusters (`Another`, `Files`, `Github`).
 
 ## Public phone
 
