@@ -17,9 +17,9 @@ The public desk draws [Liveline](https://benji.org/liveline) from `/api/desk`. T
 
 Personal Robinhood books never enter the QUANTANAMO series (`agentic` label only). Duplicate timestamps keep the later row. Oldest first.
 
-`%` on Board ALL is `((value - start) / start) * 100` against **that book’s own start**. Missing or non-positive start → no % series, not `0%`. That is why ALL can share one axis without FX.
+`%` in Board standings is `((value - start) / start) * 100` against **that book’s own start**. Missing or non-positive start → not ranked, not `0%`. Board hero is QUANTANAMO Agentic NAV only — one parchment Liveline with `showValue`. Idle (`paused`) when that book’s marks are stale so the spline does not fake a walk. Phone swipe / pull-to-refresh stay first: the hero frame is `pointer-events: none` and Liveline scrub is off.
 
-Assembler: `apps/dashboard/lib/desk-liveline.ts` (`assembleLiveline`).
+Assembler: `apps/dashboard/lib/desk-liveline.ts` (`assembleLiveline`, `lerpMark`, `livelineIdle`).
 
 ## Fill clocks
 
@@ -27,7 +27,7 @@ Fill rows (`fill_log.at`, `pm_fills.executed_at`, `meme_fills.executed_at`) do *
 
 ## Windows
 
-Liveline’s default window is 30 seconds — useless for a snapshot desk. We set `window` to `now − firstPoint` and expose `1d` / `7d` / `30d` / `all` when the span is long enough. An empty book uses Liveline’s empty state (`not in ledger`). The public boot screen uses Liveline `loading` until `/api/desk` returns.
+Liveline’s default window is 30 seconds — useless for a snapshot desk. Board hero uses the full `now − firstPoint` span with no window chips. Compact Book OPEN sparks do the same. An empty book uses Liveline’s empty state (`not in ledger`). The public boot screen uses Liveline `loading` until `/api/desk` returns.
 
 ## What is not a series
 

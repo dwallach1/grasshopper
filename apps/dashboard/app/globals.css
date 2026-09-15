@@ -4197,7 +4197,8 @@ a:focus-visible {
 }
 
 .line-board .line-frame > div:has(canvas) {
-  height: min(64dvh, 560px);
+  height: min(38dvh, 280px);
+  min-height: 196px;
 }
 
 .visually-hidden {
@@ -4442,7 +4443,8 @@ a:focus-visible {
   }
 
   .line-board .line-frame > div:has(canvas) {
-    height: min(48dvh, 380px);
+    height: min(34dvh, 240px);
+    min-height: 180px;
   }
 
   .line-mast h1 {
@@ -4479,7 +4481,7 @@ a:focus-visible {
   }
 
   .line-hero .line-frame > div:has(canvas) {
-    height: 560px;
+    height: 280px;
   }
 }
 
@@ -5561,13 +5563,38 @@ a:focus-visible {
   padding: 6px;
   border: 1px solid var(--card-line);
   border-radius: var(--r-card);
-  background: #0c0e12;
+  background: var(--card);
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 
+.term.is-line .line-hero.line-art .line-frame {
+  pointer-events: none;
+  touch-action: pan-y;
+}
+
+.term.is-line .line-hero.line-art .line-frame.is-parchment > div:has(canvas) {
+  background: transparent;
+}
+
 .term.is-line .line-hero.line-art .line-frame > div:has(canvas) {
   border-radius: 10px;
+}
+
+.term.is-line .line-hero.line-art .line-frame.is-quiet > div:has(canvas) {
+  height: min(32dvh, 240px);
+  min-height: 168px;
+}
+
+.term.is-line .line-hero.line-art .line-frame.is-parchment > div > span:first-of-type {
+  font-family: var(--font-display) !important;
+  font-size: clamp(28px, 8vw, 36px) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.term.is-line .line-hero.line-art.is-idle {
+  box-shadow: none;
 }
 
 .term.is-line .line-standings {
@@ -5880,8 +5907,9 @@ a:focus-visible {
     font-size: 32px;
   }
 
-  .term.is-line .line-hero.line-art .line-frame > div:has(canvas) {
-    height: min(40dvh, 300px);
-    min-height: 200px;
+  .term.is-line .line-hero.line-art .line-frame > div:has(canvas),
+  .term.is-line .line-hero.line-art .line-frame.is-quiet > div:has(canvas) {
+    height: min(30dvh, 220px);
+    min-height: 160px;
   }
 }

@@ -7,7 +7,10 @@ import {
   formatLivelineTime,
   formatLivelineValue,
   LIVELINE_EMPTY,
+  LIVELINE_LERP_SPEED,
+  LIVELINE_PARCHMENT,
   livelineDegen,
+  livelineIdle,
   livelineWindows,
   seriesSpanSecs,
   type LivelineClock,
@@ -36,6 +39,12 @@ export type DeskLivelineProps = {
   referenceLine?: LivelineReference;
   /** Thin Book OPEN sparkline — no window chips, no degen, no clip box. */
   compact?: boolean;
+  /** Warm parchment stroke/fill. Board hero NAV. */
+  parchment?: boolean;
+  /** No window chips, no scrub, no grid — phone swipe/pull stay first. */
+  quiet?: boolean;
+  /** Freeze lerp/pulse when ledger marks are stale. */
+  idle?: boolean;
 };
 
 export function DeskLiveline({
@@ -52,8 +61,12 @@ export function DeskLiveline({
   className,
   referenceLine,
   compact = false,
+  parchment = false,
+  quiet = false,
+  idle = false,
 }: DeskLivelineProps) {
   const motion = useMotionPrefs();
+  const freeze = livelineIdle(idle, motion.reduce, motion.hidden);
   const nowSecs = (motion.nowMs ?? Date.now()) / 1000;
   const overlay = series ?? [];
   const clocks = overlay.length
@@ -61,7 +74,7 @@ export function DeskLiveline({
     : points;
   const span = seriesSpanSecs(clocks, nowSecs);
   const windows = useMemo(() => livelineWindows(clocks, nowSecs), [clocks, nowSecs]);
-  const windowSecs = compact ? span : (windows[windows.length - 1]?.secs ?? span);
+  const windowSecs = compact || quiet ? span : (windows[windows.length - 1]?.secs ?? span);
   const multi: LivelineSeries[] = overlay
     .filter((row) => row.data.length > 0)
     .map((row) => ({
@@ -77,60 +90,71 @@ export function DeskLiveline({
     ? solo.value
     : (value ?? (data[data.length - 1]?.value ?? 0));
   const empty = !loading && data.length === 0 && multi.length === 0;
-  const allowDegen = !compact && degen && livelineDegen(returnPct) && !motion.reduce && !motion.coarse;
+  const allowDegen = !quiet && !compact && degen && livelineDegen(returnPct) && !motion.reduce && !motion.coarse;
   const extraOnPoints = points.length > 0 && multi.length > 0;
   const livelineSeries = extraOnPoints
     ? [
       {
         id: 'mark',
         label: 'mark',
-        color,
+        color: parchment ? LIVELINE_PARCHMENT : color,
         data: [...points],
         value: latest,
       },
       ...multi,
     ]
     : (multi.length > 1 ? multi : undefined);
+  const stroke = parchment ? LIVELINE_PARCHMENT : (solo?.color ?? color);
+  const frameClass = [
+    'line-frame',
+    quiet ? 'is-quiet' : '',
+    parchment ? 'is-parchment' : '',
+    freeze ? 'is-idle' : '',
+    className ?? '',
+  ].filter((part) => part.length > 0).join(' ');
 
   return (
     <div
-      className={className ? `line-frame ${className}` : 'line-frame'}
+      className={frameClass}
       style={compact ? { height: 72 } : undefined}
     >
       <Liveline
         data={data}
         value={latest}
         series={livelineSeries}
-        theme="dark"
-        color={solo?.color ?? color}
+        theme={parchment ? 'light' : 'dark'}
+        color={stroke}
         window={windowSecs}
-        windows={compact ? undefined : windows}
+        windows={compact || quiet ? undefined : windows}
         windowStyle="text"
         seriesToggleCompact={motion.coarse}
-        grid={!compact}
+        grid={!compact && !quiet}
         badge={false}
-        momentum={!motion.reduce}
+        momentum={!freeze}
         fill
-        pulse={!motion.reduce}
-        scrub
+        pulse={!freeze}
+        scrub={!quiet && !compact && !motion.coarse}
         exaggerate
         showValue={showValue && multi.length < 2}
-        valueMomentumColor
+        valueMomentumColor={showValue && !freeze}
         degen={allowDegen ? { scale: 0.7, downMomentum: true } : false}
         loading={loading}
-        paused={motion.reduce || motion.hidden}
+        paused={freeze}
+        lerpSpeed={LIVELINE_LERP_SPEED}
         emptyText={empty ? emptyText : LIVELINE_EMPTY}
         formatValue={(v) => formatLivelineValue(v, unit)}
-        formatTime={compact ? () => '' : (t) => formatLivelineTime(t, span)}
+        formatTime={compact || quiet ? () => '' : (t) => formatLivelineTime(t, span)}
         referenceLine={referenceLine}
         padding={compact
           ? { top: 6, right: 36, bottom: 6, left: 4 }
-          : {
-            top: showValue ? 52 : 16,
-            right: multi.length > 1 ? 88 : 16,
-            bottom: 28,
-            left: 12,
-          }}
+          : quiet
+            ? { top: showValue ? 48 : 12, right: 14, bottom: 18, left: 10 }
+            : {
+              top: showValue ? 52 : 16,
+              right: multi.length > 1 ? 88 : 16,
+              bottom: 28,
+              left: 12,
+            }}
       />
     </div>
   );
