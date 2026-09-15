@@ -91,6 +91,12 @@ describe('ontology candidate review queue', () => {
     expect(queue.map((row) => row.proposed_label)).toEqual(['DOCN', 'AEHR', 'power']);
     expect(queue[0]?.score).toBe(100);
     expect(queue.every((row) => row.status === 'pending')).toBe(true);
+    const singleSource = leanPendingCandidates([
+      candidate(453, { candidate_type: 'term', proposed_label: 'photonics', score: 95, source_count: 2 }),
+      candidate(5328, { candidate_type: 'membership', proposed_label: 'AVGO', score: 100, source_count: 1 }),
+    ]);
+    expect(singleSource.map((row) => row.proposed_label)).toEqual(['AVGO', 'photonics']);
+    expect(singleSource[0]?.source_count).toBe(1);
     expect(isJunkOntologyLabel('https t.co')).toBe(true);
     expect(isJunkOntologyLabel('POPULAR', 'membership')).toBe(true);
     expect(isJunkOntologyLabel('VARCHAR', 'membership')).toBe(true);

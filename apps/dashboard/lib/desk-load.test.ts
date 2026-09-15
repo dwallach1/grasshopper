@@ -57,7 +57,10 @@ describe('desk load path', () => {
     expect(live).toContain('mapBeliefs(bag.beliefs)');
     expect(live).toContain("mapLessons(bag.lessons)");
     expect(live).toContain('mapCandidates(bag.candidates)');
-    expect(live).toContain('score.desc,source_count.desc,id.desc&limit=200');
+    expect(live).toContain('candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200');
+    expect(live).not.toContain('source_count=gte.2');
+    expect(ledger).not.toContain('where source_count >= 2');
+    expect(ledger).toContain('order by candidate_type, status, score desc, source_count desc, id desc');
     expect(ledger).toContain("meta->>'untagged'");
     expect(live).toContain('untagged:meta->>untagged');
   });

@@ -129,6 +129,21 @@ describe('public desk snapshot contract', () => {
     expect((ranked[0] as { score: number }).score).toBe(100);
   });
 
+  test('score-100 source_count=1 membership beats score-95 source_count=2 term when both are pending', () => {
+    const ranked = publicPendingCandidates([
+      { id: 453, status: 'pending', score: 95, source_count: 2, proposed_label: 'photonics', candidate_type: 'term' },
+      { id: 5328, status: 'pending', score: 100, source_count: 1, proposed_label: 'AVGO', candidate_type: 'membership' },
+    ]);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'AVGO',
+      'photonics',
+    ]);
+    expect((ranked[0] as { candidate_type: string; source_count: number }).candidate_type).toBe('membership');
+    expect((ranked[0] as { source_count: number }).source_count).toBe(1);
+    expect((ranked[1] as { candidate_type: string; source_count: number }).candidate_type).toBe('term');
+    expect((ranked[1] as { source_count: number }).source_count).toBe(2);
+  });
+
   test('SQL and listicle whole labels are junk; tickers and theme words are not', () => {
     for (const label of [
       'BY', 'BIGINT', 'DATE', 'DOUBLE', 'SELECT', 'IN', 'VARCHAR', 'TIMESTAMP',
