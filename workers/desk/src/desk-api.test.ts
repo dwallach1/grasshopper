@@ -178,6 +178,9 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("mode === 'public'");
     expect(fn).toContain("'candidates'");
     expect(fn).toContain('status=eq.pending');
+    expect(fn).toContain('candidate_type.asc,score.desc,source_count.desc,id.desc&limit=200');
+    expect(fn).toContain('candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200');
+    expect(fn).not.toContain('source_count=gte.2');
     expect(fn).toContain('id.desc&limit=200');
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");

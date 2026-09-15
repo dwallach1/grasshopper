@@ -4,7 +4,7 @@ Quantanamo collects `ontology_candidates`. Review decides. The phone is read-onl
 
 ## What the desk shows
 
-Theses (parchment) has a **To review** queue: pending candidates, **membership** (and theme rows already bound to a theme id) before raw `term` noise, then ledger `score` then `source_count`, cap 40. Scores are not invented. Deny-list junk is omitted even if it is still `pending`. Public `/api/desk` ranks the same way. `ontology_management_actions` stay off the public envelope.
+Theses (parchment) has a **To review** queue: pending candidates, **membership** (and theme rows already bound to a theme id) before raw `term` noise, then ledger `score` then `source_count`, cap 40. Scores are not invented. Deny-list junk is omitted even if it is still `pending`. Fetch is pending (public) with membership-first SQL order and **no** `source_count >= 2` gate — most live memberships are `source_count=1` and would never enter a 200-row score window otherwise. Ranking + the junk deny-list still quality-filter. Public `/api/desk` ranks the same way. `ontology_management_actions` stay off the public envelope.
 
 Promote / reject / merge buttons render only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 
@@ -72,7 +72,7 @@ Promote prefers an existing thesis already bound to the proposed theme (`ontolog
 
 ## Public phone
 
-Read-only. `desk-public-rest` `/bundle/public` selects pending candidates (`PUBLIC_KEYS` includes `candidates`, fetch 200 then rank to 40). Worker deploy ≠ Edge Function deploy. CI deploys `desk-public-rest` when `supabase/functions/desk-public-rest/**` changes (or `workflow_dispatch`), with `verify_jwt=false`. Manual fallback:
+Read-only. `desk-public-rest` `/bundle/public` selects pending candidates (`PUBLIC_KEYS` includes `candidates`, fetch 200 ordered `candidate_type.asc,score.desc,source_count.desc,id.desc`, then rank to 40). No `source_count=gte.2` on that fetch. Worker deploy ≠ Edge Function deploy. CI deploys `desk-public-rest` when `supabase/functions/desk-public-rest/**` changes (or `workflow_dispatch`), with `verify_jwt=false`. Manual fallback:
 
 ```sh
 supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --no-verify-jwt
@@ -82,7 +82,7 @@ supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --
 
 ## Live path (Quantanamo)
 
-Applied. `desk-public-rest` **v6** includes `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
+Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
 
 ```sql
 select public.reject_junk_ontology_candidates();
