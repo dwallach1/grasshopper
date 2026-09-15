@@ -19,9 +19,11 @@ Normalized label (lowercase, collapsed space) is junk when:
 - it is empty
 - it contains a URL token: `http`, `https`, `www`, `t.co` (so `https t.co` matches)
 - it is one of: `url`, `stock`, `stocks`, `price`, `results`, `popular`
+- it is a SQL/schema token as the **whole** label: `select`, `bigint`, `varchar`, `timestamp`, `in`, `by`, `order`, `pt`, `arr`, `cpu`, `mw`, `llc`, …
+- it is a listicle/section header as the **whole** label: `another`, `files`, `github`, `latest`, `contents`, …
 - it is an active `ontology_lexicon.candidate_stopword` as the **whole** label (`about`, `this`, …)
 
-This is **not** a new score. `power`, `demand`, `energy`, `photonics` stay for a human — they are ontology vocabulary, just ranked below memberships.
+This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear` stay for a human — they are ontology vocabulary (and valid theme names), just ranked below memberships. Whole-label SQL/listicle stopwords still reject even when grind proposed them as memberships.
 
 Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`):
 
