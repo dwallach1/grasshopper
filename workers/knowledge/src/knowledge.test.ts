@@ -152,9 +152,9 @@ describe('worker knowledge primitives', () => {
       terms: [],
       memberships: [],
       lexicon: [{ token: 'about', token_type: 'candidate_stopword', weight: 0 }],
-      symbols: ['VST', 'STOCKS'],
+      symbols: ['VST', 'STOCKS', 'BIGINT', 'NVDA'],
     });
-    const bookmark = { id: 'bookmark-1', text: 'https t.co and STOCKS after earnings about VST.' };
+    const bookmark = { id: 'bookmark-1', text: 'https t.co and STOCKS BIGINT NVDA after earnings about VST.' };
     const classified = parseOntologyAiOutput({ analyses: [{
       bookmark_id: bookmark.id,
       market_relevance: 40,
@@ -162,7 +162,7 @@ describe('worker knowledge primitives', () => {
       claim_summary: '',
       claim_confidence: 0,
       claim_evidence_excerpt: '',
-      symbols: ['VST', 'STOCKS'],
+      symbols: ['VST', 'STOCKS', 'BIGINT', 'NVDA'],
       themes: [],
       candidates: [{
         candidate_type: 'term', theme_id: 'power', label: 'https t.co',
@@ -173,14 +173,26 @@ describe('worker knowledge primitives', () => {
         description: 'Not a ticker.',
         confidence: 85, evidence_excerpt: 'STOCKS after',
       }, {
+        candidate_type: 'membership', theme_id: 'power', label: 'BIGINT',
+        description: 'SQL type, not a ticker.',
+        confidence: 80, evidence_excerpt: 'STOCKS BIGINT NVDA',
+      }, {
+        candidate_type: 'membership', theme_id: 'power', label: 'NVDA',
+        description: 'Real ticker.',
+        confidence: 88, evidence_excerpt: 'BIGINT NVDA after',
+      }, {
         candidate_type: 'term', theme_id: 'power', label: 'about',
         description: 'Stopword.',
         confidence: 40, evidence_excerpt: 'about VST',
+      }, {
+        candidate_type: 'term', theme_id: 'power', label: 'nuclear',
+        description: 'Theme vocabulary.',
+        confidence: 70, evidence_excerpt: 'after earnings',
       }],
     }] }, [{
       id: bookmark.id, text: bookmark.text, contextAnnotations: [], bookmark, createdAt: '2026-08-24T12:00:00Z',
     }], catalog);
-    expect(classified[0]?.candidates).toEqual([]);
+    expect(classified[0]?.candidates.map((row) => row.label)).toEqual(['NVDA', 'nuclear']);
   });
 
   test('fails closed when ontology AI omits analyses', () => {

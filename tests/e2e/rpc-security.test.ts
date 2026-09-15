@@ -42,7 +42,10 @@ describe('exposed SECURITY DEFINER RPCs', () => {
     expect(functionBlock(sql, 'public.reject_junk_ontology_candidates()')).toContain('security invoker');
     expect(functionBlock(sql, 'private.reject_junk_ontology_candidates()')).toContain('security definer');
     expect(sql).toContain('junk_deny_list');
-    expect(sql).toContain("'url', 'stock', 'stocks', 'price', 'results', 'popular'");
+    expect(sql).toContain("'stock', 'stocks', 'price', 'results', 'popular'");
+    expect(sql).toContain("'by', 'in', 'from', 'where', 'select', 'order'");
+    expect(sql).toContain("'arr', 'pt', 'cpu', 'mw', 'llc'");
+    expect(sql).toContain("'another', 'files', 'github'");
     expect(sql).toContain("grant execute on function public.reject_junk_ontology_candidates");
     expect(sql).not.toMatch(/grant execute on function public\.reject_junk_ontology_candidates[\s\S]*to anon/);
     expect(functionBlock(sql, 'private.ontology_theme_thesis_alias(')).toContain('security invoker');

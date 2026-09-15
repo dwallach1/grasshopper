@@ -19,9 +19,11 @@ Normalized label (lowercase, collapsed space) is junk when:
 - it is empty
 - it contains a URL token: `http`, `https`, `www`, `t.co` (so `https t.co` matches)
 - it is one of: `url`, `stock`, `stocks`, `price`, `results`, `popular`
+- it is a SQL/schema token as the **whole** label: `select`, `bigint`, `varchar`, `timestamp`, `in`, `by`, `order`, `pt`, `arr`, `cpu`, `mw`, `llc`, …
+- it is a listicle/section header as the **whole** label: `another`, `files`, `github`, `latest`, `contents`, …
 - it is an active `ontology_lexicon.candidate_stopword` as the **whole** label (`about`, `this`, …)
 
-This is **not** a new score. `power`, `demand`, `energy`, `photonics` stay for a human — they are ontology vocabulary, just ranked below memberships.
+This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear` stay for a human — they are ontology vocabulary (and valid theme names), just ranked below memberships. Whole-label SQL/listicle stopwords still reject even when grind proposed them as memberships.
 
 Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`):
 
@@ -80,8 +82,9 @@ supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --
 
 ## Live path (Quantanamo)
 
-Applied. `desk-public-rest` **v6** includes `candidates` on `/bundle/public`. This change keeps `candidates` and only widens the pending fetch to 200 so ranking can put real memberships first — **redeploy the Edge Function**. Review RPC verified in #53. Junk sweep:
+Applied. `desk-public-rest` **v6** includes `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
 
 ```sql
 select public.reject_junk_ontology_candidates();
+-- { ok: true, rejected: 0, note: 'junk_deny_list' }
 ```

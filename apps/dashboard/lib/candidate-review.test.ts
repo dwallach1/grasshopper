@@ -19,6 +19,16 @@ import type { OntologyCandidateRow, OntologyThemeRow, ThesisRow } from './ledger
 
 const AT = '2026-09-13T12:00:00.000Z';
 
+function junkLabelsFromSql(sql: string): string[] {
+  const start = sql.indexOf('create or replace function private.ontology_label_is_junk');
+  expect(start).toBeGreaterThan(-1);
+  const next = sql.indexOf('create or replace function', start + 1);
+  const block = next === -1 ? sql.slice(start) : sql.slice(start, next);
+  const match = block.match(/v in \(([\s\S]*?)\)\s*\n\s*or exists/);
+  expect(match).toBeTruthy();
+  return [...(match?.[1] ?? '').matchAll(/'([^']+)'/g)].map((row) => row[1]);
+}
+
 function candidate(id: number, extra: Partial<OntologyCandidateRow> = {}): OntologyCandidateRow {
   return {
     id,
@@ -83,6 +93,10 @@ describe('ontology candidate review queue', () => {
     expect(queue.every((row) => row.status === 'pending')).toBe(true);
     expect(isJunkOntologyLabel('https t.co')).toBe(true);
     expect(isJunkOntologyLabel('POPULAR', 'membership')).toBe(true);
+    expect(isJunkOntologyLabel('VARCHAR', 'membership')).toBe(true);
+    expect(isJunkOntologyLabel('Another', 'theme')).toBe(true);
+    expect(isJunkOntologyLabel('NVDA', 'membership')).toBe(false);
+    expect(isJunkOntologyLabel('nuclear', 'theme')).toBe(false);
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
@@ -202,10 +216,14 @@ describe('ontology candidate review queue', () => {
 
   test('SQL deny-list stays in sync with the documented labels', async () => {
     const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
+    const migration = await readFile(
+      join(import.meta.dir, '../../../supabase/migrations/20260915003000_ontology_junk_sql_listicle.sql'),
+      'utf8',
+    );
     expect(sql).toContain('private.ontology_label_is_junk');
     expect(sql).toContain("review_note = 'junk_deny_list'");
-    for (const label of ONTOLOGY_JUNK_LABELS) {
-      expect(sql).toContain(`'${label}'`);
+    for (const source of [sql, migration]) {
+      expect(junkLabelsFromSql(source)).toEqual([...ONTOLOGY_JUNK_LABELS]);
     }
   });
 

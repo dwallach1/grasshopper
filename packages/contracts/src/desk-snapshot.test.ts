@@ -101,6 +101,8 @@ describe('public desk snapshot contract', () => {
     expect(PUBLIC_CANDIDATE_FETCH).toBe(200);
     expect(ONTOLOGY_JUNK_LABELS).toContain('https');
     expect(ONTOLOGY_JUNK_LABELS).toContain('stocks');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('varchar');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('another');
     expect(isJunkOntologyLabel('https t.co', 'term')).toBe(true);
     expect(isJunkOntologyLabel('STOCKS', 'membership')).toBe(true);
     expect(isJunkOntologyLabel('DOCN', 'membership')).toBe(false);
@@ -123,9 +125,38 @@ describe('public desk snapshot contract', () => {
       'DOCN',
       'AEHR',
       'power',
-      'Another',
     ]);
     expect((ranked[0] as { score: number }).score).toBe(100);
+  });
+
+  test('SQL and listicle whole labels are junk; tickers and theme words are not', () => {
+    for (const label of [
+      'BY', 'BIGINT', 'DATE', 'DOUBLE', 'SELECT', 'IN', 'VARCHAR', 'TIMESTAMP',
+      'PT', 'ARR', 'ORDER', 'CPU', 'MW', 'LLC', 'Another', 'Files', 'Github',
+    ]) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(true);
+    }
+    for (const label of ['NVDA', 'DOCN', 'AEHR', 'power', 'demand', 'energy', 'photonics', 'nuclear']) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(false);
+    }
+
+    const ranked = publicPendingCandidates([
+      { id: 1, status: 'pending', score: 100, source_count: 2, proposed_label: 'BIGINT', candidate_type: 'membership' },
+      { id: 2, status: 'pending', score: 100, source_count: 2, proposed_label: 'SELECT', candidate_type: 'membership' },
+      { id: 3, status: 'pending', score: 100, source_count: 2, proposed_label: 'NVDA', candidate_type: 'membership' },
+      { id: 4, status: 'pending', score: 90, source_count: 3, proposed_label: 'nuclear', candidate_type: 'theme' },
+      { id: 5, status: 'pending', score: 80, source_count: 3, proposed_label: 'energy', candidate_type: 'term' },
+      { id: 6, status: 'pending', score: 70, source_count: 2, proposed_label: 'Github', candidate_type: 'theme' },
+    ], 5);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'NVDA',
+      'energy',
+      'nuclear',
+    ]);
   });
 
   test('public snapshot keeps lean beliefs and lessons', () => {
