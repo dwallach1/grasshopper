@@ -3,12 +3,20 @@ import { describe, expect, test } from 'bun:test';
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import {
   assembleLiveline,
+  bookCurve,
   clocksFromIso,
   DEGEN_ABS_PCT,
   formatLivelineValue,
   isoToLivelineTime,
+  lerpMark,
+  lerpToward,
   LIVELINE_EMPTY,
+  LIVELINE_LERP_SPEED,
+  LIVELINE_PARCHMENT,
+  LIVELINE_SNAP_EPS,
   livelineDegen,
+  livelineIdle,
+  livelineStampIso,
   livelineWindows,
   percentClocks,
   seriesSpanSecs,
@@ -282,5 +290,40 @@ describe('assembleLiveline', () => {
     expect(formatLivelineValue(20.401, 'PCT')).toBe('+20.40%');
     expect(formatLivelineValue(2.0356, 'SOL')).toContain('SOL');
     expect(formatLivelineValue(6020.06, 'USD')).toContain('$');
+  });
+});
+
+describe('Board hero NAV lerp / idle', () => {
+  test('lerps 8% per frame and snaps when close — never invents a target', () => {
+    expect(LIVELINE_LERP_SPEED).toBe(0.08);
+    expect(lerpToward(0, 100)).toBeCloseTo(8);
+    expect(lerpToward(92, 100)).toBeCloseTo(92.64);
+    expect(lerpToward(99.995, 100)).toBe(100);
+    expect(lerpToward(Number.NaN, 50)).toBe(50);
+    expect(LIVELINE_SNAP_EPS).toBe(0.01);
+  });
+
+  test('idle / stale snaps to the last ledger mark instead of walking', () => {
+    expect(lerpMark(5000, 6020, false)).toBeCloseTo(5000 + (6020 - 5000) * 0.08);
+    expect(lerpMark(5000, 6020, true)).toBe(6020);
+    expect(lerpMark(null, 6020, false)).toBe(6020);
+    expect(lerpMark(5000, null, false)).toBeNull();
+    expect(livelineIdle(true, false, false)).toBe(true);
+    expect(livelineIdle(false, true, false)).toBe(true);
+    expect(livelineIdle(false, false, true)).toBe(true);
+    expect(livelineIdle(false, false, false)).toBe(false);
+  });
+
+  test('hero NAV is QUANTANAMO Agentic equity — parchment, not a % overlay', () => {
+    const line = assembleLiveline(liveDesk());
+    const nav = bookCurve(line, 'quantanamo');
+    expect(nav?.unit).toBe('USD');
+    expect(nav?.equity.map((row) => row.value)).toEqual([5000, 4727.5896, 4727.5896, 6020.0632]);
+    expect(nav?.now).toBeCloseTo(6020.0632);
+    expect(livelineStampIso(nav?.equity ?? [])).toBe('2026-09-04T20:06:00.000Z');
+    expect(livelineStampIso([])).toBeNull();
+    expect(LIVELINE_PARCHMENT).toBe('#a8906a');
+    expect(LIVELINE_PARCHMENT.startsWith('#')).toBe(true);
+    expect(line.all_pct.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
   });
 });

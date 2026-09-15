@@ -13,8 +13,9 @@
  * - Fill clocks: last-known ledger equity/cash stamped at `fill_log.at`
  *   (LOCF of a real mark — not fill price, not invented P/L)
  *
- * Board ALL uses % vs each book’s own start so three native books can share
- * one axis. Book ALL does not overlay raw USD+SOL (or $6k NAV on $426 equity).
+ * Board hero is QUANTANAMO Agentic NAV — one parchment Liveline with showValue.
+ * Standings still rank % vs each book’s own start so three native books can
+ * share an axis without FX. Book ALL does not overlay raw USD+SOL.
  */
 import { agenticSnapshots } from './book-performance';
 import { AVATAR_COLORS } from './desk-team';
@@ -38,6 +39,11 @@ import {
 export const DAY_SECS = 86_400;
 export const DEGEN_ABS_PCT = 8;
 export const LIVELINE_EMPTY = 'not in ledger';
+/** Liveline default: 8% of the remaining gap per rAF tick (~60fps). */
+export const LIVELINE_LERP_SPEED = 0.08;
+export const LIVELINE_SNAP_EPS = 0.01;
+/** Warm parchment stroke — Levla beige, not neon DeFi. */
+export const LIVELINE_PARCHMENT = '#a8906a';
 
 export type LivelineClock = {
   time: number;
@@ -162,6 +168,46 @@ export function percentClocks(
 export function latestClockValue(points: readonly LivelineClock[]): number | null {
   const last = points[points.length - 1];
   return last ? last.value : null;
+}
+
+/** Last ledger clock as ISO. Null when the series is empty — never a fake now. */
+export function livelineStampIso(points: readonly LivelineClock[]): string | null {
+  const last = points[points.length - 1];
+  if (!last) return null;
+  const ms = last.time * 1000;
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
+/**
+ * Approach `target` at Liveline's 8%/frame. Snap when close so the overlay
+ * does not hunt forever. Idle / first paint must not invent in-between marks.
+ */
+export function lerpToward(
+  shown: number,
+  target: number,
+  speed = LIVELINE_LERP_SPEED,
+): number {
+  if (!Number.isFinite(shown) || !Number.isFinite(target)) return target;
+  const next = shown + (target - shown) * speed;
+  if (Math.abs(next - target) < LIVELINE_SNAP_EPS) return target;
+  return next;
+}
+
+/** Hold or snap when idle/stale so a weekend book does not fake a walk. */
+export function lerpMark(
+  shown: number | null,
+  target: number | null,
+  idle: boolean,
+): number | null {
+  if (target === null || !Number.isFinite(target)) return null;
+  if (shown === null || !Number.isFinite(shown) || idle) return target;
+  return lerpToward(shown, target);
+}
+
+/** Freeze the rAF loop when marks are stale, the tab is hidden, or motion is reduced. */
+export function livelineIdle(stale: boolean, reduce: boolean, hidden: boolean): boolean {
+  return stale || reduce || hidden;
 }
 
 export function seriesSpanSecs(points: readonly LivelineClock[], nowSecs: number): number {

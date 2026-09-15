@@ -9,9 +9,13 @@ import {
   freshLead,
   NOT_RANKED,
 } from '../../lib/desk-leaderboard';
-import { assembleLiveline } from '../../lib/desk-liveline';
+import {
+  assembleLiveline,
+  bookCurve,
+  LIVELINE_EMPTY,
+  livelineStampIso,
+} from '../../lib/desk-liveline';
 import type { DeskPayload } from '../../lib/ledger-types';
-import { ledgerAmount } from '../../lib/money-units';
 import { CrtTape } from './crt-tape';
 import { DeskLiveline } from './desk-liveline';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
@@ -30,8 +34,12 @@ export function LeaderboardPanel({
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const line = useMemo(() => assembleLiveline(desk), [desk]);
+  const nav = bookCurve(line, 'quantanamo');
   const clock = now ?? Date.now();
   const lead = freshLead(board.rows, clock);
+  const qnt = board.rows.find((row) => row.id === 'quantanamo');
+  const lastIso = qnt?.last_marked ?? livelineStampIso(nav?.equity ?? []);
+  const stale = isMarkStale(lastIso, clock);
   const [order, setOrder] = useState<string[]>(() => board.rows.map((row) => row.id));
   const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
   const orderRef = useRef(order);
@@ -82,19 +90,26 @@ export function LeaderboardPanel({
 
       <CrtTape desk={desk} now={now} />
 
-      <section className="line-hero line-art" aria-label="Desk sport line">
+      <section
+        className={`line-hero line-art${stale ? ' is-idle' : ''}`}
+        aria-label="Desk NAV"
+      >
         <DeskLiveline
-          key="all"
-          series={line.all_pct}
-          unit="PCT"
-          color="#e8edf2"
-          emptyText="no ranked book in ledger"
-          showValue={false}
+          points={nav?.equity ?? []}
+          value={nav?.now ?? null}
+          unit="USD"
+          parchment
+          quiet
+          idle={stale}
+          showValue
+          emptyText={nav?.empty_text || LIVELINE_EMPTY}
         />
       </section>
 
       <p className="line-caption">
-        % vs each book’s own start — the only shared axis. No FX. Missing start is not ranked.
+        Agentic NAV
+        {lastIso ? ` · ${nyStamp(lastIso)} · ${age(lastIso, now)}` : ''}
+        {stale ? ' · idle' : ''}
         {lead ? ` · lead ${lead.steward} ${pct(lead.return_pct, 2)}` : ''}
       </p>
 
@@ -132,10 +147,6 @@ export function LeaderboardPanel({
               </span>
             </div>
             <p className="line-meta">
-              {row.unit
-                ? `${ledgerAmount(row.start, row.unit)} → ${ledgerAmount(row.now, row.unit)}`
-                : 'not in ledger'}
-              {' · '}
               {row.risk_note}
               {onOpenTeam ? (
                 <>
