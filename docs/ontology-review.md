@@ -82,7 +82,7 @@ supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --
 
 ## Live path (Quantanamo)
 
-Applied. `desk-public-rest` **v6** includes `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
+Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
 
 ```sql
 select public.reject_junk_ontology_candidates();
