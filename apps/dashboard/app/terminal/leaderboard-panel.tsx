@@ -11,9 +11,8 @@ import {
 } from '../../lib/desk-leaderboard';
 import {
   assembleLiveline,
-  bookCurve,
-  LIVELINE_EMPTY,
-  livelineStampIso,
+  boardHeroIdle,
+  boardHeroLiveline,
 } from '../../lib/desk-liveline';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { CrtTape } from './crt-tape';
@@ -34,12 +33,10 @@ export function LeaderboardPanel({
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const line = useMemo(() => assembleLiveline(desk), [desk]);
-  const nav = bookCurve(line, 'quantanamo');
+  const hero = useMemo(() => boardHeroLiveline(line), [line]);
   const clock = now ?? Date.now();
   const lead = freshLead(board.rows, clock);
-  const qnt = board.rows.find((row) => row.id === 'quantanamo');
-  const lastIso = qnt?.last_marked ?? livelineStampIso(nav?.equity ?? []);
-  const stale = isMarkStale(lastIso, clock);
+  const stale = boardHeroIdle(line, clock, isMarkStale);
   const [order, setOrder] = useState<string[]>(() => board.rows.map((row) => row.id));
   const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
   const orderRef = useRef(order);
@@ -92,25 +89,32 @@ export function LeaderboardPanel({
 
       <section
         className={`line-hero line-art${stale ? ' is-idle' : ''}`}
-        aria-label="Desk NAV"
+        aria-label="Desk return lines"
       >
         <DeskLiveline
-          points={nav?.equity ?? []}
-          value={nav?.now ?? null}
-          unit="USD"
+          series={hero.series}
+          unit={hero.unit}
           parchment
           quiet
           idle={stale}
-          showValue
-          emptyText={nav?.empty_text || LIVELINE_EMPTY}
+          showValue={hero.showValue}
+          emptyText={hero.emptyText}
         />
+        {hero.series.length > 1 ? (
+          <ul className="line-key">
+            {hero.series.map((row) => (
+              <li key={row.id} style={{ color: row.color }}>
+                <i aria-hidden="true" />
+                {row.label}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
       <p className="line-caption">
-        Agentic NAV
-        {lastIso ? ` · ${nyStamp(lastIso)} · ${age(lastIso, now)}` : ''}
+        {hero.caption}
         {stale ? ' · idle' : ''}
-        {lead ? ` · lead ${lead.steward} ${pct(lead.return_pct, 2)}` : ''}
       </p>
 
       <ol className="line-standings">

@@ -149,7 +149,7 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 
 | Key | Tab | Shows |
 |---|---|---|
-| 1 | Board | Landing (`/`). Quiet parchment [Liveline](https://benji.org/liveline) of Agentic NAV (`showValue`, 60fps lerp). Idle when marks are stale. QUANTANAMO / ODDSBORNE / BANDIT standings compete on **% vs each book’s own start** in native units (USD or SOL). No FX. Missing start is **not ranked**, not 0%. NAV is the hero once — not repeated on the rows. `/leaderboard` redirects here. See [`docs/liveline-pnl.md`](docs/liveline-pnl.md). |
+| 1 | Board | Landing (`/`). Quiet parchment [Liveline](https://benji.org/liveline) of every live steward’s **% vs that book’s own start** (QUANTANAMO / ODDSBORNE / BANDIT). Shared % axis, no FX, no summed USD+SOL NAV. Idle when every plotted book is stale. Standings rank the same %. Missing start is **not ranked**, not 0%. `/leaderboard` redirects here. See [`docs/liveline-pnl.md`](docs/liveline-pnl.md). |
 | 2 | Book | `/book`. One holdings table of open and closed lots (Stocks / Predictions / Coins). Each row carries steward identity and a LIVE / CLOSED chip. Expand a row for the linked thesis and up to three rules in force (`belief_updates.meta.kind = playbook_rule`). Closed clips show a linked `research_lessons` or belief when present — never invented P/L. |
 | 3 | Theses | Phone: parchment list of ledger theses (name, stance/status, confidence, domain/steward). Tap opens summary, falsifier, belief/confidence trail, and related evidence — no Book/Board marks. Operator desk keeps the ledger table (lifecycle, evidence, held/candidate symbols, lessons). |
 | 4 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |

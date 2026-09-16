@@ -5586,11 +5586,45 @@ a:focus-visible {
   min-height: 168px;
 }
 
-.term.is-line .line-hero.line-art .line-frame.is-parchment > div > span:first-of-type {
+/* Liveline is a fragment: value span + series-toggle div + canvas div.
+   Hide the toggle on Board so swipe stays first and the parchment key is enough. */
+.term.is-line .line-hero.line-art .line-frame.is-quiet.is-parchment > div:not(:has(canvas)) {
+  display: none;
+}
+
+.term.is-line .line-hero.line-art .line-frame.is-parchment.is-hero-value > div > span:first-of-type {
   font-family: var(--font-display) !important;
   font-size: clamp(28px, 8vw, 36px) !important;
   font-weight: 400 !important;
   letter-spacing: -0.03em !important;
+}
+
+.term.is-line .line-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  list-style: none;
+  margin: 4px 4px 2px;
+  padding: 0;
+  pointer-events: none;
+}
+
+.term.is-line .line-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.term.is-line .line-key i {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
 }
 
 .term.is-line .line-hero.line-art.is-idle {

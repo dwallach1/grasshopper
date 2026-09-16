@@ -74,7 +74,7 @@ bun run web:app
 
 Open `http://localhost:5173` (this is the printed Local URL, the Auth Site URL, and the passkey RP ID). `http://127.0.0.1:5173` works for email **if you start and finish on that IP** — passkeys still require `localhost`. Sign in. Header source should read `postgrest`.
 
-Tabs are spelled-out words: **Board, Book, Theses, Events, Tests, Team**. **Board** is the landing page at `/` — parchment Liveline of Agentic NAV, then % standings in native units (`/leaderboard` redirects here). **Book** is `/book`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-6` panels, `g` then letter (`p/b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab. See `docs/liveline-pnl.md`.
+Tabs are spelled-out words: **Board, Book, Theses, Events, Tests, Team**. **Board** is the landing page at `/` — parchment Liveline of each steward’s % vs that book’s own start, then % standings in native units (`/leaderboard` redirects here). **Book** is `/book`. The chrome stays mounted; tab switches paint from the in-memory ledger payload (`history.pushState`, no refetch). Keyboard: `1-6` panels, `g` then letter (`p/b/t/c/e/m`), `j/k` thesis, `r` refresh, `?` help. There is no filter box. Last QUANTANAMO run is a header chip, not a tab. See `docs/liveline-pnl.md`.
 
 ## Confirm you are on the real ledger
 
@@ -82,7 +82,7 @@ Logged **out**: sign-in only. `/api/ledger` returns 401. No thesis names in the 
 
 Logged **in**:
 
-On **Board** (`/`) a quiet parchment Liveline draws QUANTANAMO Agentic NAV (lerp between ledger prints; idle when marks are stale). Standings still rank each steward’s % vs that book’s own start. On **Book** (`/book`) the hero is that same equity line in native units; lots stay a quiet table. Not `dashboard_snapshots.current`, and not `position_episodes`. Missing marks stay **not in ledger**. A refresh (or the 15s poll / realtime) picks up a new QUANTANAMO snapshot without a restart. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first. Empty fills say **not in ledger**. Sparse snapshots are honest — the desk does not invent prints.
+On **Board** (`/`) a quiet parchment Liveline draws each live steward’s return curve on a shared % axis (lerp between ledger prints; idle when every plotted book is stale). Standings still rank each steward’s % vs that book’s own start. On **Book** (`/book`) lots stay a quiet table. Not `dashboard_snapshots.current`, and not `position_episodes`. Missing marks stay **not in ledger**. A refresh (or the 15s poll / realtime) picks up a new QUANTANAMO snapshot without a restart. The fill log is `broker_fills` when present, otherwise filled `trade_intents`, newest first. Empty fills say **not in ledger**. Sparse snapshots are honest — the desk does not invent prints.
 
 Each thesis with an open lot shows that lot from the **same** 7638 snapshot, joined through `trade_proposals` (filled/approved/submitted/open) or `thesis_symbols.role = held`. Watchlist tags do not count. A thesis with no open lot still renders as **no position** on Theses.
 
