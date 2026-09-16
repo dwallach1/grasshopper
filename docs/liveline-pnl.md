@@ -17,9 +17,9 @@ The public desk draws [Liveline](https://benji.org/liveline) from `/api/desk`. T
 
 Personal Robinhood books never enter the QUANTANAMO series (`agentic` label only). Duplicate timestamps keep the later row. Oldest first.
 
-`%` in Board standings is `((value - start) / start) * 100` against **that book’s own start**. Missing or non-positive start → not ranked, not `0%`. Board hero is QUANTANAMO Agentic NAV only — one parchment Liveline with `showValue`. Idle (`paused`) when that book’s marks are stale so the spline does not fake a walk. Phone swipe / pull-to-refresh stay first: the hero frame is `pointer-events: none` and Liveline scrub is off.
+`%` in Board standings is `((value - start) / start) * 100` against **that book’s own start**. Missing or non-positive start → not ranked, not `0%`. Board hero plots every live steward’s % curve on that same axis (QUANTANAMO, ODDSBORNE, BANDIT — COINTANAMO only if a book curve is wired; it is not today). No FX and no summed USD+SOL NAV. The shared view is the overlay itself, not an equal-weight composite line. `showValue` is off when two or more books plot, so the big number cannot be read as desk-wide dollars. Idle (`paused`) when **every** plotted book’s marks are stale so the spline does not fake a walk. Phone swipe / pull-to-refresh stay first: the hero frame is `pointer-events: none` and Liveline scrub is off. There is no per-book native-unit mode switch on Board — that would fight the swipe rail. Native-unit equity stays on Book.
 
-Assembler: `apps/dashboard/lib/desk-liveline.ts` (`assembleLiveline`, `lerpMark`, `livelineIdle`).
+Assembler: `apps/dashboard/lib/desk-liveline.ts` (`assembleLiveline`, `boardHeroLiveline`, `lerpMark`, `livelineIdle`).
 
 ## Fill clocks
 

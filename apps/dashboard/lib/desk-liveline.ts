@@ -13,9 +13,10 @@
  * - Fill clocks: last-known ledger equity/cash stamped at `fill_log.at`
  *   (LOCF of a real mark — not fill price, not invented P/L)
  *
- * Board hero is QUANTANAMO Agentic NAV — one parchment Liveline with showValue.
- * Standings still rank % vs each book’s own start so three native books can
- * share an axis without FX. Book ALL does not overlay raw USD+SOL.
+ * Board hero is every live steward’s return curve on a shared % axis
+ * (`all_pct`). Each book is % vs that book’s own start — never FX, never a
+ * summed USD+SOL “desk NAV”. Standings still rank the same %. Book ALL does
+ * not overlay raw dollars.
  */
 import { agenticSnapshots } from './book-performance';
 import { AVATAR_COLORS } from './desk-team';
@@ -44,6 +45,17 @@ export const LIVELINE_LERP_SPEED = 0.08;
 export const LIVELINE_SNAP_EPS = 0.01;
 /** Warm parchment stroke — Levla beige, not neon DeFi. */
 export const LIVELINE_PARCHMENT = '#a8906a';
+/**
+ * Quiet inks for the Board % overlay. Distinct on cream, not avatar neon
+ * (`#22c55e` / `#3b82f6` / `#ef4444`).
+ */
+export const LIVELINE_PARCHMENT_INKS: Record<LivelineBookId, string> = {
+  quantanamo: '#7a6b3d',
+  oddsborne: '#5a6e7c',
+  bandit: '#9a5840',
+};
+export const BOARD_HERO_CAPTION = '% vs each book’s own start · no FX';
+export const BOARD_HERO_EMPTY = 'no ranked book in ledger';
 
 export type LivelineClock = {
   time: number;
@@ -258,6 +270,7 @@ export function formatLivelineTime(time: number, spanSecs: number): string {
 }
 
 export function assembleLiveline(desk: DeskPayload): DeskLiveline {
+  // COINTANAMO has no book curve in this assembler — do not invent one.
   const books = [
     quantanamoCurve(desk),
     oddsborneCurve(desk),
@@ -270,7 +283,7 @@ export function assembleLiveline(desk: DeskPayload): DeskLiveline {
     all_pct.push({
       id: book.id,
       label: book.label,
-      color: book.color,
+      color: parchmentInk(book.id),
       data: book.pct,
       value: last.value,
     });
@@ -280,6 +293,54 @@ export function assembleLiveline(desk: DeskPayload): DeskLiveline {
 
 export function bookCurve(desk: DeskLiveline, id: LivelineBookId): LivelineBookCurve | null {
   return desk.books.find((row) => row.id === id) ?? null;
+}
+
+export function parchmentInk(id: string): string {
+  if (id === 'oddsborne') return LIVELINE_PARCHMENT_INKS.oddsborne;
+  if (id === 'bandit') return LIVELINE_PARCHMENT_INKS.bandit;
+  if (id === 'quantanamo') return LIVELINE_PARCHMENT_INKS.quantanamo;
+  return LIVELINE_PARCHMENT;
+}
+
+export type BoardHeroLiveline = {
+  series: LivelineOverlay[];
+  unit: 'PCT';
+  showValue: boolean;
+  emptyText: string;
+  caption: string;
+};
+
+/**
+ * Board hero mapping: one parchment Liveline of every live steward’s % curve.
+ * `showValue` only when a single book is plotted — that number is that book’s
+ * %, never QUANTANAMO dollars as a desk-wide NAV. No equal-weight composite
+ * line: the shared view is the overlay itself.
+ */
+export function boardHeroLiveline(line: DeskLiveline): BoardHeroLiveline {
+  const series = line.all_pct.map((row) => ({
+    ...row,
+    color: parchmentInk(row.id),
+  }));
+  return {
+    series,
+    unit: 'PCT',
+    showValue: series.length === 1,
+    emptyText: series.length ? LIVELINE_EMPTY : BOARD_HERO_EMPTY,
+    caption: BOARD_HERO_CAPTION,
+  };
+}
+
+/** Idle the hero only when every plotted book’s last equity mark is stale. */
+export function boardHeroIdle(
+  line: DeskLiveline,
+  nowMs: number,
+  stale: (at: string | null, now: number) => boolean,
+): boolean {
+  const stamps = line.books
+    .filter((book) => book.pct.length > 0)
+    .map((book) => livelineStampIso(book.equity));
+  if (stamps.length === 0) return true;
+  return stamps.every((iso) => stale(iso, nowMs));
 }
 
 function finishCurve(

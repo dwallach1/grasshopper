@@ -3,6 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import {
   assembleLiveline,
+  BOARD_HERO_CAPTION,
+  BOARD_HERO_EMPTY,
+  boardHeroIdle,
+  boardHeroLiveline,
   bookCurve,
   clocksFromIso,
   DEGEN_ABS_PCT,
@@ -13,15 +17,18 @@ import {
   LIVELINE_EMPTY,
   LIVELINE_LERP_SPEED,
   LIVELINE_PARCHMENT,
+  LIVELINE_PARCHMENT_INKS,
   LIVELINE_SNAP_EPS,
   livelineDegen,
   livelineIdle,
   livelineStampIso,
   livelineWindows,
+  parchmentInk,
   percentClocks,
   seriesSpanSecs,
   stampFillsOnCurve,
 } from './desk-liveline';
+import { AVATAR_COLORS } from './desk-team';
 import { fallbackTeam } from './desk-team';
 import type { BookNameLine, DeskPayload } from './ledger-types';
 import { BANDIT_BANKROLL_SOL_START, BANDIT_PRIMARY_ACCOUNT } from './meme-book';
@@ -314,7 +321,7 @@ describe('Board hero NAV lerp / idle', () => {
     expect(livelineIdle(false, false, false)).toBe(false);
   });
 
-  test('hero NAV is QUANTANAMO Agentic equity — parchment, not a % overlay', () => {
+  test('native QUANTANAMO equity stays on the book curve — not the Board hero', () => {
     const line = assembleLiveline(liveDesk());
     const nav = bookCurve(line, 'quantanamo');
     expect(nav?.unit).toBe('USD');
@@ -325,5 +332,40 @@ describe('Board hero NAV lerp / idle', () => {
     expect(LIVELINE_PARCHMENT).toBe('#a8906a');
     expect(LIVELINE_PARCHMENT.startsWith('#')).toBe(true);
     expect(line.all_pct.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+  });
+
+  test('Board hero maps all_pct overlays — shared % axis, no QNT dollar NAV', () => {
+    const line = assembleLiveline(liveDesk());
+    const hero = boardHeroLiveline(line);
+    expect(hero.unit).toBe('PCT');
+    expect(hero.showValue).toBe(false);
+    expect(hero.caption).toBe(BOARD_HERO_CAPTION);
+    expect(hero.caption).not.toContain('NAV');
+    expect(hero.series.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+    expect(hero.series.map((row) => row.color)).toEqual([
+      LIVELINE_PARCHMENT_INKS.quantanamo,
+      LIVELINE_PARCHMENT_INKS.oddsborne,
+      LIVELINE_PARCHMENT_INKS.bandit,
+    ]);
+    expect(hero.series.some((row) => row.color === AVATAR_COLORS.green)).toBe(false);
+    expect(hero.series.some((row) => row.color === AVATAR_COLORS.blue)).toBe(false);
+    expect(hero.series.some((row) => row.color === AVATAR_COLORS.red)).toBe(false);
+    expect(hero.series.every((row) => row.data.length > 0)).toBe(true);
+    expect(hero.series.find((row) => row.id === 'quantanamo')?.value).toBeCloseTo(20.401264);
+    expect(hero.series.find((row) => row.id === 'oddsborne')?.value).toBeCloseTo(((424.07 - 426) / 426) * 100);
+    expect(parchmentInk('cointanamo')).toBe(LIVELINE_PARCHMENT);
+    const solo = boardHeroLiveline({
+      books: line.books,
+      all_pct: line.all_pct.filter((row) => row.id === 'oddsborne'),
+    });
+    expect(solo.showValue).toBe(true);
+    expect(solo.unit).toBe('PCT');
+    expect(solo.series).toHaveLength(1);
+    const empty = boardHeroLiveline({ books: line.books, all_pct: [] });
+    expect(empty.showValue).toBe(false);
+    expect(empty.emptyText).toBe(BOARD_HERO_EMPTY);
+    expect(boardHeroIdle(line, Date.parse('2026-09-06T15:58:03.496Z'), () => false)).toBe(false);
+    expect(boardHeroIdle(line, Date.parse('2026-09-06T15:58:03.496Z'), () => true)).toBe(true);
+    expect(boardHeroIdle({ books: [], all_pct: [] }, Date.now(), () => false)).toBe(true);
   });
 });

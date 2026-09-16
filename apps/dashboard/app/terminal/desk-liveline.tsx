@@ -104,11 +104,13 @@ export function DeskLiveline({
       ...multi,
     ]
     : (multi.length > 1 ? multi : undefined);
-  const stroke = parchment ? LIVELINE_PARCHMENT : (solo?.color ?? color);
+  const showHeroValue = showValue && multi.length < 2;
+  const stroke = parchment && multi.length < 2 ? LIVELINE_PARCHMENT : (solo?.color ?? color);
   const frameClass = [
     'line-frame',
     quiet ? 'is-quiet' : '',
     parchment ? 'is-parchment' : '',
+    showHeroValue ? 'is-hero-value' : '',
     freeze ? 'is-idle' : '',
     className ?? '',
   ].filter((part) => part.length > 0).join(' ');
@@ -127,15 +129,15 @@ export function DeskLiveline({
         window={windowSecs}
         windows={compact || quiet ? undefined : windows}
         windowStyle="text"
-        seriesToggleCompact={motion.coarse}
+        seriesToggleCompact={!quiet && motion.coarse}
         grid={!compact && !quiet}
         badge={false}
         momentum={!freeze}
-        fill
+        fill={multi.length < 2}
         pulse={!freeze}
         scrub={!quiet && !compact && !motion.coarse}
         exaggerate
-        showValue={showValue && multi.length < 2}
+        showValue={showHeroValue}
         valueMomentumColor={showValue && !freeze}
         degen={allowDegen ? { scale: 0.7, downMomentum: true } : false}
         loading={loading}
@@ -148,9 +150,14 @@ export function DeskLiveline({
         padding={compact
           ? { top: 6, right: 36, bottom: 6, left: 4 }
           : quiet
-            ? { top: showValue ? 48 : 12, right: 14, bottom: 18, left: 10 }
+            ? {
+              top: showHeroValue ? 48 : 12,
+              right: multi.length > 1 ? 18 : 14,
+              bottom: 18,
+              left: 10,
+            }
             : {
-              top: showValue ? 52 : 16,
+              top: showHeroValue ? 52 : 16,
               right: multi.length > 1 ? 88 : 16,
               bottom: 28,
               left: 12,
