@@ -525,5 +525,7 @@ describe('desk IA smoke', () => {
     expect(openMap).not.toContain('clobTokenIds');
     expect(map).toContain('unix seconds');
     expect(map).toContain('never SOL→USD');
+    expect(map).toContain('lastMarkPerBucket');
+    expect(map).toContain('BOARD_HERO_BUCKET_SECS');
   });
 });

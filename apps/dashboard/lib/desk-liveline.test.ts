@@ -3,10 +3,12 @@ import { describe, expect, test } from 'bun:test';
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import {
   assembleLiveline,
+  BOARD_HERO_BUCKET_SECS,
   BOARD_HERO_CAPTION,
   BOARD_HERO_EMPTY,
   boardHeroIdle,
   boardHeroLiveline,
+  lastMarkPerBucket,
   bookCurve,
   clocksFromIso,
   DEGEN_ABS_PCT,
@@ -334,6 +336,24 @@ describe('Board hero NAV lerp / idle', () => {
     expect(line.all_pct.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
   });
 
+  test('lastMarkPerBucket keeps first + last real mark per window — never an average', () => {
+    const hour = 3600;
+    const dense: Array<{ time: number; value: number }> = [];
+    for (let i = 0; i < 12; i += 1) {
+      dense.push({ time: i * hour, value: 10 + i });
+    }
+    expect(BOARD_HERO_BUCKET_SECS).toBe(4 * hour);
+    const calm = lastMarkPerBucket(dense, BOARD_HERO_BUCKET_SECS);
+    expect(calm.map((row) => row.time)).toEqual([0, 3 * hour, 7 * hour, 11 * hour]);
+    expect(calm.map((row) => row.value)).toEqual([10, 13, 17, 21]);
+    expect(calm.every((row) => dense.some((point) => point.time === row.time && point.value === row.value))).toBe(true);
+    expect(lastMarkPerBucket(dense, 0)).toEqual(dense);
+    expect(lastMarkPerBucket(dense.slice(0, 2), BOARD_HERO_BUCKET_SECS)).toEqual(dense.slice(0, 2));
+    expect(lastMarkPerBucket([], BOARD_HERO_BUCKET_SECS)).toEqual([]);
+    const mean = dense.reduce((sum, row) => sum + row.value, 0) / dense.length;
+    expect(calm.some((row) => row.value === mean)).toBe(false);
+  });
+
   test('Board hero maps all_pct overlays — shared % axis, no QNT dollar NAV', () => {
     const line = assembleLiveline(liveDesk());
     const hero = boardHeroLiveline(line);
@@ -351,6 +371,9 @@ describe('Board hero NAV lerp / idle', () => {
     expect(hero.series.some((row) => row.color === AVATAR_COLORS.blue)).toBe(false);
     expect(hero.series.some((row) => row.color === AVATAR_COLORS.red)).toBe(false);
     expect(hero.series.every((row) => row.data.length > 0)).toBe(true);
+    expect(hero.series.find((row) => row.id === 'quantanamo')?.data.length).toBeLessThanOrEqual(
+      line.all_pct.find((row) => row.id === 'quantanamo')?.data.length ?? 0,
+    );
     expect(hero.series.find((row) => row.id === 'quantanamo')?.value).toBeCloseTo(20.401264);
     expect(hero.series.find((row) => row.id === 'oddsborne')?.value).toBeCloseTo(((424.07 - 426) / 426) * 100);
     expect(parchmentInk('cointanamo')).toBe(LIVELINE_PARCHMENT);

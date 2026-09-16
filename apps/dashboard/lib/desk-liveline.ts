@@ -56,6 +56,13 @@ export const LIVELINE_PARCHMENT_INKS: Record<LivelineBookId, string> = {
 };
 export const BOARD_HERO_CAPTION = '% vs each book’s own start · no FX';
 export const BOARD_HERO_EMPTY = 'no ranked book in ledger';
+/**
+ * Board hero path only: last real % mark in each 4h bucket.
+ * BANDIT’s 13-minute meme/fill clocks (200+ points) are the jagged source —
+ * a trailing average would invent in-between %. 4h keeps a session-scale
+ * walk on a 390px canvas without flattening a trading day to one print.
+ */
+export const BOARD_HERO_BUCKET_SECS = 4 * 60 * 60;
 
 export type LivelineClock = {
   time: number;
@@ -311,15 +318,48 @@ export type BoardHeroLiveline = {
 };
 
 /**
+ * Last real clock in each bucket, plus the series start.
+ * Every returned point already exists on the input — no average, no FX,
+ * no invented time. One- and two-point series stay as-is.
+ */
+export function lastMarkPerBucket(
+  points: readonly LivelineClock[],
+  bucketSecs: number,
+): LivelineClock[] {
+  if (points.length <= 2) return [...points];
+  if (!(bucketSecs > 0) || !Number.isFinite(bucketSecs)) return [...points];
+  const first = points[0];
+  if (!first) return [];
+  const kept: LivelineClock[] = [first];
+  let bucket = 0;
+  let pending: LivelineClock = first;
+  const origin = first.time;
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+    if (!point) continue;
+    const nextBucket = Math.floor((point.time - origin) / bucketSecs);
+    if (nextBucket !== bucket) {
+      if (pending !== kept[kept.length - 1]) kept.push(pending);
+      bucket = nextBucket;
+    }
+    pending = point;
+  }
+  if (pending !== kept[kept.length - 1]) kept.push(pending);
+  return kept;
+}
+
+/**
  * Board hero mapping: one parchment Liveline of every live steward’s % curve.
  * `showValue` only when a single book is plotted — that number is that book’s
  * %, never QUANTANAMO dollars as a desk-wide NAV. No equal-weight composite
- * line: the shared view is the overlay itself.
+ * line: the shared view is the overlay itself. Path is last mark / 4h;
+ * `value` stays the true latest %.
  */
 export function boardHeroLiveline(line: DeskLiveline): BoardHeroLiveline {
   const series = line.all_pct.map((row) => ({
     ...row,
     color: parchmentInk(row.id),
+    data: lastMarkPerBucket(row.data, BOARD_HERO_BUCKET_SECS),
   }));
   return {
     series,
