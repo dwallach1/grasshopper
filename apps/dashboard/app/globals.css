@@ -5586,6 +5586,12 @@ a:focus-visible {
   min-height: 168px;
 }
 
+/* Liveline is a fragment: value span + series-toggle div + canvas div.
+   Hide the toggle on Board so swipe stays first and the parchment key is enough. */
+.term.is-line .line-hero.line-art .line-frame.is-quiet.is-parchment > div:not(:has(canvas)) {
+  display: none;
+}
+
 .term.is-line .line-hero.line-art .line-frame.is-parchment.is-hero-value > div > span:first-of-type {
   font-family: var(--font-display) !important;
   font-size: clamp(28px, 8vw, 36px) !important;

@@ -441,6 +441,7 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.line-hero.line-art.is-idle');
     expect(css).toContain('.line-key');
     expect(css).toContain('.is-hero-value');
+    expect(css).toContain('.line-frame.is-quiet.is-parchment > div:not(:has(canvas))');
     expect(css).toContain('--font-display');
     expect(css).not.toContain('background: #0c0e12');
     expect(app).toContain('POLL_MS');
