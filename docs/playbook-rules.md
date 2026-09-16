@@ -114,7 +114,7 @@ insert into public.belief_updates (
 
 ## Incorporate an open lesson
 
-Theses shows open `research_lessons` first. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
+Theses shows open `research_lessons` first. The mast learning pulse counts playbook beliefs in force from the same `beliefs[]` the Book uses. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
 
 ```ts
 { "lesson_id": 37 }

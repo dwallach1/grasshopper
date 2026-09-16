@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react';
 
 import {
   incorporateResearchLesson,
-  openLessonCount,
   rankLessonsForDesk,
   thesisNameForLesson,
 } from '../../lib/lesson-incorporate';
@@ -23,7 +22,6 @@ export function LessonQueue({
     () => rankLessonsForDesk(desk.lessons ?? []),
     [desk.lessons],
   );
-  const open = openLessonCount(queue);
 
   return (
     <section className="review-queue lesson-queue" aria-label="Research lessons">
@@ -31,7 +29,7 @@ export function LessonQueue({
         <p className="paper-title">Lessons</p>
         <p className="thesis-lede">
           {queue.length
-            ? `${open} open · ${queue.length - open} in playbook`
+            ? 'Open first, then in playbook.'
             : 'No research lessons on this desk.'}
           {canIncorporate
             ? ' Incorporate writes a playbook rule.'
