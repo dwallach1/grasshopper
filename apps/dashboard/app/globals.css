@@ -3744,6 +3744,12 @@ a:focus-visible {
   background: transparent;
 }
 
+.term.is-swipe .steward-stage {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .team-mast,
 .thesis-mast {
   display: flex;
@@ -3897,7 +3903,8 @@ a:focus-visible {
   min-width: 0;
 }
 
-.steward-deck-slot .id-card {
+.steward-deck-slot .id-card,
+.steward-deck-slot .team-card {
   width: min(78vw, 340px);
 }
 
@@ -3916,7 +3923,7 @@ a:focus-visible {
   position: relative;
   height: 28px;
   border: 1px solid var(--line);
-  background: #0b0d10;
+  background: var(--elevated);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -3937,7 +3944,7 @@ a:focus-visible {
   min-height: 44px;
   min-width: 44px;
   border: 1px solid var(--line);
-  background: #0b0d10;
+  background: var(--elevated);
   color: var(--text-2);
   font-size: 22px;
   line-height: 1;
@@ -4121,7 +4128,8 @@ a:focus-visible {
     padding-inline: 0;
   }
 
-  .steward-deck-slot .id-card {
+  .steward-deck-slot .id-card,
+  .steward-deck-slot .team-card {
     width: 280px;
   }
 }
@@ -4147,7 +4155,8 @@ a:focus-visible {
     padding: 16px 0 8px;
   }
 
-  .steward-deck-slot .id-card {
+  .steward-deck-slot .id-card,
+  .steward-deck-slot .team-card {
     width: min(80vw, 340px);
   }
 
