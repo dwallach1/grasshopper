@@ -4,7 +4,7 @@ Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'pl
 
 ## Open with thesis_id
 
-New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot shows a quiet “untagged” chip and no rules in force. The ontology cannot learn from that money.
+New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot shows a quiet chip (`historical` for pre-ontology leftovers, otherwise `untagged`) and no rules in force. The ontology cannot learn from that money. The Theses learning pulse counts thesis-tagged vs legacy untagged vs missing-gate separately, so historical leftovers are not a write-habit miss.
 
 ```sql
 -- Gate (also a CHECK on the three position tables)

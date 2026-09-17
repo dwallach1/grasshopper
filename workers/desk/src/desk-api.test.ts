@@ -113,6 +113,9 @@ describe('public desk Worker API', () => {
         beliefs_in_force: 0,
         open_books: 0,
         open_books_tagged: 0,
+        open_books_gate_ok: 0,
+        open_books_legacy_untagged: 0,
+        open_books_missing_gate: 0,
       },
     });
     expect(ok.headers.get('cache-control')).toBe('no-store');

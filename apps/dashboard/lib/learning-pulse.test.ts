@@ -235,6 +235,49 @@ function desk(partial: Record<string, unknown> = {}): DeskPayload {
   } as unknown as DeskPayload;
 }
 
+function emptyVenueDesk(partial: Record<string, unknown> = {}) {
+  return {
+    book: {
+      account_label: 'robinhood_agentic_7638',
+      observed_at: AT,
+      last4: '7638',
+      buying_power: null,
+      starting_nav: 5000,
+      current_nav: 5000,
+      cash: null,
+      deployed: null,
+      vs_start: 0,
+      vs_start_note: MARK_NOT_IN_LEDGER,
+      day_pnl: null,
+      day_pnl_note: MARK_NOT_IN_LEDGER,
+      vs_cost: null,
+      vs_cost_note: MARK_NOT_IN_LEDGER,
+      names: [],
+    },
+    prediction_markets: {
+      desk: 'ODDSBORNE',
+      venue: 'prediction',
+      markets: [],
+      positions: [],
+      orders: [],
+      fills: [],
+      pnl: [],
+      notes: [],
+    },
+    meme_coins: {
+      desk: 'BANDIT',
+      venue: 'meme',
+      tokens: [],
+      positions: [],
+      orders: [],
+      fills: [],
+      pnl: [],
+      notes: [],
+    },
+    ...partial,
+  };
+}
+
 describe('assembleLearningPulse', () => {
   test('counts To-review, lessons, beliefs in force, and tagged open books from desk fields', () => {
     const pulse = assembleLearningPulse(desk());
@@ -245,9 +288,12 @@ describe('assembleLearningPulse', () => {
       beliefs_in_force: 2,
       open_books: 4,
       open_books_tagged: 1,
+      open_books_gate_ok: 1,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 3,
     });
     expect(formatLearningPulse(pulse)).toBe(
-      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 of 4 open books tagged',
+      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 thesis · 0 legacy untagged · 3 missing gates',
     );
     expect(learningPulseSummary(pulse)).toEqual(pulse);
   });
@@ -313,6 +359,9 @@ describe('assembleLearningPulse', () => {
       beliefs_in_force: 0,
       open_books: 0,
       open_books_tagged: 0,
+      open_books_gate_ok: 0,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 0,
     });
     expect(formatLearningPulse(pulse)).toBe(
       '0 to review · 0 open / 0 in playbook · 0 beliefs in force · no open books',
@@ -375,7 +424,181 @@ describe('assembleLearningPulse', () => {
     expect(pulse.beliefs_in_force).toBe(1);
     expect(pulse.open_books).toBe(0);
     expect(pulse.open_books_tagged).toBe(0);
+    expect(pulse.open_books_gate_ok).toBe(0);
+    expect(pulse.open_books_legacy_untagged).toBe(0);
+    expect(pulse.open_books_missing_gate).toBe(0);
     expect(formatLearningPulse(pulse)).toContain('1 belief in force');
     expect(formatLearningPulse(pulse)).toContain('no open books');
+  });
+
+  test('CODA tagged + historical-untagged lives are gate-ok — not a broken write habit', () => {
+    const pulse = assembleLearningPulse(desk({
+      ...emptyVenueDesk({
+        book: {
+          ...emptyVenueDesk().book,
+          current_nav: 5157,
+          vs_start: 157,
+          names: [
+            {
+              symbol: 'CODA',
+              quantity: 250,
+              average_cost: 10.1,
+              cost: 2525,
+              mark: 11.2,
+              pnl: 275,
+              note: '',
+              venue: 'equity',
+            },
+            {
+              symbol: 'CIFR',
+              quantity: 63,
+              average_cost: 15.82,
+              cost: 1000,
+              mark: 16.88,
+              pnl: 67,
+              note: '',
+              venue: 'equity',
+            },
+            {
+              symbol: 'NBIS',
+              quantity: 4.65,
+              average_cost: 214.91,
+              cost: 1000,
+              mark: 224.02,
+              pnl: 42.4,
+              note: '',
+              venue: 'equity',
+            },
+          ],
+        },
+      }),
+      positions: [
+        {
+          id: 'ep-coda',
+          account_key: 'agentic-7638',
+          symbol: 'CODA',
+          status: 'open',
+          quantity: 250,
+          average_cost: 10.1,
+          opened_at: AT,
+          closed_at: null,
+          next_review_at: null,
+          thesis_id: 'earnings_gap_structure',
+        },
+        {
+          id: 'ep-cifr',
+          account_key: 'agentic-7638',
+          symbol: 'CIFR',
+          status: 'open',
+          quantity: 63,
+          average_cost: 15.82,
+          opened_at: AT,
+          closed_at: null,
+          next_review_at: null,
+          thesis_id: null,
+          untagged: 'historical',
+        },
+        {
+          id: 'ep-nbis',
+          account_key: 'agentic-7638',
+          symbol: 'NBIS',
+          status: 'open',
+          quantity: 4.65,
+          average_cost: 214.91,
+          opened_at: AT,
+          closed_at: null,
+          next_review_at: null,
+          thesis_id: null,
+          untagged: 'historical',
+        },
+      ],
+    }));
+    expect(pulse.open_books).toBe(3);
+    expect(pulse.open_books_tagged).toBe(1);
+    expect(pulse.open_books_gate_ok).toBe(3);
+    expect(pulse.open_books_legacy_untagged).toBe(2);
+    expect(pulse.open_books_missing_gate).toBe(0);
+    expect(formatLearningPulse(pulse)).toBe(
+      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 thesis · 2 legacy untagged · 0 missing gates',
+    );
+    expect(formatLearningPulse(pulse)).not.toContain('open books tagged');
+    expect(learningPulseSummary(pulse).open_books_missing_gate).toBe(0);
+  });
+
+  test('live lot with neither thesis nor untagged is a true missing gate', () => {
+    const pulse = assembleLearningPulse(desk({
+      ...emptyVenueDesk({
+        book: {
+          ...emptyVenueDesk().book,
+          names: [{
+            symbol: 'CIFR',
+            quantity: 63,
+            average_cost: 15.82,
+            cost: 1000,
+            mark: 16.88,
+            pnl: 67,
+            note: '',
+            venue: 'equity',
+          }],
+        },
+      }),
+      positions: [{
+        id: 'ep-cifr',
+        account_key: 'agentic-7638',
+        symbol: 'CIFR',
+        status: 'open',
+        quantity: 63,
+        average_cost: 15.82,
+        opened_at: AT,
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+      }],
+    }));
+    expect(pulse.open_books).toBe(1);
+    expect(pulse.open_books_tagged).toBe(0);
+    expect(pulse.open_books_gate_ok).toBe(0);
+    expect(pulse.open_books_legacy_untagged).toBe(0);
+    expect(pulse.open_books_missing_gate).toBe(1);
+    expect(formatLearningPulse(pulse)).toContain('0 theses · 0 legacy untagged · 1 missing gate');
+  });
+
+  test('explicit sync_missing_thesis is legacy untagged, not a missing gate', () => {
+    const pulse = assembleLearningPulse(desk({
+      ...emptyVenueDesk({
+        book: {
+          ...emptyVenueDesk().book,
+          names: [{
+            symbol: 'CIFR',
+            quantity: 63,
+            average_cost: 15.82,
+            cost: 1000,
+            mark: 16.88,
+            pnl: 67,
+            note: '',
+            venue: 'equity',
+          }],
+        },
+      }),
+      positions: [{
+        id: 'ep-cifr',
+        account_key: 'agentic-7638',
+        symbol: 'CIFR',
+        status: 'open',
+        quantity: 63,
+        average_cost: 15.82,
+        opened_at: AT,
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+        untagged: 'sync_missing_thesis',
+      }],
+    }));
+    expect(pulse.open_books).toBe(1);
+    expect(pulse.open_books_tagged).toBe(0);
+    expect(pulse.open_books_gate_ok).toBe(1);
+    expect(pulse.open_books_legacy_untagged).toBe(1);
+    expect(pulse.open_books_missing_gate).toBe(0);
+    expect(formatLearningPulse(pulse)).toContain('0 theses · 1 legacy untagged · 0 missing gates');
   });
 });

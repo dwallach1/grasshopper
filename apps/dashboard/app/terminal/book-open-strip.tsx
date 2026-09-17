@@ -7,6 +7,7 @@ import { holdingLifeLabel, holdingTicket, type BookHolding } from '../../lib/boo
 import { isMarkStale } from '../../lib/desk-freshness';
 import { formatAmount, ledgerAmount } from '../../lib/money-units';
 import type { BookOpen, BookOpenTicket } from '../../lib/book-open-strip';
+import { HISTORICAL_UNTAGGED } from '../../lib/position-thesis';
 import { QUIET_STEWARD_FACE, type StewardFace } from '../../lib/steward-face';
 import { DeskLiveline } from './desk-liveline';
 import { HoldingIcon } from './holding-icon';
@@ -85,7 +86,7 @@ export function BookOpenStrip({
                       {row.thesis_id ? (
                         <span className="book-thesis-chip">{humanizeRule(row.thesis_id)}</span>
                       ) : row.untagged ? (
-                        <span className="book-untagged">untagged</span>
+                        <span className="book-untagged">{untaggedChip(row.untagged)}</span>
                       ) : null}
                       {row.rules_in_force.length ? (
                         <span className="book-rule-chip">
@@ -133,7 +134,7 @@ function HoldingDetail({
     <div className="book-holdings-detail">
       <p>
         {row.steward} · {holdingLifeLabel(row.life)} · {row.unit}
-        {row.thesis_name ? ` · ${row.thesis_name}` : row.untagged ? ' · untagged' : ''}
+        {row.thesis_name ? ` · ${row.thesis_name}` : row.untagged ? ` · ${untaggedChip(row.untagged)}` : ''}
         {row.note ? ` · ${row.note}` : ''}
         {ticket ? ` · marks ${markAge}` : ''}
       </p>
@@ -192,6 +193,10 @@ function OpenTicket({
       ) : null}
     </div>
   );
+}
+
+function untaggedChip(untagged: string): string {
+  return untagged === HISTORICAL_UNTAGGED ? 'historical' : 'untagged';
 }
 
 function formatSize(value: number | null): string {
