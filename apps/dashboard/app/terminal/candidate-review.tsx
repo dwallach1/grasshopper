@@ -33,7 +33,7 @@ export function CandidateReviewQueue({
         <p className="paper-title">To review</p>
         <p className="thesis-lede">
           {queue.length
-            ? `${queue.length} pending · membership first, ledger score`
+            ? 'Membership first, ledger score.'
             : 'No pending candidates on this desk.'}
           {canReview
             ? ' Promote, reject, or merge writes the ledger.'

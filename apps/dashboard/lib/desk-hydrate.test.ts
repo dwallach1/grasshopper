@@ -5,6 +5,7 @@ import { assembleDeskBookRollup } from './desk-book-rollup';
 import { deskFromWire } from './desk-client';
 import { assembleDeskFreshness } from './desk-freshness';
 import { assembleLeaderboard } from './desk-leaderboard';
+import { assembleLearningPulse } from './learning-pulse';
 
 /** Shape the live Worker served on 2026-09-10 before hydrate — no `tests`. */
 const slimPublicWire = {
@@ -93,6 +94,15 @@ describe('public slim /api/desk hydrate', () => {
     expect(() => assembleDeskFreshness(desk)).not.toThrow();
     expect(() => assembleDeskBookRollup(desk)).not.toThrow();
     expect(() => assembleCrtBoot(desk)).not.toThrow();
+    expect(() => assembleLearningPulse(desk)).not.toThrow();
+    expect(assembleLearningPulse(desk)).toEqual({
+      to_review: 0,
+      lessons_open: 0,
+      lessons_incorporated: 0,
+      beliefs_in_force: 0,
+      open_books: 1,
+      open_books_tagged: 0,
+    });
 
     const rollup = assembleDeskBookRollup(desk);
     expect(rollup.usd_nav).toBeCloseTo(5734.4193 + 400);

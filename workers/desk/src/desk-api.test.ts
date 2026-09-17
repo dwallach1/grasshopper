@@ -106,6 +106,14 @@ describe('public desk Worker API', () => {
       stale_opens: 0,
       resolved_still_open: 0,
       stale_catalog: 0,
+      learning: {
+        to_review: 0,
+        lessons_open: 0,
+        lessons_incorporated: 0,
+        beliefs_in_force: 0,
+        open_books: 0,
+        open_books_tagged: 0,
+      },
     });
     expect(ok.headers.get('cache-control')).toBe('no-store');
     const down = await handleDeskApi(
@@ -196,6 +204,8 @@ describe('public desk reader credentials', () => {
     expect(fn).not.toContain("key === 'beliefs'");
     const api = await Bun.file(new URL('./desk-api.ts', import.meta.url)).text();
     expect(api).toContain('assembleDeskBookHealth');
+    expect(api).toContain('assembleLearningPulse');
+    expect(api).toContain('learningPulseSummary');
     expect(api).toContain('waitUntil');
     expect(api).not.toContain('.clone().json()');
     expect(api).not.toContain('served.clone()');

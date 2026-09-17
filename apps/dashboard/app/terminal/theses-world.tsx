@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { assembleLearningPulse, formatLearningPulse } from '../../lib/learning-pulse';
 import {
   assembleThesisRoster,
   thesisForId,
@@ -32,6 +33,7 @@ export function ThesesWorld({
   onReviewed?: () => void;
 }) {
   const roster = assembleThesisRoster(desk).rows;
+  const pulse = useMemo(() => assembleLearningPulse(desk), [desk]);
   const firstPaint = useRef(true);
   const [readingId, setReadingId] = useState<string | null>(null);
   const reading = readingId ? thesisForId(roster, readingId) ?? null : null;
@@ -86,8 +88,8 @@ export function ThesesWorld({
       <h1 className="visually-hidden">Theses</h1>
       <header className="thesis-mast">
         <p className="paper-title">Theses</p>
-        <p className="thesis-lede">
-          Claims on the ledger. Stance, status, and evidence — not book marks.
+        <p className="learning-pulse" aria-label="Learning loop">
+          {formatLearningPulse(pulse)}
         </p>
       </header>
       <LessonQueue desk={desk} canIncorporate={canIncorporate} onIncorporated={onReviewed} />

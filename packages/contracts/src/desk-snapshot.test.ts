@@ -6,6 +6,7 @@ import {
   hydratePublicDesk,
   isJunkOntologyLabel,
   isPublicSnapshot,
+  LEARNING_PULSE_KEYS,
   LIVE_JSON_CACHE_CONTROL,
   ONTOLOGY_JUNK_LABELS,
   parseDeskWire,
@@ -94,6 +95,29 @@ describe('public desk snapshot contract', () => {
       { id: 1, status: 'pending', score: 40, source_count: 9, proposed_label: 'low', candidate_type: 'term' },
     ]);
     expect(published.ontology_actions).toEqual([]);
+  });
+
+  test('public snapshot keeps the arrays the Theses learning pulse reads', () => {
+    expect(LEARNING_PULSE_KEYS.every((key) => (DESK_ARRAY_KEYS as readonly string[]).includes(key))).toBe(true);
+    const published = toPublicDeskSnapshot({
+      ...sample,
+      beliefs: [{ id: 'b1', thesis_id: 'earnings_gap_structure', kind: 'playbook_rule' }],
+      lessons: [{ id: 37, incorporated: false, thesis_id: 'earnings_gap_structure' }],
+      ontology_candidates: [
+        { id: 2, status: 'pending', score: 100, source_count: 1, proposed_label: 'DOCN', candidate_type: 'membership' },
+      ],
+      positions: [{ id: 'ep-coda', symbol: 'CODA', status: 'open', thesis_id: 'earnings_gap_structure' }],
+    });
+    expect(published.beliefs).toEqual([
+      { id: 'b1', thesis_id: 'earnings_gap_structure', kind: 'playbook_rule' },
+    ]);
+    expect(published.lessons).toEqual([
+      { id: 37, incorporated: false, thesis_id: 'earnings_gap_structure' },
+    ]);
+    expect(published.ontology_candidates).toHaveLength(1);
+    expect(published.positions).toEqual([
+      { id: 'ep-coda', symbol: 'CODA', status: 'open', thesis_id: 'earnings_gap_structure' },
+    ]);
   });
 
   test('review ranking prefers memberships, drops deny-list junk, keeps ledger scores', () => {

@@ -4,7 +4,7 @@ Daily `research_lessons` stay open until an operator writes them into the playbo
 
 ## What the desk shows
 
-Theses (parchment) has a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. Book CLOSED still shows the clip-linked lesson on the lot; it does not repeat this queue.
+Theses (parchment) has a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. The Theses mast shows a quiet **learning pulse** counted from the same `/api/desk` arrays (To-review queue, open vs incorporated lessons, playbook beliefs in force, tagged open books). Queue headers do not repeat those counts. Book CLOSED still shows the clip-linked lesson on the lot; it does not repeat this queue.
 
 Incorporate renders only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 
@@ -32,7 +32,7 @@ Each call:
 
 ## Public phone
 
-Read-only. `desk-public-rest` `/bundle/public` already selects `lessons` (`PUBLIC_KEYS` includes `lessons`). Worker deploy ≠ Edge Function deploy. This change does not need a function redeploy unless that key is missing on a stale function.
+Read-only. `desk-public-rest` `/bundle/public` already selects `lessons` (`PUBLIC_KEYS` includes `lessons`). The pulse also needs `beliefs`, `candidates`, `positions`, and the nested pm/meme position bags — those keys are already on `/bundle/public`. Worker deploy ≠ Edge Function deploy. This change does not need a function redeploy unless those keys are missing on a stale function.
 
 `POST /api/desk` stays 405. Anon cannot execute the incorporate RPC.
 

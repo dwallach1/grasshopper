@@ -53,6 +53,19 @@ export const PUBLIC_CANDIDATE_CAP = 40;
 /** Fetch window before ranking. Must stay ≥ cap so memberships are not crowded out. */
 export const PUBLIC_CANDIDATE_FETCH = 200;
 
+/**
+ * Arrays the Theses learning pulse reads. Public slim must keep them so the
+ * phone can count To-review / lessons / beliefs / tagged lots without inventing
+ * a second payload. Nested `prediction_markets.positions`, `meme_coins.positions`,
+ * and `book.names` stay too (not in PUBLIC_OMIT).
+ */
+export const LEARNING_PULSE_KEYS = [
+  'beliefs',
+  'lessons',
+  'ontology_candidates',
+  'positions',
+] as const;
+
 /** Exact normalized labels that are not ontology. Keep in sync with `private.ontology_label_is_junk`. */
 export const ONTOLOGY_JUNK_LABELS = [
   'http',

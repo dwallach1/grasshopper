@@ -7,6 +7,10 @@ import {
 } from '@quantanamo/contracts/desk-snapshot';
 
 import { assembleDeskBookHealth, deskHealthSummary } from '../../../apps/dashboard/lib/desk-book-health';
+import {
+  assembleLearningPulse,
+  learningPulseSummary,
+} from '../../../apps/dashboard/lib/learning-pulse';
 import type { DeskPayload } from '../../../apps/dashboard/lib/ledger-types';
 
 import { liveReaderReady, loadPublicDeskServe, type PublicDeskServe } from './desk-live';
@@ -128,14 +132,15 @@ async function handleHealth(
       console.error(JSON.stringify({ event: 'desk_live_rejected' }));
       return publicError(503);
     }
-    const health = deskHealthSummary(
-      assembleDeskBookHealth(served.desk as DeskPayload, Date.now()),
-    );
+    const payload = served.desk as DeskPayload;
+    const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
+    const learning = learningPulseSummary(assembleLearningPulse(payload));
     return jsonResponse(200, {
       ok: true,
       generated_at: served.generated_at,
       source: 'live',
       ...health,
+      learning,
     }, { 'Cache-Control': 'no-store' });
   } catch (error) {
     console.error(JSON.stringify({
