@@ -102,6 +102,9 @@ describe('public slim /api/desk hydrate', () => {
       beliefs_in_force: 0,
       open_books: 1,
       open_books_tagged: 0,
+      open_books_gate_ok: 0,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 1,
     });
 
     const rollup = assembleDeskBookRollup(desk);

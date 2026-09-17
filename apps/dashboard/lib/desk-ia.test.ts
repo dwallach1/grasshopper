@@ -237,6 +237,13 @@ describe('desk IA smoke', () => {
     expect(world).toContain('formatLearningPulse');
     expect(world).toContain('learning-pulse');
     expect(world).toContain('aria-label="Learning loop"');
+    const pulse = await readDashboard('lib/learning-pulse.ts');
+    expect(pulse).toContain('open_books_gate_ok');
+    expect(pulse).toContain('open_books_legacy_untagged');
+    expect(pulse).toContain('open_books_missing_gate');
+    expect(pulse).toContain('legacy untagged');
+    expect(pulse).toContain('missing gate');
+    expect(pulse).not.toContain('open books tagged');
     expect(world).not.toContain('Claims on the ledger');
     expect(css).toContain('.learning-pulse');
     expect(css).toMatch(/\.learning-pulse \{[\s\S]*?background: var\(--card/);
@@ -518,6 +525,8 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('book-thesis-chip');
     expect(openStrip).toContain('book-untagged');
     expect(openStrip).toContain('row.untagged');
+    expect(openStrip).toContain('HISTORICAL_UNTAGGED');
+    expect(openStrip).toContain('untaggedChip');
     expect(openStrip).toContain('humanizeRule(row.thesis_id)');
     expect(openStrip).toContain('Rules in force');
     expect(openStrip).toContain('clip_note');
