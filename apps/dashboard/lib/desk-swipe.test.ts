@@ -108,7 +108,7 @@ describe('desk swipe deck', () => {
     expect(pagerScrollToBehavior(false, false, false)).toBe('smooth');
   });
 
-  test('page swipe is horizontal-only and does not share the card dragger', () => {
+  test('page swipe is horizontal-only; Team/Board card draggers do not arm the rail', () => {
     expect(isDominantHorizontal(-80, 10)).toBe(true);
     expect(isDominantHorizontal(-80, 90)).toBe(false);
     expect(swipeAxis(-80, 10)).toBe(1);
