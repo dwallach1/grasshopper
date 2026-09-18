@@ -154,7 +154,7 @@ describe('worker knowledge primitives', () => {
       lexicon: [{ token: 'about', token_type: 'candidate_stopword', weight: 0 }],
       symbols: ['VST', 'STOCKS', 'BIGINT', 'NVDA'],
     });
-    const bookmark = { id: 'bookmark-1', text: 'https t.co and STOCKS BIGINT NVDA after earnings about VST.' };
+    const bookmark = { id: 'bookmark-1', text: 'https t.co and STOCKS BIGINT NVDA since avgo cien inference after earnings about VST.' };
     const classified = parseOntologyAiOutput({ analyses: [{
       bookmark_id: bookmark.id,
       market_relevance: 40,
@@ -171,7 +171,7 @@ describe('worker knowledge primitives', () => {
       }, {
         candidate_type: 'membership', theme_id: 'power', label: 'STOCKS',
         description: 'Not a ticker.',
-        confidence: 85, evidence_excerpt: 'STOCKS after',
+        confidence: 85, evidence_excerpt: 'STOCKS BIGINT',
       }, {
         candidate_type: 'membership', theme_id: 'power', label: 'BIGINT',
         description: 'SQL type, not a ticker.',
@@ -179,20 +179,32 @@ describe('worker knowledge primitives', () => {
       }, {
         candidate_type: 'membership', theme_id: 'power', label: 'NVDA',
         description: 'Real ticker.',
-        confidence: 88, evidence_excerpt: 'BIGINT NVDA after',
+        confidence: 88, evidence_excerpt: 'BIGINT NVDA since',
       }, {
         candidate_type: 'term', theme_id: 'power', label: 'about',
         description: 'Stopword.',
         confidence: 40, evidence_excerpt: 'about VST',
       }, {
+        candidate_type: 'term', theme_id: 'power', label: 'since',
+        description: 'Discourse filler.',
+        confidence: 95, evidence_excerpt: 'since avgo',
+      }, {
+        candidate_type: 'term', theme_id: 'power', label: 'avgo cien',
+        description: 'Ticker mashup.',
+        confidence: 95, evidence_excerpt: 'avgo cien',
+      }, {
         candidate_type: 'term', theme_id: 'power', label: 'nuclear',
         description: 'Theme vocabulary.',
         confidence: 70, evidence_excerpt: 'after earnings',
+      }, {
+        candidate_type: 'term', theme_id: 'power', label: 'inference',
+        description: 'Theme vocabulary.',
+        confidence: 90, evidence_excerpt: 'inference after',
       }],
     }] }, [{
       id: bookmark.id, text: bookmark.text, contextAnnotations: [], bookmark, createdAt: '2026-08-24T12:00:00Z',
     }], catalog);
-    expect(classified[0]?.candidates.map((row) => row.label)).toEqual(['NVDA', 'nuclear']);
+    expect(classified[0]?.candidates.map((row) => row.label)).toEqual(['NVDA', 'nuclear', 'inference']);
   });
 
   test('fails closed when ontology AI omits analyses', () => {

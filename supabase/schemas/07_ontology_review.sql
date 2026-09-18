@@ -367,8 +367,10 @@ revoke all on function public.review_ontology_candidate(bigint, text, text, text
 grant execute on function public.review_ontology_candidate(bigint, text, text, text)
   to authenticated, service_role;
 
--- Deny-list hygiene. Exact labels + URL tokens + lexicon stopwords as the
--- whole label. Re-runnable; each reject writes ontology_management_actions.
+-- Deny-list hygiene. Exact labels + URL tokens + ticker mashups + lexicon
+-- stopwords as the whole label. Re-runnable; each reject writes
+-- ontology_management_actions. Keep in sync with ONTOLOGY_JUNK_LABELS /
+-- isJunkOntologyLabel (same labels; mashup regex is the TS helper).
 create or replace function private.ontology_label_is_junk(p_type text, p_label text)
 returns boolean
 language sql
@@ -379,6 +381,7 @@ as $$
   select
     v = ''
     or v ~ '(^| )(http|https|www|t\.co)( |$)'
+    or v ~ '^[a-z]{2,5}( [a-z]{2,5})+$'
     or v in (
       'http', 'https', 'www', 't.co', 'url',
       'stock', 'stocks', 'price', 'results', 'popular',
@@ -392,7 +395,12 @@ as $$
       'arr', 'pt', 'cpu', 'mw', 'llc',
       'another', 'files', 'github',
       'latest', 'trending', 'featured', 'related', 'headlines',
-      'overview', 'introduction', 'conclusion', 'contents'
+      'overview', 'introduction', 'conclusion', 'contents',
+      'since', 'literally', 'called', 'ultimately', 'next week',
+      'names', 'invest', 'leader', 'rallied', 'fastest', 'gonna',
+      'provide', 'hours', 'online', 'performers', 'clusters', 'crowded',
+      'awaited', 'awaited quarters', 'logo link', 'confirmed', 'exploring',
+      'extract', 'brand', 'breaking', 'bucket', 'department', 'cities'
     )
     or exists (
       select 1
@@ -407,7 +415,7 @@ as $$
 $$;
 
 comment on function private.ontology_label_is_junk(text, text) is
-  'True when a candidate label is URL/SQL/listicle/stopword junk. Keep labels in sync with ONTOLOGY_JUNK_LABELS.';
+  'True when a candidate label is URL/SQL/listicle/discourse/ticker-mashup/stopword junk. Keep labels in sync with ONTOLOGY_JUNK_LABELS / isJunkOntologyLabel.';
 
 revoke all on function private.ontology_label_is_junk(text, text) from public, anon;
 

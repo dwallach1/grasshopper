@@ -21,9 +21,11 @@ Normalized label (lowercase, collapsed space) is junk when:
 - it is one of: `url`, `stock`, `stocks`, `price`, `results`, `popular`
 - it is a SQL/schema token as the **whole** label: `select`, `bigint`, `varchar`, `timestamp`, `in`, `by`, `order`, `pt`, `arr`, `cpu`, `mw`, `llc`, …
 - it is a listicle/section header as the **whole** label: `another`, `files`, `github`, `latest`, `contents`, …
+- it is a discourse filler / non-vocab phrase as the **whole** label: `since`, `literally`, `next week`, `logo link`, `awaited quarters`, …
+- it is two or more 2–5 letter tokens separated by spaces (`avgo cien`, `iren mrvl`) — ticker mashups, same regex as TS `isJunkOntologyLabel`. Not a score.
 - it is an active `ontology_lexicon.candidate_stopword` as the **whole** label (`about`, `this`, …)
 
-This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear` stay for a human — they are ontology vocabulary (and valid theme names), just ranked below memberships. Whole-label SQL/listicle stopwords still reject even when grind proposed them as memberships.
+This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear`, `inference`, `scarcity`, `neocloud` stay for a human — they are ontology vocabulary (and valid theme names), just ranked below memberships. Whole-label SQL/listicle/discourse stopwords still reject even when grind proposed them as memberships.
 
 Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`):
 
@@ -82,7 +84,7 @@ supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --
 
 ## Live path (Quantanamo)
 
-Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. First apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
+Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. Discourse-filler + ticker-mashup deny-list (`ontology_junk_discourse`, 2026-09-18) ships in this change; apply / re-run `reject_junk_ontology_candidates` after merge if the live function is still the listicle revision. First listicle apply rejected **18** pending rows (`ARR`, `GITHUB`, `PT`, `CPU`, `SMALLINT`, `another`, `column`, `latest`, `postgres`, `values`). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` / `inference` / `scarcity` / `neocloud` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
 
 ```sql
 select public.reject_junk_ontology_candidates();
