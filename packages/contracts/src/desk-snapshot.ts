@@ -137,9 +137,39 @@ export const ONTOLOGY_JUNK_LABELS = [
   'introduction',
   'conclusion',
   'contents',
+  'since',
+  'literally',
+  'called',
+  'ultimately',
+  'next week',
+  'names',
+  'invest',
+  'leader',
+  'rallied',
+  'fastest',
+  'gonna',
+  'provide',
+  'hours',
+  'online',
+  'performers',
+  'clusters',
+  'crowded',
+  'awaited',
+  'awaited quarters',
+  'logo link',
+  'confirmed',
+  'exploring',
+  'extract',
+  'brand',
+  'breaking',
+  'bucket',
+  'department',
+  'cities',
 ] as const;
 
 const ONTOLOGY_URL_LABEL_RE = /(^| )(http|https|www|t\.co)( |$)/;
+/** Two+ 2–5 letter tokens separated by spaces (`avgo cien`). Same as SQL. Not a score. */
+const ONTOLOGY_TICKER_MASHUP_RE = /^[a-z]{2,5}( [a-z]{2,5})+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -149,11 +179,12 @@ export function normalizeOntologyLabel(value: unknown): string {
   return String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** URL fragments, ticker-shaped junk, and documented stop labels. Does not invent a score. */
+/** URL fragments, space-joined ticker mashups, and documented stop labels. Does not invent a score. */
 export function isJunkOntologyLabel(label: unknown, _candidateType?: unknown): boolean {
   const normalized = normalizeOntologyLabel(label);
   if (!normalized) return true;
   if (ONTOLOGY_URL_LABEL_RE.test(normalized)) return true;
+  if (ONTOLOGY_TICKER_MASHUP_RE.test(normalized)) return true;
   return (ONTOLOGY_JUNK_LABELS as readonly string[]).includes(normalized);
 }
 

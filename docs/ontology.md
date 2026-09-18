@@ -54,7 +54,7 @@ The knowledge Worker sends bounded bookmark batches and the active ontology to W
 
 Validated model proposals enter the candidate queue. Only LLM-origin candidates with sufficiently strong, multi-source evidence can auto-promote; membership promotion additionally requires a verified symbol, and vocabulary promotion requires source distinctiveness. Prompt/model versions and validated output are stored on each bookmark, so unchanged inputs skip inference while a prompt or model upgrade triggers bounded backfill.
 
-Operators review the rest on Theses (parchment **To review**). Memberships rank first. A documented deny-list (`https`, `stocks`, `select`, `varchar`, `another`, …) is auto-rejected through `reject_junk_ontology_candidates` into `ontology_management_actions`. Promote / reject / merge still write through `review_ontology_candidate` — see [`docs/ontology-review.md`](ontology-review.md). The public phone shows the pending queue and does not write.
+Operators review the rest on Theses (parchment **To review**). Memberships rank first. A documented deny-list (`https`, `stocks`, `select`, `varchar`, `another`, `since`, `logo link`, …) is auto-rejected through `reject_junk_ontology_candidates` into `ontology_management_actions`. Promote / reject / merge still write through `review_ontology_candidate` — see [`docs/ontology-review.md`](ontology-review.md). The public phone shows the pending queue and does not write.
 
 ```sh
 bun run --cwd workers/knowledge types

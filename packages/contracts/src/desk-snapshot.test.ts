@@ -127,6 +127,9 @@ describe('public desk snapshot contract', () => {
     expect(ONTOLOGY_JUNK_LABELS).toContain('stocks');
     expect(ONTOLOGY_JUNK_LABELS).toContain('varchar');
     expect(ONTOLOGY_JUNK_LABELS).toContain('another');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('since');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('awaited quarters');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('logo link');
     expect(isJunkOntologyLabel('https t.co', 'term')).toBe(true);
     expect(isJunkOntologyLabel('STOCKS', 'membership')).toBe(true);
     expect(isJunkOntologyLabel('DOCN', 'membership')).toBe(false);
@@ -195,6 +198,38 @@ describe('public desk snapshot contract', () => {
       'NVDA',
       'energy',
       'nuclear',
+    ]);
+  });
+
+  test('discourse fillers and ticker mashups are junk; theme vocabulary stays', () => {
+    for (const label of [
+      'since', 'Literally', 'called', 'ultimately', 'Next Week', 'names', 'invest',
+      'leader', 'rallied', 'fastest', 'gonna', 'provide', 'hours', 'online',
+      'performers', 'clusters', 'crowded', 'awaited', 'awaited quarters',
+      'logo link', 'confirmed', 'exploring', 'extract', 'brand', 'breaking',
+      'bucket', 'department', 'cities', 'avgo cien', 'IREN MRVL', 'cien amba',
+    ]) {
+      expect(isJunkOntologyLabel(label, 'term')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(true);
+    }
+    for (const label of ['inference', 'scarcity', 'neocloud', 'NVDA', 'DOCN', 'photonics', 'nuclear', 'power']) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(false);
+    }
+
+    const ranked = publicPendingCandidates([
+      { id: 1, status: 'pending', score: 95, source_count: 1, proposed_label: 'since', candidate_type: 'term' },
+      { id: 2, status: 'pending', score: 95, source_count: 1, proposed_label: 'avgo cien', candidate_type: 'term' },
+      { id: 3, status: 'pending', score: 95, source_count: 1, proposed_label: 'logo link', candidate_type: 'term' },
+      { id: 4, status: 'pending', score: 95, source_count: 1, proposed_label: 'inference', candidate_type: 'term' },
+      { id: 5, status: 'pending', score: 100, source_count: 1, proposed_label: 'NVDA', candidate_type: 'membership' },
+      { id: 6, status: 'pending', score: 76, source_count: 3, proposed_label: 'neocloud', candidate_type: 'term' },
+    ], 5);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'NVDA',
+      'inference',
+      'neocloud',
     ]);
   });
 

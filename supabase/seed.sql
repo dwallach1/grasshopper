@@ -137,7 +137,12 @@ from unnest(array[
   'arr','pt','cpu','mw','llc',
   'another','files','github',
   'latest','trending','featured','related','headlines',
-  'overview','introduction','conclusion','contents'
+  'overview','introduction','conclusion','contents',
+  'since','literally','called','ultimately','next week',
+  'names','invest','leader','rallied','fastest','gonna',
+  'provide','hours','online','performers','clusters','crowded',
+  'awaited','awaited quarters','logo link','confirmed','exploring',
+  'extract','brand','breaking','bucket','department','cities'
 ]::text[]) token
 on conflict (token, token_type) do nothing;
 

@@ -101,8 +101,15 @@ describe('ontology candidate review queue', () => {
     expect(isJunkOntologyLabel('POPULAR', 'membership')).toBe(true);
     expect(isJunkOntologyLabel('VARCHAR', 'membership')).toBe(true);
     expect(isJunkOntologyLabel('Another', 'theme')).toBe(true);
+    expect(isJunkOntologyLabel('since', 'term')).toBe(true);
+    expect(isJunkOntologyLabel('awaited quarters', 'term')).toBe(true);
+    expect(isJunkOntologyLabel('avgo cien', 'term')).toBe(true);
+    expect(isJunkOntologyLabel('IREN MRVL', 'term')).toBe(true);
     expect(isJunkOntologyLabel('NVDA', 'membership')).toBe(false);
     expect(isJunkOntologyLabel('nuclear', 'theme')).toBe(false);
+    expect(isJunkOntologyLabel('inference', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('scarcity', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('neocloud', 'term')).toBe(false);
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
@@ -223,11 +230,13 @@ describe('ontology candidate review queue', () => {
   test('SQL deny-list stays in sync with the documented labels', async () => {
     const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
     const migration = await readFile(
-      join(import.meta.dir, '../../../supabase/migrations/20260915003000_ontology_junk_sql_listicle.sql'),
+      join(import.meta.dir, '../../../supabase/migrations/20260918184500_ontology_junk_discourse.sql'),
       'utf8',
     );
     expect(sql).toContain('private.ontology_label_is_junk');
     expect(sql).toContain("review_note = 'junk_deny_list'");
+    expect(sql).toContain("v ~ '^[a-z]{2,5}( [a-z]{2,5})+$'");
+    expect(migration).toContain("v ~ '^[a-z]{2,5}( [a-z]{2,5})+$'");
     for (const source of [sql, migration]) {
       expect(junkLabelsFromSql(source)).toEqual([...ONTOLOGY_JUNK_LABELS]);
     }
