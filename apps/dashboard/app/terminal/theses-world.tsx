@@ -10,6 +10,7 @@ import {
   thesisForId,
   type ThesisRosterRow,
 } from '../../lib/thesis-roster';
+import { BeliefQueue, TaggedLotQueue } from './belief-queue';
 import { CandidateReviewQueue } from './candidate-review';
 import { HoldingIcon } from './holding-icon';
 import { LessonQueue } from './lesson-queue';
@@ -92,6 +93,8 @@ export function ThesesWorld({
           {formatLearningPulse(pulse)}
         </p>
       </header>
+      <BeliefQueue desk={desk} />
+      <TaggedLotQueue desk={desk} />
       <LessonQueue desk={desk} canIncorporate={canIncorporate} onIncorporated={onReviewed} />
       <CandidateReviewQueue desk={desk} canReview={canReview} onReviewed={onReviewed} />
       {roster.length ? (

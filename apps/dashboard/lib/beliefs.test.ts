@@ -107,6 +107,7 @@ describe('belief mapping', () => {
     expect(rules).toHaveLength(2);
     expect(rules[0]?.thesis_id).toBe('earnings_gap_structure');
     expect(rules[0]?.new_confidence).toBe(84);
+    expect(rules[0]?.research_lesson_id).toBe('36');
     expect(rules[0]?.rules[0]).toBe('no_chase_already_printed_leftovers');
     expect(rules[1]?.thesis_id).toBe('weather_same_day_high');
     expect(rules.find((row) => row.id === older.id)).toBeUndefined();

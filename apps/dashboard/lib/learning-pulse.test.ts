@@ -293,7 +293,7 @@ describe('assembleLearningPulse', () => {
       open_books_missing_gate: 3,
     });
     expect(formatLearningPulse(pulse)).toBe(
-      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 thesis · 0 legacy untagged · 3 missing gates',
+      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 tagged lot · 0 legacy untagged · 3 missing gates',
     );
     expect(learningPulseSummary(pulse)).toEqual(pulse);
   });
@@ -519,7 +519,7 @@ describe('assembleLearningPulse', () => {
     expect(pulse.open_books_legacy_untagged).toBe(2);
     expect(pulse.open_books_missing_gate).toBe(0);
     expect(formatLearningPulse(pulse)).toBe(
-      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 thesis · 2 legacy untagged · 0 missing gates',
+      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 tagged lot · 2 legacy untagged · 0 missing gates',
     );
     expect(formatLearningPulse(pulse)).not.toContain('open books tagged');
     expect(learningPulseSummary(pulse).open_books_missing_gate).toBe(0);
@@ -560,7 +560,7 @@ describe('assembleLearningPulse', () => {
     expect(pulse.open_books_gate_ok).toBe(0);
     expect(pulse.open_books_legacy_untagged).toBe(0);
     expect(pulse.open_books_missing_gate).toBe(1);
-    expect(formatLearningPulse(pulse)).toContain('0 theses · 0 legacy untagged · 1 missing gate');
+    expect(formatLearningPulse(pulse)).toContain('0 tagged lots · 0 legacy untagged · 1 missing gate');
   });
 
   test('explicit sync_missing_thesis is legacy untagged, not a missing gate', () => {
@@ -599,6 +599,6 @@ describe('assembleLearningPulse', () => {
     expect(pulse.open_books_gate_ok).toBe(1);
     expect(pulse.open_books_legacy_untagged).toBe(1);
     expect(pulse.open_books_missing_gate).toBe(0);
-    expect(formatLearningPulse(pulse)).toContain('0 theses · 1 legacy untagged · 0 missing gates');
+    expect(formatLearningPulse(pulse)).toContain('0 tagged lots · 1 legacy untagged · 0 missing gates');
   });
 });
