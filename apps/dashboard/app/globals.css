@@ -5212,13 +5212,17 @@ a:focus-visible {
 .thesis-world[data-reading="1"] .thesis-mast,
 .thesis-world[data-reading="1"] .review-queue,
 .thesis-world[data-reading="1"] .lesson-queue,
+.thesis-world[data-reading="1"] .belief-queue,
+.thesis-world[data-reading="1"] .tagged-lot-queue,
 .thesis-world[data-reading="1"] .thesis-empty {
   pointer-events: none;
   visibility: hidden;
 }
 
 .review-queue,
-.lesson-queue {
+.lesson-queue,
+.belief-queue,
+.tagged-lot-queue {
   display: flex;
   flex-direction: column;
   gap: 10px;

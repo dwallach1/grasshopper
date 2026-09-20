@@ -4,7 +4,7 @@ Daily `research_lessons` stay open until an operator writes them into the playbo
 
 ## What the desk shows
 
-Theses (parchment) has a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. The Theses mast shows a quiet **learning pulse** counted from the same `/api/desk` arrays (To-review queue, open vs incorporated lessons, playbook beliefs in force, thesis-tagged vs legacy untagged vs missing-gate open books). Queue headers do not repeat those counts. Book CLOSED still shows the clip-linked lesson on the lot; it does not repeat this queue.
+Theses (parchment) has a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. **Beliefs** lists the newest playbook rule per thesis from the same `beliefs[]` (rationale, thesis id+title, bound live lot). A belief that already cites a lesson on this parchment omits the summary and chips **from lesson**. **Tagged lots** lists open books that carry a `thesis_id`. The Theses mast shows a quiet **learning pulse** counted from the same `/api/desk` arrays (To-review queue, open vs incorporated lessons, playbook beliefs in force, tagged vs legacy untagged vs missing-gate open lots). Queue headers do not repeat those counts. Book CLOSED still shows the clip-linked lesson on the lot; it does not repeat this queue.
 
 Incorporate renders only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 

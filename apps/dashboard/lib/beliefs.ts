@@ -38,6 +38,7 @@ export type PlaybookRule = {
   observed_at: string;
   prior_confidence: number | null;
   new_confidence: number | null;
+  research_lesson_id: string | null;
 };
 
 export type ClipNote = {
@@ -125,6 +126,7 @@ export function assemblePlaybookRules(beliefs: readonly BeliefUpdateRow[]): Play
       observed_at: row.observed_at,
       prior_confidence: row.prior_confidence,
       new_confidence: row.new_confidence,
+      research_lesson_id: row.research_lesson_id,
     }));
 }
 

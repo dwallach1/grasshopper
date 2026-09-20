@@ -3,7 +3,8 @@
  * a lesson, a belief, or a tagged lot. To-review matches the parchment queue
  * (ranked, junk dropped, cap 40), not the grind backlog.
  *
- * Open-book coverage is gate-honest: a live lot with thesis_id is tagged;
+ * Open-book coverage is gate-honest: a live lot with thesis_id is a tagged
+ * lot (not a count of theses in the system);
  * a live lot with an explicit untagged reason (historical leftovers,
  * sync_missing_thesis, …) is legacy, not a write-habit miss; only neither
  * is a missing gate.
@@ -69,10 +70,10 @@ export function learningPulseSummary(pulse: LearningPulse): LearningPulse {
 
 function formatOpenBooks(pulse: LearningPulse): string {
   if (pulse.open_books <= 0) return 'no open books';
-  const thesisWord = pulse.open_books_tagged === 1 ? 'thesis' : 'theses';
+  const taggedWord = pulse.open_books_tagged === 1 ? 'tagged lot' : 'tagged lots';
   const missingWord = pulse.open_books_missing_gate === 1 ? 'missing gate' : 'missing gates';
   return [
-    `${pulse.open_books_tagged} ${thesisWord}`,
+    `${pulse.open_books_tagged} ${taggedWord}`,
     `${pulse.open_books_legacy_untagged} legacy untagged`,
     `${pulse.open_books_missing_gate} ${missingWord}`,
   ].join(' · ');

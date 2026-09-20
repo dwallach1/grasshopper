@@ -1,10 +1,10 @@
 # Playbook rules — load before size
 
-Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book shows up to three of those rules on a holding; Theses shows the confidence trail. This file is the write + read contract. Do not invent marks, P/L, or close rows.
+Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book shows up to three of those rules on a holding; Theses shows the confidence trail and the playbook rows in force as parchment (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
 ## Open with thesis_id
 
-New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot shows a quiet chip (`historical` for pre-ontology leftovers, otherwise `untagged`) and no rules in force. The ontology cannot learn from that money. The Theses learning pulse counts thesis-tagged vs legacy untagged vs missing-gate separately, so historical leftovers are not a write-habit miss.
+New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot shows a quiet chip (`historical` for pre-ontology leftovers, otherwise `untagged`) and no rules in force. The ontology cannot learn from that money. The Theses learning pulse counts tagged lots vs legacy untagged vs missing-gate separately, so historical leftovers are not a write-habit miss. "1 tagged lot" is open-book coverage, not a count of theses in the system.
 
 ```sql
 -- Gate (also a CHECK on the three position tables)
@@ -114,7 +114,7 @@ insert into public.belief_updates (
 
 ## Incorporate an open lesson
 
-Theses shows open `research_lessons` first. The mast learning pulse counts playbook beliefs in force from the same `beliefs[]` the Book uses. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
+Theses shows open `research_lessons` first, then inspectable playbook beliefs in force from the same `beliefs[]` the Book uses. The mast counts those rows; it does not hide the rationale. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
 
 ```ts
 { "lesson_id": 37 }
