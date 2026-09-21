@@ -75,6 +75,17 @@ export function assembleTaggedLots(desk: DeskPayload): TaggedLotCard[] {
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
+/**
+ * Pulse chip target. One distinct thesis among tagged lots, otherwise none.
+ * Two lots on the same thesis still count as one. Several theses stay on the cards.
+ */
+export function singleTaggedThesisId(desk: DeskPayload): string | null {
+  const ids = new Set(assembleTaggedLots(desk).map((row) => row.thesis_id));
+  if (ids.size !== 1) return null;
+  const [id] = ids;
+  return id ?? null;
+}
+
 function lessonListedFor(
   rule: PlaybookRule,
   listed: readonly LessonRow[],

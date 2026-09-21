@@ -4,7 +4,7 @@ import { PLAYBOOK_RULE_KIND, type BeliefUpdateRow } from './beliefs';
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import { fallbackTeam } from './desk-team';
 import type { DeskPayload, LessonRow } from './ledger-types';
-import { assembleBeliefsInForce, assembleTaggedLots } from './learning-inspect';
+import { assembleBeliefsInForce, assembleTaggedLots, singleTaggedThesisId } from './learning-inspect';
 import { BANDIT_PRIMARY_ACCOUNT } from './meme-book';
 
 const AT = '2026-09-16T20:00:00.000Z';
@@ -298,5 +298,89 @@ describe('assembleTaggedLots', () => {
         notes: [],
       },
     }))).toEqual([]);
+  });
+});
+
+describe('singleTaggedThesisId', () => {
+  test('one tagged lot yields that thesis for the pulse chip', () => {
+    expect(singleTaggedThesisId(desk())).toBe('earnings_gap_structure');
+  });
+
+  test('two lots on the same thesis still yield that one id', () => {
+    const base = desk();
+    expect(singleTaggedThesisId(desk({
+      book: {
+        ...base.book,
+        names: [
+          ...base.book.names,
+          {
+            symbol: 'APP',
+            quantity: 10,
+            average_cost: 1,
+            cost: 10,
+            mark: 1,
+            pnl: 0,
+            note: '',
+            venue: 'equity',
+          },
+        ],
+      },
+      positions: [
+        ...(base.positions ?? []),
+        {
+          id: 'ep-app',
+          account_key: 'agentic-7638',
+          symbol: 'APP',
+          status: 'open',
+          quantity: 10,
+          average_cost: 1,
+          opened_at: AT,
+          closed_at: null,
+          next_review_at: null,
+          thesis_id: 'earnings_gap_structure',
+        },
+      ],
+    }))).toBe('earnings_gap_structure');
+  });
+
+  test('two tagged theses skip the pulse chip', () => {
+    const base = desk();
+    expect(singleTaggedThesisId(desk({
+      book: {
+        ...base.book,
+        names: [
+          ...base.book.names,
+          {
+            symbol: 'APP',
+            quantity: 10,
+            average_cost: 1,
+            cost: 10,
+            mark: 1,
+            pnl: 0,
+            note: '',
+            venue: 'equity',
+          },
+        ],
+      },
+      positions: [
+        ...(base.positions ?? []),
+        {
+          id: 'ep-app',
+          account_key: 'agentic-7638',
+          symbol: 'APP',
+          status: 'open',
+          quantity: 10,
+          average_cost: 1,
+          opened_at: AT,
+          closed_at: null,
+          next_review_at: null,
+          thesis_id: 'weather_same_day_high',
+        },
+      ],
+    }))).toBeNull();
+  });
+
+  test('no tagged lot yields none', () => {
+    expect(singleTaggedThesisId(desk({ positions: [] }))).toBeNull();
   });
 });

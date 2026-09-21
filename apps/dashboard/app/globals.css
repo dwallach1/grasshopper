@@ -3766,6 +3766,10 @@ a:focus-visible {
 }
 
 .learning-pulse {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--card-line, var(--line));
@@ -3775,6 +3779,25 @@ a:focus-visible {
   color: var(--ink-2, var(--text-2));
   font-size: 13px;
   line-height: 1.4;
+}
+
+.learning-pulse p {
+  margin: 0;
+}
+
+.learning-pulse-chip {
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-3, var(--text-3));
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .team-roster,
@@ -5208,6 +5231,10 @@ a:focus-visible {
   background: transparent;
 }
 
+.thesis-world[data-reading="1"] {
+  overflow: hidden;
+}
+
 .thesis-world[data-reading="1"] .thesis-list,
 .thesis-world[data-reading="1"] .thesis-mast,
 .thesis-world[data-reading="1"] .review-queue,
@@ -5251,11 +5278,14 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
+  margin: 0;
   padding: 12px 12px 10px;
   border: 1px solid var(--card-line, var(--line));
   border-radius: var(--r-card, 14px);
   background: var(--card, var(--elevated));
   box-shadow: var(--shadow-card, none);
+  text-align: left;
 }
 
 .review-card-copy {

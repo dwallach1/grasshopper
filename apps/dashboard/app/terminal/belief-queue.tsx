@@ -11,7 +11,13 @@ import {
   type TaggedLotCard,
 } from '../../lib/learning-inspect';
 
-export function BeliefQueue({ desk }: { desk: DeskPayload }) {
+export function BeliefQueue({
+  desk,
+  onOpenThesis,
+}: {
+  desk: DeskPayload;
+  onOpenThesis: (thesisId: string) => void;
+}) {
   const queue = useMemo(() => assembleBeliefsInForce(desk), [desk]);
 
   return (
@@ -27,7 +33,7 @@ export function BeliefQueue({ desk }: { desk: DeskPayload }) {
       {queue.length ? (
         <ul className="review-list">
           {queue.map((row) => (
-            <BeliefCard key={row.id} row={row} />
+            <BeliefCard key={row.id} row={row} onOpenThesis={onOpenThesis} />
           ))}
         </ul>
       ) : null}
@@ -35,7 +41,13 @@ export function BeliefQueue({ desk }: { desk: DeskPayload }) {
   );
 }
 
-export function TaggedLotQueue({ desk }: { desk: DeskPayload }) {
+export function TaggedLotQueue({
+  desk,
+  onOpenThesis,
+}: {
+  desk: DeskPayload;
+  onOpenThesis: (thesisId: string) => void;
+}) {
   const queue = useMemo(() => assembleTaggedLots(desk), [desk]);
 
   return (
@@ -51,7 +63,7 @@ export function TaggedLotQueue({ desk }: { desk: DeskPayload }) {
       {queue.length ? (
         <ul className="review-list">
           {queue.map((row) => (
-            <TaggedLotCardView key={row.id} row={row} />
+            <TaggedLotCardView key={row.id} row={row} onOpenThesis={onOpenThesis} />
           ))}
         </ul>
       ) : null}
@@ -59,55 +71,75 @@ export function TaggedLotQueue({ desk }: { desk: DeskPayload }) {
   );
 }
 
-function BeliefCard({ row }: { row: BeliefInForceCard }) {
+function BeliefCard({
+  row,
+  onOpenThesis,
+}: {
+  row: BeliefInForceCard;
+  onOpenThesis: (thesisId: string) => void;
+}) {
   const bind = row.holdings.length
     ? `binds ${row.holdings.map((lot) => lot.name).join(', ')}`
     : 'no open lot';
 
   return (
-    <li
-      className="review-card"
-      data-belief={row.id}
-      data-thesis={row.thesis_id}
-      data-from-lesson={row.from_lesson ? '1' : '0'}
-    >
-      <span className="review-card-copy">
-        <b>{row.thesis_name}</b>
-        <i>
-          {row.thesis_id}
-          {row.steward ? ` · ${row.steward}` : ''}
-          {' · '}
-          {row.observed_at.slice(0, 10)}
-          {' · '}
-          {bind}
-        </i>
-        {row.rules.length ? (
-          <i>{row.rules.map(humanizeRule).join(' · ')}</i>
-        ) : null}
-        {row.rationale ? <p>{row.rationale}</p> : null}
-      </span>
-      <span className="review-card-meta">
-        <span className="thesis-chip">in force</span>
-        {row.from_lesson ? <span className="thesis-chip">from lesson</span> : null}
-      </span>
+    <li>
+      <button
+        type="button"
+        className="review-card"
+        data-belief={row.id}
+        data-thesis={row.thesis_id}
+        data-from-lesson={row.from_lesson ? '1' : '0'}
+        onClick={() => onOpenThesis(row.thesis_id)}
+      >
+        <span className="review-card-copy">
+          <b>{row.thesis_name}</b>
+          <i>
+            {row.thesis_id}
+            {row.steward ? ` · ${row.steward}` : ''}
+            {' · '}
+            {row.observed_at.slice(0, 10)}
+            {' · '}
+            {bind}
+          </i>
+          {row.rules.length ? (
+            <i>{row.rules.map(humanizeRule).join(' · ')}</i>
+          ) : null}
+          {row.rationale ? <p>{row.rationale}</p> : null}
+        </span>
+        <span className="review-card-meta">
+          <span className="thesis-chip">in force</span>
+          {row.from_lesson ? <span className="thesis-chip">from lesson</span> : null}
+        </span>
+      </button>
     </li>
   );
 }
 
-function TaggedLotCardView({ row }: { row: TaggedLotCard }) {
+function TaggedLotCardView({
+  row,
+  onOpenThesis,
+}: {
+  row: TaggedLotCard;
+  onOpenThesis: (thesisId: string) => void;
+}) {
   return (
-    <li
-      className="review-card"
-      data-tagged-lot={row.id}
-      data-thesis={row.thesis_id}
-    >
-      <span className="review-card-copy">
-        <b>{row.name}</b>
-        <i>{row.thesis_id} · {row.thesis_name}</i>
-      </span>
-      <span className="review-card-meta">
-        <span className="thesis-chip">tagged lot</span>
-      </span>
+    <li>
+      <button
+        type="button"
+        className="review-card"
+        data-tagged-lot={row.id}
+        data-thesis={row.thesis_id}
+        onClick={() => onOpenThesis(row.thesis_id)}
+      >
+        <span className="review-card-copy">
+          <b>{row.name}</b>
+          <i>{row.thesis_id} · {row.thesis_name}</i>
+        </span>
+        <span className="review-card-meta">
+          <span className="thesis-chip">tagged lot</span>
+        </span>
+      </button>
     </li>
   );
 }
