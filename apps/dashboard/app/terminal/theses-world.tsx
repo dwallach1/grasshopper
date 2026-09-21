@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { singleTaggedThesisId } from '../../lib/learning-inspect';
 import { assembleLearningPulse, formatLearningPulse } from '../../lib/learning-pulse';
 import {
   assembleThesisRoster,
@@ -35,7 +36,12 @@ export function ThesesWorld({
 }) {
   const roster = assembleThesisRoster(desk).rows;
   const pulse = useMemo(() => assembleLearningPulse(desk), [desk]);
+  const taggedThesisId = singleTaggedThesisId(desk);
+  const pulseThesisId = taggedThesisId && thesisForId(roster, taggedThesisId)
+    ? taggedThesisId
+    : null;
   const firstPaint = useRef(true);
+  const listScroll = useRef(0);
   const [readingId, setReadingId] = useState<string | null>(null);
   const reading = readingId ? thesisForId(roster, readingId) ?? null : null;
 
@@ -60,9 +66,17 @@ export function ThesesWorld({
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       if (event.key === 'Escape') {
         setReadingId(null);
+        const top = listScroll.current;
+        requestAnimationFrame(() => {
+          const root = document.querySelector<HTMLElement>('.thesis-world');
+          if (root) root.scrollTop = top;
+        });
         return;
       }
       if (event.key !== 'Enter' || reading) return;
+      // Belief, tagged-lot, pulse, and roster cards are buttons. Their Enter
+      // opens that thesis. A bare Enter still opens the selected roster row.
+      if (target instanceof HTMLButtonElement) return;
       const row = thesisForId(roster, selectedId ?? '') ?? roster[0];
       if (row) {
         event.preventDefault();
@@ -74,9 +88,29 @@ export function ThesesWorld({
     return () => window.removeEventListener('keydown', onKey);
   }, [onSelect, reading, roster, selectedId]);
 
-  function openRow(row: ThesisRosterRow) {
+  function openThesis(id: string) {
+    const row = thesisForId(roster, id);
+    if (!row) return;
     onSelect?.(row.id);
+    const root = document.querySelector<HTMLElement>('.thesis-world');
+    if (root) {
+      listScroll.current = root.scrollTop;
+      root.scrollTop = 0;
+    }
     setReadingId(row.id);
+  }
+
+  function closeReading() {
+    setReadingId(null);
+    const top = listScroll.current;
+    requestAnimationFrame(() => {
+      const root = document.querySelector<HTMLElement>('.thesis-world');
+      if (root) root.scrollTop = top;
+    });
+  }
+
+  function openRow(row: ThesisRosterRow) {
+    openThesis(row.id);
   }
 
   return (
@@ -89,12 +123,22 @@ export function ThesesWorld({
       <h1 className="visually-hidden">Theses</h1>
       <header className="thesis-mast">
         <p className="paper-title">Theses</p>
-        <p className="learning-pulse" aria-label="Learning loop">
-          {formatLearningPulse(pulse)}
-        </p>
+        <div className="learning-pulse" aria-label="Learning loop">
+          <p>{formatLearningPulse(pulse)}</p>
+          {pulseThesisId ? (
+            <button
+              type="button"
+              className="learning-pulse-chip"
+              data-pulse-thesis={pulseThesisId}
+              onClick={() => openThesis(pulseThesisId)}
+            >
+              {pulseThesisId}
+            </button>
+          ) : null}
+        </div>
       </header>
-      <BeliefQueue desk={desk} />
-      <TaggedLotQueue desk={desk} />
+      <BeliefQueue desk={desk} onOpenThesis={openThesis} />
+      <TaggedLotQueue desk={desk} onOpenThesis={openThesis} />
       <LessonQueue desk={desk} canIncorporate={canIncorporate} onIncorporated={onReviewed} />
       <CandidateReviewQueue desk={desk} canReview={canReview} onReviewed={onReviewed} />
       {roster.length ? (
@@ -126,7 +170,7 @@ export function ThesesWorld({
         <p className="empty thesis-empty">{NOT_IN_LEDGER}</p>
       )}
       {reading && (
-        <ThesisPage row={reading} onClose={() => setReadingId(null)} />
+        <ThesisPage row={reading} onClose={closeReading} />
       )}
     </div>
   );

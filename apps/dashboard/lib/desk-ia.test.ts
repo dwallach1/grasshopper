@@ -239,6 +239,12 @@ describe('desk IA smoke', () => {
     expect(world).toContain('formatLearningPulse');
     expect(world).toContain('learning-pulse');
     expect(world).toContain('aria-label="Learning loop"');
+    expect(world).toContain('singleTaggedThesisId');
+    expect(world).toContain('learning-pulse-chip');
+    expect(world).toContain('data-pulse-thesis');
+    expect(world).toContain('onOpenThesis={openThesis}');
+    expect(world).toContain('HTMLButtonElement');
+    expect(world).toContain('<p>{formatLearningPulse(pulse)}</p>');
     const pulse = await readDashboard('lib/learning-pulse.ts');
     expect(pulse).toContain('open_books_gate_ok');
     expect(pulse).toContain('open_books_legacy_untagged');
@@ -256,6 +262,7 @@ describe('desk IA smoke', () => {
     expect(css).toContain('.lesson-queue');
     expect(css).toContain('.belief-queue');
     expect(css).toContain('.tagged-lot-queue');
+    expect(css).toContain('.learning-pulse-chip');
     const beliefs = await readDashboard('app/terminal/belief-queue.tsx');
     expect(beliefs).toContain('assembleBeliefsInForce');
     expect(beliefs).toContain('assembleTaggedLots');
@@ -263,6 +270,8 @@ describe('desk IA smoke', () => {
     expect(beliefs).toContain('Open lots that carry a thesis id.');
     expect(beliefs).toContain('from lesson');
     expect(beliefs).toContain('binds ');
+    expect(beliefs).toContain('onOpenThesis(row.thesis_id)');
+    expect(beliefs).toContain('type="button"');
     expect(beliefs).not.toContain('${queue.length}');
     const lessons = await readDashboard('app/terminal/lesson-queue.tsx');
     expect(lessons).toContain('rankLessonsForDesk');
