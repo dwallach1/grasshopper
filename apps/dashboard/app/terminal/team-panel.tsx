@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import { clampDeckIndex, deckIndexFromThumb, deckThumbRatio, stepDeckIndex } from '../../lib/steward-deck';
+import {
+  clampDeckIndex,
+  deckIndexFromThumb,
+  deckShiftFromDrag,
+  deckThumbRatio,
+  stepDeckIndex,
+} from '../../lib/steward-deck';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { assembleTeamRoster } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
@@ -23,13 +29,52 @@ export function TeamPanel({
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const roster = cards.map((card) => card.slug).join('|');
   const [index, setIndex] = useState(0);
+  const drag = useRef<{ pointerId: number; startX: number; origin: number; count: number } | null>(null);
 
   useEffect(() => {
     setIndex(0);
   }, [roster]);
 
+  useEffect(() => {
+    function onMove(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      const shift = deckShiftFromDrag(event.clientX - active.startX);
+      setIndex(stepDeckIndex(active.origin, shift, active.count));
+    }
+    function onUp(event: PointerEvent) {
+      const active = drag.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      drag.current = null;
+    }
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, []);
+
   function show(next: number) {
     setIndex(clampDeckIndex(next, cards.length));
+  }
+
+  function onHandleDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // window listeners still drive the reorder
+    }
+    drag.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      origin: clampDeckIndex(index, cards.length),
+      count: cards.length,
+    };
   }
 
   return (
@@ -51,7 +96,16 @@ export function TeamPanel({
                 const face = faces.get(card.slug) ?? QUIET_STEWARD_FACE;
                 return (
                   <div key={card.slug} className="steward-deck-slot" data-card-slot={card.slug}>
-                    <article className="team-card" data-steward={card.slug}>
+                    <article className="team-card" data-team-card="1" data-steward={card.slug}>
+                      <button
+                        type="button"
+                        className="team-card-handle"
+                        data-card-dragger="1"
+                        aria-label={`Reorder ${card.display_name}`}
+                        onPointerDown={onHandleDown}
+                      >
+                        <i aria-hidden="true" />
+                      </button>
                       <StewardAvatar
                         slug={card.slug}
                         name={card.display_name}

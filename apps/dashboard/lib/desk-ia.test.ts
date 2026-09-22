@@ -138,10 +138,15 @@ describe('desk IA smoke', () => {
     expect(team).toContain('size="board"');
     expect(team).not.toContain('StewardIdCard');
     expect(team).toContain('steward-dragger');
+    expect(team).toContain('team-card-handle');
+    expect(team).toContain('data-team-card');
     expect(team).toContain('data-card-dragger');
     expect(team).toContain('StewardCardDragger');
+    expect(team).toContain('deckShiftFromDrag');
+    expect(team).toMatch(/className="team-card-handle"[\s\S]*data-card-dragger="1"/);
     expect(team).toMatch(/className="steward-dragger"[\s\S]*data-card-dragger="1"/);
     expect(team).not.toMatch(/className="steward-deck"[^>]*data-card-dragger/);
+    expect(team).not.toMatch(/<article className="team-card"[^>]*data-card-dragger/);
     expect(team).not.toContain('pnl');
     expect(team).not.toContain('win_rate');
     expect(team).toContain('pulse');
@@ -195,6 +200,8 @@ describe('desk IA smoke', () => {
     expect(pager).toContain('if (gesture.armed) return');
     expect(pager).toContain('isSwipeWrap');
     expect(pager).toContain('pageSwipeConsumesTarget');
+    expect(pager).toContain('horizontalPageSwipeSuppressed');
+    expect(pager).toContain('gesture.suppressHorizontal');
     expect(pager).toContain('setPointerCapture');
     expect(pager).toContain('shouldCapturePagerPointer');
     expect(pager).toContain('captureIfLocked');

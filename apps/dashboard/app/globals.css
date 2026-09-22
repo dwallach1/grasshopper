@@ -3827,6 +3827,40 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
+  touch-action: pan-y;
+}
+
+.team-card-handle {
+  appearance: none;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--gold, var(--amber));
+  border-radius: 10px;
+  background: var(--gold-dim, rgba(184, 137, 45, 0.16));
+  color: var(--gold, var(--amber));
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.team-card-handle:active {
+  cursor: grabbing;
+}
+
+.team-card-handle i {
+  width: 16px;
+  height: 12px;
+  background: repeating-linear-gradient(
+    to bottom,
+    currentColor 0 2px,
+    transparent 2px 5px
+  );
 }
 
 .thesis-card {
@@ -3907,9 +3941,9 @@ a:focus-visible {
 
 .steward-deck {
   display: block;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   padding: 20px 0 8px;
   overflow: hidden;
@@ -3920,7 +3954,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   transition: transform 280ms var(--ease);
 }

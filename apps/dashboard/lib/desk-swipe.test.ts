@@ -4,6 +4,7 @@ import { DESK_SWIPE_SURFACES, DESK_SWIPE_TABS, DESK_TABS, PUBLIC_DESK_TABS } fro
 import {
   DESK_PAGER_SLOTS,
   followPagerScroll,
+  horizontalPageSwipeSuppressed,
   isCardDraggerTarget,
   isDominantHorizontal,
   isHorizontalLock,
@@ -137,10 +138,20 @@ describe('desk swipe deck', () => {
         return null;
       },
     };
+    const card: SwipeHitTarget = {
+      closest(selector) {
+        return selector === '[data-team-card]' ? card : null;
+      },
+    };
     expect(isCardDraggerTarget(thumb)).toBe(true);
     expect(pageSwipeConsumesTarget(thumb)).toBe(false);
+    expect(horizontalPageSwipeSuppressed(thumb)).toBe(false);
     expect(pageSwipeConsumesTarget(pane)).toBe(true);
+    expect(horizontalPageSwipeSuppressed(pane)).toBe(false);
+    expect(pageSwipeConsumesTarget(card)).toBe(true);
+    expect(horizontalPageSwipeSuppressed(card)).toBe(true);
     expect(pageSwipeConsumesTarget(null)).toBe(true);
+    expect(horizontalPageSwipeSuppressed(null)).toBe(false);
     expect(swipeHitFromEvent(null)).toBeNull();
     expect(shouldCapturePagerPointer(null, false)).toBe(false);
     expect(shouldCapturePagerPointer('y', false)).toBe(false);

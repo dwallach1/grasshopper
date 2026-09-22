@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   clampDeckIndex,
   deckIndexFromThumb,
+  deckShiftFromDrag,
   deckThumbRatio,
   stepDeckIndex,
 } from './steward-deck';
@@ -36,5 +37,16 @@ describe('steward card deck index', () => {
     expect(stepDeckIndex(0, -1, 3)).toBe(0);
     expect(stepDeckIndex(0, 1, 3)).toBe(1);
     expect(stepDeckIndex(2, 1, 3)).toBe(2);
+  });
+
+  test('the card handle steps one steward per threshold, not a tab swipe', () => {
+    expect(deckShiftFromDrag(-47)).toBe(0);
+    expect(deckShiftFromDrag(-48)).toBe(1);
+    expect(deckShiftFromDrag(48)).toBe(-1);
+    expect(deckShiftFromDrag(-96)).toBe(2);
+    expect(deckShiftFromDrag(20, 0)).toBe(0);
+    expect(deckShiftFromDrag(Number.NaN)).toBe(0);
+    expect(stepDeckIndex(0, deckShiftFromDrag(-48), 3)).toBe(1);
+    expect(stepDeckIndex(0, deckShiftFromDrag(80), 3)).toBe(0);
   });
 });
