@@ -3790,16 +3790,16 @@ a:focus-visible {
 }
 
 .learning-pulse-chip {
-  display: inline;
+  display: inline-block;
   max-width: 100%;
-  margin: 0;
-  padding: 1px 7px;
-  border: 1px solid var(--card-line, var(--line));
+  margin: 1px 0;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--gold, #b8892d) 72%, transparent);
   border-radius: 999px;
-  background: transparent;
+  background: color-mix(in srgb, var(--gold, #b8892d) 16%, var(--card, #fffaf1));
   color: var(--ink, var(--text));
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.35;
   letter-spacing: 0;
   overflow-wrap: anywhere;
   text-align: left;
