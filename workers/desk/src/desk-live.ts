@@ -2,6 +2,7 @@ import {
   DESK_PUBLIC_READER_ROLE,
   isPublicSnapshot,
   MAX_SNAPSHOT_BYTES,
+  PUBLIC_LIVE_INTERVAL_MS,
   toPublicDeskSnapshot,
 } from '@quantanamo/contracts/desk-snapshot';
 import { readBoundedJson } from '@quantanamo/shared/http';
@@ -12,8 +13,8 @@ import type { JsonObjectRow } from '../../../apps/dashboard/lib/ledger-map';
 import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
 import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
 
-/** Match the phone poll so a 15s GET does not re-assemble under 1102. */
-export const LIVE_CACHE_MS = 15_000;
+/** Match the phone poll so a live GET does not re-assemble inside the interval. */
+export const LIVE_CACHE_MS = PUBLIC_LIVE_INTERVAL_MS;
 
 export type PublicDeskServe = {
   desk: unknown;

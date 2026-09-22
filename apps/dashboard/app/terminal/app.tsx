@@ -1,6 +1,10 @@
 'use client';
 
-import { PUBLIC_DESK_REFRESH_FAILED, PUBLIC_DESK_UNAVAILABLE } from '@quantanamo/contracts/desk-snapshot';
+import {
+  PUBLIC_DESK_REFRESH_FAILED,
+  PUBLIC_DESK_UNAVAILABLE,
+  PUBLIC_LIVE_INTERVAL_MS,
+} from '@quantanamo/contracts/desk-snapshot';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
@@ -39,7 +43,7 @@ import {
   toneForStatus,
 } from './format';
 
-const POLL_MS = 15_000;
+const POLL_MS = PUBLIC_LIVE_INTERVAL_MS;
 
 export function TerminalApp({
   initial,

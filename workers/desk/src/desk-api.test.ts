@@ -55,7 +55,7 @@ describe('public desk Worker API', () => {
     expect(body.ontology_actions).toEqual([]);
     expect(body.book.current_nav).toBe(5120);
     expect(response.headers.get('cache-control')).toBe(
-      'public, max-age=0, s-maxage=15, stale-while-revalidate=45',
+      'public, max-age=0, s-maxage=45, stale-while-revalidate=90',
     );
     expect(response.headers.get('content-security-policy') || '').toContain("connect-src 'self'");
   });
@@ -178,7 +178,7 @@ describe('public desk reader credentials', () => {
     expect(source).toContain('candidates: asJsonRows(bag.candidates)');
     expect(source).not.toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
-    expect(source).toContain('LIVE_CACHE_MS');
+    expect(source).toContain('LIVE_CACHE_MS = PUBLIC_LIVE_INTERVAL_MS');
     expect(source).toContain('JSON.stringify(published)');
     expect(source).not.toContain('await response.json()');
     expect(source).not.toContain('/rest/v1/');
@@ -189,8 +189,20 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("mode === 'public'");
     expect(fn).toContain("'candidates'");
     expect(fn).toContain('status=eq.pending');
-    expect(fn).toContain('candidate_type.asc,score.desc,source_count.desc,id.desc&limit=200');
+    expect(fn).toContain('PUBLIC_CANDIDATE_FETCH = 72');
+    expect(fn).toContain('PUBLIC_PNL_LIMIT = 28');
+    expect(fn).toContain('PUBLIC_NOTE_LIMIT = 24');
+    expect(fn).toContain('PUBLIC_NOTE_BODY = 200');
+    expect(fn).toContain('PUBLIC_ACCOUNT_LIMIT = 56');
+    expect(fn).toContain('PUBLIC_TEXT = 220');
+    expect(fn).toContain('latest.length < PUBLIC_ACCOUNT_LIMIT');
+    expect(fn).toContain("clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT)");
+    expect(fn).toContain("clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT)");
+    expect(fn).toContain('status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=${PUBLIC_CANDIDATE_FETCH}');
     expect(fn).toContain('candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200');
+    expect(fn).toContain('fees,cash,equity&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
+    expect(fn).toContain('fees,cash_sol,equity_sol&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
+    expect(fn).toContain('closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200');
     expect(fn).not.toContain('source_count=gte.2');
     expect(fn).toContain('id.desc&limit=200');
     expect(fn).toContain("req.method !== 'GET'");
