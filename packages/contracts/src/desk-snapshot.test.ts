@@ -9,6 +9,7 @@ import {
   LEARNING_PULSE_KEYS,
   LIVE_JSON_CACHE_CONTROL,
   ONTOLOGY_JUNK_LABELS,
+  PUBLIC_LIVE_INTERVAL_MS,
   parseDeskWire,
   PUBLIC_CANDIDATE_CAP,
   PUBLIC_CANDIDATE_FETCH,
@@ -64,7 +65,10 @@ describe('public desk snapshot contract', () => {
       pnl: [],
       notes: [],
     });
-    expect(LIVE_JSON_CACHE_CONTROL).toContain('s-maxage=15');
+    expect(PUBLIC_LIVE_INTERVAL_MS).toBe(45_000);
+    expect(LIVE_JSON_CACHE_CONTROL).toBe(
+      'public, max-age=0, s-maxage=45, stale-while-revalidate=90',
+    );
     expect(PUBLIC_DESK_REFRESH_FAILED).toContain('last good ledger');
     expect(published.meme_coins).toEqual({
       tokens: [],
@@ -122,7 +126,8 @@ describe('public desk snapshot contract', () => {
 
   test('review ranking prefers memberships, drops deny-list junk, keeps ledger scores', () => {
     expect(PUBLIC_CANDIDATE_CAP).toBe(40);
-    expect(PUBLIC_CANDIDATE_FETCH).toBe(200);
+    expect(PUBLIC_CANDIDATE_FETCH).toBe(72);
+    expect(PUBLIC_CANDIDATE_FETCH).toBeGreaterThanOrEqual(PUBLIC_CANDIDATE_CAP);
     expect(ONTOLOGY_JUNK_LABELS).toContain('https');
     expect(ONTOLOGY_JUNK_LABELS).toContain('stocks');
     expect(ONTOLOGY_JUNK_LABELS).toContain('varchar');

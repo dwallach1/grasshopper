@@ -26,10 +26,21 @@ const PUBLIC_KEYS = new Set([
   'themes', 'candidates',
 ]);
 
-const PUBLIC_QUERY: Record<string, string> = {
-  runs: 'runs?select=id,run_type,started_at,completed_at,notes&order=started_at.desc,id.desc&limit=8',
-  candidates: 'ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=200',
-};
+/** Pending window before the phone cap of 40. Memberships sort first, so 72 still fills the queue. */
+const PUBLIC_CANDIDATE_FETCH = 72;
+/** Recent marks for sparklines. Operator `/bundle` keeps limit 200. */
+const PUBLIC_PNL_LIMIT = 28;
+const PUBLIC_NOTE_LIMIT = 24;
+const PUBLIC_NOTE_BODY = 200;
+/** NAV / liveline window. Inception is a 1-row read only when this window is full. */
+const PUBLIC_ACCOUNT_LIMIT = 56;
+const PUBLIC_ORDER_LIMIT = 48;
+const PUBLIC_FILL_LIMIT = 40;
+/** Above the Theses rationale cap (180) so truncate-and-match still agrees. */
+const PUBLIC_TEXT = 220;
+const PUBLIC_RECENT_MS = 21 * 24 * 60 * 60 * 1000;
+const ACCOUNT_COLS = 'observed_at,account_label,total_value,equity_value,cash,buying_power,source';
+const AGENTIC_FILTER = 'account_label=ilike.*Agentic*';
 
 const REQUIRED: Array<[string, string]> = [
   ['theses', 'theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc'],
@@ -136,20 +147,120 @@ async function objectFrom(pairs: Array<[string, string]>, optional = true): Prom
   return Object.fromEntries(entries);
 }
 
+function asRows(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function clipText(value: unknown, max: number): unknown {
+  if (typeof value !== 'string' || value.length <= max) return value;
+  return value.slice(0, max);
+}
+
+function clipRows(rows: unknown[], field: string, max: number): unknown[] {
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+    const record = row as Record<string, unknown>;
+    const next = clipText(record[field], max);
+    if (next === record[field]) return row;
+    return { ...record, [field]: next };
+  });
+}
+
+/** Open (not filled/canceled/rejected/expired) plus rows newer than `since`. */
+function openOrRecent(timeColumn: string, since: string): string {
+  const live = [
+    'status.neq.filled',
+    'status.neq.canceled',
+    'status.neq.cancelled',
+    'status.neq.rejected',
+    'status.neq.expired',
+  ].join(',');
+  return `or=(and(${live}),${timeColumn}.gte.${since})`;
+}
+
+function publicCandidateQuery(): string {
+  return `ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=${PUBLIC_CANDIDATE_FETCH}`;
+}
+
+function publicPm(since: string): Array<[string, string]> {
+  const orders = openOrRecent('created_at', since);
+  return [
+    ['markets', 'pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id&order=close_time.asc.nullslast&limit=200'],
+    ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+    ['orders', `pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
+    ['fills', `pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
+    ['pnl', `pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}`],
+    ['notes', `pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
+  ];
+}
+
+function publicMeme(since: string): Array<[string, string]> {
+  const orders = openOrRecent('created_at', since);
+  return [
+    ['tokens', 'meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id&order=updated_at.desc&limit=200'],
+    ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+    ['orders', `meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
+    ['fills', `meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
+    ['pnl', `meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}`],
+    ['notes', `meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
+  ];
+}
+
+/**
+ * Latest window, plus the inception row when the window is full.
+ * A short history is already inside the latest read — do not fetch it twice.
+ */
+async function publicAccountWindow(): Promise<{ accountLatest: unknown[]; accountFirst: unknown[] }> {
+  const latest = await restGet(
+    `account_snapshots?select=${ACCOUNT_COLS}&${AGENTIC_FILTER}&order=observed_at.desc,id.desc&limit=${PUBLIC_ACCOUNT_LIMIT}`,
+  );
+  if (latest.length < PUBLIC_ACCOUNT_LIMIT) {
+    const oldest = latest.length ? latest[latest.length - 1] : null;
+    return { accountLatest: latest, accountFirst: oldest ? [oldest] : [] };
+  }
+  const first = await restGet(
+    `account_snapshots?select=${ACCOUNT_COLS}&${AGENTIC_FILTER}&order=observed_at.asc,id.asc&limit=1`,
+  );
+  return { accountLatest: latest, accountFirst: first };
+}
+
 async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
   try {
+    const since = mode === 'public' ? new Date(Date.now() - PUBLIC_RECENT_MS).toISOString() : '';
     const tables = (mode === 'public'
-      ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key))
+      ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key) && key !== 'accountLatest' && key !== 'accountFirst')
       : REQUIRED
-    ).map(([key, query]) => [key, mode === 'public' && PUBLIC_QUERY[key] ? PUBLIC_QUERY[key] : query] as const);
-    const required = await Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const));
-    const [pm, meme, team] = await Promise.all([
-      objectFrom(PM),
-      objectFrom(MEME),
+    ).map(([key, query]) => {
+      if (mode !== 'public') return [key, query] as const;
+      if (key === 'candidates') return [key, publicCandidateQuery()] as const;
+      if (key === 'intents') {
+        return [key, `trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&${openOrRecent('created_at', since)}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`] as const;
+      }
+      if (key === 'fills') {
+        return [key, `broker_fills?select=id,trade_intent_id,quantity,price,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`] as const;
+      }
+      return [key, query] as const;
+    });
+    const [required, pmRaw, memeRaw, team, accounts] = await Promise.all([
+      Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
+      objectFrom(mode === 'public' ? publicPm(since) : PM),
+      objectFrom(mode === 'public' ? publicMeme(since) : MEME),
       objectFrom(TEAM),
+      mode === 'public' ? publicAccountWindow() : Promise.resolve(null),
     ]);
+    const body: Record<string, unknown> = Object.fromEntries(required);
+    let pm = pmRaw;
+    let meme = memeRaw;
+    if (accounts) {
+      body.accountLatest = accounts.accountLatest;
+      body.accountFirst = accounts.accountFirst;
+      body.beliefs = clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT);
+      body.lessons = clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT);
+      pm = { ...pmRaw, notes: clipRows(pmRaw.notes ?? [], 'body', PUBLIC_NOTE_BODY) };
+      meme = { ...memeRaw, notes: clipRows(memeRaw.notes ?? [], 'body', PUBLIC_NOTE_BODY) };
+    }
     return Response.json({
-      ...Object.fromEntries(required),
+      ...body,
       pm,
       meme,
       team,

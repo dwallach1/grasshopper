@@ -23,7 +23,10 @@ export type DeskWire = z.infer<typeof DeskWireSchema>;
 
 export const PUBLIC_DESK_UNAVAILABLE = 'Desk ledger unavailable';
 export const PUBLIC_DESK_REFRESH_FAILED = 'Showing last good ledger — live read failed';
-export const LIVE_JSON_CACHE_CONTROL = 'public, max-age=0, s-maxage=15, stale-while-revalidate=45';
+/** Phone poll and Worker live cache. Origin → Supabase is not more frequent than this. */
+export const PUBLIC_LIVE_INTERVAL_MS = 45_000;
+export const LIVE_JSON_CACHE_CONTROL =
+  `public, max-age=0, s-maxage=${PUBLIC_LIVE_INTERVAL_MS / 1000}, stale-while-revalidate=${(PUBLIC_LIVE_INTERVAL_MS / 1000) * 2}`;
 
 const PUBLIC_OMIT = new Set([
   'evidence',
@@ -50,8 +53,11 @@ const PUBLIC_OMIT = new Set([
 ]);
 
 export const PUBLIC_CANDIDATE_CAP = 40;
-/** Fetch window before ranking. Must stay ≥ cap so memberships are not crowded out. */
-export const PUBLIC_CANDIDATE_FETCH = 200;
+/**
+ * Pending fetch window before ranking. Must stay ≥ cap so memberships are not
+ * crowded out. Public `/bundle/public` uses this; the operator bundle stays wider.
+ */
+export const PUBLIC_CANDIDATE_FETCH = 72;
 
 /**
  * Arrays the Theses learning pulse reads. Public slim must keep them so the
