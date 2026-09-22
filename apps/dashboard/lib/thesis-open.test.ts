@@ -90,6 +90,7 @@ function position(id: string, symbol: string, thesisId: string) {
 function desk(
   extraNames: ReturnType<typeof nameRow>[] = [],
   extraPositions: ReturnType<typeof position>[] = [],
+  lessons: unknown[] = [],
 ): DeskPayload {
   return deskFromWire({
     generated_at: AT,
@@ -157,7 +158,7 @@ function desk(
         rules: ['no_bid_close'],
       }),
     ],
-    lessons: [],
+    lessons,
     team: fallbackTeam(),
     prediction_markets: {
       desk: 'ODDSBORNE',
@@ -262,8 +263,11 @@ describe('Theses learning surfaces open the live thesis page', () => {
     const view = await mount(createElement(ThesesWorld, { desk: desk() }));
     const pulse = view.host.querySelector('.learning-pulse');
     expect(pulse?.tagName).toBe('DIV');
-    expect(pulse?.querySelector('button')).toBe(pulse?.querySelector('.learning-pulse-chip'));
-    expect(button(view.host, '.learning-pulse-chip').dataset.pulseThesis).toBe(EARNINGS);
+    expect(pulse?.querySelector('.visually-hidden')?.textContent).toContain('1 tagged lot');
+    expect(pulse?.querySelector('.visually-hidden')?.textContent).toContain('beliefs in force');
+    expect(button(view.host, '[data-pulse-thesis]').dataset.pulseThesis).toBe(EARNINGS);
+    expect(button(view.host, '[data-pulse-thesis]').classList.contains('learning-pulse-chip')).toBe(true);
+    expect(view.host.querySelector('[data-pulse-lots]')).toBeNull();
     expect(pulse?.textContent).toContain('1 tagged lot');
 
     await act(async () => {
@@ -293,7 +297,7 @@ describe('Theses learning surfaces open the live thesis page', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
     await act(async () => {
-      button(view.host, '.learning-pulse-chip').click();
+      button(view.host, '[data-pulse-thesis]').click();
     });
     expect(view.host.querySelector('.thesis-page')?.textContent).toContain(EARNINGS_SUMMARY);
 
@@ -307,15 +311,80 @@ describe('Theses learning surfaces open the live thesis page', () => {
     view.unmount();
   });
 
-  test('several tagged theses leave the pulse sentence untappable', async () => {
+  test('several tagged theses focus the lot cards instead of a combined thesis', async () => {
     const view = await mount(createElement(ThesesWorld, { desk: twoThesesDesk() }));
     const pulse = view.host.querySelector('.learning-pulse');
-    expect(pulse?.querySelector('button')).toBeNull();
-    expect(pulse?.querySelector('p')?.textContent).toContain('2 tagged lots');
+    expect(view.host.querySelector('[data-pulse-thesis]')).toBeNull();
+    expect(pulse?.querySelector('.visually-hidden')?.textContent).toContain('2 tagged lots');
+    const lots = view.host.querySelector('#tagged-lots');
+    if (!(lots instanceof HTMLElement)) throw new Error('missing tagged lots');
+    let scrolled = false;
+    lots.scrollIntoView = () => {
+      scrolled = true;
+    };
+    await act(async () => {
+      button(view.host, '[data-pulse-lots]').click();
+    });
+    expect(scrolled).toBe(true);
+    expect(lots.classList.contains('is-pulse-target')).toBe(true);
+    expect(document.activeElement).toBe(lots);
+    expect(view.host.querySelector('.thesis-page')).toBeNull();
     await act(async () => {
       button(view.host, 'button[data-belief="b-gap"]').click();
     });
     expect(view.host.querySelector('.thesis-page')?.textContent).toContain(EARNINGS_SUMMARY);
+    view.unmount();
+  });
+
+  test('beliefs control reveals live rule text, then opens that thesis', async () => {
+    const view = await mount(createElement(ThesesWorld, { desk: desk() }));
+    const beliefs = button(view.host, '[data-pulse-beliefs]');
+    expect(beliefs.getAttribute('aria-expanded')).toBe('false');
+    expect(view.host.querySelector('#learning-pulse-beliefs')).toBeNull();
+    await act(async () => {
+      beliefs.click();
+    });
+    expect(beliefs.getAttribute('aria-expanded')).toBe('true');
+    const panel = view.host.querySelector('#learning-pulse-beliefs');
+    expect(panel?.textContent).toContain('Earnings gap structure');
+    expect(panel?.textContent).toContain('no chase already printed leftovers');
+    expect(panel?.textContent).toContain('No chase leftovers.');
+    expect(panel?.textContent).toContain('Same-day city-high weather');
+    expect(panel?.textContent).toContain('Kill into a no-bid close.');
+    expect(panel?.textContent).toContain('no bid close');
+    await act(async () => {
+      button(view.host, '[data-pulse-belief="b-weather"]').click();
+    });
+    expect(view.host.querySelector('.thesis-page h2')?.textContent).toBe('Same-day city-high weather');
+    expect(view.host.querySelector('.thesis-page')?.textContent).toContain(WEATHER_SUMMARY);
+    view.unmount();
+  });
+
+  test('lessons control focuses the lessons parchment and does not invent a body', async () => {
+    const view = await mount(createElement(ThesesWorld, {
+      desk: desk([], [], [{
+        id: 37,
+        cycle_id: 1,
+        test_id: null,
+        thesis_id: EARNINGS,
+        lesson_type: 'structure',
+        summary: 'Do not chase a printed gap.',
+        market_regime: null,
+        incorporated: false,
+        created_at: AT,
+      }]),
+    }));
+    expect(view.host.querySelector('.learning-pulse .visually-hidden')?.textContent).toContain('1 open / 0 in playbook');
+    const lessons = view.host.querySelector('#lessons-parchment');
+    if (!(lessons instanceof HTMLElement)) throw new Error('missing lessons parchment');
+    await act(async () => {
+      button(view.host, '[data-pulse-lessons]').click();
+    });
+    expect(document.activeElement).toBe(lessons);
+    expect(lessons.classList.contains('is-pulse-target')).toBe(true);
+    expect(lessons.textContent).toContain('Do not chase a printed gap.');
+    expect(view.host.querySelector('.learning-pulse')?.textContent).not.toContain('Do not chase a printed gap.');
+    expect(view.host.querySelector('.thesis-page')).toBeNull();
     view.unmount();
   });
 });

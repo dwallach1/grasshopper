@@ -21,7 +21,12 @@ export function BeliefQueue({
   const queue = useMemo(() => assembleBeliefsInForce(desk), [desk]);
 
   return (
-    <section className="review-queue belief-queue" aria-label="Beliefs in force">
+    <section
+      id="beliefs-in-force"
+      className="review-queue belief-queue"
+      aria-label="Beliefs in force"
+      tabIndex={-1}
+    >
       <header className="review-mast">
         <p className="paper-title">Beliefs</p>
         <p className="thesis-lede">
@@ -51,7 +56,12 @@ export function TaggedLotQueue({
   const queue = useMemo(() => assembleTaggedLots(desk), [desk]);
 
   return (
-    <section className="review-queue tagged-lot-queue" aria-label="Open-book thesis tags">
+    <section
+      id="tagged-lots"
+      className="review-queue tagged-lot-queue"
+      aria-label="Open-book thesis tags"
+      tabIndex={-1}
+    >
       <header className="review-mast">
         <p className="paper-title">Tagged lots</p>
         <p className="thesis-lede">

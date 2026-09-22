@@ -24,7 +24,12 @@ export function LessonQueue({
   );
 
   return (
-    <section className="review-queue lesson-queue" aria-label="Research lessons">
+    <section
+      id="lessons-parchment"
+      className="review-queue lesson-queue"
+      aria-label="Research lessons"
+      tabIndex={-1}
+    >
       <header className="review-mast">
         <p className="paper-title">Lessons</p>
         <p className="thesis-lede">
