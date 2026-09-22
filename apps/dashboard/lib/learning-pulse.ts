@@ -68,24 +68,102 @@ export function learningPulseSummary(pulse: LearningPulse): LearningPulse {
   };
 }
 
-function formatOpenBooks(pulse: LearningPulse): string {
-  if (pulse.open_books <= 0) return 'no open books';
-  const taggedWord = pulse.open_books_tagged === 1 ? 'tagged lot' : 'tagged lots';
-  const missingWord = pulse.open_books_missing_gate === 1 ? 'missing gate' : 'missing gates';
-  return [
-    `${pulse.open_books_tagged} ${taggedWord}`,
-    `${pulse.open_books_legacy_untagged} legacy untagged`,
-    `${pulse.open_books_missing_gate} ${missingWord}`,
-  ].join(' · ');
+function beliefLabel(count: number): string {
+  const word = count === 1 ? 'belief' : 'beliefs';
+  return `${count} ${word} in force`;
+}
+
+function lessonsLabel(pulse: LearningPulse): string {
+  return `${pulse.lessons_open} open / ${pulse.lessons_incorporated} in playbook`;
+}
+
+function taggedLabel(count: number): string {
+  const word = count === 1 ? 'tagged lot' : 'tagged lots';
+  return `${count} ${word}`;
+}
+
+function legacyLabel(count: number): string {
+  return `${count} legacy untagged`;
+}
+
+function missingLabel(count: number): string {
+  const word = count === 1 ? 'missing gate' : 'missing gates';
+  return `${count} ${word}`;
+}
+
+export type LearningPulseControl =
+  | 'count'
+  | 'focus_lessons'
+  | 'reveal_beliefs'
+  | 'open_thesis'
+  | 'focus_lots';
+
+export type LearningPulsePart = {
+  key: 'to_review' | 'lessons' | 'beliefs' | 'open_books' | 'tagged' | 'legacy' | 'missing';
+  text: string;
+  control: LearningPulseControl;
+  thesisId: string | null;
+};
+
+export type LearningPulsePartOptions = {
+  /** Distinct thesis ids on tagged live lots. Empty stays a count. */
+  taggedThesisIds?: readonly string[];
+  /** Roster can open this id. A missing thesis focuses the lot cards. */
+  thesisOnRoster?: (thesisId: string) => boolean;
+  /** Lessons parchment already lists a lesson. Otherwise the count stays quiet. */
+  lessonsOnParchment?: boolean;
+};
+
+function taggedControl(pulse: LearningPulse, options: LearningPulsePartOptions) {
+  if (pulse.open_books_tagged <= 0) {
+    return { control: 'count', thesisId: null } satisfies Pick<LearningPulsePart, 'control' | 'thesisId'>;
+  }
+  const ids = [...new Set((options.taggedThesisIds ?? []).map((id) => id.trim()).filter(Boolean))];
+  const onRoster = options.thesisOnRoster ?? (() => false);
+  const only = ids.length === 1 ? ids[0] : undefined;
+  if (only && onRoster(only)) {
+    return { control: 'open_thesis', thesisId: only } satisfies Pick<LearningPulsePart, 'control' | 'thesisId'>;
+  }
+  return { control: 'focus_lots', thesisId: null } satisfies Pick<LearningPulsePart, 'control' | 'thesisId'>;
+}
+
+/**
+ * Same sentence as formatLearningPulse, split so beliefs, lessons, and the
+ * tagged lot can be controls. Counts stay counts. Never invents a thesis.
+ */
+export function learningPulseParts(
+  pulse: LearningPulse,
+  options: LearningPulsePartOptions = {},
+): LearningPulsePart[] {
+  const parts: LearningPulsePart[] = [
+    { key: 'to_review', text: `${pulse.to_review} to review`, control: 'count', thesisId: null },
+    {
+      key: 'lessons',
+      text: lessonsLabel(pulse),
+      control: options.lessonsOnParchment ? 'focus_lessons' : 'count',
+      thesisId: null,
+    },
+    {
+      key: 'beliefs',
+      text: beliefLabel(pulse.beliefs_in_force),
+      control: pulse.beliefs_in_force > 0 ? 'reveal_beliefs' : 'count',
+      thesisId: null,
+    },
+  ];
+  if (pulse.open_books <= 0) {
+    parts.push({ key: 'open_books', text: 'no open books', control: 'count', thesisId: null });
+    return parts;
+  }
+  const tagged = taggedControl(pulse, options);
+  parts.push(
+    { key: 'tagged', text: taggedLabel(pulse.open_books_tagged), control: tagged.control, thesisId: tagged.thesisId },
+    { key: 'legacy', text: legacyLabel(pulse.open_books_legacy_untagged), control: 'count', thesisId: null },
+    { key: 'missing', text: missingLabel(pulse.open_books_missing_gate), control: 'count', thesisId: null },
+  );
+  return parts;
 }
 
 /** One parchment sentence. Queue headers do not repeat these counts. */
 export function formatLearningPulse(pulse: LearningPulse): string {
-  const beliefWord = pulse.beliefs_in_force === 1 ? 'belief' : 'beliefs';
-  return [
-    `${pulse.to_review} to review`,
-    `${pulse.lessons_open} open / ${pulse.lessons_incorporated} in playbook`,
-    `${pulse.beliefs_in_force} ${beliefWord} in force`,
-    formatOpenBooks(pulse),
-  ].join(' · ');
+  return learningPulseParts(pulse).map((part) => part.text).join(' · ');
 }

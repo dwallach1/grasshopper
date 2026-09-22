@@ -3785,19 +3785,91 @@ a:focus-visible {
   margin: 0;
 }
 
-.learning-pulse-chip {
-  max-width: 100%;
+.learning-pulse-line {
   margin: 0;
+}
+
+.learning-pulse-chip {
+  display: inline-block;
+  max-width: 100%;
+  margin: 1px 0;
   padding: 2px 8px;
-  border: 1px solid var(--card-line, var(--line));
+  border: 1px solid color-mix(in srgb, var(--gold, #b8892d) 72%, transparent);
   border-radius: 999px;
-  background: transparent;
-  color: var(--ink-3, var(--text-3));
-  font-size: 11px;
-  line-height: 1.3;
-  letter-spacing: 0.01em;
+  background: color-mix(in srgb, var(--gold, #b8892d) 16%, var(--card, #fffaf1));
+  color: var(--ink, var(--text));
+  font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
   text-align: left;
+  vertical-align: baseline;
+}
+
+.learning-pulse-chip[aria-expanded='true'] {
+  border-color: var(--gold, #b8892d);
+  background: color-mix(in srgb, var(--gold, #b8892d) 16%, transparent);
+}
+
+.learning-pulse-beliefs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.learning-pulse-belief {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: 12px;
+  background: var(--paper, #f3ead8);
+  color: inherit;
+  text-align: left;
+}
+
+.learning-pulse-belief b {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--ink, var(--text));
+}
+
+.learning-pulse-belief i {
+  color: var(--ink-3, var(--text-3));
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.learning-pulse-belief p {
+  color: var(--ink-2, var(--text-2));
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.review-queue.is-pulse-target {
+  outline: 1px solid var(--gold, #b8892d);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+.review-queue:focus {
+  outline: none;
+}
+
+.review-queue.is-pulse-target:focus {
+  outline: 1px solid var(--gold, #b8892d);
+  outline-offset: 4px;
 }
 
 .team-roster,

@@ -1,11 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
-import { singleTaggedThesisId } from '../../lib/learning-inspect';
-import { assembleLearningPulse, formatLearningPulse } from '../../lib/learning-pulse';
 import {
   assembleThesisRoster,
   thesisForId,
@@ -14,6 +12,7 @@ import {
 import { BeliefQueue, TaggedLotQueue } from './belief-queue';
 import { CandidateReviewQueue } from './candidate-review';
 import { HoldingIcon } from './holding-icon';
+import { LearningPulseMast } from './learning-pulse-mast';
 import { LessonQueue } from './lesson-queue';
 import { toneForStatus } from './format';
 
@@ -35,11 +34,6 @@ export function ThesesWorld({
   onReviewed?: () => void;
 }) {
   const roster = assembleThesisRoster(desk).rows;
-  const pulse = useMemo(() => assembleLearningPulse(desk), [desk]);
-  const taggedThesisId = singleTaggedThesisId(desk);
-  const pulseThesisId = taggedThesisId && thesisForId(roster, taggedThesisId)
-    ? taggedThesisId
-    : null;
   const firstPaint = useRef(true);
   const listScroll = useRef(0);
   const [readingId, setReadingId] = useState<string | null>(null);
@@ -123,19 +117,11 @@ export function ThesesWorld({
       <h1 className="visually-hidden">Theses</h1>
       <header className="thesis-mast">
         <p className="paper-title">Theses</p>
-        <div className="learning-pulse" aria-label="Learning loop">
-          <p>{formatLearningPulse(pulse)}</p>
-          {pulseThesisId ? (
-            <button
-              type="button"
-              className="learning-pulse-chip"
-              data-pulse-thesis={pulseThesisId}
-              onClick={() => openThesis(pulseThesisId)}
-            >
-              {pulseThesisId}
-            </button>
-          ) : null}
-        </div>
+        <LearningPulseMast
+          desk={desk}
+          reduceMotion={reduceMotion}
+          onOpenThesis={openThesis}
+        />
       </header>
       <BeliefQueue desk={desk} onOpenThesis={openThesis} />
       <TaggedLotQueue desk={desk} onOpenThesis={openThesis} />

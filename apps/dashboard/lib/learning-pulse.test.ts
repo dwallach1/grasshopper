@@ -8,7 +8,9 @@ import type { DeskPayload, LessonRow, OntologyCandidateRow } from './ledger-type
 import {
   assembleLearningPulse,
   formatLearningPulse,
+  learningPulseParts,
   learningPulseSummary,
+  type LearningPulse,
 } from './learning-pulse';
 import { BANDIT_PRIMARY_ACCOUNT } from './meme-book';
 
@@ -600,5 +602,114 @@ describe('assembleLearningPulse', () => {
     expect(pulse.open_books_legacy_untagged).toBe(1);
     expect(pulse.open_books_missing_gate).toBe(0);
     expect(formatLearningPulse(pulse)).toContain('0 tagged lots · 1 legacy untagged · 0 missing gates');
+  });
+});
+
+describe('learningPulseParts', () => {
+  test('joined parts stay the count sentence', () => {
+    const pulse = assembleLearningPulse(desk());
+    const parts = learningPulseParts(pulse, {
+      taggedThesisIds: ['earnings_gap_structure'],
+      thesisOnRoster: (id) => id === 'earnings_gap_structure',
+      lessonsOnParchment: true,
+    });
+    expect(parts.map((part) => part.text).join(' · ')).toBe(formatLearningPulse(pulse));
+    expect(parts.map((part) => [part.key, part.control, part.thesisId])).toEqual([
+      ['to_review', 'count', null],
+      ['lessons', 'focus_lessons', null],
+      ['beliefs', 'reveal_beliefs', null],
+      ['tagged', 'open_thesis', 'earnings_gap_structure'],
+      ['legacy', 'count', null],
+      ['missing', 'count', null],
+    ]);
+  });
+
+  test('two tagged theses focus the lot cards instead of inventing one thesis', () => {
+    const pulse: LearningPulse = {
+      to_review: 0,
+      lessons_open: 2,
+      lessons_incorporated: 1,
+      beliefs_in_force: 0,
+      open_books: 2,
+      open_books_tagged: 2,
+      open_books_gate_ok: 2,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 0,
+    };
+    const parts = learningPulseParts(pulse, {
+      taggedThesisIds: ['earnings_gap_structure', 'weather_same_day_high'],
+      thesisOnRoster: () => true,
+      lessonsOnParchment: false,
+    });
+    expect(parts.map((part) => part.text).join(' · ')).toBe(formatLearningPulse(pulse));
+    expect(parts.find((part) => part.key === 'tagged')).toEqual({
+      key: 'tagged',
+      text: '2 tagged lots',
+      control: 'focus_lots',
+      thesisId: null,
+    });
+    expect(parts.find((part) => part.key === 'beliefs')?.control).toBe('count');
+    expect(parts.find((part) => part.key === 'lessons')?.control).toBe('count');
+  });
+
+  test('two lots on one roster thesis still open that thesis', () => {
+    const pulse: LearningPulse = {
+      to_review: 1,
+      lessons_open: 0,
+      lessons_incorporated: 0,
+      beliefs_in_force: 1,
+      open_books: 2,
+      open_books_tagged: 2,
+      open_books_gate_ok: 2,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 0,
+    };
+    const tagged = learningPulseParts(pulse, {
+      taggedThesisIds: ['earnings_gap_structure', 'earnings_gap_structure'],
+      thesisOnRoster: () => true,
+      lessonsOnParchment: false,
+    }).find((part) => part.key === 'tagged');
+    expect(tagged).toMatchObject({
+      control: 'open_thesis',
+      thesisId: 'earnings_gap_structure',
+      text: '2 tagged lots',
+    });
+  });
+
+  test('a tagged thesis missing from the roster focuses the lot cards', () => {
+    const pulse: LearningPulse = {
+      to_review: 0,
+      lessons_open: 0,
+      lessons_incorporated: 0,
+      beliefs_in_force: 4,
+      open_books: 1,
+      open_books_tagged: 1,
+      open_books_gate_ok: 1,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 0,
+    };
+    const tagged = learningPulseParts(pulse, {
+      taggedThesisIds: ['earnings_gap_structure'],
+      thesisOnRoster: () => false,
+    }).find((part) => part.key === 'tagged');
+    expect(tagged).toMatchObject({ control: 'focus_lots', thesisId: null, text: '1 tagged lot' });
+  });
+
+  test('no open books and no beliefs stay non-interactive counts', () => {
+    const pulse: LearningPulse = {
+      to_review: 0,
+      lessons_open: 0,
+      lessons_incorporated: 0,
+      beliefs_in_force: 0,
+      open_books: 0,
+      open_books_tagged: 0,
+      open_books_gate_ok: 0,
+      open_books_legacy_untagged: 0,
+      open_books_missing_gate: 0,
+    };
+    const parts = learningPulseParts(pulse);
+    expect(parts.map((part) => part.text).join(' · ')).toBe(formatLearningPulse(pulse));
+    expect(parts.map((part) => part.control)).toEqual(['count', 'count', 'count', 'count']);
+    expect(parts.map((part) => part.key)).toEqual(['to_review', 'lessons', 'beliefs', 'open_books']);
   });
 });
