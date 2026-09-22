@@ -3,6 +3,7 @@
  * listen, think, surprise, caution, speak. Not a timeline clip or a CSS bounce.
  */
 import type { StewardMood } from './desk-avatar';
+import { presenceTempo, type StewardPresence } from './steward-presence';
 
 const BLINK_CYCLE_MS = 2800;
 const BREATHE_CYCLE_MS = 2400;
@@ -34,6 +35,12 @@ export type StewardClock = {
   reducedMotion: boolean;
   thinking: boolean;
   attending: boolean;
+  /** When set, tempo and eyes follow presence. Mood no longer wears the face. */
+  presence?: StewardPresence;
+  /** Done-state settle, 1 at the close and 0 once the window has passed. */
+  settle?: number;
+  /** Caller already integrated tempo into elapsedMs. */
+  integrated?: boolean;
 };
 
 export type StewardMotion = {
@@ -151,7 +158,75 @@ export function stewardSpeakAmount(elapsedMs: number, delayMs: number, alive: bo
   return 0.28 + 0.72 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2));
 }
 
+function restMotion(): StewardMotion {
+  return {
+    blink: 0,
+    think: 0,
+    listen: 0,
+    up: 0,
+    down: 0,
+    glanceX: 0,
+    glanceY: 0,
+    breathe: 0.5,
+    pulse: 1,
+    surprise: 0,
+    bang: 0,
+    toggle: 0,
+    speak: 0,
+  };
+}
+
+/** Circle and eyes only. Bang and toggle stay off so presence does not hard-cut. */
+function presenceMotion(clock: StewardClock): StewardMotion {
+  const presence = clock.presence ?? 'idle';
+  const settle = Math.min(1, Math.max(0, clock.settle ?? 0));
+  const tempo = clock.integrated ? 1 : presenceTempo(presence);
+  const elapsed = clock.elapsedMs * tempo;
+  const delay = clock.delayMs;
+
+  if (clock.reducedMotion) {
+    const still = restMotion();
+    if (presence === 'working') return { ...still, think: 0.62, speak: 0.2 };
+    if (presence === 'waiting') return { ...still, listen: 1 };
+    if (presence === 'blocked') return { ...still, down: 0.82 };
+    if (presence === 'done') {
+      return {
+        ...still,
+        surprise: 0.7 * settle,
+        speak: 0.5 * settle,
+        pulse: 1 + 0.028 * settle,
+      };
+    }
+    return still;
+  }
+
+  const breathe = stewardBreathe(elapsed, delay, presence === 'working');
+  const glance = presence === 'working' ? 1 : presence === 'idle' ? 0.55 : presence === 'waiting' ? 0.22 : 0.12;
+  const blinkScale = presence === 'blocked' ? 0.25 : 1;
+  const thinkWave = stewardThinkAmount(elapsed, delay);
+  return {
+    blink: stewardBlinkAmount(elapsed, delay) * blinkScale,
+    think: presence === 'working' ? 0.28 + 0.42 * thinkWave : 0,
+    listen: presence === 'waiting' ? 0.78 + 0.18 * breathe : presence === 'working' ? 0.08 : 0,
+    up: 0,
+    down: presence === 'blocked' ? 0.7 + 0.12 * (1 - breathe) : 0,
+    glanceX: stewardGlanceX(elapsed, delay) * glance,
+    glanceY: stewardGlanceY(elapsed, delay) * glance,
+    breathe,
+    pulse: presence === 'done'
+      ? 1 + settle * 0.028
+      : presence === 'working'
+        ? stewardPulse(elapsed, delay, true)
+        : 1,
+    surprise: presence === 'done' ? settle * 0.7 : 0,
+    bang: 0,
+    toggle: 0,
+    speak: presence === 'done' ? settle * 0.55 : presence === 'working' ? 0.18 * breathe : 0,
+  };
+}
+
 export function stewardMotion(clock: StewardClock): StewardMotion {
+  if (clock.presence) return presenceMotion(clock);
   const up = clock.mood === 'up' ? 1 : 0;
   const down = clock.mood === 'down' ? 1 : 0;
   const listen = clock.attending ? 1 : 0;

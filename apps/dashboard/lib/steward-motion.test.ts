@@ -177,6 +177,58 @@ describe('steward motion curves', () => {
     expect(stewardExpressionPreview('glance').glanceX).not.toBe(0);
   });
 
+  test('presence changes tempo and eyes without a bang or toggle cut', () => {
+    const clock = {
+      delayMs: 0,
+      mood: 'up' as const,
+      alive: true,
+      reducedMotion: false,
+      thinking: true,
+      attending: true,
+    };
+    let idleBlinks = 0;
+    let workingBlinks = 0;
+    for (let step = 0; step < 40; step += 1) {
+      const elapsedMs = step * 200;
+      if (stewardMotion({ ...clock, elapsedMs, presence: 'idle' }).blink > 0.5) idleBlinks += 1;
+      if (stewardMotion({ ...clock, elapsedMs, presence: 'working' }).blink > 0.5) workingBlinks += 1;
+    }
+    expect(workingBlinks).toBeGreaterThan(idleBlinks);
+
+    const idle = stewardMotion({ ...clock, elapsedMs: 7200 * 0.3, presence: 'idle' });
+    expect(idle.bang).toBe(0);
+    expect(idle.toggle).toBe(0);
+    expect(idle.up).toBe(0);
+    expect(idle.listen).toBe(0);
+
+    const waiting = stewardMotion({ ...clock, elapsedMs: 0, presence: 'waiting', reducedMotion: true });
+    expect(waiting.listen).toBe(1);
+    expect(waiting.blink).toBe(0);
+    expect(waiting.bang).toBe(0);
+
+    const blocked = stewardMotion({ ...clock, elapsedMs: 400, presence: 'blocked', reducedMotion: true });
+    expect(blocked.down).toBeGreaterThan(0.7);
+    expect(blocked.listen).toBe(0);
+
+    const justClosed = stewardMotion({
+      ...clock,
+      elapsedMs: 0,
+      presence: 'done',
+      settle: 1,
+      reducedMotion: true,
+    });
+    const easing = stewardMotion({
+      ...clock,
+      elapsedMs: 0,
+      presence: 'done',
+      settle: 0.2,
+      reducedMotion: true,
+    });
+    expect(justClosed.surprise).toBeGreaterThan(easing.surprise);
+    expect(easing.surprise).toBeGreaterThan(0);
+    expect(justClosed.bang).toBe(0);
+  });
+
   test('approach eases toward the target instead of snapping', () => {
     const stepped = approachParam(0, 1, 0.05, 0.16);
     expect(stepped).toBeGreaterThan(0);

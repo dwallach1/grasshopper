@@ -1,19 +1,19 @@
 /**
  * Desk facts → shared StewardAvatar morph params.
- * Board %, live pulse, watching, and an open ticket. Same map for Team + Board.
+ * Presence is the one signal. Board, Team, and Book read the same map.
  */
-import { assembleBookOpen } from './book-open-strip';
-import {
-  stewardMood,
-  stewardThinking,
-  type StewardMood,
-} from './desk-avatar';
-import { assembleStewardFreshness, isMarkFresh, type StewardFreshnessId } from './desk-freshness';
-import { assembleLeaderboard } from './desk-leaderboard';
-import { deskTeam, isHeartbeatFresh, teamCards } from './desk-team';
+import type { StewardMood } from './desk-avatar';
 import type { DeskPayload } from './ledger-types';
+import {
+  stewardPresence,
+  stewardPresences,
+  type StewardPresence,
+  type StewardPresenceState,
+} from './steward-presence';
 
 export type StewardFace = {
+  presence: StewardPresence;
+  settle: number;
   mood: StewardMood;
   alive: boolean;
   thinking: boolean;
@@ -21,6 +21,8 @@ export type StewardFace = {
 };
 
 export const QUIET_STEWARD_FACE: StewardFace = {
+  presence: 'idle',
+  settle: 0,
   mood: 'idle',
   alive: false,
   thinking: false,
@@ -29,48 +31,23 @@ export const QUIET_STEWARD_FACE: StewardFace = {
 
 export function stewardDeskFaces(desk: DeskPayload, nowMs: number): Map<string, StewardFace> {
   const faces = new Map<string, StewardFace>();
-  const cards = teamCards(deskTeam(desk));
-  const board = assembleLeaderboard(desk);
-  const open = assembleBookOpen(desk);
-  const boardBySlug = new Map(board.rows.map((row) => [row.slug, row]));
-  const openBySlug = new Map(open.rows.map((row) => [row.slug, row]));
-  const activityBySlug = new Map(
-    assembleStewardFreshness(desk).map((row) => [row.id, row.activity_at]),
-  );
-
-  for (const card of cards) {
-    const row = boardBySlug.get(card.slug);
-    const tickets = openBySlug.get(card.slug);
-    const activity = activityBySlug.get(card.slug as StewardFreshnessId) ?? card.heartbeat_at;
-    faces.set(card.slug, {
-      mood: isMarkFresh(row?.last_marked, nowMs) ? stewardMood(row?.return_pct) : 'idle',
-      alive: isHeartbeatFresh(activity, nowMs),
-      thinking: stewardThinking(card.status),
-      attending: (tickets?.tickets.length ?? 0) > 0 || (row?.open_lots ?? 0) > 0,
-    });
+  for (const [slug, state] of stewardPresences(desk, nowMs)) {
+    faces.set(slug, faceFromPresence(state));
   }
-
-  for (const row of board.rows) {
-    if (faces.has(row.slug)) continue;
-    faces.set(row.slug, {
-      mood: isMarkFresh(row.last_marked, nowMs) ? stewardMood(row.return_pct) : 'idle',
-      alive: false,
-      thinking: false,
-      attending: row.open_lots > 0,
-    });
-  }
-
-  for (const row of open.rows) {
-    const prev = faces.get(row.slug) ?? QUIET_STEWARD_FACE;
-    faces.set(row.slug, {
-      ...prev,
-      attending: prev.attending || row.tickets.length > 0,
-    });
-  }
-
   return faces;
 }
 
 export function stewardDeskFace(desk: DeskPayload, slug: string, nowMs: number): StewardFace {
-  return stewardDeskFaces(desk, nowMs).get(slug) ?? QUIET_STEWARD_FACE;
+  return faceFromPresence(stewardPresence(desk, slug, nowMs));
+}
+
+function faceFromPresence(state: StewardPresenceState): StewardFace {
+  return {
+    presence: state.presence,
+    settle: state.settle,
+    mood: 'idle',
+    alive: state.presence === 'working' || state.presence === 'done',
+    thinking: false,
+    attending: state.presence === 'waiting',
+  };
 }
