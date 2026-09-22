@@ -409,6 +409,10 @@ describe('desk IA smoke', () => {
     expect(avatars).toContain('preview');
     expect(avatars).toContain('data-alive');
     expect(avatars).toContain('data-attending');
+    expect(avatars).toContain('data-presence');
+    expect(avatars).not.toContain('presence-chip');
+    expect(team).not.toContain('presence-chip');
+    expect(motion).toContain('presenceTempo');
     expect(css).toContain('prefers-reduced-motion');
     expect(css).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(css).toContain('.line-frame > div:has(canvas)');
@@ -482,6 +486,7 @@ describe('desk IA smoke', () => {
     expect(board).toContain('StewardAvatar');
     expect(board).toContain('size="board"');
     expect(board).toContain('stewardDeskFaces');
+    expect(board).not.toContain('presence-chip');
     expect(board).toContain('DeskLiveline');
     expect(board).toContain('CrtTape');
     expect(board).toContain('paper-title');

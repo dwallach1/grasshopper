@@ -11,6 +11,7 @@ import {
   type StewardMood,
 } from '../../lib/desk-avatar';
 import type { StewardExpression } from '../../lib/steward-motion';
+import type { StewardPresence } from '../../lib/steward-presence';
 import { StewardLivingIcon } from './steward-living';
 import styles from './steward-avatar.module.css';
 
@@ -23,6 +24,8 @@ export function StewardAvatar({
   mood = 'idle',
   thinking = false,
   attending = false,
+  presence = 'idle',
+  settle = 0,
   preview,
 }: {
   slug: string;
@@ -33,9 +36,11 @@ export function StewardAvatar({
   mood?: StewardMood;
   thinking?: boolean;
   attending?: boolean;
+  presence?: StewardPresence;
+  settle?: number;
   preview?: StewardExpression;
 }) {
-  const label = stewardAvatarLabel(name);
+  const label = `${stewardAvatarLabel(name)}, ${presence}`;
   const palette = stewardBotPalette({ slug, name, accent });
   const kind = stewardBotKind(slug, name);
   const delayMs = stewardEmoteDelayMs(slug, name);
@@ -63,6 +68,7 @@ export function StewardAvatar({
       data-thinking={thinking ? '1' : '0'}
       data-alive={alive ? '1' : '0'}
       data-attending={attending ? '1' : '0'}
+      data-presence={presence}
       data-preview={preview ?? ''}
       data-runtime="icon"
       role="img"
@@ -74,6 +80,8 @@ export function StewardAvatar({
         alive={alive}
         thinking={thinking}
         attending={attending}
+        presence={presence}
+        settle={settle}
         preview={preview}
         reducedMotion={reducedMotion}
         delayMs={delayMs}

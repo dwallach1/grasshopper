@@ -20,8 +20,8 @@ export function StewardExpressionSheet() {
         Same morph engine as Team foil cards and Board icons.
       </p>
       <ol className={styles.tree} aria-label="StewardAvatar morph params">
-        <li>StewardAvatar — slug, size, mood, alive, thinking, attending</li>
-        <li>stewardDeskFaces — Board %, pulse, watching, open ticket</li>
+        <li>StewardAvatar — slug, size, presence</li>
+        <li>stewardPresences — idle, working, waiting, blocked, done</li>
         <li>stewardMotion — blink, glance, listen, think, surprise, caution, speak, pulse</li>
         <li>composeStewardPose — one disk + two pills</li>
         <li>paintStewardIcon — canvas 2d, eyes clipped to the disk</li>

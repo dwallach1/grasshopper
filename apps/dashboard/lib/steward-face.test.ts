@@ -109,7 +109,7 @@ function desk(partial: Record<string, unknown> = {}): DeskPayload {
         id: 'p1',
         market_id: 'm1',
         account_key: 'oddsborne',
-        thesis_id: null,
+        thesis_id: 'fed-cut',
         outcome: 'yes',
         status: 'open',
         quantity: 25,
@@ -139,27 +139,35 @@ function desk(partial: Record<string, unknown> = {}): DeskPayload {
 }
 
 describe('steward desk face', () => {
-  test('Board %, pulse, watching, and open ticket map onto the shared face', () => {
+  test('quiet, scanning, and flat stewards share one presence face', () => {
     const faces = stewardDeskFaces(desk(), NOW);
     expect(faces.get('quantanamo')).toEqual({
-      mood: 'up',
-      alive: true,
+      presence: 'idle',
+      settle: 0,
+      mood: 'idle',
+      alive: false,
       thinking: false,
       attending: false,
     });
     expect(faces.get('oddsborne')).toEqual({
+      presence: 'working',
+      settle: 0,
       mood: 'idle',
       alive: true,
-      thinking: true,
-      attending: true,
+      thinking: false,
+      attending: false,
     });
     expect(faces.get('bandit')).toEqual({
+      presence: 'idle',
+      settle: 0,
       mood: 'idle',
       alive: false,
       thinking: false,
       attending: false,
     });
     expect(stewardDeskFace(desk(), 'spark', NOW)).toEqual({
+      presence: 'idle',
+      settle: 0,
       mood: 'idle',
       alive: false,
       thinking: false,
@@ -167,7 +175,7 @@ describe('steward desk face', () => {
     });
   });
 
-  test('a down book stays down when marks are fresh', () => {
+  test('a down book without open risk stays a calm face', () => {
     const down = desk({
       book: {
         account_label: 'robinhood_agentic_7638',
@@ -196,8 +204,10 @@ describe('steward desk face', () => {
       }),
     });
     expect(stewardDeskFace(down, 'quantanamo', NOW)).toEqual({
-      mood: 'down',
-      alive: true,
+      presence: 'idle',
+      settle: 0,
+      mood: 'idle',
+      alive: false,
       thinking: false,
       attending: false,
     });
@@ -224,8 +234,10 @@ describe('steward desk face', () => {
       },
     });
     expect(stewardDeskFace(staleWin, 'quantanamo', NOW)).toEqual({
+      presence: 'idle',
+      settle: 0,
       mood: 'idle',
-      alive: true,
+      alive: false,
       thinking: false,
       attending: false,
     });

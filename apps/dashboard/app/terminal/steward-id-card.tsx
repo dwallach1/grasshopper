@@ -63,6 +63,8 @@ export function StewardIdCard({
           alive={face.alive}
           thinking={face.thinking}
           attending={face.attending}
+          presence={face.presence}
+          settle={face.settle}
         />
       </div>
     </article>
