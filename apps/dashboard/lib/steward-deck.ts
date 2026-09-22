@@ -22,3 +22,11 @@ export function deckThumbRatio(index: number, count: number): number {
 export function stepDeckIndex(index: number, delta: number, count: number): number {
   return clampDeckIndex(index + delta, count);
 }
+
+/** One card per threshold. Drag left advances; a short nudge stays put. */
+export const TEAM_CARD_DRAG_PX = 48;
+
+export function deckShiftFromDrag(dx: number, stepPx = TEAM_CARD_DRAG_PX): number {
+  if (!(stepPx > 0) || !Number.isFinite(dx)) return 0;
+  return Math.trunc(-dx / stepPx);
+}

@@ -2,6 +2,7 @@
  * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
  * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
  * lands on Board. Card-deck motion is a separate control (`data-card-dragger`).
+ * A Team card body is not that handle and does not start a tab swipe.
  * Reduced motion snaps with no travel animation.
  */
 import {
@@ -17,6 +18,7 @@ export const PAGE_SWIPE_LOCK_PX = 12;
 /** |dx| must beat |dy| by this factor. 1.2 ≈ 40° from the horizontal — not a diagonal. */
 export const PAGE_SWIPE_DOMINANCE = 1.2;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
+export const TEAM_CARD_ATTR = 'data-team-card';
 /** Chrome synthesizes a mouse down after a touch swipe. Ignore it or the rail re-arms short. */
 export const COMPAT_MOUSE_SUPPRESS_MS = 700;
 
@@ -174,6 +176,16 @@ export function isCardDraggerTarget(target: SwipeHitTarget | null): boolean {
 
 export function pageSwipeConsumesTarget(target: SwipeHitTarget | null): boolean {
   return !isCardDraggerTarget(target);
+}
+
+export function isTeamCardBodyTarget(target: SwipeHitTarget | null): boolean {
+  if (target === null || isCardDraggerTarget(target)) return false;
+  return target.closest(`[${TEAM_CARD_ATTR}]`) !== null;
+}
+
+/** Horizontal tab swipe skips the Team card body. Vertical pull still arms. */
+export function horizontalPageSwipeSuppressed(target: SwipeHitTarget | null): boolean {
+  return isTeamCardBodyTarget(target);
 }
 
 /** Capture only after the rail locks to a tab swipe or a top-of-pane pull. A tap must reach Book rows. */

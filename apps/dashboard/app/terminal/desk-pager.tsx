@@ -16,6 +16,7 @@ import {
   DESK_PAGER_SLOTS,
   compatMouseUntil,
   followPagerScroll,
+  horizontalPageSwipeSuppressed,
   isCompatMouseSuppressed,
   isSwipeSurface,
   isSwipeWrap,
@@ -171,6 +172,7 @@ function bindPagerSwipe(
     dragging: false,
     captured: false,
     axis: null as SwipeAxisLock,
+    suppressHorizontal: false,
     from: currentSurface(),
     originX: 0,
     originY: 0,
@@ -216,6 +218,7 @@ function bindPagerSwipe(
     gesture.dragging = false;
     gesture.captured = false;
     gesture.axis = null;
+    gesture.suppressHorizontal = false;
     holding.current = false;
     pager.dataset.axis = '';
     releaseCapture();
@@ -236,10 +239,12 @@ function bindPagerSwipe(
     if (gesture.refreshing) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (isCompatMouseSuppressed(event.pointerType, performance.now(), gesture.ignoreMouseUntil)) return;
-    if (!pageSwipeConsumesTarget(swipeHitFromEvent(event.target))) return;
+    const hit = swipeHitFromEvent(event.target);
+    if (!pageSwipeConsumesTarget(hit)) return;
     gesture.armed = true;
     gesture.dragging = false;
     gesture.axis = null;
+    gesture.suppressHorizontal = horizontalPageSwipeSuppressed(hit);
     gesture.from = currentSurface();
     holding.current = true;
     gesture.originX = event.clientX;
@@ -295,6 +300,11 @@ function bindPagerSwipe(
       return;
     }
     if (locked !== 'x') return;
+    if (gesture.suppressHorizontal) {
+      disarm();
+      pager.dataset.swipe = `card:${gesture.from}`;
+      return;
+    }
     gesture.axis = 'x';
     gesture.dragging = true;
     pager.dataset.axis = 'x';
