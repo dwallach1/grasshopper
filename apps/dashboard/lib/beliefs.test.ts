@@ -159,8 +159,8 @@ describe('belief mapping', () => {
     expect(truncateRationale('  short  ')).toBe('short');
   });
 
-  test('closed clip prefers a linked lesson; else the newest belief; never invents', () => {
-    const lesson: LessonRow = {
+  test('closed clip shows the newest lesson and the playbook belief it became', () => {
+    const lesson36: LessonRow = {
       id: 36,
       cycle_id: 1,
       test_id: null,
@@ -171,18 +171,101 @@ describe('belief mapping', () => {
       incorporated: false,
       created_at: '2026-09-10T20:31:00.000Z',
     };
+    const lesson62: LessonRow = {
+      ...lesson36,
+      id: 62,
+      lesson_type: 'missed_swing',
+      summary: '9/22 leftovers — no chase.',
+      incorporated: true,
+      created_at: '2026-09-22T23:37:06.642Z',
+    };
+    const lesson64: LessonRow = {
+      ...lesson36,
+      id: 64,
+      lesson_type: 'process',
+      summary: 'No chase after-close 9/22. Hold CODA.',
+      incorporated: true,
+      created_at: '2026-09-22T23:37:06.642Z',
+    };
+    const linked = mapBeliefs([belief()]);
     expect(clipNoteFor({
       thesisId: 'earnings_gap_structure',
-      beliefs: mapBeliefs([belief()]),
-      lessons: [lesson],
-    })).toMatchObject({ kind: 'lesson', summary: 'Soft RTH is not confirmation for retail.' });
+      beliefs: linked,
+      lessons: [lesson36],
+    })).toMatchObject({
+      kind: 'lesson',
+      summary: 'Soft RTH is not confirmation for retail.',
+      belief: {
+        key: 'belief:645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
+        summary: 'Stocks autopsy run 141: FEIM leftover already printed — no chase.',
+      },
+    });
+    const incorporated = mapBeliefs([
+      belief({
+        id: 'e8781d9e-ef2c-4215-8d6b-e4b5b4fd7f19',
+        observed_at: '2026-09-23T17:47:46.732Z',
+        rationale: '9/22 leftovers became the playbook.',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['missed_swing'],
+          research_lesson_id: 62,
+        },
+      }),
+      belief({
+        id: '60ed9cb3-be49-4b16-9180-a487e7b1b12d',
+        observed_at: '2026-09-22T17:51:16.377Z',
+        rationale: 'older playbook stays off the clip',
+        meta: { kind: PLAYBOOK_RULE_KIND, rules: ['missed_swing'], research_lesson_id: 58 },
+      }),
+    ]);
     expect(clipNoteFor({
       thesisId: 'earnings_gap_structure',
-      beliefs: mapBeliefs([belief()]),
+      beliefs: incorporated,
+      lessons: [lesson62, lesson64],
+    })).toMatchObject({
+      key: 'lesson:64',
+      kind: 'lesson',
+      summary: 'No chase after-close 9/22. Hold CODA.',
+      belief: {
+        key: 'belief:e8781d9e-ef2c-4215-8d6b-e4b5b4fd7f19',
+        summary: '9/22 leftovers became the playbook.',
+      },
+    });
+    const cited = mapBeliefs([
+      belief({
+        id: 'newer-other',
+        observed_at: '2026-09-23T17:47:46.732Z',
+        rationale: 'newer rule cites a different lesson',
+        meta: { kind: PLAYBOOK_RULE_KIND, rules: ['process'], research_lesson_id: 99 },
+      }),
+      belief(),
+    ]);
+    expect(clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      beliefs: cited,
+      lessons: [lesson36],
+    })?.belief?.key).toBe('belief:645c3ea2-eb0d-4b4b-b329-7ac69b302ff1');
+    const unlinked = mapBeliefs([belief({
+      meta: { kind: PLAYBOOK_RULE_KIND, rules: ['missed_swing'] },
+    })]);
+    expect(clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      beliefs: unlinked,
+      lessons: [lesson36],
+    })?.belief?.summary).toContain('FEIM leftover');
+    const plain = mapBeliefs([belief({ meta: { kind: 'belief' } })]);
+    expect(clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      beliefs: plain,
+      lessons: [lesson36],
+    })).toMatchObject({ kind: 'lesson', belief: null });
+    expect(clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      beliefs: linked,
       lessons: [],
-    })?.kind).toBe('belief');
-    expect(clipNoteFor({ thesisId: 'orphan', beliefs: mapBeliefs([belief()]), lessons: [] })).toBeNull();
-    expect(clipNoteFor({ thesisId: null, beliefs: mapBeliefs([belief()]), lessons: [lesson] })).toBeNull();
+    })).toMatchObject({ kind: 'belief', belief: null });
+    expect(clipNoteFor({ thesisId: 'orphan', beliefs: linked, lessons: [] })).toBeNull();
+    expect(clipNoteFor({ thesisId: null, beliefs: linked, lessons: [lesson36] })).toBeNull();
   });
 
   test('holding thesis prefers an explicit id, then a held lot, then a symbol list', () => {

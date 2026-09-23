@@ -580,6 +580,7 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('humanizeRule(row.thesis_id)');
     expect(openStrip).toContain('Rules in force');
     expect(openStrip).toContain('clip_note');
+    expect(openStrip).toContain('clip_note.belief');
     expect(openStrip).toContain('no lesson on close');
     expect(css).toContain('.book-thesis-chip');
     expect(css).toContain('.book-untagged');

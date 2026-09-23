@@ -147,11 +147,20 @@ function HoldingDetail({
       ) : null}
       {row.life === 'closed' ? (
         row.clip_note ? (
-          <p className="book-clip">
-            {row.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}
-            {' · '}
-            {row.clip_note.summary}
-          </p>
+          <>
+            <p className="book-clip">
+              {row.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}
+              {' · '}
+              {row.clip_note.summary}
+            </p>
+            {row.clip_note.belief ? (
+              <p className="book-clip">
+                Belief
+                {' · '}
+                {row.clip_note.belief.summary}
+              </p>
+            ) : null}
+          </>
         ) : (
           <p className="book-clip is-empty">no lesson on close</p>
         )

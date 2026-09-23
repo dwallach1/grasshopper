@@ -41,10 +41,17 @@ export type PlaybookRule = {
   research_lesson_id: string | null;
 };
 
+export type ClipBeliefNote = {
+  key: string;
+  summary: string;
+};
+
+/** Closed-clip feedback. `belief` is set only when a lesson and a playbook rule both exist. */
 export type ClipNote = {
   key: string;
   kind: 'lesson' | 'belief';
   summary: string;
+  belief: ClipBeliefNote | null;
 };
 
 const OptionalText = z.union([z.string(), z.null()]).transform((value) => {
@@ -169,22 +176,42 @@ export function clipNoteFor(input: {
     .filter((row) => row.thesis_id === thesisId)
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)[0];
-  if (lesson) {
-    return {
-      key: `lesson:${lesson.id}`,
-      kind: 'lesson',
-      summary: truncateRationale(lesson.summary),
-    };
-  }
-  const belief = (input.beliefs ?? [])
+  const beliefs = (input.beliefs ?? [])
     .filter((row) => row.thesis_id === thesisId)
     .slice()
-    .sort((a, b) => b.observed_at.localeCompare(a.observed_at) || b.id.localeCompare(a.id))[0];
-  if (!belief) return null;
+    .sort((a, b) => b.observed_at.localeCompare(a.observed_at) || b.id.localeCompare(a.id));
+  if (!lesson) {
+    const belief = beliefs[0];
+    const summary = belief ? truncateRationale(belief.rationale) : '';
+    if (!belief || !summary) return null;
+    return {
+      key: `belief:${belief.id}`,
+      kind: 'belief',
+      summary,
+      belief: null,
+    };
+  }
+  const summary = truncateRationale(lesson.summary);
+  const playbook = beliefs.filter(isPlaybookRule);
+  const lessonKey = String(lesson.id);
+  const linked = playbook.find((row) => row.research_lesson_id === lessonKey) ?? null;
+  // Link wins. When it is missing, the newest playbook rule still sits beside the lesson.
+  const companion = linked ?? playbook[0] ?? null;
+  const belief = companion ? clipBelief(companion) : null;
+  if (!summary && !belief) return null;
+  if (!summary && belief) {
+    return {
+      key: belief.key,
+      kind: 'belief',
+      summary: belief.summary,
+      belief: null,
+    };
+  }
   return {
-    key: `belief:${belief.id}`,
-    kind: 'belief',
-    summary: truncateRationale(belief.rationale),
+    key: `lesson:${lesson.id}`,
+    kind: 'lesson',
+    summary,
+    belief,
   };
 }
 
@@ -218,6 +245,12 @@ export function thesisForHolding(
 
 export function beliefsFromDesk(desk: Pick<DeskPayload, 'beliefs'>): BeliefUpdateRow[] {
   return desk.beliefs ?? [];
+}
+
+function clipBelief(row: BeliefUpdateRow): ClipBeliefNote | null {
+  const summary = truncateRationale(row.rationale);
+  if (!summary) return null;
+  return { key: `belief:${row.id}`, summary };
 }
 
 function newerBelief(next: BeliefUpdateRow, current: BeliefUpdateRow): boolean {
