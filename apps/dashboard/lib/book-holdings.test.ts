@@ -244,7 +244,7 @@ describe('assembleBookHoldings', () => {
     expect(holdings.rows.filter((row) => row.life === 'closed')).toHaveLength(3);
   });
 
-  test('open rows bind thesis + rules in force; closed rows show a linked lesson', () => {
+  test('open rows bind thesis + rules in force; closed rows show lesson and belief', () => {
     const holdings = assembleBookHoldings(desk({
       book: {
         ...desk().book,
@@ -373,7 +373,16 @@ describe('assembleBookHoldings', () => {
     expect(closed?.clip_note).toMatchObject({
       kind: 'lesson',
       summary: 'Soft RTH is not confirmation for retail.',
+      belief: {
+        key: 'belief:b-egs',
+        summary: 'No chase leftovers already printed.',
+      },
     });
+    expect(closed?.rules_in_force).toEqual([
+      'no_chase_already_printed_leftovers',
+      'never_pltr',
+      'ignored_mcap_floor_50_100m',
+    ]);
     expect(closed?.thesis_id).toBe('earnings_gap_structure');
     expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.rules_in_force).toEqual([]);
     expect(holdings.rows.find((row) => row.id === 'eq:CIFR')?.thesis_id).toBeNull();

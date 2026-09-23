@@ -5192,6 +5192,10 @@ a:focus-visible {
   max-width: 28rem;
 }
 
+.book-clip + .book-clip {
+  margin-top: -4px !important;
+}
+
 .book-clip.is-empty {
   color: var(--ink-3, var(--text-3)) !important;
 }
