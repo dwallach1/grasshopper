@@ -132,7 +132,7 @@ function pointer(type: string, target: EventTarget, x: number, y: number) {
   target.dispatchEvent(event);
 }
 
-describe('Team card handle vs circular pager', () => {
+describe('Team stack vs circular pager', () => {
   let root: { unmount: () => void } | null = null;
 
   afterEach(async () => {
@@ -143,7 +143,7 @@ describe('Team card handle vs circular pager', () => {
     document.body.innerHTML = '';
   });
 
-  test('handle reorder stays on Team; card body does not page; mast swipe still wraps', async () => {
+  test('every steward is on one page; card swipe changes tabs; pull still arms', async () => {
     const snaps: string[] = [];
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -165,57 +165,25 @@ describe('Team card handle vs circular pager', () => {
       }));
     });
 
-    const handle = document.querySelector('.team-card-handle');
-    const card = document.querySelector('.team-card');
+    const stage = document.querySelector('.steward-stage');
+    const cards = [...document.querySelectorAll('.team-card')];
     const mast = document.querySelector('.team-mast');
     const pager = document.querySelector('.desk-pager');
-    const track = document.querySelector('.steward-deck-track');
-    expect(handle).toBeTruthy();
-    expect(handle?.getAttribute('data-card-dragger')).toBe('1');
-    expect(handle?.getAttribute('aria-label')).toBe('Reorder QUANTANAMO');
-    expect(card?.getAttribute('data-team-card')).toBe('1');
-    expect(card?.getAttribute('data-card-dragger')).toBeNull();
-    expect(track?.getAttribute('style')).toContain('translateX(0%)');
+    expect(stage?.getAttribute('data-desk-nested-scroll')).toBe('1');
+    expect(document.querySelector('.steward-deck')).toBeNull();
+    expect(document.querySelector('.steward-dragger')).toBeNull();
+    expect(document.querySelector('.team-card-handle')).toBeNull();
+    expect(cards.map((card) => card.getAttribute('data-steward'))).toEqual([
+      'quantanamo',
+      'oddsborne',
+      'bandit',
+    ]);
+    expect(cards.every((card) => card.getAttribute('data-team-card') === null)).toBe(true);
+    expect(stage?.textContent).toContain('QUANTANAMO');
+    expect(stage?.textContent).toContain('ODDSBORNE');
+    expect(stage?.textContent).toContain('BANDIT');
 
-    await act(async () => {
-      pointer('pointerdown', handle as Element, 200, 180);
-      pointer('pointermove', window, 140, 184);
-    });
-    expect(track?.getAttribute('style')).toContain('translateX(-100%)');
-    expect(snaps).toEqual([]);
-    expect(pager?.getAttribute('data-swipe') ?? '').not.toContain('move:');
-    await act(async () => {
-      pointer('pointerup', window, 140, 184);
-    });
-
-    const grip = handle?.querySelector('i');
-    if (!(grip instanceof Element)) throw new Error('missing reorder grip');
-    await act(async () => {
-      const startTouch = new Touch({ identifier: 7, target: grip, clientX: 70, clientY: 240 });
-      grip.dispatchEvent(new TouchEvent('touchstart', {
-        bubbles: true,
-        cancelable: true,
-        touches: [startTouch],
-        changedTouches: [startTouch],
-      }));
-      const moved = new Touch({ identifier: 7, target: grip, clientX: 10, clientY: 244 });
-      const move = new TouchEvent('touchmove', {
-        bubbles: true,
-        cancelable: true,
-        touches: [moved],
-        changedTouches: [moved],
-      });
-      grip.dispatchEvent(move);
-      expect(move.defaultPrevented).toBe(true);
-      pointer('pointerdown', grip, 70, 240);
-      pointer('pointermove', window, 70, 180);
-      pointer('pointerup', window, 70, 180);
-    });
-    expect(track?.getAttribute('style')).toContain('translateX(-200%)');
-    expect(snaps).toEqual([]);
-    expect(pager?.getAttribute('data-swipe') ?? '').not.toContain('move:');
-
-    const body = card?.querySelector('.team-card-copy');
+    const body = cards[0]?.querySelector('.team-card-copy');
     if (!(body instanceof Element)) throw new Error('missing card body');
     await act(async () => {
       const startTouch = new Touch({ identifier: 8, target: body, clientX: 220, clientY: 200 });
@@ -233,7 +201,7 @@ describe('Team card handle vs circular pager', () => {
         changedTouches: [moved],
       });
       body.dispatchEvent(move);
-      expect(move.defaultPrevented).toBe(true);
+      expect(move.defaultPrevented).toBe(false);
       const endTouch = new Touch({ identifier: 8, target: body, clientX: 40, clientY: 206 });
       body.dispatchEvent(new TouchEvent('touchend', {
         bubbles: true,
@@ -243,22 +211,21 @@ describe('Team card handle vs circular pager', () => {
       }));
     });
     expect(snaps).toEqual([]);
-    expect(pager?.getAttribute('data-swipe')).toBe('card:team');
+    expect(pager?.getAttribute('data-swipe') ?? '').not.toBe('card:team');
+
     await act(async () => {
       pointer('pointerdown', body, 220, 200);
       pointer('pointermove', window, 80, 204);
       pointer('pointerup', window, 80, 204);
     });
-    expect(snaps).toEqual([]);
-    expect(pager?.getAttribute('data-swipe')).toBe('card:team');
-    expect(track?.getAttribute('style')).toContain('translateX(-200%)');
+    expect(snaps).toEqual(['leaderboard']);
+    expect(document.querySelectorAll('.team-card')).toHaveLength(3);
 
     await act(async () => {
       pointer('pointerdown', body, 200, 120);
       pointer('pointermove', window, 204, 220);
       pointer('pointerup', window, 204, 220);
     });
-    expect(snaps).toEqual([]);
     expect(pager?.getAttribute('data-swipe') ?? '').toContain('pull:team');
 
     await act(async () => {
@@ -266,7 +233,7 @@ describe('Team card handle vs circular pager', () => {
       pointer('pointermove', window, 40, 44);
       pointer('pointerup', window, 40, 44);
     });
-    expect(snaps).toEqual(['leaderboard']);
+    expect(snaps).toEqual(['leaderboard', 'leaderboard']);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
