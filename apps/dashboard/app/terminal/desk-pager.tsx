@@ -456,11 +456,20 @@ function bindPagerSwipe(
     if (spec && spec.id !== currentSurface()) snapTo(spec.id);
   }
 
+  function onLostCapture(event: PointerEvent) {
+    // setPointerCapture moves capture off the row that received pointerdown.
+    // That loss bubbles while the finger is still down (often at the ~12px axis
+    // lock). Treating it as pointerup cancels the swipe before the 56px commit,
+    // so Board↔Team never wraps. Only a real release of this pager ends it.
+    if (event.target !== pager || event.buttons !== 0) return;
+    onUp(event);
+  }
+
   pager.addEventListener('pointerdown', onDown, true);
   pager.addEventListener('pointermove', onMove, { passive: false });
   pager.addEventListener('pointerup', onUp);
   pager.addEventListener('pointercancel', onUp);
-  pager.addEventListener('lostpointercapture', onUp);
+  pager.addEventListener('lostpointercapture', onLostCapture);
   pager.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
   pager.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
   pager.addEventListener('touchend', onTouchEnd);
@@ -474,7 +483,7 @@ function bindPagerSwipe(
     pager.removeEventListener('pointermove', onMove);
     pager.removeEventListener('pointerup', onUp);
     pager.removeEventListener('pointercancel', onUp);
-    pager.removeEventListener('lostpointercapture', onUp);
+    pager.removeEventListener('lostpointercapture', onLostCapture);
     pager.removeEventListener('touchstart', onTouchStart, true);
     pager.removeEventListener('touchmove', onTouchMove, true);
     pager.removeEventListener('touchend', onTouchEnd);
