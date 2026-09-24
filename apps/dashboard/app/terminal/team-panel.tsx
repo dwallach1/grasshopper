@@ -1,15 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
-import {
-  clampDeckIndex,
-  deckIndexFromThumb,
-  deckShiftFromAxes,
-  deckThumbRatio,
-  stepDeckIndex,
-} from '../../lib/steward-deck';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { assembleTeamRoster } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
@@ -18,7 +11,6 @@ import { age } from './format';
 
 export function TeamPanel({
   desk,
-  reduceMotion = false,
   now = null,
 }: {
   desk: DeskPayload;
@@ -27,211 +19,45 @@ export function TeamPanel({
 }) {
   const cards = assembleTeamRoster(desk);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
-  const roster = cards.map((card) => card.slug).join('|');
-  const [index, setIndex] = useState(0);
-  const drag = useRef<{ pointerId: number; startX: number; startY: number; origin: number; count: number } | null>(null);
-
-  useEffect(() => {
-    setIndex(0);
-  }, [roster]);
-
-  useEffect(() => {
-    function onMove(event: PointerEvent) {
-      const active = drag.current;
-      if (!active || event.pointerId !== active.pointerId) return;
-      event.preventDefault();
-      const shift = deckShiftFromAxes(event.clientX - active.startX, event.clientY - active.startY);
-      setIndex(stepDeckIndex(active.origin, shift, active.count));
-    }
-    function onUp(event: PointerEvent) {
-      const active = drag.current;
-      if (!active || event.pointerId !== active.pointerId) return;
-      drag.current = null;
-    }
-    function onTouchMove(event: TouchEvent) {
-      if (!drag.current || !event.cancelable) return;
-      event.preventDefault();
-    }
-    window.addEventListener('pointermove', onMove, { passive: false });
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-      window.removeEventListener('touchmove', onTouchMove);
-    };
-  }, []);
-
-  function show(next: number) {
-    setIndex(clampDeckIndex(next, cards.length));
-  }
-
-  function onHandleDown(event: ReactPointerEvent<HTMLButtonElement>) {
-    event.stopPropagation();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // window listeners still drive the reorder
-    }
-    drag.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      origin: clampDeckIndex(index, cards.length),
-      count: cards.length,
-    };
-  }
 
   return (
-    <div className="steward-stage" data-roster="desk_agents">
+    <div
+      className="steward-stage"
+      data-roster="desk_agents"
+      data-desk-nested-scroll="1"
+    >
       <h1 className="visually-hidden">Team</h1>
       <header className="team-mast">
         <p className="paper-title">Team</p>
         <p className="team-lede">Stewards on the ledger. Pulse is heartbeat age.</p>
       </header>
       {cards.length ? (
-        <>
-          <div className="steward-deck" aria-label="Stewards">
-            <div
-              className="steward-deck-track"
-              data-reduce-motion={reduceMotion ? '1' : '0'}
-              style={{ transform: `translateX(${-clampDeckIndex(index, cards.length) * 100}%)` }}
-            >
-              {cards.map((card) => {
-                const face = faces.get(card.slug) ?? QUIET_STEWARD_FACE;
-                return (
-                  <div key={card.slug} className="steward-deck-slot" data-card-slot={card.slug}>
-                    <article className="team-card" data-team-card="1" data-steward={card.slug}>
-                      <button
-                        type="button"
-                        className="team-card-handle"
-                        data-card-dragger="1"
-                        aria-label={`Reorder ${card.display_name}`}
-                        onPointerDown={onHandleDown}
-                      >
-                        <i aria-hidden="true" />
-                      </button>
-                      <StewardAvatar
-                        slug={card.slug}
-                        name={card.display_name}
-                        size="board"
-                        accent={card.accent}
-                        {...face}
-                      />
-                      <div className="team-card-copy">
-                        <b>{card.display_name}</b>
-                        <i>{card.domain}</i>
-                        <span>pulse {age(card.heartbeat_at ?? undefined, now)}</span>
-                      </div>
-                    </article>
+        <ul className="team-roster" aria-label="Stewards">
+          {cards.map((card) => {
+            const face = faces.get(card.slug) ?? QUIET_STEWARD_FACE;
+            return (
+              <li key={card.slug}>
+                <article className="team-card" data-steward={card.slug}>
+                  <StewardAvatar
+                    slug={card.slug}
+                    name={card.display_name}
+                    size="board"
+                    accent={card.accent}
+                    {...face}
+                  />
+                  <div className="team-card-copy">
+                    <b>{card.display_name}</b>
+                    <i>{card.domain}</i>
+                    <span>pulse {age(card.heartbeat_at ?? undefined, now)}</span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-          <StewardCardDragger
-            names={cards.map((card) => card.display_name)}
-            index={clampDeckIndex(index, cards.length)}
-            onIndex={show}
-          />
-        </>
+                </article>
+              </li>
+            );
+          })}
+        </ul>
       ) : (
         <p className="empty steward-empty">{NOT_IN_LEDGER}</p>
       )}
     </div>
-  );
-}
-
-function StewardCardDragger({
-  names,
-  index,
-  onIndex,
-}: {
-  names: readonly string[];
-  index: number;
-  onIndex: (next: number) => void;
-}) {
-  const railRef = useRef<HTMLDivElement>(null);
-  const count = names.length;
-  const current = names[index] ?? '';
-  const ratio = deckThumbRatio(index, count);
-
-  function seek(clientX: number) {
-    const rail = railRef.current;
-    if (!rail) return;
-    const box = rail.getBoundingClientRect();
-    onIndex(deckIndexFromThumb(clientX - box.left, box.width, count));
-  }
-
-  function onRailDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    seek(event.clientX);
-  }
-
-  function onRailMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    event.stopPropagation();
-    seek(event.clientX);
-  }
-
-  if (count === 0) return null;
-
-  return (
-    <nav
-      className="steward-dragger"
-      data-card-dragger="1"
-      aria-label="Steward card control"
-    >
-      <button
-        type="button"
-        aria-label="Previous steward"
-        disabled={index <= 0}
-        onClick={() => onIndex(stepDeckIndex(index, -1, count))}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        ‹
-      </button>
-      <div
-        ref={railRef}
-        className="steward-dragger-rail"
-        role="slider"
-        aria-label="Steward card track"
-        aria-valuemin={1}
-        aria-valuemax={count}
-        aria-valuenow={index + 1}
-        aria-valuetext={current}
-        onPointerDown={onRailDown}
-        onPointerMove={onRailMove}
-      >
-        <i
-          className="steward-dragger-thumb"
-          style={{ left: `${ratio * 100}%` }}
-        />
-      </div>
-      <button
-        type="button"
-        aria-label="Next steward"
-        disabled={index >= count - 1}
-        onClick={() => onIndex(stepDeckIndex(index, 1, count))}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        ›
-      </button>
-      <div className="steward-dragger-dots">
-        {names.map((name, slot) => (
-          <button
-            key={name}
-            type="button"
-            aria-label={name}
-            aria-current={slot === index ? 'true' : undefined}
-            onClick={() => onIndex(slot)}
-            onPointerDown={(event) => event.stopPropagation()}
-          />
-        ))}
-      </div>
-    </nav>
   );
 }

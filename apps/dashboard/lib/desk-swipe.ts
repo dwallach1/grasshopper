@@ -1,9 +1,11 @@
 /**
  * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
  * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
- * lands on Board. The Team reorder handle (`data-card-dragger`) owns its drag
- * on both axes. A Team card body is not that handle: a horizontal drag there
- * must not move this rail. Reduced motion snaps with no travel animation.
+ * lands on Board. Team itself is a vertical stack on that rail, so a horizontal
+ * drag on a steward card changes tabs. The Board rank handle (`data-card-dragger`)
+ * owns its drag on both axes. A marked team-card body (`data-team-card`) still
+ * suppresses a horizontal tab swipe when that attribute is present. Reduced
+ * motion snaps with no travel animation.
  */
 import {
   DESK_SWIPE_SURFACES,
@@ -202,9 +204,10 @@ export function teamGestureKind(target: SwipeHitTarget | null): TeamGestureKind 
 }
 
 /**
- * The reorder handle owns the gesture on both axes.
- * A Team card body blocks a horizontal pan so the circular rail cannot take it.
- * The mast and the rest of the stage stay with the pager.
+ * The Board rank handle owns the gesture on both axes.
+ * A marked team-card body blocks a horizontal pan so a leftover carousel cannot
+ * fight the rail. The Team stack does not mark cards that way: mast and cards
+ * stay with the pager.
  */
 export function touchBlocksNativePan(
   kind: TeamGestureKind,
