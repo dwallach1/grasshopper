@@ -110,6 +110,9 @@ describe('ontology candidate review queue', () => {
     expect(isJunkOntologyLabel('inference', 'term')).toBe(false);
     expect(isJunkOntologyLabel('scarcity', 'term')).toBe(false);
     expect(isJunkOntologyLabel('neocloud', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('further')).toBe(true);
+    expect(isJunkOntologyLabel('sso')).toBe(true);
+    expect(isJunkOntologyLabel('cuda')).toBe(true);
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
@@ -230,7 +233,7 @@ describe('ontology candidate review queue', () => {
   test('SQL deny-list stays in sync with the documented labels', async () => {
     const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
     const migration = await readFile(
-      join(import.meta.dir, '../../../supabase/migrations/20260918184500_ontology_junk_discourse.sql'),
+      join(import.meta.dir, '../../../supabase/migrations/20260924180000_ontology_junk_it_acronyms.sql'),
       'utf8',
     );
     expect(sql).toContain('private.ontology_label_is_junk');

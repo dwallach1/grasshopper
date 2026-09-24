@@ -238,6 +238,41 @@ describe('public desk snapshot contract', () => {
     ]);
   });
 
+  test('discourse fillers and IT acronym false-tickers are junk; keepers stay', () => {
+    for (const label of [
+      'further', 'directly', 'phase', 'value', 'moves', 'collapse', 'chain', 'think',
+      'right', 'philip', 'models', 'model', 'earnings', 'infrastructure', 'customers',
+      'bottle', 'captcha', 'SAML', 'sso', 'scim', 'PHP', 'js', 'sla', 'sq', 'rpm',
+      'cof', 'mcc', 'msa', 'blue', 'mktp', 'cpto', 'rag', 'jdbc', 'odbc', 'olap',
+      'etl', 'ast', 'tpc', 'adbc', 'bi', 'kb', 'mt', 'gt', 'mvcc', 'cwi', 'gqa',
+      'sota', 'zdr', 'ptq', 'cuda', 'skhy',
+    ]) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(true);
+    }
+    expect(isJunkOntologyLabel('further')).toBe(true);
+    expect(isJunkOntologyLabel('sso')).toBe(true);
+    expect(isJunkOntologyLabel('cuda')).toBe(true);
+    for (const label of ['inference', 'scarcity', 'neocloud', 'NVDA', 'DOCN', 'photonics']) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(false);
+    }
+
+    const ranked = publicPendingCandidates([
+      { id: 1, status: 'pending', score: 100, source_count: 1, proposed_label: 'SSO', candidate_type: 'membership' },
+      { id: 2, status: 'pending', score: 100, source_count: 1, proposed_label: 'CUDA', candidate_type: 'membership' },
+      { id: 3, status: 'pending', score: 95, source_count: 1, proposed_label: 'further', candidate_type: 'term' },
+      { id: 4, status: 'pending', score: 100, source_count: 1, proposed_label: 'NVDA', candidate_type: 'membership' },
+      { id: 5, status: 'pending', score: 90, source_count: 2, proposed_label: 'inference', candidate_type: 'term' },
+      { id: 6, status: 'pending', score: 76, source_count: 3, proposed_label: 'neocloud', candidate_type: 'term' },
+    ], 5);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'NVDA',
+      'inference',
+      'neocloud',
+    ]);
+  });
+
   test('public snapshot keeps lean beliefs and lessons', () => {
     const published = toPublicDeskSnapshot({
       ...sample,

@@ -400,7 +400,13 @@ as $$
       'names', 'invest', 'leader', 'rallied', 'fastest', 'gonna',
       'provide', 'hours', 'online', 'performers', 'clusters', 'crowded',
       'awaited', 'awaited quarters', 'logo link', 'confirmed', 'exploring',
-      'extract', 'brand', 'breaking', 'bucket', 'department', 'cities'
+      'extract', 'brand', 'breaking', 'bucket', 'department', 'cities',
+      'further', 'directly', 'phase', 'value', 'moves', 'collapse', 'chain',
+      'think', 'right', 'philip', 'models', 'model', 'earnings', 'infrastructure',
+      'customers', 'bottle', 'captcha', 'saml', 'sso', 'scim', 'php', 'js',
+      'sla', 'sq', 'rpm', 'cof', 'mcc', 'msa', 'blue', 'mktp', 'cpto', 'rag',
+      'jdbc', 'odbc', 'olap', 'etl', 'ast', 'tpc', 'adbc', 'bi', 'kb', 'mt',
+      'gt', 'mvcc', 'cwi', 'gqa', 'sota', 'zdr', 'ptq', 'cuda', 'skhy'
     )
     or exists (
       select 1
@@ -415,7 +421,7 @@ as $$
 $$;
 
 comment on function private.ontology_label_is_junk(text, text) is
-  'True when a candidate label is URL/SQL/listicle/discourse/ticker-mashup/stopword junk. Keep labels in sync with ONTOLOGY_JUNK_LABELS / isJunkOntologyLabel.';
+  'True when a candidate label is URL/SQL/listicle/discourse/IT-acronym/ticker-mashup/stopword junk. Keep labels in sync with ONTOLOGY_JUNK_LABELS / isJunkOntologyLabel.';
 
 revoke all on function private.ontology_label_is_junk(text, text) from public, anon;
 
