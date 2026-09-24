@@ -6,7 +6,7 @@ import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import {
   clampDeckIndex,
   deckIndexFromThumb,
-  deckShiftFromDrag,
+  deckShiftFromAxes,
   deckThumbRatio,
   stepDeckIndex,
 } from '../../lib/steward-deck';
@@ -29,7 +29,7 @@ export function TeamPanel({
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const roster = cards.map((card) => card.slug).join('|');
   const [index, setIndex] = useState(0);
-  const drag = useRef<{ pointerId: number; startX: number; origin: number; count: number } | null>(null);
+  const drag = useRef<{ pointerId: number; startX: number; startY: number; origin: number; count: number } | null>(null);
 
   useEffect(() => {
     setIndex(0);
@@ -40,7 +40,7 @@ export function TeamPanel({
       const active = drag.current;
       if (!active || event.pointerId !== active.pointerId) return;
       event.preventDefault();
-      const shift = deckShiftFromDrag(event.clientX - active.startX);
+      const shift = deckShiftFromAxes(event.clientX - active.startX, event.clientY - active.startY);
       setIndex(stepDeckIndex(active.origin, shift, active.count));
     }
     function onUp(event: PointerEvent) {
@@ -48,13 +48,19 @@ export function TeamPanel({
       if (!active || event.pointerId !== active.pointerId) return;
       drag.current = null;
     }
+    function onTouchMove(event: TouchEvent) {
+      if (!drag.current || !event.cancelable) return;
+      event.preventDefault();
+    }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('touchmove', onTouchMove);
     };
   }, []);
 
@@ -72,6 +78,7 @@ export function TeamPanel({
     drag.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
+      startY: event.clientY,
       origin: clampDeckIndex(index, cards.length),
       count: cards.length,
     };

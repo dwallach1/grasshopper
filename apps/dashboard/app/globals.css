@@ -3895,11 +3895,15 @@ a:focus-visible {
   text-align: left;
 }
 
+.team-card,
+.team-card * {
+  touch-action: pan-y;
+}
+
 .team-card {
   display: flex;
   align-items: center;
   gap: 12px;
-  touch-action: pan-y;
 }
 
 .team-card-handle {
@@ -3919,6 +3923,11 @@ a:focus-visible {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.team-card .team-card-handle,
+.team-card .team-card-handle * {
+  touch-action: none;
 }
 
 .team-card-handle:active {

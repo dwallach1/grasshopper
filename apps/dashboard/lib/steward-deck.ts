@@ -23,10 +23,17 @@ export function stepDeckIndex(index: number, delta: number, count: number): numb
   return clampDeckIndex(index + delta, count);
 }
 
-/** One card per threshold. Drag left advances; a short nudge stays put. */
+/** One card per threshold. Drag left or up advances; a short nudge stays put. */
 export const TEAM_CARD_DRAG_PX = 48;
 
 export function deckShiftFromDrag(dx: number, stepPx = TEAM_CARD_DRAG_PX): number {
   if (!(stepPx > 0) || !Number.isFinite(dx)) return 0;
   return Math.trunc(-dx / stepPx);
+}
+
+/** Dominant axis steps the deck. Vertical is isolated from the horizontal pager. */
+export function deckShiftFromAxes(dx: number, dy: number, stepPx = TEAM_CARD_DRAG_PX): number {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return 0;
+  const shift = Math.abs(dy) > Math.abs(dx) ? deckShiftFromDrag(dy, stepPx) : deckShiftFromDrag(dx, stepPx);
+  return shift === 0 ? 0 : shift;
 }

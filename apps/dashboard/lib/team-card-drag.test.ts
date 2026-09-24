@@ -16,6 +16,8 @@ Object.assign(globalThis, {
   SVGElement: dom.SVGElement,
   Event: dom.Event,
   PointerEvent: dom.PointerEvent,
+  Touch: dom.Touch,
+  TouchEvent: dom.TouchEvent,
   navigator: dom.navigator,
   getComputedStyle: dom.getComputedStyle.bind(dom),
   requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
@@ -186,18 +188,73 @@ describe('Team card handle vs circular pager', () => {
       pointer('pointerup', window, 140, 184);
     });
 
-    const body = card?.querySelector('.team-card-copy');
+    const grip = handle?.querySelector('i');
+    if (!(grip instanceof Element)) throw new Error('missing reorder grip');
     await act(async () => {
-      pointer('pointerdown', body as Element, 220, 200);
+      const startTouch = new Touch({ identifier: 7, target: grip, clientX: 70, clientY: 240 });
+      grip.dispatchEvent(new TouchEvent('touchstart', {
+        bubbles: true,
+        cancelable: true,
+        touches: [startTouch],
+        changedTouches: [startTouch],
+      }));
+      const moved = new Touch({ identifier: 7, target: grip, clientX: 10, clientY: 244 });
+      const move = new TouchEvent('touchmove', {
+        bubbles: true,
+        cancelable: true,
+        touches: [moved],
+        changedTouches: [moved],
+      });
+      grip.dispatchEvent(move);
+      expect(move.defaultPrevented).toBe(true);
+      pointer('pointerdown', grip, 70, 240);
+      pointer('pointermove', window, 70, 180);
+      pointer('pointerup', window, 70, 180);
+    });
+    expect(track?.getAttribute('style')).toContain('translateX(-200%)');
+    expect(snaps).toEqual([]);
+    expect(pager?.getAttribute('data-swipe') ?? '').not.toContain('move:');
+
+    const body = card?.querySelector('.team-card-copy');
+    if (!(body instanceof Element)) throw new Error('missing card body');
+    await act(async () => {
+      const startTouch = new Touch({ identifier: 8, target: body, clientX: 220, clientY: 200 });
+      body.dispatchEvent(new TouchEvent('touchstart', {
+        bubbles: true,
+        cancelable: true,
+        touches: [startTouch],
+        changedTouches: [startTouch],
+      }));
+      const moved = new Touch({ identifier: 8, target: body, clientX: 40, clientY: 206 });
+      const move = new TouchEvent('touchmove', {
+        bubbles: true,
+        cancelable: true,
+        touches: [moved],
+        changedTouches: [moved],
+      });
+      body.dispatchEvent(move);
+      expect(move.defaultPrevented).toBe(true);
+      const endTouch = new Touch({ identifier: 8, target: body, clientX: 40, clientY: 206 });
+      body.dispatchEvent(new TouchEvent('touchend', {
+        bubbles: true,
+        cancelable: true,
+        touches: [],
+        changedTouches: [endTouch],
+      }));
+    });
+    expect(snaps).toEqual([]);
+    expect(pager?.getAttribute('data-swipe')).toBe('card:team');
+    await act(async () => {
+      pointer('pointerdown', body, 220, 200);
       pointer('pointermove', window, 80, 204);
       pointer('pointerup', window, 80, 204);
     });
     expect(snaps).toEqual([]);
     expect(pager?.getAttribute('data-swipe')).toBe('card:team');
-    expect(track?.getAttribute('style')).toContain('translateX(-100%)');
+    expect(track?.getAttribute('style')).toContain('translateX(-200%)');
 
     await act(async () => {
-      pointer('pointerdown', body as Element, 200, 120);
+      pointer('pointerdown', body, 200, 120);
       pointer('pointermove', window, 204, 220);
       pointer('pointerup', window, 204, 220);
     });
