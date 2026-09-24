@@ -85,6 +85,38 @@ describe('public desk snapshot contract', () => {
     expect(published.lessons).toEqual([]);
   });
 
+  test('public snapshot keeps pnl_start beside the liveline tail', () => {
+    const memeStart = {
+      id: '21e58b26-aee3-47ed-a0f0-ad1b4654f556',
+      as_of: '2026-09-06T14:23:40.405Z',
+      equity_sol: 2,
+    };
+    const pmStart = {
+      id: '0d0cfe10-17b2-46b4-94f7-0e8ed1493e76',
+      as_of: '2026-09-06T13:10:47.142Z',
+      equity: 426,
+    };
+    const published = toPublicDeskSnapshot(parseDeskWire({
+      ...sample,
+      meme_coins: {
+        tokens: [],
+        pnl: [{ id: 'now', as_of: '2026-09-24T17:16:03.795Z', equity_sol: 1.908307649 }],
+        pnl_start: memeStart,
+      },
+      prediction_markets: {
+        markets: [],
+        pnl: [{ id: 'now', as_of: '2026-09-24T16:10:21.045Z', equity: 276.87 }],
+        pnl_start: pmStart,
+      },
+    }));
+    const meme = published.meme_coins as { pnl: unknown[]; pnl_start: typeof memeStart };
+    const pm = published.prediction_markets as { pnl: unknown[]; pnl_start: typeof pmStart };
+    expect(meme.pnl).toHaveLength(1);
+    expect(meme.pnl_start).toEqual(memeStart);
+    expect(pm.pnl).toHaveLength(1);
+    expect(pm.pnl_start).toEqual(pmStart);
+  });
+
   test('public snapshot keeps lean pending candidates and drops actions', () => {
     const published = toPublicDeskSnapshot({
       ...sample,

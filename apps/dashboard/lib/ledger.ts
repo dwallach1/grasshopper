@@ -58,6 +58,7 @@ import {
   decorateDesk,
   loadDeskFromRest,
 } from './ledger-live';
+import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 
@@ -431,7 +432,7 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
   try {
     const present = await sql`select to_regclass('public.pm_markets') is not null as ok`;
     if (!present[0]?.ok) return emptyPredictionMarkets();
-    const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
+    const [markets, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
       sql`
         select id, venue, slug, question, status, close_time, last_yes, last_no,
                last_marked_at, thesis_id, rules_summary
@@ -463,8 +464,14 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
       sql`
         select id, account_key, as_of, realized, unrealized, fees, cash, equity, notes
         from public.pm_pnl
-        order by as_of desc
+        order by as_of desc, id desc
         limit 200
+      `,
+      sql`
+        select id, account_key, as_of, realized, unrealized, fees, cash, equity, notes
+        from public.pm_pnl
+        order by as_of asc, id asc
+        limit 1
       `,
       sql`
         select id, market_id, thesis_id, note_type, title, body, created_at
@@ -473,12 +480,18 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
         limit 80
       `,
     ]);
+    const pmWindow = attachPnlStart(
+      pnl as unknown as Record<string, unknown>[],
+      (pnlFirst[0] as Record<string, unknown> | undefined) ?? null,
+      PNL_TAIL_LIMIT,
+    );
     return mapPredictionMarkets({
       markets: markets as unknown as Record<string, unknown>[],
       positions: positions as unknown as Record<string, unknown>[],
       orders: orders as unknown as Record<string, unknown>[],
       fills: fills as unknown as Record<string, unknown>[],
-      pnl: pnl as unknown as Record<string, unknown>[],
+      pnl: pmWindow.pnl,
+      pnl_start: pmWindow.pnl_start,
       notes: notes as unknown as Record<string, unknown>[],
     });
   } catch (error) {
@@ -542,7 +555,7 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
     // meme_ledger_skipped; silent empty is RLS.
     const present = await sql`select to_regclass('public.meme_tokens') is not null as ok`;
     if (!present[0]?.ok) return emptyMemeCoins();
-    const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
+    const [tokens, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
       sql`
         select id, venue, mint, symbol, name, status, bonding_curve_status, graduated_at,
                last_price_sol, last_mcap_sol, last_marked_at, thesis_id, kill_criteria
@@ -574,8 +587,14 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
       sql`
         select id, account_key, as_of, realized, unrealized, fees, cash_sol, equity_sol, notes
         from public.meme_pnl
-        order by as_of desc
+        order by as_of desc, id desc
         limit 200
+      `,
+      sql`
+        select id, account_key, as_of, realized, unrealized, fees, cash_sol, equity_sol, notes
+        from public.meme_pnl
+        order by as_of asc, id asc
+        limit 1
       `,
       sql`
         select id, token_id, thesis_id, note_type, title, body, created_at
@@ -584,12 +603,18 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
         limit 80
       `,
     ]);
+    const memeWindow = attachPnlStart(
+      pnl as unknown as Record<string, unknown>[],
+      (pnlFirst[0] as Record<string, unknown> | undefined) ?? null,
+      PNL_TAIL_LIMIT,
+    );
     return mapMemeCoins({
       tokens: tokens as unknown as Record<string, unknown>[],
       positions: positions as unknown as Record<string, unknown>[],
       orders: orders as unknown as Record<string, unknown>[],
       fills: fills as unknown as Record<string, unknown>[],
-      pnl: pnl as unknown as Record<string, unknown>[],
+      pnl: memeWindow.pnl,
+      pnl_start: memeWindow.pnl_start,
       notes: notes as unknown as Record<string, unknown>[],
     });
   } catch (error) {

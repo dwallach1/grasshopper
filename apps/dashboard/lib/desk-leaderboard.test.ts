@@ -14,8 +14,9 @@ import {
 } from './desk-leaderboard';
 import { fallbackTeam } from './desk-team';
 import type { BookNameLine, DeskPayload } from './ledger-types';
-import { BANDIT_BANKROLL_SOL_START, BANDIT_PRIMARY_ACCOUNT } from './meme-book';
-import { predictionStartEquity } from './prediction-book';
+import { BANDIT_BANKROLL_SOL_START, BANDIT_PRIMARY_ACCOUNT, memeEquitySeries } from './meme-book';
+import { attachPnlStart } from './pnl-inception';
+import { predictionEquitySeries, predictionStartEquity } from './prediction-book';
 
 function equityLine(symbol: string): BookNameLine {
   return {
@@ -432,6 +433,117 @@ describe('desk leaderboard', () => {
     expect(stocks?.max_drawdown_pct).toBeCloseTo(10);
     expect(board.rows.map((row) => row.id)).toEqual(['bandit', 'oddsborne', 'quantanamo']);
     expect(LEADERBOARD_RULES).toMatch(/Ties go to lower drawdown/);
+  });
+
+  test('truncated recent pnl still scores vs the ledger start, and the tail stays the chart', () => {
+    const memeStart = {
+      id: '21e58b26-aee3-47ed-a0f0-ad1b4654f556',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+      as_of: '2026-09-06T14:23:40.405Z',
+      realized: 0,
+      unrealized: 0,
+      fees: 0,
+      cash_sol: 2,
+      equity_sol: 2,
+      notes: 'initial venue balance snapshot',
+    };
+    const memeNow = 1.908307649;
+    const memeTail = Array.from({ length: 28 }, (_, index) => ({
+      id: `meme-tail-${index}`,
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+      as_of: `2026-09-24T15:${String(index).padStart(2, '0')}:00.000Z`,
+      realized: 0,
+      unrealized: 0,
+      fees: 0,
+      cash_sol: 1.48,
+      equity_sol: index === 0 ? 1.636609733 : index === 27 ? memeNow : 1.7,
+      notes: null,
+    }));
+    const memeWindow = attachPnlStart(memeTail, memeStart, 28);
+    expect(memeWindow.pnl_start?.id).toBe(memeStart.id);
+    expect(memeWindow.pnl).toHaveLength(28);
+
+    const pmStart = {
+      id: '0d0cfe10-17b2-46b4-94f7-0e8ed1493e76',
+      account_key: 'polymarket-us-primary',
+      as_of: '2026-09-06T13:10:47.142Z',
+      realized: 0,
+      unrealized: 0,
+      fees: 0,
+      cash: 426,
+      equity: 426,
+      notes: 'Seeded by GRASSHOPPER from Polymarket US balance verify',
+    };
+    const pmNow = 276.87;
+    const pmWindowEdge = 491.53;
+    const pmTail = Array.from({ length: 28 }, (_, index) => ({
+      id: `pm-tail-${index}`,
+      account_key: 'polymarket-us-primary',
+      as_of: index === 0
+        ? '2026-09-18T21:07:57.079Z'
+        : `2026-09-24T16:${String(index).padStart(2, '0')}:21.045Z`,
+      realized: 0,
+      unrealized: 0,
+      fees: 0,
+      cash: index === 27 ? pmNow : pmWindowEdge,
+      equity: index === 0 ? pmWindowEdge : index === 27 ? pmNow : 400,
+      notes: null,
+    }));
+    const pmWindow = attachPnlStart(pmTail, pmStart, 28);
+
+    const trapped = assembleLeaderboard(liveDesk({
+      meme_coins: {
+        ...liveDesk().meme_coins,
+        pnl: memeWindow.pnl,
+        pnl_start: null,
+      },
+      prediction_markets: {
+        ...liveDesk().prediction_markets,
+        pnl: pmWindow.pnl,
+        pnl_start: null,
+      },
+    }));
+    const trappedCoins = trapped.rows.find((row) => row.id === 'bandit');
+    const trappedPredictions = trapped.rows.find((row) => row.id === 'oddsborne');
+    expect(trappedCoins?.start).toBe(1.636609733);
+    expect(trappedCoins?.days_live).toBe(0);
+    expect(trappedCoins?.return_pct).toBeCloseTo(((memeNow - 1.636609733) / 1.636609733) * 100);
+    expect(trappedPredictions?.start).toBe(pmWindowEdge);
+    expect(trappedPredictions?.days_live).toBe(5);
+    expect(trappedPredictions?.return_pct).toBeCloseTo(((pmNow - pmWindowEdge) / pmWindowEdge) * 100);
+
+    const desk = liveDesk({
+      meme_coins: {
+        ...liveDesk().meme_coins,
+        pnl: memeWindow.pnl,
+        pnl_start: memeWindow.pnl_start,
+      },
+      prediction_markets: {
+        ...liveDesk().prediction_markets,
+        pnl: pmWindow.pnl,
+        pnl_start: pmWindow.pnl_start,
+      },
+    });
+    const board = assembleLeaderboard(desk);
+    const coins = board.rows.find((row) => row.id === 'bandit');
+    const predictions = board.rows.find((row) => row.id === 'oddsborne');
+    expect(coins?.ranked).toBe(true);
+    expect(coins?.start).toBe(2);
+    expect(coins?.now).toBeCloseTo(memeNow);
+    expect(coins?.return_pct).toBeCloseTo(((memeNow - 2) / 2) * 100);
+    expect(coins?.days_live).toBe(18);
+    expect(coins?.start_as_of).toBe('2026-09-06T14:23:40.405Z');
+    expect(predictions?.ranked).toBe(true);
+    expect(predictions?.start).toBe(426);
+    expect(predictions?.now).toBeCloseTo(pmNow);
+    expect(predictions?.return_pct).toBeCloseTo(((pmNow - 426) / 426) * 100);
+    expect(predictions?.days_live).toBe(18);
+    expect(predictions?.start_as_of).toBe('2026-09-06T13:10:47.142Z');
+    expect(memeEquitySeries(desk.meme_coins!).some((point) => point.as_of.startsWith('2026-09-06'))).toBe(false);
+    expect(memeEquitySeries(desk.meme_coins!)).toHaveLength(28);
+    expect(predictionEquitySeries(desk.prediction_markets!).some((point) => point.as_of.startsWith('2026-09-06'))).toBe(false);
+    expect(predictionEquitySeries(desk.prediction_markets!)).toHaveLength(28);
+    expect(board.rows.find((row) => row.id === 'quantanamo')?.return_pct).toBeCloseTo(20.401264);
   });
 
   test('freshLead skips a stale first-place book', () => {

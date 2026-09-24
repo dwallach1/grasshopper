@@ -111,6 +111,11 @@ export type PredictionMarketsPayload = {
   orders: PredictionOrderRow[];
   fills: PredictionFillRow[];
   pnl: PredictionPnlRow[];
+  /**
+   * Ledger's earliest `pm_pnl` when `pnl` is only the recent tail.
+   * Null when that tail already reaches day one. Not a chart point.
+   */
+  pnl_start?: PredictionPnlRow | null;
   notes: PredictionNoteRow[];
 };
 
@@ -126,6 +131,7 @@ export function emptyPredictionMarkets(): PredictionMarketsPayload {
     orders: [],
     fills: [],
     pnl: [],
+    pnl_start: null,
     notes: [],
   };
 }
@@ -143,6 +149,7 @@ export function predictionDesk(desk: DeskPayload): PredictionMarketsPayload {
     orders: raw.orders ?? [],
     fills: raw.fills ?? [],
     pnl: raw.pnl ?? [],
+    pnl_start: raw.pnl_start ?? null,
     notes: raw.notes ?? [],
   };
 }
@@ -405,11 +412,24 @@ export type PredictionStartEquity = {
 };
 
 /**
- * Start baseline for ODDSBORNE % return. Oldest `pm_pnl` equity, else cash
- * (account seed rows often land as cash=equity when flat). Missing start is
- * null — never 0 — so the desk can show "not ranked".
+ * Start baseline for ODDSBORNE % return.
+ * Prefer `pnl_start` when the reader capped `pnl` to a recent tail.
+ * Otherwise the oldest `pm_pnl` equity, else cash (seed rows often land
+ * as cash=equity when flat). A present `pnl_start` with neither equity
+ * nor cash is missing — do not slide forward into the tail. Missing
+ * start is null — never 0 — so the desk can show "not ranked".
  */
 export function predictionStartEquity(payload: PredictionMarketsPayload): PredictionStartEquity | null {
+  const seeded = payload.pnl_start;
+  if (seeded) {
+    if (seeded.equity != null) {
+      return { equity: seeded.equity, as_of: seeded.as_of, source: 'pnl_equity' };
+    }
+    if (seeded.cash != null) {
+      return { equity: seeded.cash, as_of: seeded.as_of, source: 'pnl_cash' };
+    }
+    return null;
+  }
   const rows = [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of));
   for (const row of rows) {
     if (row.equity !== null) {
@@ -422,6 +442,7 @@ export function predictionStartEquity(payload: PredictionMarketsPayload): Predic
   return null;
 }
 
+/** Recent tail only. Book start lives on `pnl_start`, not on this clock. */
 export function predictionEquitySeries(payload: PredictionMarketsPayload): Array<{ as_of: string; equity: number }> {
   const series: Array<{ as_of: string; equity: number }> = [];
   for (const row of [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))) {
@@ -458,12 +479,27 @@ function optionalText(row: LooseRow, key: string): string | null {
   return String(value);
 }
 
+function mapPredictionPnlRow(row: LooseRow): PredictionPnlRow {
+  return {
+    id: text(row, 'id'),
+    account_key: text(row, 'account_key'),
+    as_of: requireIso(row.as_of as string | Date, 'pm_pnl.as_of'),
+    realized: asFiniteNumber(row.realized as string | number, 'pm_pnl.realized'),
+    unrealized: asOptionalNumber(row.unrealized as string | number | null, 'pm_pnl.unrealized'),
+    fees: asFiniteNumber(row.fees as string | number, 'pm_pnl.fees'),
+    cash: asOptionalNumber(row.cash as string | number | null, 'pm_pnl.cash'),
+    equity: asOptionalNumber(row.equity as string | number | null, 'pm_pnl.equity'),
+    notes: optionalText(row, 'notes'),
+  };
+}
+
 export function mapPredictionMarkets(input: {
   markets?: readonly LooseRow[];
   positions?: readonly LooseRow[];
   orders?: readonly LooseRow[];
   fills?: readonly LooseRow[];
   pnl?: readonly LooseRow[];
+  pnl_start?: LooseRow | null;
   notes?: readonly LooseRow[];
 }): PredictionMarketsPayload {
   return {
@@ -523,17 +559,8 @@ export function mapPredictionMarkets(input: {
       price: asFiniteNumber(row.price as string | number, 'pm_fills.price'),
       executed_at: requireIso(row.executed_at as string | Date, 'pm_fills.executed_at'),
     })),
-    pnl: (input.pnl ?? []).map((row) => ({
-      id: text(row, 'id'),
-      account_key: text(row, 'account_key'),
-      as_of: requireIso(row.as_of as string | Date, 'pm_pnl.as_of'),
-      realized: asFiniteNumber(row.realized as string | number, 'pm_pnl.realized'),
-      unrealized: asOptionalNumber(row.unrealized as string | number | null, 'pm_pnl.unrealized'),
-      fees: asFiniteNumber(row.fees as string | number, 'pm_pnl.fees'),
-      cash: asOptionalNumber(row.cash as string | number | null, 'pm_pnl.cash'),
-      equity: asOptionalNumber(row.equity as string | number | null, 'pm_pnl.equity'),
-      notes: optionalText(row, 'notes'),
-    })),
+    pnl: (input.pnl ?? []).map((row) => mapPredictionPnlRow(row)),
+    pnl_start: input.pnl_start ? mapPredictionPnlRow(input.pnl_start) : null,
     notes: (input.notes ?? []).map((row) => ({
       id: text(row, 'id'),
       market_id: optionalText(row, 'market_id'),
