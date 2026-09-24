@@ -1,9 +1,9 @@
 /**
  * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
  * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
- * lands on Board. Card-deck motion is a separate control (`data-card-dragger`).
- * A Team card body is not that handle and does not start a tab swipe.
- * Reduced motion snaps with no travel animation.
+ * lands on Board. The Team reorder handle (`data-card-dragger`) owns its drag
+ * on both axes. A Team card body is not that handle: a horizontal drag there
+ * must not move this rail. Reduced motion snaps with no travel animation.
  */
 import {
   DESK_SWIPE_SURFACES,
@@ -21,6 +21,8 @@ export const CARD_DRAGGER_ATTR = 'data-card-dragger';
 export const TEAM_CARD_ATTR = 'data-team-card';
 /** Chrome synthesizes a mouse down after a touch swipe. Ignore it or the rail re-arms short. */
 export const COMPAT_MOUSE_SUPPRESS_MS = 700;
+/** After a handle or card-body gesture, keep rejecting rail snap until the finger's scroll settles. */
+export const PAGER_PIN_SETTLE_MS = 400;
 
 export type SwipeAxisLock = 'x' | 'y' | null;
 
@@ -186,6 +188,34 @@ export function isTeamCardBodyTarget(target: SwipeHitTarget | null): boolean {
 /** Horizontal tab swipe skips the Team card body. Vertical pull still arms. */
 export function horizontalPageSwipeSuppressed(target: SwipeHitTarget | null): boolean {
   return isTeamCardBodyTarget(target);
+}
+
+export type TeamGestureKind = 'handle' | 'card' | 'page';
+
+/** A card-body touch shorter than this is still a tap. Past it, horizontal pan must not move the rail. */
+export const CARD_NATIVE_BLOCK_PX = 6;
+
+export function teamGestureKind(target: SwipeHitTarget | null): TeamGestureKind {
+  if (isCardDraggerTarget(target)) return 'handle';
+  if (isTeamCardBodyTarget(target)) return 'card';
+  return 'page';
+}
+
+/**
+ * The reorder handle owns the gesture on both axes.
+ * A Team card body blocks a horizontal pan so the circular rail cannot take it.
+ * The mast and the rest of the stage stay with the pager.
+ */
+export function touchBlocksNativePan(
+  kind: TeamGestureKind,
+  dx: number,
+  dy: number,
+  block = CARD_NATIVE_BLOCK_PX,
+): boolean {
+  if (kind === 'handle') return true;
+  if (kind !== 'card') return false;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return false;
+  return Math.abs(dx) >= block && isDominantHorizontal(dx, dy);
 }
 
 /** Capture only after the rail locks to a tab swipe or a top-of-pane pull. A tap must reach Book rows. */

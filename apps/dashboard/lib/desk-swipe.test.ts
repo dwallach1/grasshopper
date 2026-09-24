@@ -6,6 +6,8 @@ import {
   followPagerScroll,
   horizontalPageSwipeSuppressed,
   isCardDraggerTarget,
+  teamGestureKind,
+  touchBlocksNativePan,
   isDominantHorizontal,
   isHorizontalLock,
   isSwipeSurface,
@@ -152,6 +154,17 @@ describe('desk swipe deck', () => {
     expect(horizontalPageSwipeSuppressed(card)).toBe(true);
     expect(pageSwipeConsumesTarget(null)).toBe(true);
     expect(horizontalPageSwipeSuppressed(null)).toBe(false);
+    expect(teamGestureKind(thumb)).toBe('handle');
+    expect(teamGestureKind(card)).toBe('card');
+    expect(teamGestureKind(pane)).toBe('page');
+    expect(teamGestureKind(null)).toBe('page');
+    expect(touchBlocksNativePan('handle', 0, 0)).toBe(true);
+    expect(touchBlocksNativePan('handle', 4, 40)).toBe(true);
+    expect(touchBlocksNativePan('card', -20, 4)).toBe(true);
+    expect(touchBlocksNativePan('card', 4, 28)).toBe(false);
+    expect(touchBlocksNativePan('card', 2, 0)).toBe(false);
+    expect(touchBlocksNativePan('page', -80, 4)).toBe(false);
+    expect(touchBlocksNativePan('card', Number.NaN, 4)).toBe(false);
     expect(swipeHitFromEvent(null)).toBeNull();
     expect(shouldCapturePagerPointer(null, false)).toBe(false);
     expect(shouldCapturePagerPointer('y', false)).toBe(false);

@@ -142,7 +142,7 @@ describe('desk IA smoke', () => {
     expect(team).toContain('data-team-card');
     expect(team).toContain('data-card-dragger');
     expect(team).toContain('StewardCardDragger');
-    expect(team).toContain('deckShiftFromDrag');
+    expect(team).toContain('deckShiftFromAxes');
     expect(team).toMatch(/className="team-card-handle"[\s\S]*data-card-dragger="1"/);
     expect(team).toMatch(/className="steward-dragger"[\s\S]*data-card-dragger="1"/);
     expect(team).not.toMatch(/className="steward-deck"[^>]*data-card-dragger/);

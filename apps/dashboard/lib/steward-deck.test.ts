@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   clampDeckIndex,
   deckIndexFromThumb,
+  deckShiftFromAxes,
   deckShiftFromDrag,
   deckThumbRatio,
   stepDeckIndex,
@@ -48,5 +49,15 @@ describe('steward card deck index', () => {
     expect(deckShiftFromDrag(Number.NaN)).toBe(0);
     expect(stepDeckIndex(0, deckShiftFromDrag(-48), 3)).toBe(1);
     expect(stepDeckIndex(0, deckShiftFromDrag(80), 3)).toBe(0);
+  });
+
+  test('vertical handle drag steps the deck and a diagonal keeps the stronger axis', () => {
+    expect(deckShiftFromAxes(-48, 4)).toBe(1);
+    expect(deckShiftFromAxes(4, -48)).toBe(1);
+    expect(deckShiftFromAxes(4, 48)).toBe(-1);
+    expect(deckShiftFromAxes(0, 0)).toBe(0);
+    expect(deckShiftFromAxes(Number.NaN, -48)).toBe(0);
+    expect(stepDeckIndex(1, deckShiftFromAxes(0, -48), 3)).toBe(2);
+    expect(stepDeckIndex(1, deckShiftFromAxes(0, 48), 3)).toBe(0);
   });
 });

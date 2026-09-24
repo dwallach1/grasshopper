@@ -21,6 +21,7 @@ import {
   isSwipeSurface,
   isSwipeWrap,
   lockSwipeAxis,
+  PAGER_PIN_SETTLE_MS,
   pageSwipeConsumesTarget,
   pageSwipeFromDrag,
   pagerScrollToBehavior,
@@ -28,7 +29,10 @@ import {
   shouldCapturePagerPointer,
   swipeHitFromEvent,
   swipeTabLabel,
+  teamGestureKind,
+  touchBlocksNativePan,
   type SwipeAxisLock,
+  type TeamGestureKind,
 } from '../../lib/desk-swipe';
 
 export function DeskPager({
@@ -173,6 +177,10 @@ function bindPagerSwipe(
     captured: false,
     axis: null as SwipeAxisLock,
     suppressHorizontal: false,
+    cardHold: false,
+    // SAFETY: kind starts as a page swipe and is only assigned from teamGestureKind.
+    nativeKind: 'page' as TeamGestureKind,
+    pinUntil: 0,
     from: currentSurface(),
     originX: 0,
     originY: 0,
@@ -181,6 +189,7 @@ function bindPagerSwipe(
     ignoreMouseUntil: 0,
     refreshing: false,
   };
+  let pinning = false;
 
   function snapTo(next: DeskSwipeSurface) {
     programmatic.current = true;
@@ -224,6 +233,34 @@ function bindPagerSwipe(
     releaseCapture();
   }
 
+  function pinPager() {
+    if (pinning) return;
+    const pane = canonicalPane(pager, gesture.from);
+    if (!pane) return;
+    const left = pane.offsetLeft;
+    if (Math.abs(pager.scrollLeft - left) < 1) return;
+    pinning = true;
+    const snap = pager.style.scrollSnapType;
+    pager.style.scrollSnapType = 'none';
+    pager.scrollLeft = left;
+    pager.style.scrollSnapType = snap;
+    pinning = false;
+  }
+
+  function releaseNativePin() {
+    const hold = gesture.nativeKind === 'handle' || gesture.cardHold;
+    if (hold) pinPager();
+    gesture.nativeKind = 'page';
+    gesture.cardHold = false;
+    if (hold) gesture.pinUntil = performance.now() + PAGER_PIN_SETTLE_MS;
+  }
+
+  function rememberTouchOrigin(x: number, y: number) {
+    gesture.originX = x;
+    gesture.originY = y;
+    gesture.from = currentSurface();
+  }
+
   function startRefresh() {
     if (gesture.refreshing) return;
     gesture.refreshing = true;
@@ -240,6 +277,15 @@ function bindPagerSwipe(
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     if (isCompatMouseSuppressed(event.pointerType, performance.now(), gesture.ignoreMouseUntil)) return;
     const hit = swipeHitFromEvent(event.target);
+    const kind = teamGestureKind(hit);
+    if (kind === 'page') gesture.pinUntil = 0;
+    gesture.nativeKind = kind;
+    if (kind === 'handle') {
+      rememberTouchOrigin(event.clientX, event.clientY);
+      gesture.pointerId = event.pointerId;
+      gesture.cardHold = false;
+      return;
+    }
     if (!pageSwipeConsumesTarget(hit)) return;
     gesture.armed = true;
     gesture.dragging = false;
@@ -260,6 +306,12 @@ function bindPagerSwipe(
     if (gesture.pointerId >= 0 && event.pointerId !== gesture.pointerId) return;
     const dx = event.clientX - gesture.originX;
     const dy = event.clientY - gesture.originY;
+    if (gesture.cardHold) {
+      event.preventDefault();
+      pinPager();
+      pager.dataset.swipe = `card:${gesture.from}`;
+      return;
+    }
     if (gesture.axis === 'y') {
       event.preventDefault();
       const travel = pullTravel(dy);
@@ -301,7 +353,10 @@ function bindPagerSwipe(
     }
     if (locked !== 'x') return;
     if (gesture.suppressHorizontal) {
-      disarm();
+      gesture.cardHold = true;
+      gesture.dragging = false;
+      event.preventDefault();
+      pinPager();
       pager.dataset.swipe = `card:${gesture.from}`;
       return;
     }
@@ -323,7 +378,40 @@ function bindPagerSwipe(
     pager.scrollLeft = followPagerScroll(gesture.startLeft, dx, maxLeft);
   }
 
+  function onTouchStart(event: TouchEvent) {
+    const kind = teamGestureKind(swipeHitFromEvent(event.target));
+    if (kind === 'page') {
+      gesture.pinUntil = 0;
+      gesture.nativeKind = 'page';
+      return;
+    }
+    gesture.nativeKind = kind;
+    const touch = event.changedTouches[0];
+    if (touch && !gesture.armed) rememberTouchOrigin(touch.clientX, touch.clientY);
+    if (kind === 'handle' && event.cancelable) event.preventDefault();
+  }
+
+  function onTouchMove(event: TouchEvent) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - gesture.originX;
+    const dy = touch.clientY - gesture.originY;
+    if (!touchBlocksNativePan(gesture.nativeKind, dx, dy)) return;
+    if (event.cancelable) event.preventDefault();
+    if (gesture.nativeKind === 'card') {
+      gesture.cardHold = true;
+      pager.dataset.swipe = `card:${gesture.from}`;
+    }
+    pinPager();
+  }
+
+  function onTouchEnd() {
+    releaseNativePin();
+  }
+
   function onUp(event: PointerEvent) {
+    const tracked = gesture.pointerId < 0 || event.pointerId === gesture.pointerId;
+    if (tracked) releaseNativePin();
     if (!gesture.armed) return;
     if (gesture.pointerId >= 0 && event.pointerId !== gesture.pointerId) return;
     const dx = event.clientX - gesture.originX;
@@ -354,6 +442,12 @@ function bindPagerSwipe(
   }
 
   function onScroll() {
+    const pinningGesture = gesture.nativeKind === 'handle' || gesture.cardHold;
+    const settle = !gesture.armed && performance.now() < gesture.pinUntil;
+    if (pinningGesture || settle) {
+      pinPager();
+      return;
+    }
     if (programmatic.current || holding.current) return;
     const width = pager.clientWidth;
     if (width <= 0) return;
@@ -367,6 +461,10 @@ function bindPagerSwipe(
   pager.addEventListener('pointerup', onUp);
   pager.addEventListener('pointercancel', onUp);
   pager.addEventListener('lostpointercapture', onUp);
+  pager.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+  pager.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+  pager.addEventListener('touchend', onTouchEnd);
+  pager.addEventListener('touchcancel', onTouchEnd);
   window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
@@ -377,6 +475,10 @@ function bindPagerSwipe(
     pager.removeEventListener('pointerup', onUp);
     pager.removeEventListener('pointercancel', onUp);
     pager.removeEventListener('lostpointercapture', onUp);
+    pager.removeEventListener('touchstart', onTouchStart, true);
+    pager.removeEventListener('touchmove', onTouchMove, true);
+    pager.removeEventListener('touchend', onTouchEnd);
+    pager.removeEventListener('touchcancel', onTouchEnd);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
