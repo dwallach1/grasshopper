@@ -602,4 +602,30 @@ describe('desk IA smoke', () => {
     expect(map).toContain('lastMarkPerBucket');
     expect(map).toContain('BOARD_HERO_BUCKET_SECS');
   });
+
+  test('Board day-read sits under the title and above Liveline', async () => {
+    const board = await readDashboard('app/terminal/leaderboard-panel.tsx');
+    const read = await readDashboard('app/terminal/board-day-read.tsx');
+    const lib = await readDashboard('lib/board-day-read.ts');
+    const css = await readDashboard('app/globals.css');
+    const titleAt = board.indexOf('paper-title');
+    const readAt = board.indexOf('<BoardDayRead');
+    const lineAt = board.indexOf('<DeskLiveline');
+    expect(titleAt).toBeGreaterThan(-1);
+    expect(readAt).toBeGreaterThan(titleAt);
+    expect(lineAt).toBeGreaterThan(readAt);
+    expect(board).toContain('data-card-dragger');
+    expect(read).toContain('assembleBoardDayRead');
+    expect(read).toContain('aria-label="Day read"');
+    expect(read).not.toContain('pnl');
+    expect(lib).toContain('assembleBookHoldings');
+    expect(lib).toContain('assembleBeliefsInForce');
+    expect(lib).toContain('assembleStewardFreshness');
+    expect(lib).toContain('assembleDeskFreshness');
+    expect(lib).toContain('stewardPresences');
+    expect(lib).not.toContain('return_pct');
+    expect(css).toMatch(/\.day-read-lead \{[^}]*font-family: var\(--font-display\)/);
+    expect(css).toContain('.day-read-stamp');
+    expect(css).toContain('.day-read {');
+  });
 });
