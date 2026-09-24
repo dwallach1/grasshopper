@@ -119,7 +119,7 @@ function desk(): DeskPayload {
   } as unknown as DeskPayload;
 }
 
-function pointer(type: string, target: EventTarget, x: number, y: number) {
+function pointer(type: string, target: EventTarget, x: number, y: number, buttons = 1) {
   const event = new dom.PointerEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -128,6 +128,7 @@ function pointer(type: string, target: EventTarget, x: number, y: number) {
     pointerId: 1,
     pointerType: 'touch',
     button: 0,
+    buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : buttons,
   });
   target.dispatchEvent(event);
 }
@@ -237,5 +238,53 @@ describe('Team stack vs circular pager', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+  });
+
+  test('capture handoff still wraps last to first and first to last', async () => {
+    async function swipe(surface: 'team' | 'leaderboard', fromX: number, toX: number) {
+      const snaps: string[] = [];
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      root = createRoot(host);
+      await act(async () => {
+        root?.render(createElement(DeskPager, {
+          surface,
+          reduceMotion: true,
+          onSnap: (next: string) => {
+            snaps.push(next);
+          },
+          onRefresh: async () => {},
+          children: {
+            leaderboard: createElement('div', { className: 'board-body' }, 'Board'),
+            book: createElement('div', null, 'Book'),
+            theses: createElement('div', null, 'Theses'),
+            team: createElement(TeamPanel, { desk: desk(), reduceMotion: true, now: Date.parse('2026-09-06T13:24:00.000Z') }),
+          },
+        }));
+      });
+      const pager = document.querySelector('.desk-pager');
+      const target = surface === 'team'
+        ? document.querySelector('.team-card')
+        : document.querySelector('.board-body');
+      if (!pager || !target) throw new Error('missing swipe target');
+      const lockX = fromX + Math.sign(toX - fromX) * 24;
+      await act(async () => {
+        pointer('pointerdown', target, fromX, 220);
+        pointer('pointermove', window, lockX, 224);
+        pointer('lostpointercapture', target, lockX, 224, 1);
+        pointer('lostpointercapture', pager, lockX, 224, 1);
+        pointer('pointermove', window, toX, 226);
+        pointer('pointerup', window, toX, 226);
+      });
+      return snaps;
+    }
+
+    expect(await swipe('team', 280, 40)).toEqual(['leaderboard']);
+    await act(async () => {
+      root?.unmount();
+    });
+    root = null;
+    document.body.innerHTML = '';
+    expect(await swipe('leaderboard', 40, 280)).toEqual(['team']);
   });
 });
