@@ -5680,6 +5680,38 @@ a:focus-visible {
   color: var(--ink, var(--text));
 }
 
+/* Board day-read: two factual lines on the parchment, under the wordmark
+   and above Liveline. No chip, no alert, no second panel. */
+.day-read {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 1px 0 1px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--gold, #b8892d) 48%, transparent);
+  max-width: 36rem;
+}
+
+.day-read-lead,
+.day-read-stamp {
+  margin: 0;
+}
+
+.day-read-lead {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--ink, var(--text));
+}
+
+.day-read-stamp {
+  color: var(--ink-2, var(--text-2));
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
 .term-public .term-top,
 .term.is-line .term-top,
 .term.is-swipe .term-top,
@@ -6113,6 +6145,10 @@ a:focus-visible {
 
   .term.is-line .paper-title {
     font-size: 32px;
+  }
+
+  .term.is-line .day-read-lead {
+    font-size: 16px;
   }
 
   .term.is-line .line-hero.line-art .line-frame > div:has(canvas),

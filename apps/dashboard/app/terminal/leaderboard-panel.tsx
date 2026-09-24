@@ -15,6 +15,7 @@ import {
   boardHeroLiveline,
 } from '../../lib/desk-liveline';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { BoardDayRead } from './board-day-read';
 import { CrtTape } from './crt-tape';
 import { DeskLiveline } from './desk-liveline';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
@@ -84,6 +85,7 @@ export function LeaderboardPanel({
     <div className="line-stage line-board">
       <h1 className="visually-hidden">Board</h1>
       <p className="paper-title">Board</p>
+      <BoardDayRead desk={desk} now={now} />
 
       <CrtTape desk={desk} now={now} />
 
