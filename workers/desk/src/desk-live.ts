@@ -35,6 +35,11 @@ function asObjectRows(value: unknown): Record<string, unknown>[] {
   );
 }
 
+function asObjectRow(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 function asJsonRows(value: unknown): JsonObjectRow[] {
   return asObjectRows(value) as JsonObjectRow[];
 }
@@ -149,8 +154,8 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
     ontologySymbols?: unknown;
     candidates?: unknown;
     actions?: unknown;
-    pm?: { markets?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; notes?: unknown[] };
-    meme?: { tokens?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; notes?: unknown[] };
+    pm?: { markets?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; pnl_start?: unknown; notes?: unknown[] };
+    meme?: { tokens?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; pnl_start?: unknown; notes?: unknown[] };
     team?: { agents?: unknown[]; domains?: unknown[]; stewards?: unknown[]; accounts?: unknown[] };
   };
   const live = assemblePublicDeskFromRestBag({
@@ -172,6 +177,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
       orders: asObjectRows(bag.pm?.orders),
       fills: asObjectRows(bag.pm?.fills),
       pnl: asObjectRows(bag.pm?.pnl),
+      pnl_start: asObjectRow(bag.pm?.pnl_start),
       notes: asObjectRows(bag.pm?.notes),
     }),
     meme: mapMemeCoins({
@@ -180,6 +186,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
       orders: asObjectRows(bag.meme?.orders),
       fills: asObjectRows(bag.meme?.fills),
       pnl: asObjectRows(bag.meme?.pnl),
+      pnl_start: asObjectRow(bag.meme?.pnl_start),
       notes: asObjectRows(bag.meme?.notes),
     }),
     team: assembleTeam({

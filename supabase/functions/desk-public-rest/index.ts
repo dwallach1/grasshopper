@@ -3,6 +3,8 @@
  * The public Worker has no JWT secret and no service_role. This function
  * SELECTs desk_public_reader tables and returns one bundle. Writes are 405.
  */
+import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception.ts';
+
 const ALLOWED_TABLES = new Set([
   'theses', 'thesis_symbols', 'thesis_evidence', 'thesis_scores', 'thesis_relations', 'runs',
   'cloud_runs', 'cloud_tasks', 'codex_automations', 'catalysts', 'research_queue', 'research_lessons',
@@ -28,8 +30,16 @@ const PUBLIC_KEYS = new Set([
 
 /** Pending window before the phone cap of 40. Memberships sort first, so 72 still fills the queue. */
 const PUBLIC_CANDIDATE_FETCH = 72;
-/** Recent marks for sparklines. Operator `/bundle` keeps limit 200. */
+/**
+ * Recent marks for the phone liveline. When this window is full, `pnl_start`
+ * is the ledger's earliest row — kept off the tail so chart density stays.
+ * Operator `/bundle` uses PNL_TAIL_LIMIT and the same inception read.
+ */
 const PUBLIC_PNL_LIMIT = 28;
+const PM_PNL_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash,equity,notes';
+const PM_PNL_PUBLIC_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash,equity';
+const MEME_PNL_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes';
+const MEME_PNL_PUBLIC_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol';
 const PUBLIC_NOTE_LIMIT = 24;
 const PUBLIC_NOTE_BODY = 200;
 /** NAV / liveline window. Inception is a 1-row read only when this window is full. */
@@ -83,7 +93,6 @@ const PM: Array<[string, string]> = [
   ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
   ['orders', 'pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200'],
   ['fills', 'pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200'],
-  ['pnl', 'pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=200'],
   ['notes', 'pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80'],
 ];
 
@@ -92,7 +101,6 @@ const MEME: Array<[string, string]> = [
   ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
   ['orders', 'meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200'],
   ['fills', 'meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200'],
-  ['pnl', 'meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=200'],
   ['notes', 'meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80'],
 ];
 
@@ -189,7 +197,6 @@ function publicPm(since: string): Array<[string, string]> {
     ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
     ['orders', `pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
     ['fills', `pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
-    ['pnl', `pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}`],
     ['notes', `pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
   ];
 }
@@ -201,15 +208,23 @@ function publicMeme(since: string): Array<[string, string]> {
     ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
     ['orders', `meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
     ['fills', `meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
-    ['pnl', `meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}`],
     ['notes', `meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
   ];
 }
 
 /**
- * Latest window, plus the inception row when the window is full.
- * A short history is already inside the latest read — do not fetch it twice.
+ * Recent pnl tail plus the ledger's earliest mark when the tail is full.
+ * The start row is `pnl_start`, not another point on the liveline.
+ * Account snapshots still skip the inception read when their own window is short.
  */
+async function pnlWindow(table: 'pm_pnl' | 'meme_pnl', cols: string, limit: number): Promise<{ pnl: unknown[]; pnl_start: unknown | null }> {
+  const [latest, first] = await Promise.all([
+    restGet(`${table}?select=${cols}&order=as_of.desc,id.desc&limit=${limit}`),
+    restGet(`${table}?select=${cols}&order=as_of.asc,id.asc&limit=1`),
+  ]);
+  return attachPnlStart(latest, first[0] ?? null, limit);
+}
+
 async function publicAccountWindow(): Promise<{ accountLatest: unknown[]; accountFirst: unknown[] }> {
   const latest = await restGet(
     `account_snapshots?select=${ACCOUNT_COLS}&${AGENTIC_FILTER}&order=observed_at.desc,id.desc&limit=${PUBLIC_ACCOUNT_LIMIT}`,
@@ -241,23 +256,28 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       }
       return [key, query] as const;
     });
-    const [required, pmRaw, memeRaw, team, accounts] = await Promise.all([
+    const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
+    const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
+    const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
+    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
       objectFrom(TEAM),
       mode === 'public' ? publicAccountWindow() : Promise.resolve(null),
+      pnlWindow('pm_pnl', pmPnlCols, pnlLimit),
+      pnlWindow('meme_pnl', memePnlCols, pnlLimit),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
-    let pm = pmRaw;
-    let meme = memeRaw;
+    let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
+    let meme: Record<string, unknown> = { ...memeRaw, pnl: memePnl.pnl, pnl_start: memePnl.pnl_start };
     if (accounts) {
       body.accountLatest = accounts.accountLatest;
       body.accountFirst = accounts.accountFirst;
       body.beliefs = clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT);
       body.lessons = clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT);
-      pm = { ...pmRaw, notes: clipRows(pmRaw.notes ?? [], 'body', PUBLIC_NOTE_BODY) };
-      meme = { ...memeRaw, notes: clipRows(memeRaw.notes ?? [], 'body', PUBLIC_NOTE_BODY) };
+      pm = { ...pm, notes: clipRows(asRows(pm.notes), 'body', PUBLIC_NOTE_BODY) };
+      meme = { ...meme, notes: clipRows(asRows(meme.notes), 'body', PUBLIC_NOTE_BODY) };
     }
     return Response.json({
       ...body,

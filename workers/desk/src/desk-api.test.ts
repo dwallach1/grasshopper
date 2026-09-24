@@ -176,6 +176,8 @@ describe('public desk reader credentials', () => {
     expect(source).toContain('beliefs: asJsonRows(bag.beliefs)');
     expect(source).toContain('lessons: asJsonRows(bag.lessons)');
     expect(source).toContain('candidates: asJsonRows(bag.candidates)');
+    expect(source).toContain('pnl_start: asObjectRow(bag.pm?.pnl_start)');
+    expect(source).toContain('pnl_start: asObjectRow(bag.meme?.pnl_start)');
     expect(source).not.toContain('assembleDeskFromRestBag');
     expect(source).toContain('readBoundedJson');
     expect(source).toContain('LIVE_CACHE_MS = PUBLIC_LIVE_INTERVAL_MS');
@@ -200,8 +202,14 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT)");
     expect(fn).toContain('status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=${PUBLIC_CANDIDATE_FETCH}');
     expect(fn).toContain('candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200');
-    expect(fn).toContain('fees,cash,equity&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
-    expect(fn).toContain('fees,cash_sol,equity_sol&order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
+    expect(fn).toContain("const PM_PNL_PUBLIC_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash,equity'");
+    expect(fn).toContain("const MEME_PNL_PUBLIC_COLS = 'id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol'");
+    expect(fn).toContain('order=as_of.desc,id.desc&limit=${limit}');
+    expect(fn).toContain('order=as_of.asc,id.asc&limit=1');
+    expect(fn).toContain('attachPnlStart');
+    expect(fn).toContain('pnl_start: pmPnl.pnl_start');
+    expect(fn).toContain('pnl_start: memePnl.pnl_start');
+    expect(fn).not.toContain('order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
     expect(fn).toContain('closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200');
     expect(fn).not.toContain('source_count=gte.2');
     expect(fn).toContain('id.desc&limit=200');

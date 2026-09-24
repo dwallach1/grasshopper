@@ -109,6 +109,11 @@ export type MemeCoinsPayload = {
   orders: MemeOrderRow[];
   fills: MemeFillRow[];
   pnl: MemePnlRow[];
+  /**
+   * Ledger's earliest `meme_pnl` when `pnl` is only the recent tail.
+   * Null when that tail already reaches day one. Not a chart point.
+   */
+  pnl_start?: MemePnlRow | null;
   notes: MemeNoteRow[];
 };
 
@@ -124,6 +129,7 @@ export function emptyMemeCoins(): MemeCoinsPayload {
     orders: [],
     fills: [],
     pnl: [],
+    pnl_start: null,
     notes: [],
   };
 }
@@ -141,6 +147,7 @@ export function memeDesk(desk: DeskPayload): MemeCoinsPayload {
     orders: raw.orders ?? [],
     fills: raw.fills ?? [],
     pnl: raw.pnl ?? [],
+    pnl_start: raw.pnl_start ?? null,
     notes: raw.notes ?? [],
   };
 }
@@ -346,14 +353,35 @@ export type MemeStartEquity = {
 };
 
 /**
- * Start bankroll for BANDIT % return in SOL. Prefer the earliest `meme_pnl`
- * equity_sol. If that mark is missing but the primary account has a current
- * mark, use the documented 2 SOL seed — never invent a current equity.
+ * Start bankroll for BANDIT % return in SOL.
+ * Prefer `pnl_start` (the ledger's first mark when the tail is truncated),
+ * else the earliest equity in `pnl` when that tail already reaches day one.
+ * `desk_accounts.meta.bankroll_sol_start` (2 SOL) is only the fallback when
+ * a first row exists but has no equity_sol. Never invent a current equity,
+ * and never treat a later tail row as day one once `pnl_start` is present.
  */
 export function memeStartEquity(payload: MemeCoinsPayload): MemeStartEquity | null {
   const latest = latestMemePnl(payload);
   if (latest?.equity_sol === null || latest?.equity_sol === undefined) return null;
   const account = latest.account_key || BANDIT_PRIMARY_ACCOUNT;
+  const seeded = payload.pnl_start ?? null;
+  if (seeded) {
+    if (seeded.equity_sol !== null && seeded.equity_sol !== undefined) {
+      return {
+        equity_sol: seeded.equity_sol,
+        as_of: seeded.as_of,
+        source: 'pnl_equity',
+        account_key: seeded.account_key || account,
+      };
+    }
+    if ((seeded.account_key || account) !== BANDIT_PRIMARY_ACCOUNT) return null;
+    return {
+      equity_sol: BANDIT_BANKROLL_SOL_START,
+      as_of: seeded.as_of,
+      source: 'bankroll',
+      account_key: account,
+    };
+  }
   const earliest = earliestMemePnl(payload);
   if (earliest?.equity_sol !== null && earliest?.equity_sol !== undefined) {
     return {
@@ -372,6 +400,7 @@ export function memeStartEquity(payload: MemeCoinsPayload): MemeStartEquity | nu
   };
 }
 
+/** Recent tail only. Book start lives on `pnl_start`, not on this clock. */
 export function memeEquitySeries(payload: MemeCoinsPayload): Array<{ as_of: string; equity_sol: number }> {
   const series: Array<{ as_of: string; equity_sol: number }> = [];
   for (const row of [...payload.pnl].sort((a, b) => a.as_of.localeCompare(b.as_of))) {
@@ -403,6 +432,20 @@ function clip(value: string, max: number): string {
   return `${trimmed.slice(0, max - 1)}…`;
 }
 
+function mapMemePnlRow(row: LooseRow): MemePnlRow {
+  return {
+    id: text(row, 'id'),
+    account_key: text(row, 'account_key'),
+    as_of: requireIso(row.as_of as string | Date, 'meme_pnl.as_of'),
+    realized: asFiniteNumber(row.realized as string | number, 'meme_pnl.realized'),
+    unrealized: asOptionalNumber(row.unrealized as string | number | null, 'meme_pnl.unrealized'),
+    fees: asFiniteNumber(row.fees as string | number, 'meme_pnl.fees'),
+    cash_sol: asOptionalNumber(row.cash_sol as string | number | null, 'meme_pnl.cash_sol'),
+    equity_sol: asOptionalNumber(row.equity_sol as string | number | null, 'meme_pnl.equity_sol'),
+    notes: optionalText(row, 'notes'),
+  };
+}
+
 // If the DB has meme_* rows but every array here is empty, SELECT RLS is
 // missing (GRANT alone is not enough).
 export function mapMemeCoins(input: {
@@ -411,6 +454,7 @@ export function mapMemeCoins(input: {
   orders?: readonly LooseRow[];
   fills?: readonly LooseRow[];
   pnl?: readonly LooseRow[];
+  pnl_start?: LooseRow | null;
   notes?: readonly LooseRow[];
 }): MemeCoinsPayload {
   return {
@@ -473,17 +517,8 @@ export function mapMemeCoins(input: {
       fee_sol: asOptionalNumber(row.fee_sol as string | number | null, 'meme_fills.fee_sol') ?? 0,
       executed_at: requireIso(row.executed_at as string | Date, 'meme_fills.executed_at'),
     })),
-    pnl: (input.pnl ?? []).map((row) => ({
-      id: text(row, 'id'),
-      account_key: text(row, 'account_key'),
-      as_of: requireIso(row.as_of as string | Date, 'meme_pnl.as_of'),
-      realized: asFiniteNumber(row.realized as string | number, 'meme_pnl.realized'),
-      unrealized: asOptionalNumber(row.unrealized as string | number | null, 'meme_pnl.unrealized'),
-      fees: asFiniteNumber(row.fees as string | number, 'meme_pnl.fees'),
-      cash_sol: asOptionalNumber(row.cash_sol as string | number | null, 'meme_pnl.cash_sol'),
-      equity_sol: asOptionalNumber(row.equity_sol as string | number | null, 'meme_pnl.equity_sol'),
-      notes: optionalText(row, 'notes'),
-    })),
+    pnl: (input.pnl ?? []).map((row) => mapMemePnlRow(row)),
+    pnl_start: input.pnl_start ? mapMemePnlRow(input.pnl_start) : null,
     notes: (input.notes ?? []).map((row) => ({
       id: text(row, 'id'),
       token_id: optionalText(row, 'token_id'),

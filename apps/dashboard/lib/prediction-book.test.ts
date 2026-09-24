@@ -370,6 +370,58 @@ describe('prediction book mapping', () => {
         notes: 'seed cash',
       }],
     }))?.source).toBe('pnl_cash');
+    expect(predictionStartEquity(payload({
+      pnl: [{
+        id: 'window',
+        account_key: 'polymarket-us-primary',
+        as_of: '2026-09-18T21:07:57.079Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: 491.53,
+        equity: 491.53,
+        notes: null,
+      }],
+      pnl_start: {
+        id: '0d0cfe10-17b2-46b4-94f7-0e8ed1493e76',
+        account_key: 'polymarket-us-primary',
+        as_of: '2026-09-06T13:10:47.142Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: 426,
+        equity: 426,
+        notes: null,
+      },
+    }))).toEqual({
+      equity: 426,
+      as_of: '2026-09-06T13:10:47.142Z',
+      source: 'pnl_equity',
+    });
+    expect(predictionStartEquity(payload({
+      pnl: [{
+        id: 'window',
+        account_key: 'polymarket-us-primary',
+        as_of: '2026-09-24T16:10:21.045Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: 276.87,
+        equity: 276.87,
+        notes: null,
+      }],
+      pnl_start: {
+        id: 'blank-start',
+        account_key: 'polymarket-us-primary',
+        as_of: '2026-09-06T13:10:47.142Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash: null,
+        equity: null,
+        notes: null,
+      },
+    }))).toBeNull();
   });
 
   test('events include market close without inventing a date', () => {
