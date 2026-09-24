@@ -44,7 +44,12 @@ describe('desk load path', () => {
     expect(ledger).toContain('closed_at');
     expect(ledger).toContain("status in ('proposed', 'open', 'closing', 'closed')");
     expect(ledger).toContain('limit 200');
+    expect(ledger).toContain('order by as_of asc, id asc');
+    expect(ledger).toContain('pnl_start: pmWindow.pnl_start');
+    expect(ledger).toContain('pnl_start: memeWindow.pnl_start');
     expect(live).toContain('limit=200');
+    expect(live).toContain('order=as_of.asc,id.asc&limit=1');
+    expect(live).toContain('pnl_start: window.pnl_start');
     expect(ledger).toContain('loadTeam');
     expect(ledger).toContain('desk_agents');
     expect(ledger).toContain('desk_domain_stewards');

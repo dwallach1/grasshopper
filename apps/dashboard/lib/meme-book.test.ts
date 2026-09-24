@@ -8,6 +8,7 @@ import {
   emptyMemeCoins,
   mapMemeCoins,
   memeBookNames,
+  memeEquitySeries,
   memeFillLog,
   memeStartEquity,
   type MemeCoinsPayload,
@@ -270,6 +271,88 @@ describe('meme book mapping', () => {
     expect(mapped.tokens[0]?.symbol).toBe('ZDOG');
     expect(mapped.positions[0]?.quantity).toBeCloseTo(12.5);
     expect(mapped.positions[0]?.mark_sol).toBeNull();
+    expect(mapped.pnl_start).toBeNull();
     expect(mapped.desk).toBe('BANDIT');
+  });
+
+  test('pnl_start is the book start; a null equity there falls back to 2 SOL, not the tail', () => {
+    const tail = {
+      id: 'window',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+      as_of: '2026-09-24T17:16:03.795Z',
+      realized: 0,
+      unrealized: 0,
+      fees: 0,
+      cash_sol: 1.484347307,
+      equity_sol: 1.908307649,
+      notes: null,
+    };
+    const seeded = memeStartEquity(payload({
+      pnl: [tail],
+      pnl_start: {
+        id: '21e58b26-aee3-47ed-a0f0-ad1b4654f556',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: 2,
+        notes: 'initial venue balance snapshot',
+      },
+    }));
+    expect(seeded).toEqual({
+      equity_sol: 2,
+      as_of: '2026-09-06T14:23:40.405Z',
+      source: 'pnl_equity',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+    });
+    expect(memeEquitySeries(payload({
+      pnl: [tail],
+      pnl_start: {
+        id: '21e58b26-aee3-47ed-a0f0-ad1b4654f556',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: 2,
+        notes: null,
+      },
+    })).map((point) => point.as_of)).toEqual(['2026-09-24T17:16:03.795Z']);
+    expect(memeStartEquity(payload({
+      pnl: [tail],
+      pnl_start: {
+        id: 'seed-unmarked',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: null,
+        notes: 'seed cash',
+      },
+    }))).toEqual({
+      equity_sol: BANDIT_BANKROLL_SOL_START,
+      as_of: '2026-09-06T14:23:40.405Z',
+      source: 'bankroll',
+      account_key: BANDIT_PRIMARY_ACCOUNT,
+    });
+    expect(memeStartEquity(payload({
+      pnl: [{ ...tail, equity_sol: null }],
+      pnl_start: {
+        id: '21e58b26-aee3-47ed-a0f0-ad1b4654f556',
+        account_key: BANDIT_PRIMARY_ACCOUNT,
+        as_of: '2026-09-06T14:23:40.405Z',
+        realized: 0,
+        unrealized: 0,
+        fees: 0,
+        cash_sol: 2,
+        equity_sol: 2,
+        notes: null,
+      },
+    }))).toBeNull();
   });
 });

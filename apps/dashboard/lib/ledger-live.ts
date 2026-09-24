@@ -55,6 +55,7 @@ import {
 import { assembleRoutines } from './routines';
 import { mapBeliefs } from './beliefs';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
+import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception';
 
 const JsonArraySchema = z.array(z.object({}).passthrough());
 export const REST_FETCH_MS = 8_000;
@@ -345,27 +346,47 @@ async function loadTeamRest(auth: DeskRestAuth): Promise<DeskTeamPayload> {
 }
 
 async function loadMemeCoinsRest(auth: DeskRestAuth): Promise<MemeCoinsPayload> {
-  const [tokens, positions, orders, fills, pnl, notes] = await Promise.all([
+  const [tokens, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
     restOptional('meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id,kill_criteria&order=updated_at.desc&limit=200', auth),
     restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
     restOptional('meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', auth),
     restOptional('meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200', auth),
-    restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc&limit=200', auth),
+    restOptional(`meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc,id.desc&limit=${PNL_TAIL_LIMIT}`, auth),
+    restOptional('meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.asc,id.asc&limit=1', auth),
     restOptional('meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', auth),
   ]);
-  return mapMemeCoins({ tokens, positions, orders, fills, pnl, notes });
+  const window = attachPnlStart(pnl, pnlFirst[0] ?? null, PNL_TAIL_LIMIT);
+  return mapMemeCoins({
+    tokens,
+    positions,
+    orders,
+    fills,
+    pnl: window.pnl,
+    pnl_start: window.pnl_start,
+    notes,
+  });
 }
 
 async function loadPredictionMarketsRest(auth: DeskRestAuth): Promise<PredictionMarketsPayload> {
-  const [markets, positions, orders, fills, pnl, notes] = await Promise.all([
+  const [markets, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
     restOptional('pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200', auth),
     restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
     restOptional('pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', auth),
     restOptional('pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200', auth),
-    restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc&limit=200', auth),
+    restOptional(`pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc,id.desc&limit=${PNL_TAIL_LIMIT}`, auth),
+    restOptional('pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.asc,id.asc&limit=1', auth),
     restOptional('pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80', auth),
   ]);
-  return mapPredictionMarkets({ markets, positions, orders, fills, pnl, notes });
+  const window = attachPnlStart(pnl, pnlFirst[0] ?? null, PNL_TAIL_LIMIT);
+  return mapPredictionMarkets({
+    markets,
+    positions,
+    orders,
+    fills,
+    pnl: window.pnl,
+    pnl_start: window.pnl_start,
+    notes,
+  });
 }
 
 export function bookFields(
