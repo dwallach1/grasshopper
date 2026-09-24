@@ -142,7 +142,13 @@ from unnest(array[
   'names','invest','leader','rallied','fastest','gonna',
   'provide','hours','online','performers','clusters','crowded',
   'awaited','awaited quarters','logo link','confirmed','exploring',
-  'extract','brand','breaking','bucket','department','cities'
+  'extract','brand','breaking','bucket','department','cities',
+  'further','directly','phase','value','moves','collapse','chain','think',
+  'right','philip','models','model','earnings','infrastructure','customers',
+  'bottle','captcha','saml','sso','scim','php','js','sla','sq','rpm','cof',
+  'mcc','msa','blue','mktp','cpto','rag','jdbc','odbc','olap','etl','ast',
+  'tpc','adbc','bi','kb','mt','gt','mvcc','cwi','gqa','sota','zdr','ptq',
+  'cuda','skhy'
 ]::text[]) token
 on conflict (token, token_type) do nothing;
 
