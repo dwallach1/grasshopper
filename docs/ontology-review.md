@@ -23,10 +23,11 @@ Normalized label (lowercase, collapsed space) is junk when:
 - it is a listicle/section header as the **whole** label: `another`, `files`, `github`, `latest`, `contents`, …
 - it is a discourse filler / non-vocab phrase as the **whole** label: `since`, `literally`, `further`, `directly`, `phase`, `model`, `earnings`, `next week`, `logo link`, `awaited quarters`, …
 - it is an IT/protocol acronym or false-ticker membership as the **whole** label: `sso`, `saml`, `scim`, `cuda`, `php`, `jdbc`, `etl`, …
+- it is a SQL/programming false ticker or factory discourse filler as the **whole** label: `decimal`, `jvm`, `filing`, `rosenblatt`, `hugeint`, `tinyint`, …
 - it is two or more 2–5 letter tokens separated by spaces (`avgo cien`, `iren mrvl`) — ticker mashups, same regex as TS `isJunkOntologyLabel`. Not a score.
 - it is an active `ontology_lexicon.candidate_stopword` as the **whole** label (`about`, `this`, …)
 
-This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear`, `inference`, `scarcity`, `neocloud` stay for a human — they are ontology vocabulary (and valid theme names), just ranked below memberships. Whole-label SQL/listicle/discourse stopwords still reject even when grind proposed them as memberships.
+This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear`, `inference`, `scarcity`, `neocloud`, `bottleneck`, `nebius`, `nscale`, `crypto-ai`, `ai-cloud`, `ai-power`, `GOOGL`, `AMZN`, `NET` stay for a human — they are ontology vocabulary (and valid theme names or tickers), just ranked below memberships. Whole-label SQL/listicle/discourse stopwords still reject even when grind proposed them as memberships.
 
 Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`):
 
@@ -85,7 +86,7 @@ supabase functions deploy desk-public-rest --project-ref xqungxapqicdmboniezz --
 
 ## Live path (Quantanamo)
 
-Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. Discourse-filler + ticker-mashup deny-list (`ontology_junk_discourse`, 2026-09-18) is applied: first mashup sweep rejected **35** pending rows (`avgo cien`, `iren mrvl`, `cien amba`, and other 2–5 letter space-joined pairs). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` / `inference` / `scarcity` / `neocloud` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships.
+Applied. `desk-public-rest` **v11** (2026-09-15) fetches pending candidates without `source_count=gte.2`, ordered membership-first. **v6** first included `candidates` on `/bundle/public`. Review RPC verified in #53. SQL/listicle deny-list (`ontology_junk_sql_listicle`, 2026-09-15) is on Quantanamo `xqungxapqicdmboniezz`. Discourse-filler + ticker-mashup deny-list (`ontology_junk_discourse`, 2026-09-18) is applied: first mashup sweep rejected **35** pending rows (`avgo cien`, `iren mrvl`, `cien amba`, and other 2–5 letter space-joined pairs). Re-run is idempotent (`rejected: 0`). Pending keepers still include `NVDA` / `DOCN` memberships and `power` / `demand` / `energy` / `photonics` / `inference` / `scarcity` / `neocloud` terms. `nuclear` is not on the deny-list (theme name stays valid); grind already rejected lone `nuclear` / `NUCLEAR` memberships. Factory 2026-09-25 stopwords (`decimal`, `jvm`, `filing`, `rosenblatt`, …) are active `candidate_stopword` rows. The operator sweep rejected **268** pending rows on those labels (`review_note = junk_deny_list`, 17:23–17:24 UTC), leaving **412** pending. Migration `20260925101900_ontology_junk_sql_discourse` is the durable `IN (...)` copy of that list. Opening the PR does not apply it; the live function body still ends the hardcoded list at `skhy`. Re-run after apply is idempotent.
 
 ```sql
 select public.reject_junk_ontology_candidates();

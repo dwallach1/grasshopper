@@ -305,6 +305,54 @@ describe('public desk snapshot contract', () => {
     ]);
   });
 
+  test('SQL and discourse factory stopwords are junk; keepers stay reviewable', () => {
+    for (const label of [
+      'decimal', 'JVM', 'filing', 'Rosenblatt', 'hugeint', 'tinyint', 'it', 'do',
+      'blue collar', 'excellent take', 'fy26 results', 'insider-filings', 'thesis-linked',
+      'nbis excellent', 'requested features', 'commit', 'llvm', 'market',
+    ]) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(true);
+    }
+    expect(isJunkOntologyLabel('decimal')).toBe(true);
+    expect(isJunkOntologyLabel('jvm')).toBe(true);
+    expect(isJunkOntologyLabel('filing')).toBe(true);
+    expect(isJunkOntologyLabel('rosenblatt')).toBe(true);
+    for (const label of [
+      'inference', 'scarcity', 'neocloud', 'NVDA', 'bottleneck', 'nebius', 'nscale',
+      'crypto-ai', 'ai-cloud', 'ai-power', 'GOOGL', 'AMZN', 'NET',
+    ]) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'term')).toBe(false);
+      expect(isJunkOntologyLabel(label, 'theme')).toBe(false);
+    }
+    expect(ONTOLOGY_JUNK_LABELS).toContain('decimal');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('jvm');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('filing');
+    expect(ONTOLOGY_JUNK_LABELS).toContain('rosenblatt');
+    expect(new Set(ONTOLOGY_JUNK_LABELS).size).toBe(ONTOLOGY_JUNK_LABELS.length);
+
+    const ranked = publicPendingCandidates([
+      { id: 1, status: 'pending', score: 100, source_count: 1, proposed_label: 'DECIMAL', candidate_type: 'membership' },
+      { id: 2, status: 'pending', score: 100, source_count: 1, proposed_label: 'JVM', candidate_type: 'membership' },
+      { id: 3, status: 'pending', score: 95, source_count: 1, proposed_label: 'filing', candidate_type: 'term' },
+      { id: 4, status: 'pending', score: 90, source_count: 2, proposed_label: 'rosenblatt', candidate_type: 'term' },
+      { id: 5, status: 'pending', score: 100, source_count: 1, proposed_label: 'NVDA', candidate_type: 'membership' },
+      { id: 6, status: 'pending', score: 90, source_count: 2, proposed_label: 'inference', candidate_type: 'term' },
+      { id: 7, status: 'pending', score: 88, source_count: 2, proposed_label: 'bottleneck', candidate_type: 'term' },
+      { id: 8, status: 'pending', score: 100, source_count: 1, proposed_label: 'NET', candidate_type: 'membership' },
+      { id: 9, status: 'pending', score: 80, source_count: 2, proposed_label: 'crypto-ai', candidate_type: 'term' },
+    ], 8);
+    expect(ranked.map((row) => (row as { proposed_label: string }).proposed_label)).toEqual([
+      'NET',
+      'NVDA',
+      'inference',
+      'bottleneck',
+      'crypto-ai',
+    ]);
+  });
+
   test('public snapshot keeps lean beliefs and lessons', () => {
     const published = toPublicDeskSnapshot({
       ...sample,

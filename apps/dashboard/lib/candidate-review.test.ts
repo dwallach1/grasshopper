@@ -19,6 +19,12 @@ import type { OntologyCandidateRow, OntologyThemeRow, ThesisRow } from './ledger
 
 const AT = '2026-09-13T12:00:00.000Z';
 
+function lexiconTokensFromMigration(sql: string): string[] {
+  const match = sql.match(/from unnest\(array\[([\s\S]*?)\]::text\[\]\)/);
+  expect(match).toBeTruthy();
+  return [...(match?.[1] ?? '').matchAll(/'([^']+)'/g)].map((row) => row[1]);
+}
+
 function junkLabelsFromSql(sql: string): string[] {
   const start = sql.indexOf('create or replace function private.ontology_label_is_junk');
   expect(start).toBeGreaterThan(-1);
@@ -113,6 +119,19 @@ describe('ontology candidate review queue', () => {
     expect(isJunkOntologyLabel('further')).toBe(true);
     expect(isJunkOntologyLabel('sso')).toBe(true);
     expect(isJunkOntologyLabel('cuda')).toBe(true);
+    expect(isJunkOntologyLabel('decimal')).toBe(true);
+    expect(isJunkOntologyLabel('jvm')).toBe(true);
+    expect(isJunkOntologyLabel('filing')).toBe(true);
+    expect(isJunkOntologyLabel('rosenblatt')).toBe(true);
+    expect(isJunkOntologyLabel('bottleneck', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('nebius', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('nscale', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('crypto-ai', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('ai-cloud', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('ai-power', 'term')).toBe(false);
+    expect(isJunkOntologyLabel('GOOGL', 'membership')).toBe(false);
+    expect(isJunkOntologyLabel('AMZN', 'membership')).toBe(false);
+    expect(isJunkOntologyLabel('NET', 'membership')).toBe(false);
     expect(REVIEW_QUEUE_CAP).toBe(40);
   });
 
@@ -233,7 +252,7 @@ describe('ontology candidate review queue', () => {
   test('SQL deny-list stays in sync with the documented labels', async () => {
     const sql = await readFile(join(import.meta.dir, '../../../supabase/schemas/07_ontology_review.sql'), 'utf8');
     const migration = await readFile(
-      join(import.meta.dir, '../../../supabase/migrations/20260924180000_ontology_junk_it_acronyms.sql'),
+      join(import.meta.dir, '../../../supabase/migrations/20260925101900_ontology_junk_sql_discourse.sql'),
       'utf8',
     );
     expect(sql).toContain('private.ontology_label_is_junk');
@@ -243,6 +262,13 @@ describe('ontology candidate review queue', () => {
     for (const source of [sql, migration]) {
       expect(junkLabelsFromSql(source)).toEqual([...ONTOLOGY_JUNK_LABELS]);
     }
+    const inserted = lexiconTokensFromMigration(migration);
+    expect(inserted).toEqual([...ONTOLOGY_JUNK_LABELS].slice(-inserted.length));
+    expect(inserted).toHaveLength(110);
+    expect(inserted).toContain('decimal');
+    expect(inserted).toContain('jvm');
+    expect(inserted).toContain('filing');
+    expect(inserted).toContain('rosenblatt');
   });
 
   test('SQL alias map stays in sync with the documented pairs', async () => {
