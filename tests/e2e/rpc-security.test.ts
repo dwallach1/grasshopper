@@ -51,6 +51,9 @@ describe('exposed SECURITY DEFINER RPCs', () => {
     expect(sql).toContain("'further', 'directly', 'phase'");
     expect(sql).toContain("'saml', 'sso', 'scim'");
     expect(sql).toContain("'cuda', 'skhy'");
+    expect(sql).toContain("'decimal', 'df', 'dht'");
+    expect(sql).toContain("'jvm', 'kl', 'listen'");
+    expect(sql).toContain("'review', 'rosenblatt'");
     expect(sql).toContain("v ~ '^[a-z]{2,5}( [a-z]{2,5})+$'");
     expect(sql).toContain("grant execute on function public.reject_junk_ontology_candidates");
     expect(sql).not.toMatch(/grant execute on function public\.reject_junk_ontology_candidates[\s\S]*to anon/);

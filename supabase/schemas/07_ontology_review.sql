@@ -406,7 +406,26 @@ as $$
       'customers', 'bottle', 'captcha', 'saml', 'sso', 'scim', 'php', 'js',
       'sla', 'sq', 'rpm', 'cof', 'mcc', 'msa', 'blue', 'mktp', 'cpto', 'rag',
       'jdbc', 'odbc', 'olap', 'etl', 'ast', 'tpc', 'adbc', 'bi', 'kb', 'mt',
-      'gt', 'mvcc', 'cwi', 'gqa', 'sota', 'zdr', 'ptq', 'cuda', 'skhy'
+      'gt', 'mvcc', 'cwi', 'gqa', 'sota', 'zdr', 'ptq', 'cuda', 'skhy',
+      'adm', 'argument', 'asserted', 'between', 'blob', 'blue collar',
+      'bnf', 'cas', 'cdc', 'closes', 'commit', 'conflict',
+      'contracted', 'dag', 'decimal', 'df', 'dht', 'do',
+      'done', 'drbd', 'dsa', 'dsv', 'et', 'excellent',
+      'excellent take', 'expected', 'fetch', 'filing', 'first', 'future',
+      'fy26 results', 'gfs', 'glm', 'gossip', 'gw', 'gwa',
+      'holdings', 'hugeint', 'insider-filings', 'ipc', 'iq', 'iso',
+      'it', 'jit', 'jvm', 'kl', 'listen', 'llvm',
+      'lock', 'lr', 'market', 'mp', 'ms', 'nbis excellent',
+      'ne', 'nearly', 'nfs', 'oss', 'possible', 'pre',
+      'prepare', 'ptl', 'push', 'quality', 'race', 'raise',
+      'reasons', 'rebase', 'ref', 'refetch', 'reiterating', 'relentless',
+      'remains', 'replicate', 'report', 'reporting', 'reports', 'requested',
+      'requested features', 'requests', 'retained', 'retry', 'review', 'rosenblatt',
+      'rto', 'scary', 'september', 'serve', 'setup', 'sf',
+      'sha', 'simd', 'snp', 'sre', 'sweep', 'thesis-linked',
+      'tinyint', 'tj', 'tls', 'tpch', 'trillion', 'txn',
+      'uk', 'upload', 'verification', 'vm', 'voting', 'window',
+      'without', 'zone'
     )
     or exists (
       select 1
