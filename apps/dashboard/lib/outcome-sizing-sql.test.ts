@@ -427,3 +427,24 @@ describe('thesis_max_stakes operator gate', () => {
     expect(sql).toContain("and (coalesce((select auth.role()), '') <> 'authenticated' or (select public.is_ledger_operator()));");
   });
 });
+
+describe('NYSE calendar and max_stake at entry', () => {
+  test('calendar migration is the schema file; session rule honours holidays and early closes', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/29_us_market_calendar.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926182213_us_market_calendar.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain("('2026-11-27', 'early_close', '13:00', 'Day after Thanksgiving')");
+    expect(sql).toContain("when c.kind = 'holiday' then time '00:00' else c.close_et end");
+    expect(sql).toContain('create or replace function public.us_regular_session_open(p_at timestamptz default now())');
+  });
+
+  test('entry cap snapshot migration is the schema file; the check uses the cap at entry', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/30_max_stake_at_entry.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926182254_max_stake_at_entry.sql'), 'utf8')).toBe(sql);
+    for (const table of ['pm_orders', 'meme_orders', 'trade_intents', 'position_episodes']) {
+      expect(sql).toContain(`create trigger snapshot_entry_max_stake before insert on public.${table}`);
+    }
+    expect(sql).not.toContain('v_thesis_max_stake');
+    expect(sql.match(/max_stake_at_entry \* 1\.10/g)?.length).toBe(4);
+    expect(sql).toContain('exception when others then');
+  });
+});
