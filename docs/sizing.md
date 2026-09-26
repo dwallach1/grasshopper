@@ -1,6 +1,6 @@
 # Sizing: results set the size, no hard cap per position, no fixed rails
 
-Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, or averaging-down ban. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, and each new entry or add is scaled by a half-Kelly multiplier. The only hard limit on size is mechanical: a buy can't spend more cash than the steward actually has (no margin).
+Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss, or portfolio drawdown limit. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, and each new entry or add is scaled by a half-Kelly multiplier. The only hard limit on size is mechanical: a buy can't spend more cash than the steward actually has (no margin).
 
 ## The rules
 
@@ -30,7 +30,7 @@ Position size follows results, and there is **no hard cap per position** (David,
 
 `workers/research` (`approvedCandidate` / `sizeBuyNotional`, position-decision adds) takes the thesis multiplier from `public.thesis_sizing()` (through cloud-control context) and fails closed when it's missing. The notional is `requested % of live NAV × multiplier`, limited by `min(cash, buying_power)`. The broker gateway has **no fixed rails**. It only runs mechanical checks: a valid quantity and notional (a sell within available shares; a reduce smaller than a full exit), buying power, cash (a buy that would need margin is rejected), a fresh uncrossed quote, no same-symbol order already pending, and an open US regular session (orders are regular-hours market orders). Adds are `requested % × multiplier` like entries: no fixed add %, add count, spacing or averaging-down rule. Reduces use the model's requested partial %: no fixed band. Wide spreads and the first and last 15 minutes of the session are guidance, not blocks.
 
-One fixed protective rule is still in code: the −8% hard-loss exit on a position (`hard_loss_exit_percent`). The `portfolio-drawdown` risk control (8%) is also still active, as text only (nothing enforces it). Both are exits, not limits on entries. Neither was on the removal list.
+There is no global stop-loss and no portfolio drawdown limit. An autonomous exit happens only when the linked thesis's own written invalidation (`theses.falsifier`) is confirmed: the model says the thesis is invalidated with confidence ≥ 90, and there is deterministic adverse evidence. The position review prefers the thesis linked to the position episode. If no linked thesis has a written falsifier, the exit is left to the steward's judgment and its learned beliefs.
 
 The deprecated intent fields (`maxTradePercent`, `maxDailyNotionalPercent`, `maxTradesPerDay`, `maxSpreadBps`) are no longer sent, and the gateway ignores them.
 

@@ -109,7 +109,8 @@ Live book: **Agentic** proof account (last4 7638). Starting capital is the first
 |---|---|---|
 | Asset class | Equities only | No options, crypto, margin, or shorting |
 | Per name | No hard cap | Size = requested % of **live** NAV × outcome multiplier ([`docs/sizing.md`](docs/sizing.md)); limited only by cash (no margin) |
-| Fixed rails | None | No trade count, spread block, 09:45–15:45 buffer, fixed add %, add count, reduce band or averaging-down ban (David, 2026-09-26). Spread and the session edges are guidance |
+| Fixed rails | None | No trade count, spread block, 09:45–15:45 buffer, fixed add %, add count, reduce band, averaging-down ban, global stop-loss or drawdown limit (David, 2026-09-26). Spread and the session edges are guidance |
+| Exits | The linked thesis's own invalidation | `theses.falsifier`; with none written, the steward's judgment and learned beliefs |
 | Entry gate | QUANTANAMO: hardening thesis at confidence ≥ 80 | Any steward: no new entries on a rejected or killed thesis |
 | Session | US regular hours open | Mechanical: orders are regular-hours market orders; no after-hours queue |
 | Review | `review_equity_order` immediately before `place_equity_order` | Any broker check blocks |

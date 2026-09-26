@@ -350,10 +350,11 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           average_buy_price: position.averageBuyPrice,
           thesis_id: unambiguousThesisId(position.symbol, theses),
           monitor_policy: {
-            // No fixed add %, reduce band, add count or averaging-down rule (David,
-            // 2026-09-26: "Kill the old rules!"). Adds are results-sized.
-            policy_version: 'autonomous-position-v2',
-            hard_loss_limit_percent: 8,
+            // No fixed add %, reduce band, add count, averaging-down rule or global stop
+            // (David, 2026-09-26: "Kill the old rules!"). Adds are results-sized; exits come
+            // from the linked thesis's own invalidation (theses.falsifier) or the steward.
+            policy_version: 'autonomous-position-v3',
+            exit_source: 'linked_thesis_falsifier_or_steward_judgment',
           },
         })),
       }));
@@ -410,8 +411,11 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
         if (!position || position.quantity <= 0) continue;
         const positionKey = `${snapshot.accountKey}:${position.symbol}`;
         const idempotencyKey = `${cycleRunId}:position:${position.symbol}:${PROMPT_VERSION}`;
-        const relatedTheses: PositionThesis[] = theses
-          .filter((thesis) => thesis.symbols.includes(position.symbol))
+        // Exits read the linked thesis's own invalidation, so prefer the episode's thesis.
+        const episodeThesisId = typeof row.thesis_id === 'string' && row.thesis_id.trim() ? row.thesis_id.trim() : null;
+        const symbolTheses = theses.filter((thesis) => thesis.symbols.includes(position.symbol));
+        const linkedTheses = episodeThesisId ? symbolTheses.filter((thesis) => thesis.id === episodeThesisId) : [];
+        const relatedTheses: PositionThesis[] = (linkedTheses.length > 0 ? linkedTheses : symbolTheses)
           .map((thesis) => ({
             id: thesis.id, name: thesis.name, status: thesis.status, stance: thesis.stance,
             confidence: thesis.confidence, symbols: thesis.symbols, falsifier: thesis.falsifier,
@@ -1016,12 +1020,13 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v5',
+    version: 'autonomous-equity-v6',
     // Size follows results with no hard cap per position, and no fixed rails (David,
-    // 2026-09-26: "Kill the old rules!"): no trade count, spread block or 09:45-15:45
-    // window. The notional was sized upstream (requested % x outcome multiplier, limited
-    // by spendable cash); the gateway re-checks only mechanical limits.
+    // 2026-09-26: "Kill the old rules!"): no trade count, spread block, 09:45-15:45 window
+    // or global stop-loss. The notional was sized upstream (requested % x outcome
+    // multiplier, limited by spendable cash); the gateway re-checks only mechanical limits.
     sizing: 'requested_percent_x_outcome_multiplier',
+    exits: 'linked_thesis_falsifier_or_steward_judgment',
     mechanical: 'cash_no_margin_valid_qty_fresh_uncrossed_quote_regular_session_open',
     quoteMaxAgeSeconds: 120,
     guidance: 'wide spreads and the first/last 15 minutes of the session are guidance, not blocks',
