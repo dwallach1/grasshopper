@@ -16,6 +16,8 @@ const ALLOWED_TABLES = new Set([
   'meme_tokens', 'meme_positions', 'meme_orders', 'meme_fills', 'meme_pnl', 'meme_notes',
   'desk_agents', 'desk_domains', 'desk_domain_stewards', 'desk_accounts',
   'belief_updates', 'thesis_domains',
+  // Outcome ledger scorecard (security_invoker views; read-only).
+  'v_steward_scorecard', 'v_steward_scorecard_weekly', 'v_steward_trend', 'v_thesis_scorecard',
 ]);
 
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
@@ -94,6 +96,14 @@ const PM: Array<[string, string]> = [
   ['orders', 'pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200'],
   ['fills', 'pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200'],
   ['notes', 'pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80'],
+];
+
+/** Steward scorecard views. Optional: before the outcome migration these serve []. */
+const SCORECARD: Array<[string, string]> = [
+  ['stewards', 'v_steward_scorecard?select=*&order=sort_order.asc'],
+  ['weekly', 'v_steward_scorecard_weekly?select=steward,unit,week_start,iso_week,is_current,trades,priced_trades,wins,hit_rate,realized_pnl&order=week_start.desc,steward.asc&limit=60'],
+  ['trend', 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction'],
+  ['theses', 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin&order=priced_trades.desc'],
 ];
 
 const MEME: Array<[string, string]> = [
@@ -259,7 +269,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
-    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl] = await Promise.all([
+    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
@@ -267,6 +277,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       mode === 'public' ? publicAccountWindow() : Promise.resolve(null),
       pnlWindow('pm_pnl', pmPnlCols, pnlLimit),
       pnlWindow('meme_pnl', memePnlCols, pnlLimit),
+      objectFrom(SCORECARD),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
@@ -284,6 +295,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       pm,
       meme,
       team,
+      scorecard,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error(JSON.stringify({

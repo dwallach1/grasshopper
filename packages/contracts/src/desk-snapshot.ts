@@ -440,6 +440,7 @@ const NESTED_ARRAYS = {
   prediction_markets: ['markets', 'positions', 'orders', 'fills', 'pnl', 'notes'],
   meme_coins: ['tokens', 'positions', 'orders', 'fills', 'pnl', 'notes'],
   team: ['agents', 'domains', 'stewards', 'accounts'],
+  scorecard: ['stewards', 'weekly', 'trend', 'theses'],
 } as const;
 
 const EMPTY_COUNTS = {
