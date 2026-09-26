@@ -468,7 +468,8 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
                              "book_equity": g.get("book_equity"), "thesis_status": g.get("thesis_status"),
                              "open_risk": g.get("open_risk"), "risk_budget": g.get("risk_budget"),
                              "risk_headroom": g.get("risk_headroom"),
-                             "entry_risk_fraction": g.get("entry_risk_fraction")}
+                             "entry_risk_fraction": g.get("entry_risk_fraction"),
+                             "risk_basis": g.get("risk_basis")}
         check_quantity(sz)
         qty = sz["quantity"]
 

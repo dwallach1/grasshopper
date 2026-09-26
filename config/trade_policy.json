@@ -32,7 +32,7 @@
     "results_driven_sizing": {
       "buy_notional": "min(requested percent of live total_value, edge-scaled max_stake, spendable cash)",
       "max_stake": "private.edge_max_stake via steward_sizing_guidance / public.v_thesis_max_stake: starter while unproven (n_eff<10 or LCB<=0) = 0.03 x book / steward bet vol (sd of return on stake, floor 0.25; 1.0 under 5 trades); proven: max(starter, min(book x 0.5 x LCB/sd^2, starter x 2^(1+(n_eff-10)/5))); x steward drawdown scale (1 within 10% of closing high, to 0.5 at 40% below)",
-      "entry_requires": "invalidation_price passed to steward_sizing_guidance (else missing_invalidation) and written on the new open lot (DB-enforced); book observation <= 6h (else stale_book); open risk to invalidation <= 10% of book (entry fitted via p_entry_price, else exposure_cap)",
+      "entry_requires": "invalidation_price passed to steward_sizing_guidance (else missing_invalidation) and written on the new open lot (DB-enforced); book observation <= 6h (else stale_book); open risk <= 10% of book, equities to invalidation (entry fitted via p_entry_price) and ODDSBORNE binaries / BANDIT memes at full notional (risk_basis), else exposure_cap",
       "size_multiplier": "retired: the outcome multiplier no longer scales size (docs/rules/confidence-multiplier.md); steward_sizing_guidance no longer returns it",
       "per_position_cap": null,
       "mechanical_limits": [

@@ -70,6 +70,8 @@ export type ThesisScoreRow = {
   name: string | null;
   steward: string;
   stated_confidence: number | null;
+  /** Earned results score (migration 41); null = unscored. */
+  results_confidence: number | null;
   outcome_implied_confidence: number | null;
   confidence_gap: number | null;
   priced_trades: number;
@@ -198,6 +200,7 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         name: str(row.name),
         steward,
         stated_confidence: stated,
+        results_confidence: num(row.results_confidence),
         outcome_implied_confidence: implied,
         confidence_gap: gap,
         priced_trades: int(row.priced_trades),
