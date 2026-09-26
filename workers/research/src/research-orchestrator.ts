@@ -58,10 +58,6 @@ type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
 // quantanamo-research-orchestrator. The final topology has no publication Workflow.
 const PROMPT_VERSION = SYNTHESIS_PROMPT_VERSION;
 const MAX_CONTROL_BYTES = 512 * 1024;
-// Compatibility values for a broker gateway older than PR 4 (which required these
-// fields and rejected maxTradePercent > 5). The current gateway ignores them.
-const LEGACY_GATEWAY_MAX_TRADE_PERCENT = 5;
-const LEGACY_GATEWAY_MAX_DAILY_NOTIONAL_PERCENT = 20;
 
 type DeduplicationResult = { duplicate: boolean };
 
@@ -354,10 +350,10 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           average_buy_price: position.averageBuyPrice,
           thesis_id: unambiguousThesisId(position.symbol, theses),
           monitor_policy: {
-            policy_version: 'autonomous-position-v1',
+            // No fixed add %, reduce band, add count or averaging-down rule (David,
+            // 2026-09-26: "Kill the old rules!"). Adds are results-sized.
+            policy_version: 'autonomous-position-v2',
             hard_loss_limit_percent: 8,
-            max_add_percent_per_review: 2,
-            max_reduce_percent_per_review: 50,
           },
         })),
       }));
@@ -1020,15 +1016,15 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v4',
-    // Size follows results with no hard cap per position (David, 2026-09-26). The
-    // notional was already sized upstream (requested % x outcome multiplier, limited
-    // by spendable cash); the gateway only re-checks mechanical limits.
+    version: 'autonomous-equity-v5',
+    // Size follows results with no hard cap per position, and no fixed rails (David,
+    // 2026-09-26: "Kill the old rules!"): no trade count, spread block or 09:45-15:45
+    // window. The notional was sized upstream (requested % x outcome multiplier, limited
+    // by spendable cash); the gateway re-checks only mechanical limits.
     sizing: 'requested_percent_x_outcome_multiplier',
-    maxTradesPerDay: 3,
-    maxSpreadBps: 80,
+    mechanical: 'cash_no_margin_valid_qty_fresh_uncrossed_quote_regular_session_open',
     quoteMaxAgeSeconds: 120,
-    executionWindow: '09:45-15:45 America/New_York',
+    guidance: 'wide spreads and the first/last 15 minutes of the session are guidance, not blocks',
   };
   const policySha256 = await sha256(policy);
   const brokerIntent: AutonomousEquityIntent = {
@@ -1038,13 +1034,6 @@ async function processTradeExecutionTask(
     positionAction,
     ...(proposal.side === 'buy' ? { dollarAmount: proposal.notional } : { quantity: proposal.quantity }),
     rationaleSha256,
-    // Legacy fields, ignored by the gateway since PR 4. They are still sent so a
-    // gateway older than PR 4 fails closed on buys above 5% of book (and still
-    // accepts sells) instead of reading undefined limits.
-    maxTradePercent: LEGACY_GATEWAY_MAX_TRADE_PERCENT,
-    maxDailyNotionalPercent: LEGACY_GATEWAY_MAX_DAILY_NOTIONAL_PERCENT,
-    maxTradesPerDay: policy.maxTradesPerDay,
-    maxSpreadBps: policy.maxSpreadBps,
   };
   const requestFingerprint = await sha256(brokerIntent);
   const intentRow = firstObject(await cloudControl(env, 'upsert_trade_intent', {

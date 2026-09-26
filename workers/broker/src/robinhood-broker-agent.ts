@@ -225,14 +225,17 @@ async function stableHash<Value>(value: Value): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function regularExecutionWindow(now = new Date()): boolean {
+// Mechanical, not a rail: autonomous orders are regular-hours market orders, so the US
+// regular session (09:30-16:00 ET, weekdays) must be open or the order would queue for an
+// unknown next-open price. The old 09:45-15:45 buffer window is gone.
+function regularSessionOpen(now = new Date()): boolean {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(now);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   if (!['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(values.weekday || '')) return false;
   const minutes = Number(values.hour) * 60 + Number(values.minute);
-  return minutes >= 9 * 60 + 45 && minutes <= 15 * 60 + 45;
+  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
 }
 
 function isoDayStart(now = new Date()): string {
@@ -560,20 +563,16 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
 
   async executeAutonomousEquityIntent(intent: AutonomousEquityIntent): Promise<AutonomousExecutionResult> {
     if (!brokerExecutionEnabled(this.env)) throw new Error('Broker execution is disabled');
-    if (!regularExecutionWindow()) throw new Error('Autonomous execution is outside the regular-session safety window');
+    if (!regularSessionOpen()) throw new Error('The US regular session is closed (market orders would queue)');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(intent.refId)) {
       throw new Error('A version-4 UUID refId is required');
     }
     const symbol = intent.symbol.trim().toUpperCase();
     if (!/^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)) throw new Error('Invalid equity symbol');
     if (!/^[0-9a-f]{64}$/.test(intent.rationaleSha256)) throw new Error('A rationale hash is required');
-    // No % size rail: the orchestrator sends a results-driven notional (requested % x
-    // outcome multiplier). maxTradePercent / maxDailyNotionalPercent are legacy and
-    // ignored; validateBrokerExecutionPolicy applies only mechanical checks.
-    if (!Number.isInteger(intent.maxTradesPerDay) || intent.maxTradesPerDay < 1 || intent.maxTradesPerDay > 3) {
-      throw new Error('Daily trade-count cap exceeds the gateway maximum');
-    }
-    if (intent.maxSpreadBps <= 0 || intent.maxSpreadBps > 80) throw new Error('Spread cap exceeds the gateway maximum');
+    // No fixed rails: the orchestrator sends a results-driven size (requested % x outcome
+    // multiplier). The legacy maxTradePercent / maxDailyNotionalPercent / maxTradesPerDay /
+    // maxSpreadBps fields are ignored; validateBrokerExecutionPolicy is mechanical only.
     if (!['open', 'add', 'reduce', 'exit'].includes(intent.positionAction)) throw new Error('A supported position action is required');
     const hasDollarAmount = Number.isFinite(intent.dollarAmount);
     const hasQuantity = Number.isFinite(intent.quantity);
@@ -620,8 +619,7 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
       const ask = finiteNumber(quote.ask_price, 'ask price');
       const bid = finiteNumber(quote.bid_price, 'bid price');
       if (ask <= 0 || bid <= 0) throw new Error('A valid bid/ask is unavailable');
-      const spreadBps = ((ask - bid) / ((ask + bid) / 2)) * 10_000;
-      if (spreadBps < 0 || spreadBps > intent.maxSpreadBps) throw new Error('Bid/ask spread exceeds the configured limit');
+      if (ask < bid) throw new Error('Crossed bid/ask quote');
       validateBrokerExecutionPolicy({ ...intent, symbol }, snapshot, intent.side === 'buy' ? ask : bid);
       const sideQuoteTime = Date.parse(String(intent.side === 'buy'
         ? quote.venue_ask_time || quote.venue_last_trade_time || ''
@@ -703,7 +701,7 @@ body{font-family:ui-sans-serif,system-ui,sans-serif;background:#08110d;color:#e8
 <p>This OAuth connection is stored by a Cloudflare Durable Object. No Codex session or local computer is involved after authorization.</p>
 <div class="status"><strong>Connection:</strong> <code>${status.connection}</code><br><strong>Discovered tools:</strong> ${status.toolCount}<br><strong>Required read tools present:</strong> ${status.requiredReadToolsPresent ? 'yes' : 'no'}<br><strong>Trade execution:</strong> ${status.executionEnabled ? 'autonomous, policy-gated' : 'disabled'}</div>
 ${action}
-<ul><li>OAuth tokens remain in the account Durable Object</li><li>Orders require fresh account, quote, tradability, spread, sizing, and broker-review gates</li><li>Duplicate intent IDs are rejected or returned idempotently</li></ul>
+<ul><li>OAuth tokens remain in the account Durable Object</li><li>Orders require fresh account, quote, tradability, cash, and broker-review checks</li><li>Duplicate intent IDs are rejected or returned idempotently</li></ul>
 <p>Run the local desk with <code>bun run web:app</code> to read live Supabase snapshots.</p></main></body></html>`;
   const headers = new Headers(securityHeaders('text/html; charset=utf-8'));
   headers.set('set-cookie', `__Host-quantanamo_csrf=${csrfToken}; Path=/; Secure; SameSite=Strict; Max-Age=600`);

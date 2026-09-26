@@ -21,6 +21,8 @@
 export const KELLY_REFERENCE_PERCENT = 20;
 /** A request cannot be more than the whole book. Mechanical sanity bound, not a rail. */
 export const MAX_REQUEST_PERCENT = 100;
+/** Mechanical: Robinhood's minimum dollar-based order. Not a sizing rail. */
+export const MIN_ORDER_NOTIONAL = 1;
 export const THIN_SAMPLE_N = 5;
 export const THIN_MULTIPLIER = 0.5;
 export const MIN_MULTIPLIER = 0.25;

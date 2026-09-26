@@ -27,24 +27,19 @@ export function validateBrokerExecutionPolicy(
     }
     if (intent.positionAction === 'reduce') {
       if (requested >= position.sharesAvailableForSells - tolerance) throw new Error('Reduction cannot be a full exit');
-      if (requested > position.sharesAvailableForSells * 0.5 + tolerance) throw new Error('Reduction exceeds 50% of available shares');
     }
   } else {
     throw new Error('Unsupported position action');
   }
 
   if (intent.side === 'buy') {
-    // Size is results-driven upstream. No % rail per order or per position here; only
-    // mechanical checks: a trade count, buying power, and no margin (settled cash).
-    if (snapshot.todayAgenticOrderCount >= intent.maxTradesPerDay) throw new Error('Daily buy trade-count limit reached');
+    // Size is results-driven upstream. No fixed rails here (no % cap, no trade count);
+    // only mechanical checks: buying power and no margin (settled cash).
     if (requested > snapshot.buyingPower) throw new Error('Order exceeds current buying power');
     if (!Number.isFinite(snapshot.cash) || requested > snapshot.cash) throw new Error('Order would use margin (exceeds cash)');
   }
-  if (intent.positionAction === 'add' && position && markPrice !== undefined) {
-    if (!Number.isFinite(markPrice) || markPrice <= 0) throw new Error('A valid add price is required');
-    if (position.averageBuyPrice !== null && markPrice < position.averageBuyPrice) {
-      throw new Error('Autonomous averaging down is not permitted');
-    }
+  if (markPrice !== undefined && (!Number.isFinite(markPrice) || markPrice <= 0)) {
+    throw new Error('A valid order price is required');
   }
   return requested;
 }

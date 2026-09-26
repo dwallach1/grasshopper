@@ -19,19 +19,25 @@ describe('broker position-action policy', () => {
     expect(validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'exit', quantity: 10 }, snapshot)).toBe(10);
   });
 
-  test('rejects a reduction larger than half the position', () => {
-    expect(() => validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'reduce', quantity: 6 }, snapshot)).toThrow();
+  test('no fixed reduce band: any partial reduction below a full exit is allowed; a reduce cannot be a full exit', () => {
+    expect(validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'reduce', quantity: 9 }, snapshot)).toBe(9);
+    expect(validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'reduce', quantity: 1 }, snapshot)).toBe(1);
+    expect(() => validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'reduce', quantity: 10 }, snapshot)).toThrow('full exit');
+    expect(() => validateBrokerExecutionPolicy({ ...base, side: 'sell', positionAction: 'reduce', quantity: 11 }, snapshot)).toThrow('available shares');
   });
 
-  test('rejects averaging down on an add', () => {
+  test('no averaging-down ban: an add below cost passes; the price must still be valid', () => {
     const buySnapshot = {
       ...snapshot,
       todayAgenticOrderCount: 0,
       positions: [{ symbol: 'ABCD', quantity: 2, sharesAvailableForSells: 2, averageBuyPrice: 100 }],
     };
-    expect(() => validateBrokerExecutionPolicy(
+    expect(validateBrokerExecutionPolicy(
       { ...base, side: 'buy', positionAction: 'add', dollarAmount: 100 }, buySnapshot, 99,
-    )).toThrow('averaging down');
+    )).toBe(100);
+    expect(() => validateBrokerExecutionPolicy(
+      { ...base, side: 'buy', positionAction: 'add', dollarAmount: 100 }, buySnapshot, 0,
+    )).toThrow('valid order price');
   });
 
   test('rejects a same-symbol pending order', () => {
@@ -41,7 +47,7 @@ describe('broker position-action policy', () => {
   });
 
   const fresh = { ...snapshot, todayAgenticOrderCount: 0, todayAgenticOrderNotional: 0, positions: [] };
-  const modern = { ...base, maxTradePercent: undefined, maxDailyNotionalPercent: undefined };
+  const modern = { ...base, maxTradePercent: undefined, maxDailyNotionalPercent: undefined, maxTradesPerDay: undefined, maxSpreadBps: undefined };
 
   test('no % rail: a results-driven open far above the old 5% / 20% caps passes when cash covers it', () => {
     expect(validateBrokerExecutionPolicy({ ...modern, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 6_000 }, fresh))
@@ -51,14 +57,15 @@ describe('broker position-action policy', () => {
       .toBe(6_000);
   });
 
-  test('mechanical limits only: buying power, no margin, daily trade count, positive size', () => {
+  test('mechanical limits only: buying power, no margin, positive size; no daily trade count', () => {
     const open = { ...modern, symbol: 'WXYZ', side: 'buy' as const, positionAction: 'open' as const };
     expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 9_000.01 }, fresh)).toThrow('buying power');
     const marginAccount = { ...fresh, cash: 1_000, buyingPower: 9_000 };
     expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 1_000.01 }, marginAccount)).toThrow('margin');
     expect(validateBrokerExecutionPolicy({ ...open, dollarAmount: 1_000 }, marginAccount)).toBe(1_000);
-    expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 100 }, { ...fresh, todayAgenticOrderCount: 3 }))
-      .toThrow('trade-count');
+    expect(validateBrokerExecutionPolicy({ ...open, dollarAmount: 100 }, { ...fresh, todayAgenticOrderCount: 12 })).toBe(100);
+    expect(validateBrokerExecutionPolicy({ ...base, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 100 },
+      { ...fresh, todayAgenticOrderCount: 12 })).toBe(100);
     expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 0 }, fresh)).toThrow('positive');
   });
 

@@ -65,12 +65,13 @@ describe('autonomous position decisions', () => {
     expect(result.action).toBe('hold');
   });
 
-  test('does not average down', () => {
+  test('no averaging-down ban: an add below cost is results-sized like any other add', () => {
     const result = decidePositionAction(basePosition, snapshot, thesis, {
       position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
       portfolio_risk_pass: true, bull_case_pass: true, bear_case_answered: true,
     }, context(99, 96, 97));
-    expect(result.action).toBe('hold');
+    expect(result.action).toBe('add');
+    expect(result.dollarAmount).toBe(200);
   });
 
   test('blocks churn while a same-symbol order is pending', () => {
@@ -78,13 +79,34 @@ describe('autonomous position decisions', () => {
     expect(result.action).toBe('hold');
   });
 
-  test('blocks an add after a same-day reduction', () => {
+  test('no add count, spacing or fixed add %: a 6% add after a same-day reduction is results-sized', () => {
+    const smaller = { ...basePosition, quantity: 2 };
+    const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, thesis, {
+      position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 6,
+      portfolio_risk_pass: true, bull_case_pass: true, bear_case_answered: true,
+    }, context(), { addsToday: 3, addsLifetime: 5, reductionsToday: 1, lastAddAt: new Date().toISOString() });
+    expect(result.action).toBe('add');
+    expect(result.dollarAmount).toBe(600);
+  });
+
+  test('no fixed reduce band: the requested partial % is used; 0 or 100 is not a reduce', () => {
+    const decision = {
+      position_action: 'reduce', decision_confidence: 90, thesis_state: 'weakening', summary: 'The catalyst weakened.',
+    };
+    expect(decidePositionAction(basePosition, snapshot, thesis, { ...decision, reduce_percent: 80 }, context(96, 100, 98)).quantity).toBe(8);
+    expect(decidePositionAction(basePosition, snapshot, thesis, { ...decision, reduce_percent: 10 }, context(96, 100, 98)).quantity).toBe(1);
+    expect(decidePositionAction(basePosition, snapshot, thesis, { ...decision, reduce_percent: 100 }, context(96, 100, 98)).action).toBe('hold');
+  });
+
+  test('a wide spread is not a block', () => {
+    const wide = context();
+    wide.market.symbols[0]!.spreadBps = 400;
     const smaller = { ...basePosition, quantity: 2 };
     const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, thesis, {
       position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
       portfolio_risk_pass: true, bull_case_pass: true, bear_case_answered: true,
-    }, context(), { addsToday: 0, addsLifetime: 0, reductionsToday: 1, lastAddAt: null });
-    expect(result.action).toBe('hold');
+    }, wide);
+    expect(result.action).toBe('add');
   });
 
   const addDecision = {

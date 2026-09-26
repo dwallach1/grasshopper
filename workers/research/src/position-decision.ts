@@ -11,7 +11,7 @@ import {
   asBrokerResearchContext,
   PositionAiOutputSchema,
 } from './schemas';
-import { sizeBuyNotional, validMultiplier } from './sizing';
+import { MIN_ORDER_NOTIONAL, sizeBuyNotional, validMultiplier } from './sizing';
 
 export type ManagedPosition = BrokerAccountSnapshot['positions'][number];
 
@@ -87,14 +87,13 @@ export function decidePositionAction(
   theses: PositionThesis[],
   output: unknown,
   brokerContext: unknown,
-  history: PositionHistory = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null },
+  _history: PositionHistory = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null },
 ): PositionAction {
   const symbol = position.symbol;
   const researched = asBrokerResearchContext(brokerContext);
   const market = marketRow(researched, symbol);
   const quoteAt = market ? Date.parse(String(market.quoteAt || '')) : NaN;
   const last = market ? Number(market.last) : NaN;
-  const spreadBps = market ? Number(market.spreadBps) : NaN;
   const snapshotAge = Date.now() - Date.parse(snapshot.observedAt);
   const fresh = Boolean(
     market
@@ -103,9 +102,7 @@ export function decidePositionAction(
     && market.tradable === true
     && market.state === 'active'
     && Number.isFinite(last)
-    && last > 0
-    && Number.isFinite(spreadBps)
-    && spreadBps <= 80,
+    && last > 0,
   );
   if (!fresh || !Number.isFinite(snapshotAge) || snapshotAge < 0 || snapshotAge > 300_000) {
     return {
@@ -183,11 +180,12 @@ export function decidePositionAction(
     && confidence >= 88
     && thesisState !== 'intact'
     && adverseReasons.length > 0
-    && history.reductionsToday === 0
   ) {
-    const requestedPercent = Number(decision.reduce_percent);
-    const reducePercent = Math.min(50, Math.max(25, Number.isFinite(requestedPercent) ? requestedPercent : 25));
-    const quantity = boundedSellQuantity(position, reducePercent / 100);
+    // No fixed reduce band: the model's reduce % (a partial sell, 0 < % < 100) is used as-is.
+    const reducePercent = Number(decision.reduce_percent);
+    const quantity = Number.isFinite(reducePercent) && reducePercent > 0 && reducePercent < 100
+      ? boundedSellQuantity(position, reducePercent / 100)
+      : 0;
     if (quantity > 0) return {
       action: 'reduce', symbol, quantity,
       rationale: `Evidence-backed ${reducePercent}% risk reduction: ${String(decision.summary || '').slice(0, 1200)}`,
@@ -198,7 +196,6 @@ export function decidePositionAction(
   const supportingThesis = theses.find((thesis) =>
     thesis.symbols.includes(symbol)
     && thesis.status === 'hardening' && thesis.stance === 'bullish' && thesis.confidence >= 80);
-  const lastAddAge = history.lastAddAt ? Date.now() - Date.parse(history.lastAddAt) : Number.POSITIVE_INFINITY;
   if (
     recommendation === 'add'
     && confidence >= 90
@@ -207,25 +204,22 @@ export function decidePositionAction(
     && decision.bull_case_pass === true
     && decision.bear_case_answered === true
     && supportingThesis
-    && last >= averageCost
-    && history.addsToday === 0
-    && history.addsLifetime < 2
-    && lastAddAge >= 24 * 60 * 60 * 1_000
-    && history.reductionsToday === 0
   ) {
     const evidence = actionableBrokerEvidence(researched, symbol);
     const requestedPercent = Number(decision.add_percent);
     const multiplier = supportingThesis.size_multiplier;
-    // Results-driven add: the per-review add % (1..2, autonomous-position-management) x the
-    // thesis multiplier. No per-position cap; only spendable cash (no margin) limits it.
-    const dollarAmount = validMultiplier(multiplier) ? sizeBuyNotional({
-      totalValue: snapshot.totalValue,
-      buyingPower: snapshot.buyingPower,
-      cash: snapshot.cash,
-      requestedPercent: Math.min(2, Math.max(1, Number.isFinite(requestedPercent) ? requestedPercent : 1)),
-      multiplier,
-    }) : 0;
-    if (evidence.pass && dollarAmount >= 25) return {
+    // Results-driven add: the model's requested add % of NAV x the thesis multiplier. No fixed
+    // add %, add count, spacing or averaging-down rule; only spendable cash (no margin) limits it.
+    const dollarAmount = validMultiplier(multiplier) && Number.isFinite(requestedPercent) && requestedPercent > 0
+      ? sizeBuyNotional({
+        totalValue: snapshot.totalValue,
+        buyingPower: snapshot.buyingPower,
+        cash: snapshot.cash,
+        requestedPercent,
+        multiplier,
+      })
+      : 0;
+    if (evidence.pass && dollarAmount >= MIN_ORDER_NOTIONAL) return {
       action: 'add', symbol, dollarAmount,
       rationale: `Evidence-backed add to ${supportingThesis.name}: ${String(decision.summary || '').slice(0, 1200)}`,
       evidence: {

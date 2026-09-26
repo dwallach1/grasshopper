@@ -193,3 +193,65 @@ describe('confidence gate scope SQL (PR 5)', () => {
     expect(doc).toContain('`entry_allowed`');
   });
 });
+
+describe('thesis sync, retro tags, killed gate, no fixed rails (PR 6)', () => {
+  const syncPath = join(root, 'supabase/schemas/16_outcome_thesis_sync.sql');
+  const gatePath = join(root, 'supabase/schemas/17_killed_gate_no_rails.sql');
+
+  test('migrations are the schema files at the prod versions', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926173030_outcome_thesis_sync.sql'), 'utf8'))
+      .toBe(await readFile(syncPath, 'utf8'));
+    expect(await readFile(join(root, 'supabase/migrations/20260926173458_killed_gate_no_rails.sql'), 'utf8'))
+      .toBe(await readFile(gatePath, 'utf8'));
+  });
+
+  test('a thesis_id change on any source position propagates to trade_outcomes, for every origin', async () => {
+    const sql = await readFile(syncPath, 'utf8');
+    for (const table of ['meme_positions', 'pm_positions', 'position_episodes']) {
+      expect(sql).toMatch(new RegExp(`after update of thesis_id on public\\.${table}\\s+for each row when \\(old\\.thesis_id is distinct from new\\.thesis_id\\)`));
+    }
+    expect(sql).toContain('where o.source_table = tg_table_name');
+    expect(sql).not.toContain("meta->>'origin' = 'trigger'");
+    expect(sql).toMatch(/exception when others then\s+raise warning/);
+    expect(sql).toContain("security definer\nset search_path = ''");
+  });
+
+  test('backfill copies tagged source theses only, then re-scores meme_4h_momentum_clip', async () => {
+    const run = await readFile(join(root, 'supabase/migrations/20260926173056_outcome_thesis_backfill.sql'), 'utf8');
+    expect(run).toContain('and s.th is not null');
+    expect(run).toContain('and o.thesis_id is distinct from s.th');
+    expect(run).toContain("select private.rescore_thesis_confidence('meme_4h_momentum_clip');");
+  });
+
+  test('SNOW and OCC retro tags record the reason and GRASSHOPPER; IREN stays untagged', async () => {
+    const run = await readFile(join(root, 'supabase/migrations/20260926173152_retro_tag_snow_occ.sql'), 'utf8');
+    expect(run).toContain("'quantanamo:SNOW:2026-09-02'");
+    expect(run).toContain("'quantanamo:OCC:2026-09-08'");
+    expect(run).toContain("'tagged_by', 'GRASSHOPPER'");
+    expect(run).not.toMatch(/'quantanamo:IREN/);
+    expect(run).toContain("select private.rescore_thesis_confidence('earnings_gap_structure');");
+  });
+
+  test('killed thesis blocks entries for all stewards; rails leave risk_controls', async () => {
+    const sql = await readFile(gatePath, 'utf8');
+    expect(sql).toContain("v_killed := coalesce(th.status = 'killed', false);");
+    expect(sql).toContain('v_blocked := v_rejected or v_killed;');
+    expect(sql).toContain("when v_killed then 'thesis_killed'");
+    expect(sql).toContain('when v_blocked then 0::numeric');
+    expect(sql).toContain("th.status = 'hardening' and coalesce(th.confidence, 0) >= 80");
+    for (const key of ['max_trades_per_day', 'max_spread_bps', 'window_start', 'max_add_percent_per_review', 'reduce_percent_min', 'allow_averaging_down', 'max_adds_per_day']) {
+      expect(sql).toContain(`'${key}'`);
+    }
+    expect(sql).toContain("where control_key = 'event-liquidity'");
+    expect(sql).not.toMatch(/grant[^;]*to (anon|authenticated)/);
+  });
+
+  test('trade policy has no fixed rails', async () => {
+    const text = await readFile(join(root, 'config/trade_policy.json'), 'utf8');
+    for (const key of ['max_trades_per_day', 'max_spread_bps', 'autonomous_execution_window_start', 'max_add_percent_of_portfolio_value_per_review',
+      'allow_averaging_down', 'reduce_percent_min', 'reduce_percent_max', 'max_adds_per_position_per_day', 'max_new_positions_per_run']) {
+      expect(text).not.toContain(`"${key}"`);
+    }
+    expect(await readFile(join(root, 'supabase/functions/dashboard-publication/trade-policy.json'), 'utf8')).toBe(text);
+  });
+});
