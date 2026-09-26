@@ -409,3 +409,13 @@ describe('listed equities are not ontology junk', () => {
     expect(sql).toContain('create or replace function public.listed_equity(c public.ontology_candidates)');
   });
 });
+
+describe('entries that bypass guidance surface in the watchdog', () => {
+  test('migration is the schema file and compares buys with the thesis max_stake', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/27_integrity_entry_over_max_stake.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926181602_integrity_entry_over_max_stake.sql'), 'utf8')).toBe(sql);
+    expect(sql.match(/'entry_over_max_stake'/g)?.length).toBe(3);
+    expect(sql).toContain('ms.max_stake * 1.10');
+    expect(sql).toContain("'broker_fill_without_intent'");
+  });
+});
