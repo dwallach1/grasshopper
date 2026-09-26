@@ -75,7 +75,7 @@ The automated position monitor is retired, so the ledger watches itself with rea
 | `public.v_ledger_watchdog` | one row of counts: `invalidation_breaches`, `breaches_actionable`, `breaches_review_at_open`, `lots_missing_invalidation`, `integrity_issues`, `integrity_errors`, `integrity` (per check), `open_lots` |
 | `public.v_invalidation_breaches` | open lots whose latest ledger mark is at or below `invalidation_price`, with steward, table, unit, mark age, lot age and `action_hint` (`exit_full_lot`, or `review_at_open` for an equity marked outside the regular session) |
 | `public.v_open_lots_missing_invalidation` | open lots with no `invalidation_price` |
-| `public.v_ledger_integrity` | open lot without thesis, no mark, stale mark (>24h equities/PM, >6h coins), lot vs broker quantity mismatch, broker position without a lot, fill without a position, buy order without a thesis, broker fill without an intent |
+| `public.v_ledger_integrity` | open lot without thesis, no mark, stale mark (>24h equities/PM, >6h coins), lot vs broker quantity mismatch, broker position without a lot, fill without a position, buy order without a thesis, broker fill without an intent, entry over max_stake (a live buy or new lot since 2026-09-26 above its thesis's current `max_stake` + 10%: an entry that bypassed guidance) |
 | `public.v_open_lot_marks` | every open lot with its latest mark in its own unit |
 | `public.v_thesis_max_stake` | the edge-scaled cap per live thesis |
 

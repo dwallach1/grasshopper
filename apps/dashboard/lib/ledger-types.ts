@@ -513,6 +513,8 @@ export type OntologyCandidateRow = {
   status: string;
   last_seen_at: string;
   review_note: string | null;
+  /** Membership label is a verified listed equity (`public.listed_equities`). */
+  listed_equity?: boolean | null;
 };
 
 export type OntologyActionRow = {

@@ -208,6 +208,22 @@ describe('public desk snapshot contract', () => {
     expect((ranked[1] as { source_count: number }).source_count).toBe(2);
   });
 
+  test('a verified listed equity is a ticker, not a word: membership passes, term stays junk', () => {
+    for (const label of ['TXN', 'GFS', 'MP']) {
+      expect(isJunkOntologyLabel(label, 'membership')).toBe(true);
+      expect(isJunkOntologyLabel(label, 'membership', { listedEquity: true })).toBe(false);
+      expect(isJunkOntologyLabel(label, 'membership', { listedEquities: new Set(['TXN', 'GFS', 'MP']) })).toBe(false);
+      expect(isJunkOntologyLabel(label.toLowerCase(), 'term', { listedEquity: true })).toBe(true);
+    }
+    expect(isJunkOntologyLabel('SELECT', 'membership', { listedEquities: new Set(['TXN']) })).toBe(true);
+    const ranked = publicPendingCandidates([
+      { id: 1, status: 'pending', score: 44, source_count: 1, proposed_label: 'TXN', candidate_type: 'membership', listed_equity: true },
+      { id: 2, status: 'pending', score: 44, source_count: 1, proposed_label: 'GFS', candidate_type: 'membership', listed_equity: false },
+      { id: 3, status: 'pending', score: 40, source_count: 1, proposed_label: 'txn', candidate_type: 'term', listed_equity: false },
+    ]);
+    expect(ranked.map((row) => (row as { id: number }).id)).toEqual([1]);
+  });
+
   test('SQL and listicle whole labels are junk; tickers and theme words are not', () => {
     for (const label of [
       'BY', 'BIGINT', 'DATE', 'DOUBLE', 'SELECT', 'IN', 'VARCHAR', 'TIMESTAMP',

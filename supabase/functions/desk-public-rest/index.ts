@@ -88,7 +88,7 @@ const REQUIRED: Array<[string, string]> = [
   ['riskControls', 'risk_controls?select=id,control_key,scope,control_type,threshold_json,enforcement_level,status&order=control_key.asc'],
   ['themes', 'ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status.asc,name.asc'],
   ['ontologySymbols', 'symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300'],
-  ['candidates', 'ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&order=candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200'],
+  ['candidates', 'ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note,listed_equity&order=candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200'],
   ['actions', 'ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100'],
 ];
 
@@ -207,7 +207,7 @@ function openOrRecent(timeColumn: string, since: string): string {
 }
 
 function publicCandidateQuery(): string {
-  return `ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=${PUBLIC_CANDIDATE_FETCH}`;
+  return `ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note,listed_equity&status=eq.pending&order=candidate_type.asc,score.desc,source_count.desc,id.desc&limit=${PUBLIC_CANDIDATE_FETCH}`;
 }
 
 function publicPm(since: string): Array<[string, string]> {

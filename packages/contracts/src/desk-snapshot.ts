@@ -346,10 +346,29 @@ export function normalizeOntologyLabel(value: unknown): string {
   return String(value ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** URL fragments, space-joined ticker mashups, and documented stop labels. Does not invent a score. */
-export function isJunkOntologyLabel(label: unknown, _candidateType?: unknown): boolean {
+export type OntologyJunkOptions = {
+  /** The ledger says this membership label is a verified listed equity (`ontology_candidates.listed_equity`). */
+  listedEquity?: boolean | null;
+  /** Upper-case tickers from `public.listed_equities` (active rows). */
+  listedEquities?: ReadonlySet<string>;
+};
+
+/**
+ * URL fragments, space-joined ticker mashups, and documented stop labels. Does not invent a score.
+ * The stop labels are words. A membership label that is a verified listed equity is a ticker,
+ * not a word, so it is never junk here; review decides on context. Same rule as SQL.
+ */
+export function isJunkOntologyLabel(
+  label: unknown,
+  candidateType?: unknown,
+  options: OntologyJunkOptions = {},
+): boolean {
   const normalized = normalizeOntologyLabel(label);
   if (!normalized) return true;
+  if (String(candidateType ?? '').toLowerCase() === 'membership') {
+    const ticker = normalized.toUpperCase();
+    if (options.listedEquity === true || options.listedEquities?.has(ticker)) return false;
+  }
   if (ONTOLOGY_URL_LABEL_RE.test(normalized)) return true;
   if (ONTOLOGY_TICKER_MASHUP_RE.test(normalized)) return true;
   return (ONTOLOGY_JUNK_LABELS as readonly string[]).includes(normalized);
@@ -392,7 +411,9 @@ export function publicPendingCandidates(rows: unknown, cap = PUBLIC_CANDIDATE_CA
   );
   return records
     .filter((row) => row.status === 'pending')
-    .filter((row) => !isJunkOntologyLabel(row.proposed_label, row.candidate_type))
+    .filter((row) => !isJunkOntologyLabel(row.proposed_label, row.candidate_type, {
+      listedEquity: row.listed_equity === true,
+    }))
     .filter((row) => !rejected.has(ontologyReviewKey(row)))
     .slice()
     .sort(compareOntologyReviewRows)

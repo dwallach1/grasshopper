@@ -174,7 +174,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('risk_controls?select=id,control_key,scope,control_type,threshold_json,enforcement_level,status&order=control_key.asc', auth),
     restRows('ontology_themes?select=id,thesis_id,kind,name,description,status,match_threshold,auto_promote_sources&order=status.asc,name.asc', auth),
     restRows('symbols?select=symbol,status,mention_count,source_count,first_seen_at,last_seen_at&order=source_count.desc,mention_count.desc&limit=300', auth),
-    restRows('ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note&order=candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200', auth),
+    restRows('ontology_candidates?select=id,candidate_type,candidate_key,proposed_theme_id,proposed_label,proposed_description,score,evidence_count,source_count,status,last_seen_at,review_note,listed_equity&order=candidate_type.asc,status.asc,score.desc,source_count.desc,id.desc&limit=200', auth),
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 

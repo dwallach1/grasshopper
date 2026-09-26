@@ -638,6 +638,7 @@ const CandidateSchema = z
     status: z.string(),
     last_seen_at: Timestamp,
     review_note: z.string().nullable(),
+    listed_equity: z.boolean().nullable().optional(),
   })
   .passthrough();
 
