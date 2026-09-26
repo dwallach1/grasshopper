@@ -7,6 +7,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 force="${1:-}"
 pairs=(
   "$here/bandit/live_trade_clip.py:/workspace/bandit/live_trade_clip.py"
+  "$here/bandit/paper_bank20.py:/workspace/bandit/paper_bank20.py"
   "$here/oddsborne/pm_enter.py:/workspace/oddsborne/pm_enter.py"
 )
 for pair in "${pairs[@]}"; do

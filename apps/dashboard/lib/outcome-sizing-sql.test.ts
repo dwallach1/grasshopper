@@ -448,3 +448,25 @@ describe('NYSE calendar and max_stake at entry', () => {
     expect(sql).toContain('exception when others then');
   });
 });
+
+describe('steward-wide starter and shadow exits', () => {
+  test('an unproven thesis is capped at the steward-wide cap; proven theses keep their own', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/31_steward_wide_starter.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926202730_steward_wide_starter.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain('if p_thesis_id is not null and not v_proven then');
+    expect(sql).toContain('select * into sw from private.edge_max_stake(p_steward, null, p_book_equity);');
+    expect(sql).toContain('v_proven := true;');
+  });
+
+  test('shadow exits read meta.paper_* (no parallel store) through a closed-lot definer function', async () => {
+    const first = await readFile(join(root, 'supabase/schemas/32_shadow_exits.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926202740_shadow_exits.sql'), 'utf8')).toBe(first);
+    const sql = await readFile(join(root, 'supabase/schemas/33_shadow_exits_definer.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926202903_shadow_exits_definer.sql'), 'utf8')).toBe(sql);
+    expect(sql).not.toMatch(/add column[^;]*shadow/i);
+    expect(sql).toContain("where kv.key like 'paper\\_%'");
+    expect(sql.match(/where [pe]\.status = 'closed'/g)?.length).toBe(3);
+    expect(sql).toContain('revoke all on function private.shadow_exit_rows() from public, anon;');
+    expect(sql).toContain('(count(*) >= 10');
+  });
+});

@@ -54,8 +54,15 @@ class StewardScripts(unittest.TestCase):
         self.assertIn("invalidation_price", SCRIPTS["bandit"].read_text())
         self.assertIn("invalidation_price", SCRIPTS["oddsborne"].read_text())
 
+    def test_shadow_exit_contract(self) -> None:
+        # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).
+        text = (HERE / "bandit" / "paper_bank20.py").read_text()
+        self.assertIn("'paper_bank20'", text)
+        for key in ("rule", "triggered", "trigger_minute", "paper_exit_pct", "real_exit_pct", "delta_pct_pts", "source"):
+            self.assertIn(f'"{key}"', text, key)
+
     def test_no_hardcoded_box_paths(self) -> None:
-        for name, path in SCRIPTS.items():
+        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")]:
             text = path.read_text()
             self.assertNotRegex(text, r"""["']/workspace/""", name)
 
