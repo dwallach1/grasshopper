@@ -419,3 +419,11 @@ describe('entries that bypass guidance surface in the watchdog', () => {
     expect(sql).toContain("'broker_fill_without_intent'");
   });
 });
+
+describe('thesis_max_stakes operator gate', () => {
+  test('migration is the schema file; signed-in callers must be ledger operators', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/28_max_stake_operator_gate.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926181826_max_stake_operator_gate.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain("and (coalesce((select auth.role()), '') <> 'authenticated' or (select public.is_ledger_operator()));");
+  });
+});
