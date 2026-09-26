@@ -7,6 +7,7 @@ import {
 } from '@quantanamo/contracts/desk-snapshot';
 
 import { assembleDeskBookHealth, deskHealthSummary } from '../../../apps/dashboard/lib/desk-book-health';
+import { watchdogHealthSummary } from '../../../apps/dashboard/lib/ledger-watchdog';
 import {
   assembleLearningPulse,
   learningPulseSummary,
@@ -79,7 +80,10 @@ function asServe(live: unknown): PublicDeskServe | null {
 
 function edgeCache(): Cache | null {
   try {
-    return typeof caches !== 'undefined' ? caches.default : null;
+    if (typeof caches === 'undefined') return null;
+    // Workers expose caches.default; the DOM CacheStorage type in this tsconfig does not declare it.
+    const storage = caches as CacheStorage & { default?: Cache };
+    return storage.default ?? null;
   } catch {
     return null;
   }
@@ -135,11 +139,13 @@ async function handleHealth(
     const payload = served.desk as DeskPayload;
     const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
     const learning = learningPulseSummary(assembleLearningPulse(payload));
+    const watchdog = watchdogHealthSummary(payload.watchdog);
     return jsonResponse(200, {
       ok: true,
       generated_at: served.generated_at,
       source: 'live',
       ...health,
+      watchdog,
       learning,
     }, { 'Cache-Control': 'no-store' });
   } catch (error) {

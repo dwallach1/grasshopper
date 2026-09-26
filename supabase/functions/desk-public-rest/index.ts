@@ -18,6 +18,8 @@ const ALLOWED_TABLES = new Set([
   'belief_updates', 'thesis_domains',
   // Outcome ledger scorecard (security_invoker views; read-only).
   'v_steward_scorecard', 'v_steward_scorecard_weekly', 'v_steward_trend', 'v_thesis_scorecard',
+  // Ledger watchdog backstop (security_invoker views; read-only).
+  'v_ledger_watchdog', 'v_invalidation_breaches', 'v_open_lots_missing_invalidation', 'v_ledger_integrity',
 ]);
 
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
@@ -92,7 +94,7 @@ const REQUIRED: Array<[string, string]> = [
 
 const PM: Array<[string, string]> = [
   ['markets', 'pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200'],
-  ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+  ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
   ['orders', 'pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200'],
   ['fills', 'pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200'],
   ['notes', 'pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80'],
@@ -106,9 +108,17 @@ const SCORECARD: Array<[string, string]> = [
   ['theses', 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin&order=priced_trades.desc'],
 ];
 
+/** Ledger watchdog views (same queries as apps/dashboard/lib/ledger-watchdog.ts). Optional. */
+const WATCHDOG: Array<[string, string]> = [
+  ['summary', 'v_ledger_watchdog?select=*'],
+  ['breaches', 'v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint&order=mark_at.desc&limit=50'],
+  ['missing', 'v_open_lots_missing_invalidation?select=steward,lot_table,lot_id,instrument,unit,thesis_id,mark,mark_at,opened_at&order=opened_at.asc&limit=50'],
+  ['issues', 'v_ledger_integrity?select=check_name,severity,steward,ref_table,ref_id,instrument,detail,at&order=at.desc.nullslast&limit=50'],
+];
+
 const MEME: Array<[string, string]> = [
   ['tokens', 'meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id,kill_criteria&order=updated_at.desc&limit=200'],
-  ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+  ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
   ['orders', 'meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200'],
   ['fills', 'meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200'],
   ['notes', 'meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=80'],
@@ -204,7 +214,7 @@ function publicPm(since: string): Array<[string, string]> {
   const orders = openOrRecent('created_at', since);
   return [
     ['markets', 'pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id&order=close_time.asc.nullslast&limit=200'],
-    ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+    ['positions', 'pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
     ['orders', `pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
     ['fills', `pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
     ['notes', `pm_notes?select=id,market_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
@@ -215,7 +225,7 @@ function publicMeme(since: string): Array<[string, string]> {
   const orders = openOrRecent('created_at', since);
   return [
     ['tokens', 'meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id&order=updated_at.desc&limit=200'],
-    ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
+    ['positions', 'meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200'],
     ['orders', `meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&${orders}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`],
     ['fills', `meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=${PUBLIC_FILL_LIMIT}`],
     ['notes', `meme_notes?select=id,token_id,thesis_id,note_type,title,body,created_at&order=created_at.desc&limit=${PUBLIC_NOTE_LIMIT}`],
@@ -269,7 +279,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
-    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard] = await Promise.all([
+    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
@@ -278,6 +288,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       pnlWindow('pm_pnl', pmPnlCols, pnlLimit),
       pnlWindow('meme_pnl', memePnlCols, pnlLimit),
       objectFrom(SCORECARD),
+      objectFrom(WATCHDOG),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
@@ -296,6 +307,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       meme,
       team,
       scorecard,
+      watchdog,
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error(JSON.stringify({

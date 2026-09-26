@@ -7,13 +7,20 @@ import { OPEN_POSITION } from './book-open-strip';
 import { isMarkStale } from './desk-freshness';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk } from './meme-book';
+import { formatAmount } from './money-units';
+import { watchdogHealthSummary } from './ledger-watchdog';
 import { predictionDesk } from './prediction-book';
 
-export type DeskBookAlertKind = 'stale_open' | 'resolved_still_open' | 'stale_catalog';
+export type DeskBookAlertKind =
+  | 'stale_open'
+  | 'resolved_still_open'
+  | 'stale_catalog'
+  | 'invalidation_breach'
+  | 'missing_invalidation';
 
 export type DeskBookAlert = {
   kind: DeskBookAlertKind;
-  steward: 'oddsborne' | 'bandit';
+  steward: 'quantanamo' | 'oddsborne' | 'bandit';
   id: string;
   label: string;
   at: string | null;
@@ -25,6 +32,10 @@ export type DeskBookHealth = {
   stale_opens: number;
   resolved_still_open: number;
   stale_catalog: number;
+  /** v_ledger_watchdog backstop (0 when the views are unavailable). */
+  invalidation_breaches: number;
+  lots_missing_invalidation: number;
+  integrity_issues: number;
   alerts: DeskBookAlert[];
 };
 
@@ -137,16 +148,49 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
     }
   }
 
+  // Independent backstop: the ledger watchdog views (never invented marks).
+  const watchdog = desk.watchdog;
+  for (const lot of watchdog?.breaches ?? []) {
+    alerts.push({
+      kind: 'invalidation_breach',
+      steward: stewardSlug(lot.steward),
+      id: `breach-${lot.lot_table}-${lot.lot_id}`,
+      label: lot.instrument,
+      at: lot.mark_at,
+      detail: `mark ${lot.mark === null ? '—' : formatAmount(lot.mark, lot.unit)} at/below inval ${
+        lot.invalidation_price === null ? '—' : formatAmount(lot.invalidation_price, lot.unit)}${
+        lot.action_hint === 'review_at_open' ? ' · review at open' : ''}`,
+    });
+  }
+  for (const lot of watchdog?.missing ?? []) {
+    alerts.push({
+      kind: 'missing_invalidation',
+      steward: stewardSlug(lot.steward),
+      id: `noinval-${lot.lot_table}-${lot.lot_id}`,
+      label: lot.instrument,
+      at: lot.mark_at,
+      detail: 'open lot has no invalidation',
+    });
+  }
+
   const stale_opens = alerts.filter((row) => row.kind === 'stale_open').length;
   const resolved_still_open = alerts.filter((row) => row.kind === 'resolved_still_open').length;
   const stale_catalog = alerts.filter((row) => row.kind === 'stale_catalog').length;
+  const counts = watchdogHealthSummary(watchdog);
   return {
     marks_lagging: stale_opens > 0 || resolved_still_open > 0 || stale_catalog > 0,
     stale_opens,
     resolved_still_open,
     stale_catalog,
+    invalidation_breaches: counts.invalidation_breaches,
+    lots_missing_invalidation: counts.lots_missing_invalidation,
+    integrity_issues: counts.integrity_issues,
     alerts,
   };
+}
+
+function stewardSlug(value: string): DeskBookAlert['steward'] {
+  return value === 'oddsborne' || value === 'bandit' ? value : 'quantanamo';
 }
 
 export function deskHealthSummary(health: DeskBookHealth): {
@@ -154,11 +198,17 @@ export function deskHealthSummary(health: DeskBookHealth): {
   stale_opens: number;
   resolved_still_open: number;
   stale_catalog: number;
+  invalidation_breaches: number;
+  lots_missing_invalidation: number;
+  integrity_issues: number;
 } {
   return {
     marks_lagging: health.marks_lagging,
     stale_opens: health.stale_opens,
     resolved_still_open: health.resolved_still_open,
     stale_catalog: health.stale_catalog,
+    invalidation_breaches: health.invalidation_breaches,
+    lots_missing_invalidation: health.lots_missing_invalidation,
+    integrity_issues: health.integrity_issues,
   };
 }

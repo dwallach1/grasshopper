@@ -154,6 +154,24 @@ describe('assembleBookHoldings', () => {
     expect(holdingTicket(nbis!, open.rows.flatMap((row) => row.tickets))).toBeUndefined();
   });
 
+  test('prediction-market and coin lots show their invalidation in their own units', () => {
+    const base = desk();
+    const pm = base.prediction_markets!;
+    const meme = base.meme_coins!;
+    const holdings = assembleBookHoldings(desk({
+      prediction_markets: { ...pm, positions: [{ ...pm.positions[0]!, invalidation_price: 0.6, invalidation_note: 'Dot plot turns dovish.' }] },
+      meme_coins: { ...meme, positions: [{ ...meme.positions[0]!, invalidation_price: 0.000078, invalidation_note: '-40% from entry' }] },
+    }));
+    const pmRow = holdings.rows.find((row) => row.id === 'pm:p-open');
+    const memeRow = holdings.rows.find((row) => row.id === 'meme:pos-baton');
+    expect(pmRow?.invalidation).toEqual({ price: 0.6, note: 'Dot plot turns dovish.' });
+    expect(pmRow?.unit).toBe('USD');
+    expect(memeRow?.invalidation).toEqual({ price: 0.000078, note: '-40% from entry' });
+    expect(memeRow?.unit).toBe('SOL');
+    const plain = assembleBookHoldings(desk());
+    expect(plain.rows.find((row) => row.id === 'pm:p-open')?.invalidation).toBeNull();
+  });
+
   test('a live stock lot shows its steward-written invalidation', () => {
     const lot = {
       id: 'ep-nbis',

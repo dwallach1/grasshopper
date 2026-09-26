@@ -59,12 +59,27 @@ Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quant
 
 There is no global stop-loss and no portfolio drawdown limit. Exits come from the position's own written invalidation, read in this order:
 
-1. **The lot.** The steward writes it on the open lot: `position_episodes.invalidation_price` (USD per share) and `position_episodes.invalidation_note` (text). When the fresh price is at or below `invalidation_price`, the lot exits in full, because it has hit its own definition. An `invalidation_note` counts as the written invalidation for the confirmed exit below, and it is read before the thesis.
+1. **The lot.** The steward writes it on the open lot: `position_episodes.invalidation_price` (USD per share) and `position_episodes.invalidation_note` (text). When a fresh **regular-session** price (09:30–16:00 America/New_York, Mon–Fri) is at or below `invalidation_price`, the lot exits in full, because it has hit its own definition. A pre-market or after-hours print at or below the line does **not** exit: the decision is `hold` with `review_at_open: true` (trigger `lot_invalidation_price_extended_hours`), and the lot is re-read on the next regular-session print (monitor policy `autonomous-position-v5`, execution `autonomous-equity-v8`). An `invalidation_note` counts as the written invalidation for the confirmed exit below, and it is read before the thesis.
 2. **The linked thesis.** `theses.falsifier`. The position review prefers the thesis linked to the position episode.
 
 A written invalidation (the lot note or the thesis falsifier) triggers an exit only once it is confirmed: the model says the thesis is invalidated with confidence ≥ 90, and there is deterministic adverse evidence. If neither the lot nor a linked thesis has a written invalidation, the exit is left to the steward's judgment and its learned beliefs.
 
-`pm_positions` and `meme_positions` have the same two columns, priced in each row's own unit (outcome price, or SOL per token). ODDSBORNE and BANDIT can use them in their own exit logic. Each book's worker role can update the columns on its own table. The desk holdings line shows a live stock lot's invalidation.
+`pm_positions` and `meme_positions` have the same two columns, priced in each row's own unit (outcome price, or SOL per token). Prediction markets and coins trade around the clock, so there is no session filter for them: any mark at or below the line is a breach. ODDSBORNE and BANDIT apply them in their own exit logic. Each book's worker role can update the columns on its own table. The desk holdings line shows the invalidation chip for stock, prediction-market and coin lots, each in its own unit.
+
+## Backstop watchdog
+
+The automated position monitor is retired, so the ledger watches itself with read-only views (security invoker; granted to `authenticated`, `quantanamo_worker`, `desk_public_reader`). They never invent a mark: a lot without a ledger mark is reported as `open_lot_no_mark`, never as a breach.
+
+| View | What it lists |
+|---|---|
+| `public.v_ledger_watchdog` | one row of counts: `invalidation_breaches`, `breaches_actionable`, `breaches_review_at_open`, `lots_missing_invalidation`, `integrity_issues`, `integrity_errors`, `integrity` (per check), `open_lots` |
+| `public.v_invalidation_breaches` | open lots whose latest ledger mark is at or below `invalidation_price`, with steward, table, unit, mark age, lot age and `action_hint` (`exit_full_lot`, or `review_at_open` for an equity marked outside the regular session) |
+| `public.v_open_lots_missing_invalidation` | open lots with no `invalidation_price` |
+| `public.v_ledger_integrity` | open lot without thesis, no mark, stale mark (>24h equities/PM, >6h coins), lot vs broker quantity mismatch, broker position without a lot, fill without a position, buy order without a thesis, broker fill without an intent |
+| `public.v_open_lot_marks` | every open lot with its latest mark in its own unit |
+| `public.v_thesis_max_stake` | the edge-scaled cap per live thesis |
+
+The counts are in `/api/health` (`watchdog`), in the desk payload (`watchdog`), and in `build_dashboard_snapshot()` (`watchdog`, plus `scorecard`). The ledger health routine should run `select * from public.v_ledger_watchdog;` and list the rows from the breach, missing and integrity views when a count is above zero.
 
 The deprecated intent fields (`maxTradePercent`, `maxDailyNotionalPercent`, `maxTradesPerDay`, `maxSpreadBps`) are no longer sent, and the gateway ignores them.
 

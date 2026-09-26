@@ -61,7 +61,7 @@ function BookHealthStrip({
       <ul className="book-health-alerts">
         {health.alerts.map((alert) => (
           <li key={alert.id}>
-            {alert.steward === 'oddsborne' ? 'ODD' : 'BND'} {alert.label}
+            {alert.steward === 'oddsborne' ? 'ODD' : alert.steward === 'bandit' ? 'BND' : 'QNT'} {alert.label}
             {' · '}
             {alert.detail}
             {' · '}
