@@ -148,30 +148,37 @@ export function decidePositionAction(
     model_recommendation: recommendation,
   };
   const adverseReasons = deterministicAdverseEvidence(researched, symbol);
-  const hasStructuredFalsifier = theses.some((thesis) =>
+  // No global stop-loss (David, 2026-09-26: "Kill the old rules!"). An autonomous exit comes
+  // only from the linked thesis's own invalidation (theses.falsifier). With no written
+  // falsifier, exits are left to the steward's judgment and its learned beliefs.
+  const exitThesis = theses.find((thesis) =>
     thesis.symbols.includes(symbol) && (thesis.falsifier?.trim().length ?? 0) >= 20);
-
-  if (returnPercent !== null && returnPercent <= -8) {
-    const quantity = boundedSellQuantity(position, 1);
-    if (quantity > 0) return {
-      action: 'exit', symbol, quantity,
-      rationale: `Position breached the -8% hard loss limit (${returnPercent.toFixed(2)}%).`,
-      evidence: { ...commonEvidence, trigger: 'hard_loss_limit' },
-    };
-  }
 
   if (
     recommendation === 'exit'
     && confidence >= 90
     && thesisState === 'invalidated'
     && adverseReasons.length > 0
-    && hasStructuredFalsifier
+    && exitThesis
   ) {
     const quantity = boundedSellQuantity(position, 1);
     if (quantity > 0) return {
       action: 'exit', symbol, quantity,
-      rationale: `Validated thesis invalidation: ${String(decision.summary || '').slice(0, 1200)}`,
-      evidence: { ...commonEvidence, trigger: 'validated_thesis_invalidation', adverse_reasons: adverseReasons },
+      rationale: `Validated thesis invalidation (${exitThesis.id}): ${String(decision.summary || '').slice(0, 1200)}`,
+      evidence: {
+        ...commonEvidence,
+        trigger: 'validated_thesis_invalidation',
+        thesis_id: exitThesis.id,
+        thesis_falsifier: String(exitThesis.falsifier).slice(0, 500),
+        adverse_reasons: adverseReasons,
+      },
+    };
+  }
+  if (recommendation === 'exit' && !exitThesis) {
+    return {
+      action: 'hold', symbol,
+      rationale: 'No linked thesis carries a written invalidation; exit is left to the steward.',
+      evidence: { ...commonEvidence, exit_source: 'steward_judgment' },
     };
   }
 

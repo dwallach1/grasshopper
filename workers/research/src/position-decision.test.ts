@@ -31,10 +31,25 @@ function context(last = 105, previousClose = last - 4, open = last - 2) {
 }
 
 describe('autonomous position decisions', () => {
-  test('exits on the deterministic hard loss limit', () => {
+  test('no global stop: a -9% position with no thesis invalidation holds', () => {
     const result = decidePositionAction(basePosition, snapshot, thesis, {}, context(91));
+    expect(result.action).toBe('hold');
+  });
+
+  test('exit reads the linked thesis falsifier', () => {
+    const invalidated = {
+      position_action: 'exit', decision_confidence: 92, thesis_state: 'invalidated',
+      invalidation_confirmed: true, summary: 'Demand reversal documented in the print.',
+    };
+    const result = decidePositionAction(basePosition, snapshot, thesis, invalidated, context(95, 100, 97));
     expect(result.action).toBe('exit');
     expect(result.quantity).toBe(10);
+    expect(result.evidence.thesis_id).toBe('t1');
+    expect(String(result.evidence.thesis_falsifier)).toContain('demand reversal');
+    const noFalsifier = [{ ...thesis[0]!, falsifier: null }];
+    const held = decidePositionAction(basePosition, snapshot, noFalsifier, invalidated, context(95, 100, 97));
+    expect(held.action).toBe('hold');
+    expect(held.evidence.exit_source).toBe('steward_judgment');
   });
 
   test('reduces only with high-confidence adverse evidence', () => {
@@ -139,11 +154,10 @@ describe('autonomous position decisions', () => {
     expect(result.dollarAmount).toBe(57.5);
   });
 
-  test('hard-loss exit on a large position', () => {
-    const oversize = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 };
-    const result = decidePositionAction(oversize, { ...snapshot, positions: [oversize] }, thesis, {}, context(91));
-    expect(result.action).toBe('exit');
-    expect(result.quantity).toBe(48);
+  test('no global stop on a large position either', () => {
+    const large = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 };
+    const result = decidePositionAction(large, { ...snapshot, positions: [large] }, thesis, {}, context(85));
+    expect(result.action).toBe('hold');
   });
 
   test('missing outcome multiplier fails closed on adds', () => {

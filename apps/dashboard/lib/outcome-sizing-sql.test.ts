@@ -255,3 +255,33 @@ describe('thesis sync, retro tags, killed gate, no fixed rails (PR 6)', () => {
     expect(await readFile(join(root, 'supabase/functions/dashboard-publication/trade-policy.json'), 'utf8')).toBe(text);
   });
 });
+
+describe('no global stop or drawdown limit (PR 7)', () => {
+  const path = join(root, 'supabase/schemas/18_thesis_exits_no_stop.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926173855_thesis_exits_no_stop.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+  });
+
+  test('portfolio-drawdown retired; hard-loss exit removed from risk_controls', async () => {
+    const sql = await readFile(path, 'utf8');
+    expect(sql).toContain("where control_key = 'portfolio-drawdown'");
+    expect(sql).toContain("set status = 'retired'");
+    expect(sql).toContain("threshold_json - 'hard_loss_exit_percent'");
+  });
+
+  test('policy, code and docs carry no global stop', async () => {
+    const policy = await readFile(join(root, 'config/trade_policy.json'), 'utf8');
+    expect(policy).not.toContain('hard_loss_exit_percent');
+    expect(policy).toContain('theses.falsifier');
+    const code = await readFile(join(root, 'workers/research/src/position-decision.ts'), 'utf8');
+    expect(code).not.toMatch(/returnPercent\s*<=\s*-/);
+    expect(code).not.toContain('hard_loss');
+    const orchestrator = await readFile(join(root, 'workers/research/src/research-orchestrator.ts'), 'utf8');
+    expect(orchestrator).not.toContain('hard_loss_limit_percent');
+    expect(orchestrator).toContain("version: 'autonomous-equity-v6'");
+    const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
+    expect(doc).not.toMatch(/−8%|-8%/);
+  });
+});
