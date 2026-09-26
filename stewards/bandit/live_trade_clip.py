@@ -6,7 +6,7 @@ Usage:
   add --dry-run to print guidance + size and exit without trading.
 
 Buys exactly sized_notional from steward_sizing_guidance('bandit','meme_4h_momentum_clip',<SYM>,<request>,<invalidation>).
-sized_notional = min(request x multiplier, edge-scaled max_stake, cash). The invalidation (SOL/token) defaults to
+sized_notional = min(request, edge-scaled max_stake, cash). The invalidation (SOL/token) defaults to
 0.6 x the Jupiter pre-trade price (--invalidation-price overrides) and is written on the meme_positions lot;
 guidance refuses (missing_invalidation) and the DB rejects a new open lot without one. meme_orders carries thesis_id.
 Aborts if entry_allowed is false. No max-open or daily-stop rail (removed per David). 3% price-impact abort stays.
@@ -351,7 +351,7 @@ def main() -> int:
                     THESIS_ID,
                     str(SIZE_SOL),
                     KILL,
-                    f"BANDIT live — {SYMBOL} {SIZE_SOL} SOL ExactIn (steward size: req {REQUEST_SOL} x {GUIDANCE.get('multiplier')}); thesis meme_4h_momentum_clip; {RATIONALE}; kill -40%/thesis/4h; TP FULL bank at +50%",
+                    f"BANDIT live — {SYMBOL} {SIZE_SOL} SOL ExactIn (steward size: req {REQUEST_SOL} capped at max_stake {GUIDANCE.get('max_stake')}); thesis meme_4h_momentum_clip; {RATIONALE}; kill -40%/thesis/4h; TP FULL bank at +50%",
                     json.dumps({"pre_balance_lamports": bal0, "slot": slot0, "steward_sizing_guidance": GUIDANCE}),
                     json.dumps(
                         {
@@ -802,7 +802,7 @@ def _parse_args():
     ap.add_argument("--mint", required=True)
     ap.add_argument("--symbol", required=True)
     ap.add_argument("--name")
-    ap.add_argument("--request", required=True, help="requested SOL before steward multiplier")
+    ap.add_argument("--request", required=True, help="requested SOL (guidance caps it at max_stake and cash)")
     ap.add_argument("--rationale", default="")
     ap.add_argument("--invalidation-price", help="SOL per token; default 0.6 x Jupiter pre-trade price")
     ap.add_argument("--dry-run", action="store_true")

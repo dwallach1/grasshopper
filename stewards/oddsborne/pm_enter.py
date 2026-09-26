@@ -10,7 +10,7 @@ Pipeline (refuses at the first failing gate, never invents prices or ids):
      Refuse if edge_after_costs <= 0. That is the ONLY edge rule (no cent bar, no %-of-book cap).
   3. public.steward_sizing_guidance('oddsborne', thesis_id, slug, requested, invalidation). --invalidation
      (outcome price, 0 < inval < price) is required. Refuse if entry_allowed is false (unknown/rejected/killed
-     thesis, missing_invalidation, stale_book). sized_notional = min(requested x multiplier, edge-scaled
+     thesis, missing_invalidation, stale_book). sized_notional = min(requested, edge-scaled
      max_stake, cash). quantity = floor(sized_notional/price),
      capped so notional + est. fee <= spendable_cash (no margin). Refuse if quantity < 1.
   4. orders.preview at the venue (refuse on preview error). Live: orders.create (never retried),
@@ -633,7 +633,7 @@ def main(argv=None) -> int:
     ap.add_argument("--outcome", required=True, choices=["yes", "no"],
                     help="yes = long:true side (first team), no = short side")
     ap.add_argument("--price", required=True, type=float, help="limit price of the outcome being bought")
-    ap.add_argument("--usd", required=True, type=float, help="requested USD (before steward multiplier)")
+    ap.add_argument("--usd", required=True, type=float, help="requested USD (guidance caps it at max_stake and cash)")
     ap.add_argument("--thesis", default=None, help="thesis_id (required; refused if missing)")
     ap.add_argument("--p", dest="my_probability", required=True, type=float, help="my probability for the outcome")
     ap.add_argument("--fair-source", default="")

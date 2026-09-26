@@ -1,0 +1,1902 @@
+{
+"grid2": [
+[
+"bandit",
+0.0,
+0.0,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 0.924,
+"p2x": 0.049,
+"p10x": 0.001,
+"p_dd50": 0.113,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 96.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 0.872,
+"p2x": 0.092,
+"p10x": 0.005,
+"p_dd50": 0.359,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 124.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 0.875,
+"p2x": 0.083,
+"p10x": 0.003,
+"p_dd50": 0.093,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 113.5,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 0.918,
+"p2x": 0.047,
+"p10x": 0.0,
+"p_dd50": 0.019,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 108.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"volstarter_v2%_dd",
+false,
+0.0446,
+{
+"median_x": 0.89,
+"p2x": 0.073,
+"p10x": 0.003,
+"p_dd50": 0.059,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 102.5,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"volstarter_v3%_dd",
+false,
+0.0668,
+{
+"median_x": 0.834,
+"p2x": 0.137,
+"p10x": 0.003,
+"p_dd50": 0.288,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 172.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"volstarter_v4%_dd",
+false,
+0.0891,
+{
+"median_x": 0.788,
+"p2x": 0.193,
+"p10x": 0.005,
+"p_dd50": 0.564,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 157.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 1.736,
+"p2x": 0.525,
+"p10x": 0.069,
+"p_dd50": 0.125,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 202.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 2.119,
+"p2x": 0.669,
+"p10x": 0.136,
+"p_dd50": 0.232,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 186.5,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 1.977,
+"p2x": 0.629,
+"p10x": 0.106,
+"p_dd50": 0.099,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 188.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 1.666,
+"p2x": 0.497,
+"p10x": 0.057,
+"p_dd50": 0.045,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 204.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"volstarter_v2%_dd",
+false,
+0.0446,
+{
+"median_x": 1.874,
+"p2x": 0.588,
+"p10x": 0.103,
+"p_dd50": 0.095,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 187.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"volstarter_v3%_dd",
+false,
+0.0668,
+{
+"median_x": 2.361,
+"p2x": 0.731,
+"p10x": 0.118,
+"p_dd50": 0.107,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 180.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0449,
+"volstarter_v4%_dd",
+false,
+0.0891,
+{
+"median_x": 2.931,
+"p2x": 0.798,
+"p10x": 0.137,
+"p_dd50": 0.171,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 151.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 17.838,
+"p2x": 0.969,
+"p10x": 0.653,
+"p_dd50": 0.327,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 122.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 44.468,
+"p2x": 0.989,
+"p10x": 0.785,
+"p_dd50": 0.525,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 101.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 28.417,
+"p2x": 0.987,
+"p10x": 0.739,
+"p_dd50": 0.29,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 107.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 13.195,
+"p2x": 0.961,
+"p10x": 0.605,
+"p_dd50": 0.142,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 126.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"volstarter_v2%_dd",
+false,
+0.0446,
+{
+"median_x": 27.63,
+"p2x": 0.983,
+"p10x": 0.733,
+"p_dd50": 0.289,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 110.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"volstarter_v3%_dd",
+false,
+0.0668,
+{
+"median_x": 30.731,
+"p2x": 0.996,
+"p10x": 0.759,
+"p_dd50": 0.295,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 99.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0898,
+"volstarter_v4%_dd",
+false,
+0.0891,
+{
+"median_x": 34.99,
+"p2x": 0.999,
+"p10x": 0.794,
+"p_dd50": 0.302,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 85.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 1.183,
+"p2x": 0.396,
+"p10x": 0.007,
+"p_dd50": 0.42,
+"p_ruin80": 0.003,
+"med_trades_to_2x": 72.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 1.23,
+"p2x": 0.547,
+"p10x": 0.05,
+"p_dd50": 0.821,
+"p_ruin80": 0.074,
+"med_trades_to_2x": 54.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 1.145,
+"p2x": 0.441,
+"p10x": 0.029,
+"p_dd50": 0.508,
+"p_ruin80": 0.001,
+"med_trades_to_2x": 51.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 1.095,
+"p2x": 0.334,
+"p10x": 0.007,
+"p_dd50": 0.119,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 69.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"volstarter_v2%_dd",
+false,
+0.0102,
+{
+"median_x": 1.101,
+"p2x": 0.087,
+"p10x": 0.003,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 85.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"volstarter_v3%_dd",
+false,
+0.0153,
+{
+"median_x": 1.151,
+"p2x": 0.13,
+"p10x": 0.004,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 91.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"volstarter_v4%_dd",
+false,
+0.0204,
+{
+"median_x": 1.171,
+"p2x": 0.2,
+"p10x": 0.005,
+"p_dd50": 0.011,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 97.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 1.79,
+"p2x": 0.585,
+"p10x": 0.029,
+"p_dd50": 0.217,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 69.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 2.414,
+"p2x": 0.756,
+"p10x": 0.145,
+"p_dd50": 0.678,
+"p_ruin80": 0.021,
+"med_trades_to_2x": 48.5,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 1.966,
+"p2x": 0.665,
+"p10x": 0.099,
+"p_dd50": 0.315,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 49.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 1.599,
+"p2x": 0.519,
+"p10x": 0.025,
+"p_dd50": 0.043,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 67.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"volstarter_v2%_dd",
+false,
+0.0102,
+{
+"median_x": 1.26,
+"p2x": 0.223,
+"p10x": 0.016,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 88.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"volstarter_v3%_dd",
+false,
+0.0153,
+{
+"median_x": 1.414,
+"p2x": 0.289,
+"p10x": 0.017,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 88.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.1957,
+"volstarter_v4%_dd",
+false,
+0.0204,
+{
+"median_x": 1.553,
+"p2x": 0.399,
+"p10x": 0.019,
+"p_dd50": 0.005,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 91.5,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 4.254,
+"p2x": 0.889,
+"p10x": 0.199,
+"p_dd50": 0.015,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 56.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 10.236,
+"p2x": 0.973,
+"p10x": 0.579,
+"p_dd50": 0.222,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 36.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 8.185,
+"p2x": 0.949,
+"p10x": 0.485,
+"p_dd50": 0.037,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 37.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 3.948,
+"p2x": 0.865,
+"p10x": 0.18,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 56.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"volstarter_v2%_dd",
+false,
+0.0102,
+{
+"median_x": 2.75,
+"p2x": 0.711,
+"p10x": 0.189,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 77.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"volstarter_v3%_dd",
+false,
+0.0153,
+{
+"median_x": 3.009,
+"p2x": 0.766,
+"p10x": 0.203,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 75.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.3914,
+"volstarter_v4%_dd",
+false,
+0.0204,
+{
+"median_x": 3.344,
+"p2x": 0.842,
+"p10x": 0.218,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 73.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 0.978,
+"p2x": 0.006,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 0.969,
+"p2x": 0.013,
+"p10x": 0.0,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 39.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 0.97,
+"p2x": 0.013,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 42.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 0.979,
+"p2x": 0.006,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v2%_dd",
+false,
+0.08,
+{
+"median_x": 0.959,
+"p2x": 0.013,
+"p10x": 0.0,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 43.5,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v3%_dd",
+false,
+0.12,
+{
+"median_x": 0.941,
+"p2x": 0.017,
+"p10x": 0.0,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 42.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v4%_dd",
+false,
+0.16,
+{
+"median_x": 0.916,
+"p2x": 0.029,
+"p10x": 0.0,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 1.033,
+"p2x": 0.061,
+"p10x": 0.002,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 1.061,
+"p2x": 0.11,
+"p10x": 0.004,
+"p_dd50": 0.01,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 60.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 1.06,
+"p2x": 0.107,
+"p10x": 0.003,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 1.033,
+"p2x": 0.059,
+"p10x": 0.002,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v2%_dd",
+false,
+0.08,
+{
+"median_x": 1.12,
+"p2x": 0.123,
+"p10x": 0.004,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 59.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v3%_dd",
+false,
+0.12,
+{
+"median_x": 1.204,
+"p2x": 0.148,
+"p10x": 0.004,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 60.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v4%_dd",
+false,
+0.16,
+{
+"median_x": 1.28,
+"p2x": 0.185,
+"p10x": 0.004,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 62.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_halving",
+false,
+0.05,
+{
+"median_x": 1.32,
+"p2x": 0.33,
+"p10x": 0.019,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 65.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_none",
+false,
+0.05,
+{
+"median_x": 1.573,
+"p2x": 0.458,
+"p10x": 0.071,
+"p_dd50": 0.028,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_ddscale",
+false,
+0.05,
+{
+"median_x": 1.514,
+"p2x": 0.447,
+"p10x": 0.057,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_halving+dd",
+false,
+0.05,
+{
+"median_x": 1.303,
+"p2x": 0.325,
+"p10x": 0.017,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 66.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v2%_dd",
+false,
+0.08,
+{
+"median_x": 1.621,
+"p2x": 0.469,
+"p10x": 0.063,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 59.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v3%_dd",
+false,
+0.12,
+{
+"median_x": 1.765,
+"p2x": 0.511,
+"p10x": 0.073,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 58.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v4%_dd",
+false,
+0.16,
+{
+"median_x": 1.915,
+"p2x": 0.556,
+"p10x": 0.083,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 55.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_halving",
+true,
+0.05,
+{
+"median_x": 0.94,
+"p2x": 0.001,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 44.5,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_none",
+true,
+0.05,
+{
+"median_x": 0.894,
+"p2x": 0.003,
+"p10x": 0.0,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 42.5,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_ddscale",
+true,
+0.05,
+{
+"median_x": 0.893,
+"p2x": 0.002,
+"p10x": 0.0,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 40.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"book5_halving+dd",
+true,
+0.05,
+{
+"median_x": 0.94,
+"p2x": 0.001,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 44.5,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v2%_dd",
+true,
+0.08,
+{
+"median_x": 0.838,
+"p2x": 0.004,
+"p10x": 0.0,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 29.5,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v3%_dd",
+true,
+0.12,
+{
+"median_x": 0.773,
+"p2x": 0.007,
+"p10x": 0.0,
+"p_dd50": 0.005,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 24.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"volstarter_v4%_dd",
+true,
+0.16,
+{
+"median_x": 0.722,
+"p2x": 0.007,
+"p10x": 0.0,
+"p_dd50": 0.067,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 24.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.251
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_halving",
+true,
+0.05,
+{
+"median_x": 0.98,
+"p2x": 0.011,
+"p10x": 0.0,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 45.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_none",
+true,
+0.05,
+{
+"median_x": 0.977,
+"p2x": 0.016,
+"p10x": 0.0,
+"p_dd50": 0.007,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 41.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_ddscale",
+true,
+0.05,
+{
+"median_x": 0.978,
+"p2x": 0.014,
+"p10x": 0.0,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 41.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"book5_halving+dd",
+true,
+0.05,
+{
+"median_x": 0.98,
+"p2x": 0.011,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 45.5,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v2%_dd",
+true,
+0.08,
+{
+"median_x": 0.975,
+"p2x": 0.019,
+"p10x": 0.0,
+"p_dd50": 0.002,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 38.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v3%_dd",
+true,
+0.12,
+{
+"median_x": 0.956,
+"p2x": 0.025,
+"p10x": 0.001,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 40.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.1,
+0.0222,
+"volstarter_v4%_dd",
+true,
+0.16,
+{
+"median_x": 0.93,
+"p2x": 0.033,
+"p10x": 0.001,
+"p_dd50": 0.015,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 43.5,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.497
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_halving",
+true,
+0.05,
+{
+"median_x": 1.034,
+"p2x": 0.065,
+"p10x": 0.002,
+"p_dd50": 0.006,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 64.5,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_none",
+true,
+0.05,
+{
+"median_x": 1.058,
+"p2x": 0.105,
+"p10x": 0.005,
+"p_dd50": 0.021,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 55.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_ddscale",
+true,
+0.05,
+{
+"median_x": 1.059,
+"p2x": 0.101,
+"p10x": 0.003,
+"p_dd50": 0.005,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 56.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"book5_halving+dd",
+true,
+0.05,
+{
+"median_x": 1.034,
+"p2x": 0.063,
+"p10x": 0.001,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 64.5,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v2%_dd",
+true,
+0.08,
+{
+"median_x": 1.122,
+"p2x": 0.116,
+"p10x": 0.005,
+"p_dd50": 0.006,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 52.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v3%_dd",
+true,
+0.12,
+{
+"median_x": 1.204,
+"p2x": 0.147,
+"p10x": 0.007,
+"p_dd50": 0.006,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 53.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+],
+[
+"quantanamo",
+0.2,
+0.0444,
+"volstarter_v4%_dd",
+true,
+0.16,
+{
+"median_x": 1.274,
+"p2x": 0.185,
+"p10x": 0.007,
+"p_dd50": 0.009,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 55.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.765
+}
+]
+],
+"bt": [
+[
+"bandit",
+0.0,
+0.0,
+"no_bt",
+{
+"median_x": 0.875,
+"p2x": 0.083,
+"p10x": 0.003,
+"p_dd50": 0.093,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 113.5,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 0.891,
+"p2x": 0.073,
+"p10x": 0.001,
+"p_dd50": 0.073,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 161.0,
+"med_trades_to_proven": 24.0,
+"p_proven": 0.596
+}
+],
+[
+"bandit",
+0.0,
+0.2,
+"no_bt",
+{
+"median_x": 0.875,
+"p2x": 0.083,
+"p10x": 0.003,
+"p_dd50": 0.093,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 113.5,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.634
+}
+],
+[
+"bandit",
+0.0,
+0.2,
+"bt30_w.5_h.5",
+{
+"median_x": 0.873,
+"p2x": 0.082,
+"p10x": 0.003,
+"p_dd50": 0.097,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 127.0,
+"med_trades_to_proven": 6.0,
+"p_proven": 0.736
+}
+],
+[
+"bandit",
+0.1,
+0.0,
+"no_bt",
+{
+"median_x": 1.977,
+"p2x": 0.629,
+"p10x": 0.106,
+"p_dd50": 0.099,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 188.0,
+"med_trades_to_proven": 20.0,
+"p_proven": 0.963
+}
+],
+[
+"bandit",
+0.1,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 2.012,
+"p2x": 0.642,
+"p10x": 0.089,
+"p_dd50": 0.063,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 212.0,
+"med_trades_to_proven": 19.0,
+"p_proven": 0.966
+}
+],
+[
+"bandit",
+0.2,
+0.0,
+"no_bt",
+{
+"median_x": 28.417,
+"p2x": 0.987,
+"p10x": 0.739,
+"p_dd50": 0.29,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 107.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 1.0
+}
+],
+[
+"bandit",
+0.2,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 25.847,
+"p2x": 0.99,
+"p10x": 0.743,
+"p_dd50": 0.213,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 107.0,
+"med_trades_to_proven": 7.0,
+"p_proven": 1.0
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"no_bt",
+{
+"median_x": 1.145,
+"p2x": 0.441,
+"p10x": 0.029,
+"p_dd50": 0.508,
+"p_ruin80": 0.001,
+"med_trades_to_2x": 51.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 1.174,
+"p2x": 0.439,
+"p10x": 0.028,
+"p_dd50": 0.515,
+"p_ruin80": 0.001,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 32.0,
+"p_proven": 0.639
+}
+],
+[
+"oddsborne",
+0.0,
+0.2,
+"no_bt",
+{
+"median_x": 1.145,
+"p2x": 0.441,
+"p10x": 0.029,
+"p_dd50": 0.508,
+"p_ruin80": 0.001,
+"med_trades_to_2x": 51.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.693
+}
+],
+[
+"oddsborne",
+0.0,
+0.2,
+"bt30_w.5_h.5",
+{
+"median_x": 1.165,
+"p2x": 0.438,
+"p10x": 0.027,
+"p_dd50": 0.517,
+"p_ruin80": 0.001,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 13.0,
+"p_proven": 0.749
+}
+],
+[
+"oddsborne",
+0.1,
+0.0,
+"no_bt",
+{
+"median_x": 1.966,
+"p2x": 0.665,
+"p10x": 0.099,
+"p_dd50": 0.315,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 49.0,
+"med_trades_to_proven": 21.0,
+"p_proven": 0.85
+}
+],
+[
+"oddsborne",
+0.1,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 2.017,
+"p2x": 0.669,
+"p10x": 0.095,
+"p_dd50": 0.331,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 50.0,
+"med_trades_to_proven": 23.0,
+"p_proven": 0.833
+}
+],
+[
+"oddsborne",
+0.2,
+0.0,
+"no_bt",
+{
+"median_x": 8.185,
+"p2x": 0.949,
+"p10x": 0.485,
+"p_dd50": 0.037,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 37.0,
+"med_trades_to_proven": 16.0,
+"p_proven": 0.987
+}
+],
+[
+"oddsborne",
+0.2,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 8.225,
+"p2x": 0.955,
+"p10x": 0.485,
+"p_dd50": 0.035,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 39.0,
+"med_trades_to_proven": 12.0,
+"p_proven": 0.991
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"no_bt",
+{
+"median_x": 0.97,
+"p2x": 0.013,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 42.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 0.979,
+"p2x": 0.004,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 68.0,
+"med_trades_to_proven": 18.0,
+"p_proven": 0.401
+}
+],
+[
+"quantanamo",
+0.0,
+0.2,
+"no_bt",
+{
+"median_x": 0.97,
+"p2x": 0.013,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 42.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.471
+}
+],
+[
+"quantanamo",
+0.0,
+0.2,
+"bt30_w.5_h.5",
+{
+"median_x": 0.971,
+"p2x": 0.011,
+"p10x": 0.0,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 47.5,
+"med_trades_to_proven": 7.0,
+"p_proven": 0.573
+}
+],
+[
+"quantanamo",
+0.1,
+0.0,
+"no_bt",
+{
+"median_x": 1.06,
+"p2x": 0.107,
+"p10x": 0.003,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 17.0,
+"p_proven": 0.775
+}
+],
+[
+"quantanamo",
+0.1,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 1.074,
+"p2x": 0.083,
+"p10x": 0.001,
+"p_dd50": 0.0,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 66.0,
+"med_trades_to_proven": 18.0,
+"p_proven": 0.759
+}
+],
+[
+"quantanamo",
+0.2,
+0.0,
+"no_bt",
+{
+"median_x": 1.514,
+"p2x": 0.447,
+"p10x": 0.057,
+"p_dd50": 0.003,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 61.0,
+"med_trades_to_proven": 14.0,
+"p_proven": 0.957
+}
+],
+[
+"quantanamo",
+0.2,
+0.0,
+"bt30_w.5_h.5",
+{
+"median_x": 1.524,
+"p2x": 0.409,
+"p10x": 0.042,
+"p_dd50": 0.001,
+"p_ruin80": 0.0,
+"med_trades_to_2x": 60.0,
+"med_trades_to_proven": 11.0,
+"p_proven": 0.961
+}
+]
+]
+}

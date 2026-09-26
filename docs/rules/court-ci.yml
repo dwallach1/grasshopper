@@ -1,0 +1,13 @@
+# Move to .github/workflows/court.yml (needs a token with `workflow` scope) and make it a required check.
+name: rules-court
+on:
+  pull_request:
+    paths: ['supabase/**', 'stewards/**', 'docs/rules/**', 'tools/court/**', 'docs/sizing.md']
+jobs:
+  court:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test apps/dashboard/lib/rules-court.test.ts

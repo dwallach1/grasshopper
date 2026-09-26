@@ -1,0 +1,17 @@
+# Functions that implement trading rules. A migration numbered >= 35 that defines one needs a
+# `-- court-ruling: docs/rules/<rule_id>.md` line naming an existing ruling.
+public.steward_sizing_guidance
+private.edge_max_stake
+private.stake_edge_stats
+private.steward_starter_stake
+private.steward_starter_share
+private.steward_drawdown
+private.thesis_edge_evidence
+private.half_kelly_multiplier
+private.outcome_posterior_confidence
+private.rescore_thesis_confidence
+private.require_lot_invalidation
+private.snapshot_entry_max_stake
+private.is_us_regular_session
+private.steward_spendable_cash
+private.steward_book_equity
