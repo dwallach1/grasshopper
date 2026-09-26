@@ -118,6 +118,7 @@ describe('public desk Worker API', () => {
         integrity_issues: 0,
         integrity_errors: 0,
         integrity: {},
+        exposure_over_budget: 0,
       },
       learning: {
         to_review: 0,

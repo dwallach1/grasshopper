@@ -7,6 +7,8 @@ import type { DeskPayload } from '../../lib/ledger-types';
 import {
   assembleThesisRoster,
   thesisForId,
+  thesisScoreLabel,
+  thesisScoreTitle,
   type ThesisRosterRow,
 } from '../../lib/thesis-roster';
 import { BeliefQueue, TaggedLotQueue } from './belief-queue';
@@ -146,7 +148,12 @@ export function ThesesWorld({
                 <span className="thesis-card-meta">
                   <span className="thesis-chip">{row.stance}</span>
                   <span className={`thesis-chip ${toneForStatus(row.status)}`}>{row.status}</span>
-                  <span className="thesis-conf">{row.confidence}</span>
+                  <span
+                    className={`thesis-conf${row.results_confidence === null ? ' is-unscored' : ''}`}
+                    title={thesisScoreTitle(row)}
+                  >
+                    {thesisScoreLabel(row)}
+                  </span>
                 </span>
               </button>
             </li>
@@ -175,7 +182,7 @@ function ThesisPage({
         Back to theses
       </button>
       <p className="thesis-page-kicker">
-        {row.stance} · {row.status} · {row.confidence}
+        {row.stance} · {row.status} · {thesisScoreLabel(row)} · stated {row.stated_confidence}
         {' · '}
         {row.domain} · {row.steward_name}
       </p>

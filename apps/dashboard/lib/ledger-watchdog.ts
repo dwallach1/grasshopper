@@ -40,6 +40,24 @@ export type WatchdogIssue = {
   at: string | null;
 };
 
+/**
+ * Open risk to invalidation vs the 10%-of-book budget, per steward (v_exposure_usage, carried in the
+ * v_ledger_watchdog `exposure` summary). Book units. `over` = headroom below zero.
+ */
+export type ExposureUsage = {
+  steward: 'quantanamo' | 'oddsborne' | 'bandit';
+  unit: MoneyUnit;
+  open_risk: number;
+  risk_budget: number;
+  used_share: number | null;
+  headroom: number;
+  over: boolean;
+  /** 'to_invalidation' | 'full_notional' once the view reports it. */
+  risk_basis: string | null;
+};
+
+const EXPOSURE_ORDER = ['quantanamo', 'oddsborne', 'bandit'] as const;
+
 export type LedgerWatchdog = {
   available: boolean;
   checked_at: string | null;
@@ -51,6 +69,8 @@ export type LedgerWatchdog = {
   integrity_errors: number;
   integrity: Record<string, number>;
   open_lots: number;
+  exposure_over_budget: number;
+  exposure: ExposureUsage[];
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -68,6 +88,8 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     integrity_errors: 0,
     integrity: {},
     open_lots: 0,
+    exposure_over_budget: 0,
+    exposure: [],
     breaches: [],
     missing: [],
     issues: [],
@@ -127,6 +149,29 @@ function issue(row: Record<string, unknown>): WatchdogIssue {
   };
 }
 
+function exposureRows(value: unknown): ExposureUsage[] {
+  const bag = record(value);
+  if (!bag) return [];
+  return EXPOSURE_ORDER.flatMap((steward) => {
+    const row = record(bag[steward]);
+    if (!row) return [];
+    const openRisk = num(row.open_risk);
+    const budget = num(row.risk_budget);
+    if (openRisk === null || budget === null) return [];
+    const headroom = num(row.headroom) ?? budget - openRisk;
+    return [{
+      steward,
+      unit: str(row.unit) === 'SOL' ? 'SOL' : 'USD',
+      open_risk: openRisk,
+      risk_budget: budget,
+      used_share: num(row.used_share),
+      headroom,
+      over: headroom < 0,
+      risk_basis: str(row.risk_basis),
+    } satisfies ExposureUsage];
+  });
+}
+
 /** Map `{ summary, breaches, missing, issues }` rows (any path). */
 export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
   const bag = record(raw);
@@ -146,6 +191,8 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     integrity_errors: count(summary.integrity_errors),
     integrity,
     open_lots: count(summary.open_lots),
+    exposure_over_budget: count(summary.exposure_over_budget),
+    exposure: exposureRows(summary.exposure),
     breaches: rows(bag.breaches).map(lot),
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -162,6 +209,7 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   integrity_issues: number;
   integrity_errors: number;
   integrity: Record<string, number>;
+  exposure_over_budget: number;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -173,5 +221,16 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     integrity_issues: w.integrity_issues,
     integrity_errors: w.integrity_errors,
     integrity: w.integrity,
+    exposure_over_budget: w.exposure_over_budget,
   };
+}
+
+function wholeAmount(value: number, unit: MoneyUnit): string {
+  if (unit === 'SOL') return `${value.toFixed(3)} SOL`;
+  return `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
+/** Quiet Book line: `risk $654 / $550 budget`. Never colored like P/L. */
+export function exposureLine(row: ExposureUsage): string {
+  return `risk ${wholeAmount(row.open_risk, row.unit)} / ${wholeAmount(row.risk_budget, row.unit)} budget`;
 }

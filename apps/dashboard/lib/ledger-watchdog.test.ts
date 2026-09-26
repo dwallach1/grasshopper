@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { assembleDeskBookHealth, deskHealthSummary } from './desk-book-health';
-import { emptyLedgerWatchdog, mapLedgerWatchdog, watchdogHealthSummary } from './ledger-watchdog';
+import { emptyLedgerWatchdog, exposureLine, mapLedgerWatchdog, watchdogHealthSummary } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
 
 describe('ledger watchdog', () => {
@@ -33,5 +33,25 @@ describe('ledger watchdog', () => {
     expect(health.alerts.map((alert) => alert.kind)).toEqual(['invalidation_breach', 'missing_invalidation']);
     expect(health.alerts[0]?.detail).toContain('0.00001900 SOL');
     expect(deskHealthSummary(health)).toMatchObject({ invalidation_breaches: 1, lots_missing_invalidation: 1 });
+  });
+
+  test('exposure: per-steward open risk vs the 10% budget from the watchdog summary, in order', () => {
+    const watchdog = mapLedgerWatchdog({
+      summary: [{
+        checked_at: '2026-09-26T22:00:00Z', open_lots: 3, exposure_over_budget: 1,
+        exposure: {
+          bandit: { unit: 'SOL', open_risk: 0, risk_budget: 0.180319, used_share: 0, headroom: 0.180319 },
+          quantanamo: { unit: 'USD', open_risk: '654.354', risk_budget: '550.065', used_share: '0.119', headroom: '-104.289' },
+          oddsborne: { unit: 'USD', open_risk: 0, risk_budget: 27.687, used_share: 0, headroom: 27.687 },
+        },
+      }],
+    });
+    expect(watchdog.exposure.map((row) => row.steward)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+    expect(watchdog.exposure[0]).toMatchObject({ over: true, open_risk: 654.354, risk_budget: 550.065 });
+    expect(exposureLine(watchdog.exposure[0]!)).toBe('risk $654 / $550 budget');
+    expect(exposureLine(watchdog.exposure[2]!)).toBe('risk 0.000 SOL / 0.180 SOL budget');
+    expect(watchdog.exposure[1]?.over).toBe(false);
+    expect(watchdogHealthSummary(watchdog).exposure_over_budget).toBe(1);
+    expect(mapLedgerWatchdog({ summary: [{ open_lots: 0 }] }).exposure).toEqual([]);
   });
 });

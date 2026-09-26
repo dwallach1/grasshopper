@@ -135,7 +135,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       queuedTasks,
     ] = await Promise.all([
       sql`
-        select id, name, summary, status, confidence, time_horizon, stance,
+        select id, name, summary, status, confidence, stated_confidence, results_confidence, time_horizon, stance,
                variant_perception, falsifier, created_at, updated_at
         from public.theses
         order by confidence desc, name
@@ -463,7 +463,7 @@ async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
       from public.v_steward_trend
     `),
     viewRows('v_thesis_scorecard', sql`
-      select thesis_id, name, steward, stated_confidence, outcome_implied_confidence, confidence_gap,
+      select thesis_id, name, steward, stated_confidence, results_confidence, outcome_implied_confidence, confidence_gap,
              priced_trades, wins, miscalibrated, thin
       from public.v_thesis_scorecard
       order by priced_trades desc
