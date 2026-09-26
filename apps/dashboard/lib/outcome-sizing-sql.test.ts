@@ -312,3 +312,24 @@ describe('per-lot invalidation (PR 8)', () => {
   });
 });
 
+
+describe('unknown thesis never sizes an entry', () => {
+  const path = join(root, 'supabase/schemas/21_unknown_thesis_gate.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926174615_unknown_thesis_gate.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+  });
+
+  test('unknown thesis: entry_allowed false, sized 0, reason unknown_thesis, for every steward', async () => {
+    const sql = await readFile(path, 'utf8');
+    expect(sql).toContain('v_unknown := th.id is null;');
+    expect(sql).toContain('v_blocked := v_rejected or v_killed or v_unknown;');
+    expect(sql).toContain('v_allowed := coalesce(v_gate, false) and not v_blocked;');
+    expect(sql.match(/when v_unknown then 'unknown_thesis'/g)?.length).toBe(3);
+    expect(sql).toContain('when v_unknown then 0::numeric\n      when p_requested is null then null');
+    // Null thesis is unchanged: QUANTANAMO requires one; the others use the steward multiplier.
+    expect(sql).toContain("when p_thesis_id is null then 'quantanamo_requires_thesis'");
+    expect(sql).toContain('select * into st from private.steward_outcome_stats(p_steward);');
+  });
+});
