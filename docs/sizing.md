@@ -30,7 +30,16 @@ Position size follows results, and there is **no hard cap per position** (David,
 
 `workers/research` (`approvedCandidate` / `sizeBuyNotional`, position-decision adds) takes the thesis multiplier from `public.thesis_sizing()` (through cloud-control context) and fails closed when it's missing. The notional is `requested % of live NAV × multiplier`, limited by `min(cash, buying_power)`. The broker gateway has **no fixed rails**. It only runs mechanical checks: a valid quantity and notional (a sell within available shares; a reduce smaller than a full exit), buying power, cash (a buy that would need margin is rejected), a fresh uncrossed quote, no same-symbol order already pending, and an open US regular session (orders are regular-hours market orders). Adds are `requested % × multiplier` like entries: no fixed add %, add count, spacing or averaging-down rule. Reduces use the model's requested partial %: no fixed band. Wide spreads and the first and last 15 minutes of the session are guidance, not blocks.
 
-There is no global stop-loss and no portfolio drawdown limit. An autonomous exit happens only when the linked thesis's own written invalidation (`theses.falsifier`) is confirmed: the model says the thesis is invalidated with confidence ≥ 90, and there is deterministic adverse evidence. The position review prefers the thesis linked to the position episode. If no linked thesis has a written falsifier, the exit is left to the steward's judgment and its learned beliefs.
+`steward_sizing_guidance` refuses a thesis id that names no thesis, for every steward: `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'unknown_thesis'`. A null thesis is unchanged. QUANTANAMO still requires a thesis (`quantanamo_requires_thesis`), while ODDSBORNE and BANDIT size untagged entries at the steward-level multiplier.
+
+There is no global stop-loss and no portfolio drawdown limit. Exits come from the position's own written invalidation, read in this order:
+
+1. **The lot.** The steward writes it on the open lot: `position_episodes.invalidation_price` (USD per share) and `position_episodes.invalidation_note` (text). When the fresh price is at or below `invalidation_price`, the lot exits in full, because it has hit its own definition. An `invalidation_note` counts as the written invalidation for the confirmed exit below, and it is read before the thesis.
+2. **The linked thesis.** `theses.falsifier`. The position review prefers the thesis linked to the position episode.
+
+A written invalidation (the lot note or the thesis falsifier) triggers an exit only once it is confirmed: the model says the thesis is invalidated with confidence ≥ 90, and there is deterministic adverse evidence. If neither the lot nor a linked thesis has a written invalidation, the exit is left to the steward's judgment and its learned beliefs.
+
+`pm_positions` and `meme_positions` have the same two columns, priced in each row's own unit (outcome price, or SOL per token). ODDSBORNE and BANDIT can use them in their own exit logic. Each book's worker role can update the columns on its own table. The desk holdings line shows a live stock lot's invalidation.
 
 The deprecated intent fields (`maxTradePercent`, `maxDailyNotionalPercent`, `maxTradesPerDay`, `maxSpreadBps`) are no longer sent, and the gateway ignores them.
 

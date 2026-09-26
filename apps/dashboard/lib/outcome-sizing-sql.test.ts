@@ -280,8 +280,56 @@ describe('no global stop or drawdown limit (PR 7)', () => {
     expect(code).not.toContain('hard_loss');
     const orchestrator = await readFile(join(root, 'workers/research/src/research-orchestrator.ts'), 'utf8');
     expect(orchestrator).not.toContain('hard_loss_limit_percent');
-    expect(orchestrator).toContain("version: 'autonomous-equity-v6'");
+    expect(orchestrator).toContain("version: 'autonomous-equity-v7'");
     const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
     expect(doc).not.toMatch(/−8%|-8%/);
+  });
+});
+
+describe('per-lot invalidation (PR 8)', () => {
+  const path = join(root, 'supabase/schemas/19_lot_invalidation.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926174236_lot_invalidation.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+  });
+
+  test('adds invalidation_price / invalidation_note and grants each book worker update', async () => {
+    const sql = await readFile(path, 'utf8');
+    for (const table of ['position_episodes', 'pm_positions', 'meme_positions']) {
+      expect(sql).toContain(`alter table public.${table}\n  add column if not exists invalidation_price numeric,\n  add column if not exists invalidation_note text;`);
+    }
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.position_episodes to quantanamo_worker;');
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.pm_positions to oddsborne_worker;');
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.meme_positions to bandit_worker;');
+  });
+
+  test('exit logic and the desk read the lot invalidation', async () => {
+    const code = await readFile(join(root, 'workers/research/src/position-decision.ts'), 'utf8');
+    expect(code.indexOf('lot_invalidation_price')).toBeLessThan(code.indexOf('thesis.falsifier'));
+    const desk = await readFile(join(root, 'supabase/functions/desk-public-rest/index.ts'), 'utf8');
+    expect(desk).toContain('invalidation_price,invalidation_note');
+  });
+});
+
+
+describe('unknown thesis never sizes an entry', () => {
+  const path = join(root, 'supabase/schemas/21_unknown_thesis_gate.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926174615_unknown_thesis_gate.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+  });
+
+  test('unknown thesis: entry_allowed false, sized 0, reason unknown_thesis, for every steward', async () => {
+    const sql = await readFile(path, 'utf8');
+    expect(sql).toContain('v_unknown := th.id is null;');
+    expect(sql).toContain('v_blocked := v_rejected or v_killed or v_unknown;');
+    expect(sql).toContain('v_allowed := coalesce(v_gate, false) and not v_blocked;');
+    expect(sql.match(/when v_unknown then 'unknown_thesis'/g)?.length).toBe(3);
+    expect(sql).toContain('when v_unknown then 0::numeric\n      when p_requested is null then null');
+    // Null thesis is unchanged: QUANTANAMO requires one; the others use the steward multiplier.
+    expect(sql).toContain("when p_thesis_id is null then 'quantanamo_requires_thesis'");
+    expect(sql).toContain('select * into st from private.steward_outcome_stats(p_steward);');
   });
 });

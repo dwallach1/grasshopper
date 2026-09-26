@@ -88,6 +88,11 @@ export function BookOpenStrip({
                       ) : row.untagged ? (
                         <span className="book-untagged">{untaggedChip(row.untagged)}</span>
                       ) : null}
+                      {row.invalidation ? (
+                        <span className="book-inval-chip" title={row.invalidation.note ?? undefined}>
+                          {invalidationChip(row)}
+                        </span>
+                      ) : null}
                       {row.rules_in_force.length ? (
                         <span className="book-rule-chip">
                           {row.rules_in_force.length} {row.rules_in_force.length === 1 ? 'rule' : 'rules'}
@@ -138,6 +143,13 @@ function HoldingDetail({
         {row.note ? ` · ${row.note}` : ''}
         {ticket ? ` · marks ${markAge}` : ''}
       </p>
+      {row.invalidation ? (
+        <p className="book-inval">
+          Invalidation
+          {row.invalidation.price !== null ? ` ${formatAmount(row.invalidation.price, row.unit)}` : ''}
+          {row.invalidation.note ? ` · ${row.invalidation.note}` : ''}
+        </p>
+      ) : null}
       {row.rules_in_force.length ? (
         <ul className="book-rules" aria-label="Rules in force">
           {row.rules_in_force.map((rule) => (
@@ -202,6 +214,11 @@ function OpenTicket({
       ) : null}
     </div>
   );
+}
+
+function invalidationChip(row: BookHolding): string {
+  const price = row.invalidation?.price ?? null;
+  return price !== null ? `inval ${formatAmount(price, row.unit)}` : 'inval note';
 }
 
 function untaggedChip(untagged: string): string {

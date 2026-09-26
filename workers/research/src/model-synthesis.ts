@@ -299,7 +299,7 @@ export async function synthesizePositionDecision(
     'Do not invent facts. Recommend hold by default.',
     'Add requires a fresh positive catalyst and an intact hardening thesis.',
     'Reduce or exit requires specific adverse evidence or a confirmed thesis invalidation.',
-    'There is no global stop-loss: judge an exit against the linked thesis falsifier (its written invalidation).',
+    'There is no global stop-loss: judge an exit against the lot invalidation first (the steward\'s per-lot price and note), then the linked thesis falsifier (its written invalidation).',
     'Set escalate=true for exits, large reduces, or conflicting evidence.',
   ].join(' ');
   const user = [
@@ -307,6 +307,7 @@ export async function synthesizePositionDecision(
     `Review reason: ${task.reason}`,
     `Position: ${JSON.stringify(position)}`,
     `Portfolio: ${JSON.stringify(snapshot)}`,
+    `Lot invalidation: ${JSON.stringify(task.lotInvalidation ?? null)}`,
     `Linked theses: ${JSON.stringify(task.theses || [])}`,
     `Broker context: ${JSON.stringify(brokerContext)}`,
   ].join('\n');

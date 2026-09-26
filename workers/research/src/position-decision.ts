@@ -12,6 +12,7 @@ import {
   PositionAiOutputSchema,
 } from './schemas';
 import { MIN_ORDER_NOTIONAL, sizeBuyNotional, validMultiplier } from './sizing';
+import type { LotInvalidation } from './schemas';
 
 export type ManagedPosition = BrokerAccountSnapshot['positions'][number];
 
@@ -88,6 +89,7 @@ export function decidePositionAction(
   output: unknown,
   brokerContext: unknown,
   _history: PositionHistory = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null },
+  lot: LotInvalidation | null = null,
 ): PositionAction {
   const symbol = position.symbol;
   const researched = asBrokerResearchContext(brokerContext);
@@ -148,37 +150,73 @@ export function decidePositionAction(
     model_recommendation: recommendation,
   };
   const adverseReasons = deterministicAdverseEvidence(researched, symbol);
-  // No global stop-loss (David, 2026-09-26: "Kill the old rules!"). An autonomous exit comes
-  // only from the linked thesis's own invalidation (theses.falsifier). With no written
-  // falsifier, exits are left to the steward's judgment and its learned beliefs.
+  // No global stop-loss (David, 2026-09-26: "Kill the old rules!"). Exits come from the
+  // position's own written invalidation, read in this order:
+  //   1. the lot (position_episodes.invalidation_price / invalidation_note, steward-written),
+  //   2. the linked thesis (theses.falsifier).
+  // With neither, exits are left to the steward's judgment and its learned beliefs.
+  const lotPrice = lot && typeof lot.price === 'number' && Number.isFinite(lot.price) && lot.price > 0 ? lot.price : null;
+  const lotNote = lot?.note?.trim() ? lot.note.trim() : null;
+  const lotEvidence: DecisionJsonObject = {
+    lot_invalidation_price: lotPrice,
+    lot_invalidation_note: lotNote ? lotNote.slice(0, 500) : null,
+  };
+
+  // 1a. The steward's own per-lot price is hit: the lot is invalidated by its own definition.
+  if (lotPrice !== null && last <= lotPrice) {
+    const quantity = boundedSellQuantity(position, 1);
+    if (quantity > 0) return {
+      action: 'exit', symbol, quantity,
+      rationale: `Lot invalidation price hit: last ${last} <= ${lotPrice}${lotNote ? ` (${lotNote.slice(0, 300)})` : ''}.`,
+      evidence: {
+        ...commonEvidence,
+        ...lotEvidence,
+        trigger: 'lot_invalidation_price',
+        invalidation_source: 'lot',
+      },
+    };
+  }
+
+  // 1b/2. A written invalidation (lot note first, then the linked thesis falsifier) confirmed by
+  // the model (exit, confidence >= 90, thesis invalidated) and deterministic adverse evidence.
   const exitThesis = theses.find((thesis) =>
     thesis.symbols.includes(symbol) && (thesis.falsifier?.trim().length ?? 0) >= 20);
+  const invalidationSource: 'lot' | 'thesis' | null = lotNote ? 'lot' : exitThesis ? 'thesis' : null;
 
   if (
     recommendation === 'exit'
     && confidence >= 90
     && thesisState === 'invalidated'
     && adverseReasons.length > 0
-    && exitThesis
+    && invalidationSource
   ) {
     const quantity = boundedSellQuantity(position, 1);
+    const label = invalidationSource === 'lot' ? 'lot invalidation' : `thesis invalidation (${exitThesis?.id})`;
     if (quantity > 0) return {
       action: 'exit', symbol, quantity,
-      rationale: `Validated thesis invalidation (${exitThesis.id}): ${String(decision.summary || '').slice(0, 1200)}`,
+      rationale: `Validated ${label}: ${String(decision.summary || '').slice(0, 1200)}`,
       evidence: {
         ...commonEvidence,
-        trigger: 'validated_thesis_invalidation',
-        thesis_id: exitThesis.id,
-        thesis_falsifier: String(exitThesis.falsifier).slice(0, 500),
+        ...lotEvidence,
+        trigger: invalidationSource === 'lot' ? 'validated_lot_invalidation' : 'validated_thesis_invalidation',
+        invalidation_source: invalidationSource,
+        thesis_id: exitThesis?.id ?? null,
+        thesis_falsifier: exitThesis ? String(exitThesis.falsifier).slice(0, 500) : null,
         adverse_reasons: adverseReasons,
       },
     };
   }
-  if (recommendation === 'exit' && !exitThesis) {
+  if (recommendation === 'exit' && !invalidationSource) {
     return {
       action: 'hold', symbol,
-      rationale: 'No linked thesis carries a written invalidation; exit is left to the steward.',
-      evidence: { ...commonEvidence, exit_source: 'steward_judgment' },
+      rationale: lotPrice !== null
+        ? `Lot invalidation price ${lotPrice} is not hit (last ${last}) and no written invalidation is confirmed.`
+        : 'Neither the lot nor a linked thesis carries a written invalidation; exit is left to the steward.',
+      evidence: {
+        ...commonEvidence,
+        ...lotEvidence,
+        exit_source: lotPrice !== null ? 'lot_invalidation_price_not_hit' : 'steward_judgment',
+      },
     };
   }
 

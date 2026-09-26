@@ -29,6 +29,7 @@ import {
   parseJsonObject,
   parseJsonObjectOrNull,
   parsePositionConfiguration,
+  lotInvalidationFromEpisode,
   parsePositionEpisodeRows,
   parseTheses,
   unambiguousThesisId,
@@ -352,9 +353,10 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           monitor_policy: {
             // No fixed add %, reduce band, add count, averaging-down rule or global stop
             // (David, 2026-09-26: "Kill the old rules!"). Adds are results-sized; exits come
-            // from the linked thesis's own invalidation (theses.falsifier) or the steward.
-            policy_version: 'autonomous-position-v3',
-            exit_source: 'linked_thesis_falsifier_or_steward_judgment',
+            // from the lot's own invalidation (position_episodes.invalidation_price/_note), then
+            // the linked thesis's (theses.falsifier), or the steward.
+            policy_version: 'autonomous-position-v4',
+            exit_source: 'lot_invalidation_then_linked_thesis_falsifier_or_steward_judgment',
           },
         })),
       }));
@@ -421,6 +423,9 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
             confidence: thesis.confidence, symbols: thesis.symbols, falsifier: thesis.falsifier,
             size_multiplier: thesis.size_multiplier ?? null,
           }));
+        // The steward's per-lot invalidation (position_episodes.invalidation_price/_note) is read
+        // before the thesis-level falsifier.
+        const lotInvalidation = lotInvalidationFromEpisode(row);
         const monitor = this.env.POSITION_MONITOR.getByName(positionKey);
         await monitor.configure({
           positionKey, episodeId: row.id, symbol: position.symbol,
@@ -433,13 +438,14 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           entity_type: 'position',
           entity_key: positionKey,
           status: 'queued',
-          input_sha256: await sha256({ position, relatedTheses, observedAt: snapshot.observedAt }),
+          input_sha256: await sha256({ position, relatedTheses, lotInvalidation, observedAt: snapshot.observedAt }),
           queued_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
         messages.push({ body: {
           kind: 'position_review', runId: cycleRunId, idempotencyKey, positionKey,
-          episodeId: row.id, symbol: position.symbol, theses: relatedTheses, reason: 'scheduled_position_review',
+          episodeId: row.id, symbol: position.symbol, theses: relatedTheses, lotInvalidation,
+          reason: 'scheduled_position_review',
         } });
       }
       if (messages.length > 0) await this.env.RESEARCH_TASK_QUEUE.sendBatch(messages);
@@ -889,7 +895,9 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
   const monitor = env.POSITION_MONITOR.getByName(task.positionKey);
   const history = await monitor.getPolicyHistory();
   const modelOutput = await analyzePosition(env, task, position, snapshot, brokerContextValue);
-  const decision = decidePositionAction(position, snapshot, task.theses || [], modelOutput, brokerContextValue, history);
+  const decision = decidePositionAction(
+    position, snapshot, task.theses || [], modelOutput, brokerContextValue, history, task.lotInvalidation ?? null,
+  );
   const observedAt = new Date().toISOString();
   const recorded = await monitor.recordObservation({
     eventId: task.idempotencyKey,
@@ -1020,13 +1028,13 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v6',
+    version: 'autonomous-equity-v7',
     // Size follows results with no hard cap per position, and no fixed rails (David,
     // 2026-09-26: "Kill the old rules!"): no trade count, spread block, 09:45-15:45 window
     // or global stop-loss. The notional was sized upstream (requested % x outcome
     // multiplier, limited by spendable cash); the gateway re-checks only mechanical limits.
     sizing: 'requested_percent_x_outcome_multiplier',
-    exits: 'linked_thesis_falsifier_or_steward_judgment',
+    exits: 'lot_invalidation_then_linked_thesis_falsifier_or_steward_judgment',
     mechanical: 'cash_no_margin_valid_qty_fresh_uncrossed_quote_regular_session_open',
     quoteMaxAgeSeconds: 120,
     guidance: 'wide spreads and the first/last 15 minutes of the session are guidance, not blocks',

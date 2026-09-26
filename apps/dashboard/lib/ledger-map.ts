@@ -451,6 +451,12 @@ const PositionSchema = z
       return trimmed ? trimmed : null;
     }),
     untagged: z.union([z.string(), z.null()]).optional(),
+    invalidation_price: OptionalMoney.optional().transform((value) => (value != null && value > 0 ? value : null)),
+    invalidation_note: z.union([z.string(), z.null()]).optional().transform((value) => {
+      if (value == null) return null;
+      const trimmed = value.trim();
+      return trimmed ? trimmed.slice(0, 500) : null;
+    }),
     meta: z.unknown().optional(),
   })
   .passthrough();

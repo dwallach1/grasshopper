@@ -5164,6 +5164,7 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.book-inval-chip,
 .book-rule-chip,
 .book-thesis-chip {
   display: inline-flex;
@@ -5176,6 +5177,11 @@ a:focus-visible {
   font-size: 9px;
   letter-spacing: 0.04em;
   text-transform: lowercase;
+}
+
+.book-inval-chip {
+  background: transparent;
+  font-variant-numeric: tabular-nums;
 }
 
 .book-thesis-chip {

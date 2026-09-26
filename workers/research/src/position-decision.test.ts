@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
 import { decidePositionAction } from './position-decision';
+import { lotInvalidationFromEpisode } from './schemas';
 
 const now = new Date().toISOString();
 const basePosition = { symbol: 'ABCD', quantity: 10, sharesAvailableForSells: 10, averageBuyPrice: 100 };
@@ -50,6 +51,51 @@ describe('autonomous position decisions', () => {
     const held = decidePositionAction(basePosition, snapshot, noFalsifier, invalidated, context(95, 100, 97));
     expect(held.action).toBe('hold');
     expect(held.evidence.exit_source).toBe('steward_judgment');
+  });
+
+  test('lot invalidation price is read first: hit exits, not hit holds', () => {
+    const history = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null };
+    const lot = { price: 96, note: 'Loses the post-earnings gap.' };
+    // The model says hold, but the steward's own lot price is hit.
+    const hit = decidePositionAction(basePosition, snapshot, thesis, {}, context(95.5), history, lot);
+    expect(hit.action).toBe('exit');
+    expect(hit.quantity).toBe(10);
+    expect(hit.evidence.trigger).toBe('lot_invalidation_price');
+    expect(hit.evidence.invalidation_source).toBe('lot');
+    expect(hit.evidence.lot_invalidation_price).toBe(96);
+    const notHit = decidePositionAction(basePosition, snapshot, thesis, {}, context(97), history, lot);
+    expect(notHit.action).toBe('hold');
+    // No lot price and no linked falsifier: an exit call stays the steward's judgment.
+    const invalidated = {
+      position_action: 'exit', decision_confidence: 92, thesis_state: 'invalidated', summary: 'Gap lost.',
+    };
+    const noFalsifier = [{ ...thesis[0]!, falsifier: null }];
+    const priceOnly = decidePositionAction(
+      basePosition, snapshot, noFalsifier, invalidated, context(97, 101, 99), history, { price: 90, note: null },
+    );
+    expect(priceOnly.action).toBe('hold');
+    expect(priceOnly.evidence.exit_source).toBe('lot_invalidation_price_not_hit');
+  });
+
+  test('lot invalidation note comes before the thesis falsifier', () => {
+    const history = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null };
+    const invalidated = {
+      position_action: 'exit', decision_confidence: 92, thesis_state: 'invalidated', summary: 'Gap lost.',
+    };
+    const noFalsifier = [{ ...thesis[0]!, falsifier: null }];
+    const result = decidePositionAction(
+      basePosition, snapshot, noFalsifier, invalidated, context(95, 100, 97), history,
+      { price: null, note: 'Lot is wrong if the gap fills on volume.' },
+    );
+    expect(result.action).toBe('exit');
+    expect(result.evidence.trigger).toBe('validated_lot_invalidation');
+    expect(result.evidence.invalidation_source).toBe('lot');
+    // A lot note still needs model confirmation and adverse evidence.
+    const unconfirmed = decidePositionAction(
+      basePosition, snapshot, noFalsifier, { ...invalidated, decision_confidence: 70 }, context(95, 100, 97), history,
+      { price: null, note: 'Lot is wrong if the gap fills on volume.' },
+    );
+    expect(unconfirmed.action).toBe('hold');
   });
 
   test('reduces only with high-confidence adverse evidence', () => {
@@ -165,5 +211,15 @@ describe('autonomous position decisions', () => {
     const unsized = [{ ...thesis[0]!, size_multiplier: null }];
     const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, unsized, addDecision, context());
     expect(result.action).toBe('hold');
+  });
+});
+
+describe('lotInvalidationFromEpisode', () => {
+  test('reads position_episodes.invalidation_price and invalidation_note', () => {
+    expect(lotInvalidationFromEpisode({ invalidation_price: '12.50', invalidation_note: ' gap fills ' }))
+      .toEqual({ price: 12.5, note: 'gap fills' });
+    expect(lotInvalidationFromEpisode({ invalidation_price: null, invalidation_note: '' })).toBeNull();
+    expect(lotInvalidationFromEpisode({ invalidation_price: 0, invalidation_note: null })).toBeNull();
+    expect(lotInvalidationFromEpisode({})).toBeNull();
   });
 });
