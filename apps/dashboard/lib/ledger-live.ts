@@ -158,7 +158,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('agent_runs?select=id,cycle_id,agent_role,independence_group,price_blinded,status,summary,created_at&order=created_at.desc,id.desc', auth),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.desc,id.desc&limit=200', auth),
     restRows('account_snapshots?select=observed_at,account_label,total_value,equity_value,cash,buying_power,source&account_label=ilike.*Agentic*&order=observed_at.asc,id.asc&limit=1', auth),
-    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,closed_at,next_review_at,thesis_id,untagged:meta->>untagged&status=in.(proposed,open,closing,closed)&order=opened_at.desc.nullslast,symbol.asc&limit=400', auth),
+    restRows('position_episodes?select=id,account_key,symbol,status,quantity,average_cost,opened_at,closed_at,next_review_at,thesis_id,invalidation_price,invalidation_note,untagged:meta->>untagged&status=in.(proposed,open,closing,closed)&order=opened_at.desc.nullslast,symbol.asc&limit=400', auth),
     restRows(`portfolio_exposure?select=symbol,quantity,average_buy_price,last_price,observed_at,account_last4&account_last4=eq.${AGENTIC_LAST4}&order=observed_at.desc,quantity.desc&limit=80`, auth),
     restRows('trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&order=created_at.desc&limit=200', auth),
     restRows('trade_proposals?select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at&order=created_at.desc,id.desc&limit=40', auth),

@@ -277,6 +277,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         'position_episodes',
         sql`
         select id, account_key, symbol, status, quantity, average_cost, opened_at, closed_at, next_review_at, thesis_id,
+               invalidation_price, invalidation_note,
                nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.position_episodes
         where status in ('proposed', 'open', 'closing', 'closed')

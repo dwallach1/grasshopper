@@ -367,6 +367,9 @@ export type PositionRow = {
   next_review_at: string | null;
   thesis_id: string | null;
   untagged?: string | null;
+  /** Steward-written per-lot invalidation (position_episodes.invalidation_price / _note). */
+  invalidation_price?: number | null;
+  invalidation_note?: string | null;
 };
 
 export type ExposureRow = {

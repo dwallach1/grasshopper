@@ -46,7 +46,11 @@ export type BookHolding = {
   untagged: string | null;
   rules_in_force: string[];
   clip_note: ClipNote | null;
+  /** Steward-written per-lot invalidation (live stock lots). Null when none is written. */
+  invalidation: HoldingInvalidation | null;
 };
+
+export type HoldingInvalidation = { price: number | null; note: string | null };
 
 export type BookHoldings = {
   rows: BookHolding[];
@@ -118,6 +122,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
       size: Math.abs(row.quantity),
       upl: finiteOrNull(row.pnl),
       note: row.note,
+      invalidation: equityLot(desk, symbol).invalidation,
       ...bindHolding(desk, {
         symbol,
         ...equityLot(desk, symbol),
@@ -144,6 +149,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
         size: Math.abs(row.quantity),
         upl: null,
         note: '',
+        invalidation: lotInvalidation(row),
         ...bindHolding(desk, {
           symbol,
           thesisId: row.thesis_id,
@@ -306,6 +312,7 @@ function holdingRow(input: {
   untagged: string | null;
   rules_in_force: string[];
   clip_note: ClipNote | null;
+  invalidation?: HoldingInvalidation | null;
 }): BookHolding {
   const book = venueLabel(input.venue) as BookHoldingBook;
   const steward_slug: BookHoldingStewardSlug = book === 'ODDSBORNE'
@@ -335,25 +342,42 @@ function holdingRow(input: {
     untagged: input.untagged,
     rules_in_force: input.rules_in_force,
     clip_note: input.clip_note,
+    invalidation: input.invalidation ?? null,
   };
 }
 
 function equityLot(
   desk: DeskPayload,
   symbol: string,
-): { thesisId: string | null; untagged: string | null } {
+): { thesisId: string | null; untagged: string | null; invalidation: HoldingInvalidation | null } {
   const wanted = symbol.trim();
-  if (!wanted) return { thesisId: null, untagged: null };
+  if (!wanted) return { thesisId: null, untagged: null, invalidation: null };
   const open = (desk.positions ?? []).find((row) => {
     const status = row.status.toLowerCase();
     return row.symbol.trim() === wanted
       && (OPEN_POSITION.has(status) || status === 'closing');
   });
-  if (!open) return { thesisId: null, untagged: null };
+  if (!open) return { thesisId: null, untagged: null, invalidation: null };
   return {
     thesisId: open.thesis_id ?? null,
     untagged: leanUntagged(open),
+    invalidation: lotInvalidation(open),
   };
+}
+
+/** position_episodes.invalidation_price / invalidation_note, as the steward wrote them. */
+export function lotInvalidation(row: {
+  invalidation_price?: number | null;
+  invalidation_note?: string | null;
+}): HoldingInvalidation | null {
+  const price = typeof row.invalidation_price === 'number' && Number.isFinite(row.invalidation_price)
+    && row.invalidation_price > 0
+    ? row.invalidation_price
+    : null;
+  const note = typeof row.invalidation_note === 'string' && row.invalidation_note.trim()
+    ? row.invalidation_note.trim()
+    : null;
+  return price === null && note === null ? null : { price, note };
 }
 
 function finiteOrNull(value: number | null | undefined): number | null {

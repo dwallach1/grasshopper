@@ -98,7 +98,7 @@
       "13:05",
       "15:25"
     ],
-    "exit_source": "the linked thesis's own invalidation (theses.falsifier); with none written, the steward's judgment and learned beliefs. No global stop-loss.",
+    "exit_source": "the lot's own invalidation first (position_episodes.invalidation_price: exit when the price is at or below it; invalidation_note), then the linked thesis's (theses.falsifier); with none written, the steward's judgment and learned beliefs. No global stop-loss.",
     "require_deterministic_adverse_evidence_for_thesis_exit_or_reduce": true,
     "same_symbol_pending_order_blocks_new_action": true,
     "add_sizing": "requested percent of live total_value x thesis outcome multiplier, limited by spendable cash (no fixed add %, count, spacing or averaging-down rule)",

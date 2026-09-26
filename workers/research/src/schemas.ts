@@ -419,6 +419,29 @@ export function asBrokerResearchContext(value: unknown): BrokerResearchContext {
   return parsed.success ? parsed.data : {};
 }
 
+/** Per-lot invalidation a steward writes on position_episodes (invalidation_price / invalidation_note). */
+export const LotInvalidationSchema = z.object({
+  price: z.number().positive().nullable(),
+  note: z.string().nullable(),
+});
+
+export type LotInvalidation = z.infer<typeof LotInvalidationSchema>;
+
+/** Reads a position episode row's lot invalidation. Null when the steward wrote neither field. */
+export function lotInvalidationFromEpisode(row: {
+  invalidation_price?: unknown;
+  invalidation_note?: unknown;
+}): LotInvalidation | null {
+  const rawPrice = typeof row.invalidation_price === 'string' || typeof row.invalidation_price === 'number'
+    ? Number(row.invalidation_price)
+    : NaN;
+  const price = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : null;
+  const note = typeof row.invalidation_note === 'string' && row.invalidation_note.trim()
+    ? row.invalidation_note.trim().slice(0, 1_000)
+    : null;
+  return price === null && note === null ? null : { price, note };
+}
+
 const PositionThesisSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -448,6 +471,8 @@ export const CloudTaskSchema = z.discriminatedUnion('kind', [
     episodeId: z.string().optional(),
     symbol: z.string().optional(),
     theses: z.array(PositionThesisSchema).optional(),
+    /** Steward-written per-lot invalidation from position_episodes (read before the thesis). */
+    lotInvalidation: LotInvalidationSchema.nullable().optional(),
   }),
   z.object({
     kind: z.literal('trade_execution'),
@@ -487,6 +512,8 @@ export function parseJsonObjectOrNull(text: string): Record<string, unknown> | n
 export const PositionEpisodeRowSchema = z.object({
   id: z.string().min(1),
   symbol: z.string().min(1),
+  invalidation_price: z.union([z.string(), z.number(), z.null()]).optional(),
+  invalidation_note: z.union([z.string(), z.null()]).optional(),
 }).passthrough();
 
 export type PositionEpisodeRow = z.infer<typeof PositionEpisodeRowSchema>;

@@ -8,6 +8,7 @@ import {
   holdingLifeLabel,
   holdingTicket,
   holdingUpl,
+  lotInvalidation,
 } from './book-holdings';
 import { assembleBookOpen } from './book-open-strip';
 import { fallbackTeam } from './desk-team';
@@ -151,6 +152,29 @@ describe('assembleBookHoldings', () => {
     const open = assembleBookOpen(desk());
     expect(open.rows.some((row) => row.id === 'quantanamo')).toBe(false);
     expect(holdingTicket(nbis!, open.rows.flatMap((row) => row.tickets))).toBeUndefined();
+  });
+
+  test('a live stock lot shows its steward-written invalidation', () => {
+    const lot = {
+      id: 'ep-nbis',
+      account_key: 'agentic-7638',
+      symbol: 'NBIS',
+      status: 'open',
+      quantity: 4.65,
+      average_cost: 214.91,
+      opened_at: '2026-08-26T19:01:17.000Z',
+      closed_at: null,
+      next_review_at: null,
+      thesis_id: null,
+    };
+    const withLot = assembleBookHoldings(desk({
+      positions: [{ ...lot, invalidation_price: 182.5, invalidation_note: 'Loses the AI-capex bid.' }],
+    }));
+    const nbis = withLot.rows.find((row) => row.id === 'eq:NBIS');
+    expect(nbis?.invalidation).toEqual({ price: 182.5, note: 'Loses the AI-capex bid.' });
+    const without = assembleBookHoldings(desk({ positions: [lot] }));
+    expect(without.rows.find((row) => row.id === 'eq:NBIS')?.invalidation).toBeNull();
+    expect(lotInvalidation({ invalidation_price: 0, invalidation_note: ' ' })).toBeNull();
   });
 
   test('zero-size open lots stay off; closed Stocks / Predictions / Coins join as historic', () => {

@@ -280,8 +280,35 @@ describe('no global stop or drawdown limit (PR 7)', () => {
     expect(code).not.toContain('hard_loss');
     const orchestrator = await readFile(join(root, 'workers/research/src/research-orchestrator.ts'), 'utf8');
     expect(orchestrator).not.toContain('hard_loss_limit_percent');
-    expect(orchestrator).toContain("version: 'autonomous-equity-v6'");
+    expect(orchestrator).toContain("version: 'autonomous-equity-v7'");
     const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
     expect(doc).not.toMatch(/−8%|-8%/);
   });
 });
+
+describe('per-lot invalidation (PR 8)', () => {
+  const path = join(root, 'supabase/schemas/19_lot_invalidation.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926174236_lot_invalidation.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+  });
+
+  test('adds invalidation_price / invalidation_note and grants each book worker update', async () => {
+    const sql = await readFile(path, 'utf8');
+    for (const table of ['position_episodes', 'pm_positions', 'meme_positions']) {
+      expect(sql).toContain(`alter table public.${table}\n  add column if not exists invalidation_price numeric,\n  add column if not exists invalidation_note text;`);
+    }
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.position_episodes to quantanamo_worker;');
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.pm_positions to oddsborne_worker;');
+    expect(sql).toContain('grant update (invalidation_price, invalidation_note) on public.meme_positions to bandit_worker;');
+  });
+
+  test('exit logic and the desk read the lot invalidation', async () => {
+    const code = await readFile(join(root, 'workers/research/src/position-decision.ts'), 'utf8');
+    expect(code.indexOf('lot_invalidation_price')).toBeLessThan(code.indexOf('thesis.falsifier'));
+    const desk = await readFile(join(root, 'supabase/functions/desk-public-rest/index.ts'), 'utf8');
+    expect(desk).toContain('invalidation_price,invalidation_note');
+  });
+});
+
