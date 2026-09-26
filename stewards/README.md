@@ -73,4 +73,4 @@ cd /workspace/oddsborne && .venv/bin/python pm_enter.py \
 
 ## Checks
 
-`python3 -m unittest discover -s stewards -p 'test_*.py'` runs in CI (`.github/workflows/stewards.yml`). It needs no dependencies: it byte-compiles the scripts, checks the contract points above in the source, and scans for credential-looking literals.
+`python3 -m unittest discover -s stewards -p 'test_*.py'` needs no dependencies: it byte-compiles the scripts, checks the contract points above in the source, and scans for credential-looking literals. It also runs inside `bun run test` (`apps/dashboard/lib/steward-scripts.test.ts`). `stewards-ci.yml` is a ready GitHub Actions workflow; move it to `.github/workflows/` with a token that has `workflow` scope (the agent's token doesn't).
