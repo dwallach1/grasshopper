@@ -1,0 +1,22 @@
+name: Steward scripts
+
+on:
+  pull_request:
+    paths: ['stewards/**', '.github/workflows/stewards.yml']
+  push:
+    branches: [main]
+    paths: ['stewards/**', '.github/workflows/stewards.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile, contract and credential checks (no dependencies)
+        run: python -m unittest discover -s stewards -p 'test_*.py' -v
