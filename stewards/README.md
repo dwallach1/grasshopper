@@ -8,7 +8,7 @@ Nothing secret is in this directory. Credentials come from the process environme
 
 1. **Guidance first.** Call `public.steward_sizing_guidance(steward, thesis_id, instrument, requested, invalidation_price)` before any buy.
    - If `entry_allowed = false`, don't trade. The reasons are `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation` or `stale_book`; QUANTANAMO can also get `quantanamo_requires_thesis` or `quantanamo_confidence_gate`.
-   - Trade exactly `sized_notional`, which is `min(requested, max_stake, spendable cash)`. `max_stake` is the edge-scaled cap per thesis: a starter share of the book until proven, × the steward drawdown scale (see `docs/sizing.md` and the court rulings in `docs/rules/`). The multiplier is informational.
+   - Trade exactly `sized_notional`, which is `min(requested, max_stake, spendable cash)`. `max_stake` is the edge-scaled cap per thesis: a starter share of the book until proven, × the steward drawdown scale (see `docs/sizing.md` and the court rulings in `docs/rules/`). Guidance no longer returns a multiplier (struck by the court, docs/rules/confidence-multiplier.md).
 2. **Invalidation is required.** Pass it in the lot's own unit: outcome price for ODDSBORNE, SOL per token for BANDIT, USD per share for QUANTANAMO.
    - Guidance refuses without it.
    - The database also rejects a new or re-opened `open` lot in `pm_positions`, `meme_positions` or `position_episodes` without `invalidation_price` (trigger `private.require_lot_invalidation`).

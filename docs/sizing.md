@@ -7,7 +7,7 @@ Position size follows results, and there is **no hard cap per position** (David,
 | Rule | Value |
 |---|---|
 | Per-position cap | **None** |
-| Multiplier | **Informational only** since the 2026-09-26 court ruling ([confidence-multiplier](rules/confidence-multiplier.md)): half-Kelly from the thesis's closed `trade_outcomes`, `clamp((kelly / 2) / 0.20, 0.25, 1.0)`, still returned by guidance but it no longer scales size (it was gameable and noise at small n; `max_stake` does the small-sample work) |
+| Multiplier | **Retired** by the 2026-09-26 court ruling ([confidence-multiplier](rules/confidence-multiplier.md)): it was gameable and noise at small n, and `max_stake` does the small-sample work. Guidance no longer returns `multiplier` / `multiplier_basis` / `half_kelly_fraction` (migration 40). `public.thesis_sizing()` still computes it for the retired `workers/research` code only |
 | Max stake | Edge-scaled per thesis, in the book's unit (see [Edge-scaled max stake](#edge-scaled-max-stake)). Starter while unproven: a share of current book (QUANTANAMO 4.545%, ODDSBORNE 5.418%, BANDIT 5.546%; = $250 / $15 / 0.10 SOL at the 2026-09-26 books), × the steward drawdown scale |
 | Size | `min(requested, max_stake, spendable cash)`. Spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
 | Applies to | New entries and **adds** |
@@ -96,7 +96,7 @@ select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<marke
 -- QUANTANAMO: select * from public.steward_sizing_guidance('quantanamo', '<thesis_id>', '<SYMBOL>', <requested usd>, <invalidation usd/share>);
 ```
 
-The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (informational, + `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested, max_stake, spendable_cash)`, `max_stake` / `max_stake_reason`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
+The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, sample stats (`sample_trades`, `sample_wins`, `hit_rate`, `avg_win`, `avg_loss`), `sized_notional = min(requested, max_stake, spendable_cash)`, `max_stake` / `max_stake_reason`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the caps and gates. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
 
 Entry fields:
 

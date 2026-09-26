@@ -301,7 +301,7 @@ def main() -> int:
     g = dict(zip(cols, row))
     GUIDANCE = {k: (str(v) if isinstance(v, (Decimal,)) or hasattr(v, "isoformat") else v) for k, v in g.items()}
     print("GUIDANCE=" + json.dumps({k: GUIDANCE.get(k) for k in (
-        "requested", "multiplier", "multiplier_basis", "max_stake", "max_stake_reason", "sized_notional",
+        "requested", "max_stake", "max_stake_reason", "sized_notional",
         "spendable_cash", "sample_trades", "thesis_confidence", "thesis_status", "invalidation_price",
         "book_age_minutes", "entry_allowed", "entry_blocked_reason")}))
     if not g.get("entry_allowed"):
@@ -758,7 +758,7 @@ def main() -> int:
     deadline = opened_at + timedelta(hours=4)
     last_fill = {
         "ok": True, "symbol": SYMBOL, "name": NAME, "mint": MINT, "decimals": DECIMALS,
-        "size_sol": str(SIZE_SOL), "requested_sol": str(REQUEST_SOL), "multiplier": GUIDANCE.get("multiplier"), "in_sol": str(in_sol), "tokens": str(out_tokens),
+        "size_sol": str(SIZE_SOL), "requested_sol": str(REQUEST_SOL), "max_stake": GUIDANCE.get("max_stake"), "in_sol": str(in_sol), "tokens": str(out_tokens),
         "entry_price_sol_per_token": str(entry_price), "signature": sig,
         "solscan": f"https://solscan.io/tx/{sig}", "path": path, "slippage_bps": used_slippage,
         "price_impact_pct": (order_meta or {}).get("priceImpactPct"),

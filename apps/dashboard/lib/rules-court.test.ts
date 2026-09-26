@@ -99,4 +99,16 @@ describe('rules court', () => {
     const seed = await readFile(join(root, 'supabase/schemas/36_desk_rules_seed.sql'), 'utf8');
     expect(seed).toContain("('quantanamo-80-gate', ");
   });
+
+  test('40: guidance no longer returns the struck multiplier, and steward scripts do not read it', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/40_guidance_drop_multiplier.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926215608_guidance_drop_multiplier.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain('-- court-ruling: docs/rules/confidence-multiplier.md');
+    const ret = sql.slice(sql.indexOf('returns table ('), sql.indexOf('language plpgsql'));
+    for (const col of ['multiplier', 'multiplier_basis', 'half_kelly_fraction']) expect(ret).not.toMatch(new RegExp(`\\b${col}\\b`));
+    for (const f of ['stewards/oddsborne/pm_enter.py', 'stewards/bandit/live_trade_clip.py', 'stewards/bandit/paper_bank20.py']) {
+      const src = await readFile(join(root, f), 'utf8');
+      expect(src).not.toMatch(/\[["']multiplier(_basis)?["']\]|get\(["']multiplier/);
+    }
+  });
 });

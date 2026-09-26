@@ -458,10 +458,10 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         summary["guidance"] = g
         check_guidance(g)
         sz = compute_quantity(g["sized_notional"], g.get("spendable_cash"), price, theta)
-        summary["sizing"] = {**sz, "sized_notional": g["sized_notional"], "multiplier": g["multiplier"],
-                             "multiplier_basis": g["multiplier_basis"], "spendable_cash": g["spendable_cash"],
+        summary["sizing"] = {**sz, "sized_notional": g["sized_notional"],
+                             "spendable_cash": g.get("spendable_cash"),
                              "max_stake": g.get("max_stake"), "max_stake_reason": g.get("max_stake_reason"),
-                             "book_equity": g["book_equity"], "thesis_status": g["thesis_status"]}
+                             "book_equity": g.get("book_equity"), "thesis_status": g.get("thesis_status")}
         check_quantity(sz)
         qty = sz["quantity"]
 
