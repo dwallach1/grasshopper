@@ -11,7 +11,9 @@ Position size follows results, and there is **no hard cap per position** (David,
 | Size | `requested × multiplier`, limited only by spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
 | Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
-| Autonomous QUANTANAMO buys | Only on a `hardening` thesis with outcome-adjusted confidence ≥ 80 |
+| Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with outcome-adjusted confidence ≥ 80 |
+| ODDSBORNE and BANDIT | No confidence gate; the multiplier is the throttle. They may enter at the returned size at any confidence |
+| Rejected thesis | No new entries for any steward (`thesis_rejected = true`, `entry_allowed = false`, `sized_notional = 0`) |
 | Clip sizes (BANDIT, ODDSBORNE) | No fixed clip. A steward's usual clip is the *requested* size; the multiplier sets what actually goes on |
 
 ## Confidence re-scoring
@@ -40,7 +42,19 @@ select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', 
 select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>', <requested usd>);
 ```
 
-The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested × multiplier, spendable_cash)`, the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`, and `autonomous_buy_gate_pass`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
+The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested × multiplier, spendable_cash)`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
+
+Entry fields:
+
+| Field | QUANTANAMO | ODDSBORNE / BANDIT |
+|---|---|---|
+| `gate_applies` | `true` | `false` |
+| `autonomous_buy_gate_pass` | `hardening` and confidence ≥ 80 (null with no thesis) | `true` unless the thesis is rejected |
+| `thesis_rejected` | `theses.status = 'rejected'` | same |
+| `entry_allowed` | the gate passes | the thesis is not rejected |
+| `entry_blocked_reason` | `thesis_rejected`, `quantanamo_confidence_gate` or `quantanamo_requires_thesis` | `thesis_rejected` or null |
+
+**Before a buy, read `entry_allowed`, then size to `sized_notional`.** A rejected thesis returns `sized_notional = 0`. Sells and exits never go through this call.
 
 Example (ledger on 2026-09-26): BANDIT's book is 1.84 SOL, with 1.46 SOL cash. A 0.45 SOL clip on `meme_4h_momentum_clip` (1 closed trade, so the multiplier is 0.5) sizes to **0.225 SOL**. With no thesis, the steward multiplier is 0.25 (34 trades, no edge) → 0.1125 SOL.
 
