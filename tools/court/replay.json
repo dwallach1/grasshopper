@@ -1,0 +1,59 @@
+{
+ "bandit": {
+  "trades": 35,
+  "actual": {
+   "end": 1.8032,
+   "ret_pct": -10.76
+  },
+  "current_rules": {
+   "end": 2.0728,
+   "ret_pct": 2.58,
+   "maxdd_pct": 6.32,
+   "avg_stake": 0.07
+  },
+  "proposed_rules": {
+   "end": 2.0066,
+   "ret_pct": -0.7,
+   "maxdd_pct": 10.6,
+   "avg_stake": 0.1117
+  }
+ },
+ "oddsborne": {
+  "trades": 8,
+  "actual": {
+   "end": 276.87,
+   "ret_pct": -34.71
+  },
+  "current_rules": {
+   "end": 411.051,
+   "ret_pct": -3.07,
+   "maxdd_pct": 7.52,
+   "avg_stake": 10.7812
+  },
+  "proposed_rules": {
+   "end": 445.5607,
+   "ret_pct": 5.07,
+   "maxdd_pct": 12.69,
+   "avg_stake": 24.5597
+  }
+ },
+ "quantanamo": {
+  "trades": 7,
+  "actual": {
+   "end": 5500.65,
+   "ret_pct": 10.01
+  },
+  "current_rules": {
+   "end": 5030.4787,
+   "ret_pct": 0.61,
+   "maxdd_pct": 1.41,
+   "avg_stake": 160.7143
+  },
+  "proposed_rules": {
+   "end": 5007.3153,
+   "ret_pct": 0.15,
+   "maxdd_pct": 2.3,
+   "avg_stake": 229.0053
+  }
+ }
+}

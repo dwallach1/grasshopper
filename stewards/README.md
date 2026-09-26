@@ -8,7 +8,7 @@ Nothing secret is in this directory. Credentials come from the process environme
 
 1. **Guidance first.** Call `public.steward_sizing_guidance(steward, thesis_id, instrument, requested, invalidation_price)` before any buy.
    - If `entry_allowed = false`, don't trade. The reasons are `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation` or `stale_book`; QUANTANAMO can also get `quantanamo_requires_thesis` or `quantanamo_confidence_gate`.
-   - Trade exactly `sized_notional`, which is `min(requested × multiplier, max_stake, spendable cash)`. `max_stake` is the edge-scaled cap per thesis (see `docs/sizing.md`).
+   - Trade exactly `sized_notional`, which is `min(requested, max_stake, spendable cash)`. `max_stake` is the edge-scaled cap per thesis: a starter share of the book until proven, × the steward drawdown scale (see `docs/sizing.md` and the court rulings in `docs/rules/`). The multiplier is informational.
 2. **Invalidation is required.** Pass it in the lot's own unit: outcome price for ODDSBORNE, SOL per token for BANDIT, USD per share for QUANTANAMO.
    - Guidance refuses without it.
    - The database also rejects a new or re-opened `open` lot in `pm_positions`, `meme_positions` or `position_episodes` without `invalidation_price` (trigger `private.require_lot_invalidation`).
@@ -30,7 +30,7 @@ cd /workspace/bandit && .venv/bin/python live_trade_clip.py \
 | Arg | Meaning |
 |---|---|
 | `--mint`, `--symbol` | Token (required) |
-| `--request` | Requested SOL before the multiplier (required) |
+| `--request` | Requested SOL before the max-stake cap (required) |
 | `--invalidation-price` | SOL per token. Default is 0.6 × the Jupiter pre-trade price (−40%). The script aborts if there's no price. |
 | `--dry-run` | Prints guidance and size, then exits without trading |
 
@@ -56,7 +56,7 @@ cd /workspace/oddsborne && .venv/bin/python pm_enter.py \
 | `--thesis` | Required (the script refuses without it) |
 | `--price` | Limit price of the outcome being bought |
 | `--p` | Your probability. The only edge rule is `edge_after_costs = p − price − Θ·p·(1−p) > 0`. |
-| `--usd` | Requested USD before the multiplier |
+| `--usd` | Requested USD before the max-stake cap |
 | `--invalidation` | Required, with 0 < inval < price. Written on the `pm_positions` lot along with `--invalidation-note`. |
 | `--dry-run` | Venue preview only: no `orders.create`, no `pm_orders` / `pm_fills` writes, no heartbeat |
 
