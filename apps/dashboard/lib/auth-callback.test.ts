@@ -45,7 +45,7 @@ describe('safeNextPath', () => {
     expect(safeNextPath('/book')).toBe('/book');
     expect(safeNextPath('/runs?tab=test')).toBe('/book');
     expect(safeNextPath('/catalysts')).toBe('/events');
-    expect(safeNextPath('/theses')).toBe('/theses');
+    expect(safeNextPath('/theses')).toBe('/book');
     expect(safeNextPath('/team')).toBe('/team');
     expect(safeNextPath('/mates')).toBe('/team');
     expect(safeNextPath('/leaderboard')).toBe('/');

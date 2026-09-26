@@ -10,6 +10,8 @@ export default {
       || path === '/board'
       || path === '/ranks'
       || path === '/catalysts'
+      || path === '/books'
+      || path === '/theses'
       || path === '/ontology'
       || path === '/risk'
       || path === '/runs'

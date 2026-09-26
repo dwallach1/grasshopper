@@ -1,15 +1,15 @@
 /**
  * Desk surfaces. Tab switches must not remount this shell or refetch the ledger.
  *
- * Board (`/`) is home. Book lives at `/book`. Chrome stays mounted; tab changes
- * paint from in-memory state and `history.pushState`.
+ * Board (`/`) is home. Books (`/book`) is one page per steward that replaced the
+ * old Book and Theses tabs; `/theses` folds into it. Chrome stays mounted; tab
+ * changes paint from in-memory state and `history.pushState`.
  * Keep README.md "Local desk" in the same PR when this list changes.
  */
 
 export const DESK_SURFACES = [
   'leaderboard',
   'book',
-  'theses',
   'events',
   'backtests',
   'team',
@@ -27,23 +27,22 @@ export type DeskTab = {
 
 export const DESK_TABS: readonly DeskTab[] = [
   { href: '/', id: 'leaderboard', key: '1', label: 'Board', go: 'p' },
-  { href: '/book', id: 'book', key: '2', label: 'Book', go: 'b' },
-  { href: '/theses', id: 'theses', key: '3', label: 'Theses', go: 't' },
-  { href: '/events', id: 'events', key: '4', label: 'Events', go: 'c' },
-  { href: '/backtests', id: 'backtests', key: '5', label: 'Tests', go: 'e' },
-  { href: '/team', id: 'team', key: '6', label: 'Team', go: 'm' },
+  { href: '/book', id: 'book', key: '2', label: 'Books', go: 'b' },
+  { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
+  { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
+  { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
 ] as const;
 
 /**
- * Phone deck matches the public bottom nav: Board Book Theses Team.
+ * Phone deck matches the public bottom nav: Board Books Team.
  * Operator Events / Tests stay off this rail.
  */
-export const DESK_SWIPE_SURFACES = ['leaderboard', 'book', 'theses', 'team'] as const;
+export const DESK_SWIPE_SURFACES = ['leaderboard', 'book', 'team'] as const;
 export type DeskSwipeSurface = (typeof DESK_SWIPE_SURFACES)[number];
 
 export const DESK_SWIPE_TABS: readonly DeskTab[] = DESK_SWIPE_SURFACES.map((id) => tabForSurface(id));
 
-/** Public chrome is the same four surfaces as the swipe deck. */
+/** Public chrome is the same three surfaces as the swipe deck. */
 export const PUBLIC_DESK_SURFACES = DESK_SWIPE_SURFACES;
 export const PUBLIC_DESK_TABS: readonly DeskTab[] = PUBLIC_DESK_SURFACES.map((id) => tabForSurface(id));
 
@@ -58,10 +57,12 @@ export const DESK_PATH_REDIRECTS = [
   { source: '/board', destination: '/' },
   { source: '/ranks', destination: '/' },
   { source: '/catalysts', destination: '/events' },
-  { source: '/ontology', destination: '/theses' },
+  { source: '/books', destination: '/book' },
+  { source: '/theses', destination: '/book' },
+  { source: '/ontology', destination: '/book' },
   { source: '/risk', destination: '/book' },
   { source: '/runs', destination: '/book' },
-  { source: '/learnings', destination: '/theses' },
+  { source: '/learnings', destination: '/book' },
   { source: '/mates', destination: '/team' },
 ] as const satisfies readonly DeskPathRedirect[];
 
@@ -74,13 +75,13 @@ function surfaceFromHead(head: string): DeskSurface {
     case 'home':
       return 'leaderboard';
     case 'book':
+    case 'books':
     case 'risk':
     case 'runs':
-      return 'book';
     case 'theses':
     case 'ontology':
     case 'learnings':
-      return 'theses';
+      return 'book';
     case 'events':
     case 'catalysts':
       return 'events';
@@ -124,9 +125,10 @@ export function surfaceFromGoLetter(letter: string): DeskSurface | null {
       return 'book';
     case 'k':
       return 'backtests';
+    case 't':
     case 'l':
     case 'o':
-      return 'theses';
+      return 'book';
     case 'a':
       return 'team';
     case 'd':
