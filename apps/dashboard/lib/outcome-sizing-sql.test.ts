@@ -450,12 +450,13 @@ describe('NYSE calendar and max_stake at entry', () => {
 });
 
 describe('steward-wide starter and shadow exits', () => {
-  test('an unproven thesis is capped at the steward-wide cap; proven theses keep their own', async () => {
-    const sql = await readFile(join(root, 'supabase/schemas/31_steward_wide_starter.sql'), 'utf8');
-    expect(await readFile(join(root, 'supabase/migrations/20260926202730_steward_wide_starter.sql'), 'utf8')).toBe(sql);
-    expect(sql).toContain('if p_thesis_id is not null and not v_proven then');
-    expect(sql).toContain('select * into sw from private.edge_max_stake(p_steward, null, p_book_equity);');
-    expect(sql).toContain('v_proven := true;');
+  test('steward-wide starter (31) is reverted by 34: the function is 23 again', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/34_revert_steward_wide_starter.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926213759_revert_steward_wide_starter.sql'), 'utf8')).toBe(sql);
+    const prior = await readFile(join(root, 'supabase/schemas/23_edge_stake_reason.sql'), 'utf8');
+    const body = (t: string) => t.slice(t.indexOf('create or replace function private.edge_max_stake'));
+    expect(body(sql)).toBe(body(prior));
+    expect(sql).not.toContain('capped at steward-wide');
   });
 
   test('shadow exits read meta.paper_* (no parallel store) through a closed-lot definer function', async () => {
