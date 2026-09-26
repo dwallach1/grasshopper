@@ -26,12 +26,15 @@ Position size follows results, and there is **no hard cap per position** (David,
 - **Unproven** (n < 10, or LCB ≤ 0): `max_stake = starter`.
 - **Proven** (n ≥ 10 and LCB > 0): `max_stake = max(starter, min(book_equity × 0.5 × LCB / sd², starter × 2^(1 + (n − 10) / 5)))`. That is half-Kelly on the lower bound, never faster than doubling every 5 proven trades.
 - **After losses:** × 0.5 per consecutive most-recent loss (at most two halvings, so never below 0.25 × the uncut value).
+- **No escape by new thesis:** an unproven thesis is also capped at its steward's steward-wide cap (the same formula over *all* the steward's priced trades, including the steward-wide loss halvings): `max_stake = min(unproven thesis cap, steward-wide cap)`. A steward can't reset a loss-reduced cap by registering a fresh thesis. Proven theses keep their own edge-based cap. (Migration 31, 2026-09-26.)
 
 | Steward | Unit | Starter | Book on 2026-09-26 |
 |---|---|---|---|
 | QUANTANAMO | USD | 250 | ~$5,500 |
 | ODDSBORNE | USD | 15 | ~$277 |
 | BANDIT | SOL | 0.10 | ~1.79 SOL |
+
+On 2026-09-26 ~13:30 PT the steward-wide caps were QUANTANAMO $62.50 (7 priced trades, 3 straight losses), ODDSBORNE $3.75 (8 trades, 2 straight losses) and BANDIT 0.025 SOL (35 trades, LCB −7.4%, 3 straight losses). So every unproven QUANTANAMO theme was at $62.50, not $250, until QUANTANAMO's streak breaks.
 
 The starters are about 5% of each book. That isn't a rail: the cap grows with n and LCB and shrinks after losses. `public.v_thesis_max_stake` (or `public.thesis_max_stakes()`) lists the current value, reason, n and LCB per live thesis. Guidance returns `max_stake`, `max_stake_reason`, `edge_trades` and `edge_lcb`. The Beta-prior re-score (k = 10) already makes confidence sample-size aware. `max_stake` also bounds the noise in the half-Kelly multiplier at n = 5–9.
 

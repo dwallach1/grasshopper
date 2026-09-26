@@ -40,6 +40,7 @@ cd /workspace/bandit && .venv/bin/python live_trade_clip.py \
   - `BANDIT_SOLANA_PRIVATE_KEY`, `HELIUS_API_KEY`, `JUPITER_API_KEY`, `BANDIT_WORKER_DB_PASSWORD`.
   - Optional: `BANDIT_STATE_DIR` (where `_last_fill_*.json` goes; default is the script's directory).
 - Python dependencies: `requests`, `base58`, `solders`, `psycopg`.
+- After every close, run `bandit/paper_bank20.py <position_id>` to record the shadow exit (see [Shadow exits](#shadow-exits-all-stewards) and `bandit/README.md`).
 
 ## ODDSBORNE: `oddsborne/pm_enter.py`
 
@@ -65,9 +66,29 @@ cd /workspace/oddsborne && .venv/bin/python pm_enter.py \
   - Optional: `ODDSBORNE_HOME` (helper modules), `ODDSBORNE_OUT_DIR` (orphan-order dumps).
 - Python dependencies: `polymarket_us`, `psycopg`.
 
+## Shadow exits (all stewards)
+
+To test an alternative exit rule without trading it, write one object per closed lot to the lot's own `meta` under a key starting with `paper_` (for example `meme_positions.meta.paper_bank20`). There is no separate table; the views read `meta` on `meme_positions`, `pm_positions` and `position_episodes`.
+
+| Key | Meaning |
+|---|---|
+| `rule` | Rule id, e.g. `bank_at_+20pct` (required) |
+| `paper_exit_pct` | Return vs entry if the rule had been followed, in % (required). Equals `real_exit_pct` when it didn't fire. |
+| `real_exit_pct` | Real exit return vs entry **on the same mark basis**, in % (required) |
+| `delta_pct_pts` | `paper − real`, in percentage points (computed if absent) |
+| `triggered`, `trigger_minute` | Did it fire, and how many minutes after entry |
+| `source`, `note` | Mark basis |
+
+Numbers may be JSON numbers or numeric strings.
+
+- `public.v_shadow_exits`: one row per closed lot × rule, including the fill-based `real_fill_return_pct` from `trade_outcomes` for reference.
+- `public.v_shadow_exit_scorecard`: per steward × rule, with `n`, `paper_better` / `paper_worse`, mean and LCB of the delta, `clips_to_decide`, and `promotable`. `promotable` means n ≥ 10 and LCB (mean − sd/√n) of the delta > 0, the same bar the edge-scaled cap uses.
+
+The views only measure. Promoting a rule is a steward decision, recorded as a playbook rule.
+
 ## The box copies
 
-`/workspace/bandit/live_trade_clip.py` and `/workspace/oddsborne/pm_enter.py` are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
+`/workspace/bandit/live_trade_clip.py`, `/workspace/bandit/paper_bank20.py` and `/workspace/oddsborne/pm_enter.py` are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
 - The scripts put the directory they are invoked from first on `sys.path`. On the box, they therefore keep using the box's own `load_secrets.py` and `db_connect.py`.
 - After a merge, run `bash stewards/sync_box.sh`. It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
 
