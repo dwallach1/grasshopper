@@ -355,7 +355,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       sql`
         select id, candidate_type, candidate_key, proposed_theme_id, proposed_label,
                proposed_description, score, evidence_count, source_count, status,
-               last_seen_at, review_note
+               last_seen_at, review_note, public.listed_equity(ontology_candidates) as listed_equity
         from public.ontology_candidates
         order by candidate_type, status, score desc, source_count desc, id desc
         limit 200

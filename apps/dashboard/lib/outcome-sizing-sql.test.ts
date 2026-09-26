@@ -397,3 +397,15 @@ describe('ledger watchdog views and regular-session invalidation', () => {
     expect(orchestrator).toContain("policy_version: 'autonomous-position-v5'");
   });
 });
+
+describe('listed equities are not ontology junk', () => {
+  test('migration is the schema file and wraps the word deny-list for memberships only', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/26_listed_equities.sql'), 'utf8');
+    expect(await readFile(join(root, 'supabase/migrations/20260926181351_listed_equities.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain("not (lower(coalesce(p_type, \\'\\')) = \\'membership\\' and public.is_listed_equity(p_label))");
+    for (const symbol of ['TXN', 'GFS', 'MP']) expect(sql).toContain(`('${symbol}', `);
+    expect(sql).toContain("and c.review_note = 'junk_deny_list'");
+    expect(sql).toContain("'restore'");
+    expect(sql).toContain('create or replace function public.listed_equity(c public.ontology_candidates)');
+  });
+});
