@@ -19,6 +19,7 @@ const thesisTask = {
     symbols: ['ABCD'],
     size_multiplier: 1,
     sizing_basis: 'half_kelly',
+    max_stake: 1_000_000,
   },
 };
 

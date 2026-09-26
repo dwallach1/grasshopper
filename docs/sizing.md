@@ -1,6 +1,6 @@
 # Sizing: results set the size, no hard cap per position, no fixed rails
 
-Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss, or portfolio drawdown limit. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, and each new entry or add is scaled by a half-Kelly multiplier. The only hard limit on size is mechanical: a buy can't spend more cash than the steward actually has (no margin).
+Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss, or portfolio drawdown limit. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, each new entry or add is scaled by a half-Kelly multiplier, and each entry is bounded by an **edge-scaled max stake** that starts small and grows only with measured, proven edge (see below). A buy also can't spend more cash than the steward actually has (no margin).
 
 ## The rules
 
@@ -8,7 +8,8 @@ Position size follows results, and there is **no hard cap per position** (David,
 |---|---|
 | Per-position cap | **None** |
 | Multiplier | Half-Kelly from the thesis's closed `trade_outcomes`: `clamp((kelly / 2) / 0.20, 0.25, 1.0)`. Uses **0.5 when n < 5**, 0.25 when there are no wins yet (or no edge), 1.0 when there are no losses yet. The 0.20 is only a scale reference (a half-Kelly of 20% of book = full size); it does not cap anything |
-| Size | `requested × multiplier`, limited only by spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
+| Max stake | Edge-scaled per thesis, in the book's unit (see [Edge-scaled max stake](#edge-scaled-max-stake)). Starter while unproven: QUANTANAMO $250, ODDSBORNE $15, BANDIT 0.10 SOL |
+| Size | `min(requested × multiplier, max_stake, spendable cash)`. Spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
 | Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
 | Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with outcome-adjusted confidence ≥ 80 |
@@ -16,6 +17,30 @@ Position size follows results, and there is **no hard cap per position** (David,
 | Rejected or killed thesis | No new entries for any steward (`entry_allowed = false`, `sized_notional = 0`, reason `thesis_rejected` / `thesis_killed`) |
 | Learned rules | Beliefs and lessons in force (`belief_updates` with `meta.kind = 'playbook_rule'`, `research_lessons`) stay in force. They're scored by outcomes, not fixed rails |
 | Clip sizes (BANDIT, ODDSBORNE) | No fixed clip. A steward's usual clip is the *requested* size; the multiplier sets what actually goes on |
+
+## Edge-scaled max stake
+
+`requested` is not trusted on its own. Every entry is bounded by a per-thesis `max_stake` derived from measured edge, with small-sample shrinkage (`private.edge_max_stake`, 2026-09-26):
+
+- `r_i = realized_pnl / cost` for each priced, non-paper closed trade on the thesis (the whole steward's trades when the thesis is null). `n`, `mean(r)`, `sd(r)`, and the one-sigma lower bound `LCB = mean − sd / √n`.
+- **Unproven** (n < 10, or LCB ≤ 0): `max_stake = starter`.
+- **Proven** (n ≥ 10 and LCB > 0): `max_stake = max(starter, min(book_equity × 0.5 × LCB / sd², starter × 2^(1 + (n − 10) / 5)))`. That is half-Kelly on the lower bound, never faster than doubling every 5 proven trades.
+- **After losses:** × 0.5 per consecutive most-recent loss (at most two halvings, so never below 0.25 × the uncut value).
+
+| Steward | Unit | Starter | Book on 2026-09-26 |
+|---|---|---|---|
+| QUANTANAMO | USD | 250 | ~$5,500 |
+| ODDSBORNE | USD | 15 | ~$277 |
+| BANDIT | SOL | 0.10 | ~1.79 SOL |
+
+The starters are about 5% of each book. That isn't a rail: the cap grows with n and LCB and shrinks after losses. `public.v_thesis_max_stake` (or `public.thesis_max_stakes()`) lists the current value, reason, n and LCB per live thesis. Guidance returns `max_stake`, `max_stake_reason`, `edge_trades` and `edge_lcb`. The Beta-prior re-score (k = 10) already makes confidence sample-size aware. `max_stake` also bounds the noise in the half-Kelly multiplier at n = 5–9.
+
+## Required invalidation and a fresh book
+
+- **Invalidation.** Pass the planned `invalidation_price` as the 5th guidance argument: USD per share, outcome price, or SOL per token. Without it, guidance returns `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'missing_invalidation'`. The database enforces the same rule: `private.require_lot_invalidation` rejects any insert (or re-open, or clear) of an `open` row in `position_episodes`, `pm_positions` or `meme_positions` whose `invalidation_price` is null (SQLSTATE 23514, message `missing_invalidation`). Lots that existed before this change are grandfathered.
+- **Fresh book.** Guidance sizes only from a book and cash observation no older than 6 hours (`book_age_minutes`). Otherwise it returns `entry_blocked_reason = 'stale_book'` with size 0. QUANTANAMO: record a fresh `account_snapshots` row before sizing. ODDSBORNE and BANDIT: refresh `pm_pnl` / `meme_pnl` first.
+
+Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quantanamo_requires_thesis` > `quantanamo_confidence_gate` > `missing_invalidation` > `stale_book`.
 
 ## Confidence re-scoring
 
@@ -49,12 +74,13 @@ Before any **buy/add**, call:
 
 ```sql
 -- BANDIT: instrument = mint or symbol; unit is SOL; requested = the clip you'd take at full size
-select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', '<mint>', 0.45);
+select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', '<mint>', 0.45, <invalidation SOL/token>);
 -- ODDSBORNE: instrument = pm_markets.slug or id; unit is USD
-select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>', <requested usd>);
+select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>', <requested usd>, <invalidation outcome price>);
+-- QUANTANAMO: select * from public.steward_sizing_guidance('quantanamo', '<thesis_id>', '<SYMBOL>', <requested usd>, <invalidation usd/share>);
 ```
 
-The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested × multiplier, spendable_cash)`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
+The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested × multiplier, max_stake, spendable_cash)`, `max_stake` / `max_stake_reason`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
 
 Entry fields:
 
@@ -63,14 +89,14 @@ Entry fields:
 | `gate_applies` | `true` | `false` |
 | `autonomous_buy_gate_pass` | `hardening` and confidence ≥ 80 (null with no thesis) | `true` unless the thesis is rejected or killed |
 | `thesis_rejected` / `thesis_killed` | `theses.status` = `'rejected'` / `'killed'` | same |
-| `entry_allowed` | the gate passes | the thesis is not rejected or killed |
-| `entry_blocked_reason` | `thesis_rejected`, `thesis_killed`, `quantanamo_confidence_gate` or `quantanamo_requires_thesis` | `thesis_rejected`, `thesis_killed` or null |
+| `entry_allowed` | the gate passes, an invalidation is given, and the book is fresh | the thesis is known and not rejected or killed, an invalidation is given, and the book is fresh |
+| `entry_blocked_reason` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `quantanamo_requires_thesis`, `quantanamo_confidence_gate`, `missing_invalidation`, `stale_book` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation`, `stale_book` or null |
 
 **Before a buy, read `entry_allowed`, then size to `sized_notional`.** A rejected or killed thesis returns `sized_notional = 0`. Sells and exits never go through this call.
 
-Example (ledger on 2026-09-26): BANDIT's book is 1.84 SOL, with 1.46 SOL cash. A 0.45 SOL clip on `meme_4h_momentum_clip` (3 closed trades, so the multiplier is still 0.5) sizes to **0.225 SOL**. With no thesis, the steward multiplier is 0.25 (34 trades, no edge) → 0.1125 SOL.
+Example (ledger on 2026-09-26 ~11:00 PT): BANDIT's book is ~1.79 SOL, with 1.46 SOL cash. A 0.45 SOL clip on `meme_4h_momentum_clip` (3 closed trades, multiplier 0.5 → 0.225) is capped at `max_stake` **0.025 SOL** (unproven starter 0.10, halved twice after two straight losses). ODDSBORNE's $200 Miami request would now size to at most the $3.75–$15 cap instead of $100.
 
-Size is **not** a DB reject guard. ODDSBORNE and BANDIT record orders after the venue accepts them. The cap-breach audit view from #84 has been dropped, and the `thesis-notional` risk control is retired.
+Size is **not** a DB reject guard (the invalidation is). ODDSBORNE and BANDIT record orders after the venue accepts them. The cap-breach audit view from #84 has been dropped, and the `thesis-notional` risk control is retired.
 
 ## Thesis links follow the source position
 

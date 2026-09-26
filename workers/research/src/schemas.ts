@@ -27,6 +27,8 @@ export const ThesisSchema = z.object({
   /** Outcome multiplier (0.25..1) from public.thesis_sizing(); null = no autonomous buy. */
   size_multiplier: z.number().min(0.25).max(1).nullable().optional(),
   sizing_basis: z.string().nullable().optional(),
+  /** Edge-scaled max stake in USD from public.thesis_max_stakes(); null = no autonomous buy. */
+  max_stake: z.number().nonnegative().nullable().optional(),
 });
 
 const ThesisSizingRowSchema = z.object({
@@ -35,6 +37,12 @@ const ThesisSizingRowSchema = z.object({
   status: z.string().nullable().optional(),
   multiplier: z.coerce.number().min(0.25).max(1),
   multiplier_basis: z.string().nullable().optional(),
+}).passthrough();
+
+const ThesisMaxStakeRowSchema = z.object({
+  thesis_id: z.string().min(1),
+  max_stake: z.coerce.number().nonnegative(),
+  unit: z.string().optional(),
 }).passthrough();
 
 export type Thesis = z.infer<typeof ThesisSchema>;
@@ -94,6 +102,7 @@ const CloudContextSchema = z.object({
   approved_proposals: z.array(z.unknown()).optional(),
   risk_controls: z.array(z.unknown()).optional(),
   thesis_sizing: z.array(z.unknown()).optional(),
+  thesis_max_stake: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const FinalizeRunSchema = z.object({
@@ -116,6 +125,11 @@ export function parseTheses(context: unknown): Thesis[] {
     const live = ThesisSizingRowSchema.safeParse(row);
     if (live.success) sizing.set(live.data.thesis_id, live.data);
   }
+  const maxStakes = new Map<string, number>();
+  for (const row of parsed.data.thesis_max_stake ?? []) {
+    const stake = ThesisMaxStakeRowSchema.safeParse(row);
+    if (stake.success && stake.data.unit === 'USD') maxStakes.set(stake.data.thesis_id, stake.data.max_stake);
+  }
   const theses: Thesis[] = [];
   for (const row of rows) {
     const thesis = ThesisSchema.safeParse(row);
@@ -133,6 +147,7 @@ export function parseTheses(context: unknown): Thesis[] {
       recent_investigations: thesis.data.recent_investigations?.slice(0, 6),
       size_multiplier: live ? live.multiplier : null,
       sizing_basis: live?.multiplier_basis ?? null,
+      max_stake: maxStakes.get(thesis.data.id) ?? null,
     });
   }
   return theses.slice(0, MAX_THESES_PER_RUN);
