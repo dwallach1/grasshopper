@@ -26,6 +26,8 @@ export type PositionThesis = {
   falsifier?: string | null;
   /** Outcome multiplier from public.thesis_sizing() (0.25..1). Missing = no add. */
   size_multiplier?: number | null;
+  /** Edge-scaled max stake (USD) from public.thesis_max_stakes(). Missing = no add. */
+  max_stake?: number | null;
 };
 
 export type PositionHistory = {
@@ -262,6 +264,7 @@ export function decidePositionAction(
         cash: snapshot.cash,
         requestedPercent,
         multiplier,
+        maxStake: supportingThesis.max_stake,
       })
       : 0;
     if (evidence.pass && dollarAmount >= MIN_ORDER_NOTIONAL) return {

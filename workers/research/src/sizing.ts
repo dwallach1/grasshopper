@@ -82,12 +82,15 @@ export function sizeBuyNotional(input: {
   cash?: number;
   requestedPercent: number;
   multiplier: number;
+  /** Edge-scaled max stake (USD) from public.thesis_max_stakes(). Required: missing = 0. */
+  maxStake: number | null | undefined;
 }): number {
-  const { totalValue, requestedPercent, multiplier } = input;
+  const { totalValue, requestedPercent, multiplier, maxStake } = input;
   if (!validMultiplier(multiplier)) return 0;
+  if (typeof maxStake !== 'number' || !Number.isFinite(maxStake) || maxStake <= 0) return 0;
   if (!Number.isFinite(requestedPercent) || requestedPercent <= 0 || requestedPercent > MAX_REQUEST_PERCENT) return 0;
   if (!Number.isFinite(totalValue) || totalValue <= 0) return 0;
   const sized = totalValue * requestedPercent / 100 * multiplier;
-  const affordable = Math.min(sized, spendableCash(input.buyingPower, input.cash));
+  const affordable = Math.min(sized, maxStake, spendableCash(input.buyingPower, input.cash));
   return Number.isFinite(affordable) && affordable > 0 ? Math.floor(affordable * 100) / 100 : 0;
 }

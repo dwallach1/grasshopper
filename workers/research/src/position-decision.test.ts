@@ -15,6 +15,7 @@ const thesis = [{
   id: 't1', name: 'Test thesis', status: 'hardening', stance: 'bullish', confidence: 85, symbols: ['ABCD'],
   falsifier: 'The thesis is invalidated by a documented demand reversal.',
   size_multiplier: 1,
+  max_stake: 1_000_000,
 }];
 
 function context(last = 105, previousClose = last - 4, open = last - 2) {

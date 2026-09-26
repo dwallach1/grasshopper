@@ -37,6 +37,8 @@ export type DecisionThesisTask = {
     symbols: string[];
     /** Outcome multiplier from public.thesis_sizing() (0.25..1). Missing = no order. */
     size_multiplier?: number | null;
+    /** Edge-scaled max stake (USD) from public.thesis_max_stakes(). Missing = no order. */
+    max_stake?: number | null;
     sizing_basis?: string | null;
   };
 };
@@ -131,14 +133,15 @@ export function approvedCandidate(
   if (!Number.isFinite(requestedPercent) || requestedPercent <= 0 || requestedPercent > MAX_REQUEST_PERCENT) {
     return null;
   }
-  // Size follows results: requested % of book x outcome multiplier. No per-position cap;
-  // only spendable cash (no margin) limits the order.
+  // Size follows results: min(requested % of book x outcome multiplier, edge-scaled max stake,
+  // spendable cash). No fixed % cap.
   const notional = sizeBuyNotional({
     totalValue: snapshot.totalValue,
     buyingPower: snapshot.buyingPower,
     cash: snapshot.cash,
     requestedPercent,
     multiplier,
+    maxStake: task.thesis.max_stake,
   });
   if (notional < MIN_ORDER_NOTIONAL) return null;
   return {
@@ -150,6 +153,7 @@ export function approvedCandidate(
       decision_confidence: decision.decision_confidence ?? null,
       requested_percent: requestedPercent,
       size_multiplier: multiplier,
+      max_stake: task.thesis.max_stake ?? null,
       sizing_basis: task.thesis.sizing_basis ?? null,
       sized_percent: Math.round(notional / snapshot.totalValue * 10_000) / 100,
       sizing: 'requested_percent_x_outcome_multiplier',

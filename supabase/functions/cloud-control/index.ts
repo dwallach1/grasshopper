@@ -251,7 +251,7 @@ function buildRunObservability(tasks: unknown[]): {
 }
 
 async function context(): Promise<unknown> {
-  const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals, thesisSizing] = await Promise.all([
+  const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals, thesisSizing, thesisMaxStakes] = await Promise.all([
     rest('dashboard_snapshots?id=eq.current&select=generated_at,payload'),
     rest('position_episodes?status=in.(proposed,open,closing)&select=*&order=updated_at.desc&limit=100'),
     rest('cloud_tasks?task_type=eq.thesis_research&status=eq.complete&select=entity_key,input_sha256&order=queued_at.desc&limit=500'),
@@ -260,6 +260,8 @@ async function context(): Promise<unknown> {
     // Live outcome-tempered confidence + size multiplier per thesis. A failure here means
     // no multipliers, and the worker then approves no autonomous buys (fails closed).
     rest('rpc/thesis_sizing', { method: 'POST', body: '{}' }).catch(() => []),
+    // Edge-scaled max stake per thesis (USD). Missing = no autonomous buy (fails closed).
+    rest('rpc/thesis_max_stakes', { method: 'POST', body: '{}' }).catch(() => []),
   ]);
   const rows = Array.isArray(snapshotRows) ? snapshotRows : [];
   const latestInputs: Record<string, string> = {};
@@ -277,6 +279,7 @@ async function context(): Promise<unknown> {
     risk_controls: Array.isArray(riskControls) ? riskControls : [],
     approved_proposals: Array.isArray(approvedProposals) ? approvedProposals : [],
     thesis_sizing: Array.isArray(thesisSizing) ? thesisSizing : [],
+    thesis_max_stake: Array.isArray(thesisMaxStakes) ? thesisMaxStakes : [],
     broker_gateway: { available: true, mode: 'robinhood_mcp' },
   };
 }
@@ -437,6 +440,17 @@ async function createTradeProposal(payload: unknown): Promise<unknown> {
   });
 }
 
+function lotInvalidationPatch(
+  position: Record<string, unknown>, current: Record<string, unknown> | undefined,
+): { invalidation_price?: number; invalidation_note?: string } {
+  const price = Number(position.invalidation_price);
+  const note = typeof position.invalidation_note === 'string' ? position.invalidation_note.trim() : '';
+  const patch: { invalidation_price?: number; invalidation_note?: string } = {};
+  if (Number.isFinite(price) && price > 0 && current?.invalidation_price == null) patch.invalidation_price = price;
+  if (note && !current?.invalidation_note) patch.invalidation_note = note.slice(0, 1000);
+  return patch;
+}
+
 async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
   const record = SyncPositionEpisodesSchema.parse(payload);
   const accountKey = record.account_key;
@@ -477,6 +491,9 @@ async function syncPositionEpisodes(payload: unknown): Promise<unknown> {
       thesis_id: thesis.thesis_id,
       meta: thesis.meta,
       updated_at: observedAt,
+      // New open lots must carry the steward's invalidation (DB trigger require_lot_invalidation).
+      // Keep an existing one; take a positive one from the payload when given.
+      ...lotInvalidationPatch(position, current),
     };
     if (current && typeof current.id === 'string') {
       await rest(`position_episodes?id=eq.${encodeURIComponent(current.id)}`, {

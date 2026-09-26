@@ -422,6 +422,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
             id: thesis.id, name: thesis.name, status: thesis.status, stance: thesis.stance,
             confidence: thesis.confidence, symbols: thesis.symbols, falsifier: thesis.falsifier,
             size_multiplier: thesis.size_multiplier ?? null,
+            max_stake: thesis.max_stake ?? null,
           }));
         // The steward's per-lot invalidation (position_episodes.invalidation_price/_note) is read
         // before the thesis-level falsifier.

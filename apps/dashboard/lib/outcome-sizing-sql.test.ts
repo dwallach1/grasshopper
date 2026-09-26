@@ -333,3 +333,40 @@ describe('unknown thesis never sizes an entry', () => {
     expect(sql).toContain('select * into st from private.steward_outcome_stats(p_steward);');
   });
 });
+
+describe('edge-scaled max stake and required invalidation', () => {
+  const path = join(root, 'supabase/schemas/22_edge_scaled_stake.sql');
+  const reasonPath = join(root, 'supabase/schemas/23_edge_stake_reason.sql');
+
+  test('migrations are the schema files at the prod versions', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926175825_edge_scaled_stake.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+    expect(await readFile(join(root, 'supabase/migrations/20260926175903_edge_stake_reason.sql'), 'utf8'))
+      .toBe(await readFile(reasonPath, 'utf8'));
+  });
+
+  test('size = min(requested x multiplier, max_stake, cash); starters per book', async () => {
+    const sql = await readFile(path, 'utf8');
+    expect(sql).toContain('round(least(p_requested * v_mult, ms.max_stake, greatest(coalesce(ca.cash, 0), 0)), 6)');
+    expect(sql).toContain("when 'quantanamo' then 250::numeric");
+    expect(sql).toContain("when 'oddsborne' then 15::numeric");
+    expect(sql).toContain("when 'bandit' then 0.10::numeric");
+    const reason = await readFile(reasonPath, 'utf8');
+    expect(reason).toContain('v_lcb := st.mean_ret - st.sd_ret / sqrt(st.n::numeric);');
+    expect(reason).toContain('if coalesce(st.n, 0) >= 10 and v_lcb > 0 then');
+    expect(reason).toContain('v_haircut := power(0.5::numeric, least(coalesce(st.loss_streak, 0), 2));');
+  });
+
+  test('entries need an invalidation and a fresh book; new open lots are rejected without one', async () => {
+    const sql = await readFile(path, 'utf8');
+    expect(sql).toContain('p_invalidation_price numeric default null');
+    expect(sql).toContain("when v_no_inval then 'missing_invalidation'");
+    expect(sql).toContain("when v_stale then 'stale_book'");
+    expect(sql).toContain('drop function if exists public.steward_sizing_guidance(text, text, text, numeric);');
+    expect(sql).toMatch(/grant execute on function public\.steward_sizing_guidance\(text, text, text, numeric, numeric\)\s+to quantanamo_worker, oddsborne_worker, bandit_worker, service_role/);
+    for (const table of ['position_episodes', 'pm_positions', 'meme_positions']) {
+      expect(sql).toContain(`on public.${table} for each row execute function private.require_lot_invalidation();`);
+    }
+    expect(sql).toContain('create or replace view public.v_thesis_max_stake');
+  });
+});
