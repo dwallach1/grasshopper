@@ -39,3 +39,18 @@ describe('New York research schedule gate', () => {
     });
   });
 });
+
+describe('NYSE holidays and early closes', () => {
+  test('a scheduled slot on an exchange holiday is not actionable', () => {
+    expect(marketGate(Date.parse('2026-11-26T15:05:00Z'))).toMatchObject({
+      time: '10:05', slot: 'morning', actionable: false, reason: 'market_holiday',
+    });
+  });
+
+  test('the 15:05 pre-close slot after a 13:00 early close is not actionable; 10:05 still is', () => {
+    expect(marketGate(Date.parse('2026-11-27T20:05:00Z'))).toMatchObject({
+      time: '15:05', actionable: false, reason: 'market_early_close',
+    });
+    expect(marketGate(Date.parse('2026-11-27T15:05:00Z'))).toMatchObject({ time: '10:05', actionable: true });
+  });
+});

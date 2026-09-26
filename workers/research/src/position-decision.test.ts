@@ -106,6 +106,10 @@ describe('autonomous position decisions', () => {
     expect(isRegularSession(Date.parse('2026-09-23T13:29:00Z'))).toBe(false);
     expect(isRegularSession(Date.parse('2026-09-23T20:00:00Z'))).toBe(false); // 16:00 ET
     expect(isRegularSession(Date.parse('2026-12-02T14:30:00Z'))).toBe(true); // EST: 09:30 ET
+    expect(isRegularSession(Date.parse('2026-09-07T15:00:00Z'))).toBe(false); // Labor Day
+    expect(isRegularSession(Date.parse('2026-11-27T17:59:00Z'))).toBe(true); // 12:59 ET, early close day
+    expect(isRegularSession(Date.parse('2026-11-27T18:00:00Z'))).toBe(false); // 13:00 ET early close
+    expect(isRegularSession(Date.parse('2027-03-26T15:00:00Z'))).toBe(false); // Good Friday 2027
   });
 
   test('lot invalidation note comes before the thesis falsifier', () => {

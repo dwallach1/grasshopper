@@ -6,7 +6,8 @@
   "exports": {
     "./broker": "./src/broker.ts",
     "./publication": "./src/publication.ts",
-    "./desk-snapshot": "./src/desk-snapshot.ts"
+    "./desk-snapshot": "./src/desk-snapshot.ts",
+    "./market-calendar": "./src/market-calendar.ts"
   },
   "scripts": {
     "test": "bun test src"

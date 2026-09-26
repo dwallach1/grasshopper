@@ -12,6 +12,7 @@ import {
   type BrokerMarketContext,
 } from '@quantanamo/contracts/broker';
 import { validateBrokerExecutionPolicy } from './broker-execution-policy';
+import { isUsRegularSession } from '@quantanamo/contracts/market-calendar';
 
 import {
   ROBINHOOD_EXECUTION_TOOL_ALLOWLIST,
@@ -225,17 +226,11 @@ async function stableHash<Value>(value: Value): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-// Mechanical, not a rail: autonomous orders are regular-hours market orders, so the US
-// regular session (09:30-16:00 ET, weekdays) must be open or the order would queue for an
-// unknown next-open price. The old 09:45-15:45 buffer window is gone.
+// Mechanical, not a rail: autonomous orders are regular-hours market orders, so the NYSE core
+// session (09:30-16:00 ET weekdays, 13:00 on early closes, closed on holidays) must be open or the
+// order would queue for an unknown next-open price. The old 09:45-15:45 buffer window is gone.
 function regularSessionOpen(now = new Date()): boolean {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  if (!['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(values.weekday || '')) return false;
-  const minutes = Number(values.hour) * 60 + Number(values.minute);
-  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+  return isUsRegularSession(now.getTime());
 }
 
 function isoDayStart(now = new Date()): string {

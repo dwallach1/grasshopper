@@ -1,4 +1,5 @@
 import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
+import { isUsRegularSession } from '@quantanamo/contracts/market-calendar';
 
 import {
   actionableBrokerEvidence,
@@ -47,19 +48,11 @@ export type PositionAction = {
 };
 
 /**
- * True when `ms` falls in the US equity regular session: Mon-Fri, 09:30-16:00 America/New_York.
- * Exchange holidays are not modelled here; on a holiday the broker quote is not active, so the
- * fresh-quote check above already yields insufficient_data.
+ * True when `ms` falls in the NYSE core session: Mon-Fri 09:30-16:00 America/New_York, 13:00 on
+ * early-close days, never on an exchange holiday (NYSE_CALENDAR, same table as the watchdog).
  */
 export function isRegularSession(ms: number): boolean {
-  if (!Number.isFinite(ms)) return false;
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(new Date(ms));
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-  if (get('weekday') === 'Sat' || get('weekday') === 'Sun') return false;
-  const minutes = Number(get('hour')) * 60 + Number(get('minute'));
-  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+  return isUsRegularSession(ms);
 }
 
 function boundedSellQuantity(position: ManagedPosition, fraction: number): number {

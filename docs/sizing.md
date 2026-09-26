@@ -59,7 +59,7 @@ Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quant
 
 There is no global stop-loss and no portfolio drawdown limit. Exits come from the position's own written invalidation, read in this order:
 
-1. **The lot.** The steward writes it on the open lot: `position_episodes.invalidation_price` (USD per share) and `position_episodes.invalidation_note` (text). When a fresh **regular-session** price (09:30–16:00 America/New_York, Mon–Fri) is at or below `invalidation_price`, the lot exits in full, because it has hit its own definition. A pre-market or after-hours print at or below the line does **not** exit: the decision is `hold` with `review_at_open: true` (trigger `lot_invalidation_price_extended_hours`), and the lot is re-read on the next regular-session print (monitor policy `autonomous-position-v5`, execution `autonomous-equity-v8`). An `invalidation_note` counts as the written invalidation for the confirmed exit below, and it is read before the thesis.
+1. **The lot.** The steward writes it on the open lot: `position_episodes.invalidation_price` (USD per share) and `position_episodes.invalidation_note` (text). When a fresh **regular-session** price (NYSE core session: 09:30–16:00 America/New_York Mon–Fri, 13:00 on early-close days, never on an exchange holiday; `public.us_equity_market_calendar` / `NYSE_CALENDAR`, source nyse.com/markets/hours-calendars, 2026–2028) is at or below `invalidation_price`, the lot exits in full, because it has hit its own definition. A pre-market or after-hours print at or below the line does **not** exit: the decision is `hold` with `review_at_open: true` (trigger `lot_invalidation_price_extended_hours`), and the lot is re-read on the next regular-session print (monitor policy `autonomous-position-v5`, execution `autonomous-equity-v8`). An `invalidation_note` counts as the written invalidation for the confirmed exit below, and it is read before the thesis.
 2. **The linked thesis.** `theses.falsifier`. The position review prefers the thesis linked to the position episode.
 
 A written invalidation (the lot note or the thesis falsifier) triggers an exit only once it is confirmed: the model says the thesis is invalidated with confidence ≥ 90, and there is deterministic adverse evidence. If neither the lot nor a linked thesis has a written invalidation, the exit is left to the steward's judgment and its learned beliefs.
@@ -75,7 +75,7 @@ The automated position monitor is retired, so the ledger watches itself with rea
 | `public.v_ledger_watchdog` | one row of counts: `invalidation_breaches`, `breaches_actionable`, `breaches_review_at_open`, `lots_missing_invalidation`, `integrity_issues`, `integrity_errors`, `integrity` (per check), `open_lots` |
 | `public.v_invalidation_breaches` | open lots whose latest ledger mark is at or below `invalidation_price`, with steward, table, unit, mark age, lot age and `action_hint` (`exit_full_lot`, or `review_at_open` for an equity marked outside the regular session) |
 | `public.v_open_lots_missing_invalidation` | open lots with no `invalidation_price` |
-| `public.v_ledger_integrity` | open lot without thesis, no mark, stale mark (>24h equities/PM, >6h coins), lot vs broker quantity mismatch, broker position without a lot, fill without a position, buy order without a thesis, broker fill without an intent, entry over max_stake (a live buy or new lot since 2026-09-26 above its thesis's current `max_stake` + 10%: an entry that bypassed guidance) |
+| `public.v_ledger_integrity` | open lot without thesis, no mark, stale mark (>24h equities/PM, >6h coins), lot vs broker quantity mismatch, broker position without a lot, fill without a position, buy order without a thesis, broker fill without an intent, entry over max_stake (a live buy, buy intent, or intent-less new lot whose filled size is above the `max_stake_at_entry` snapshotted on that row + 10%: an entry that bypassed guidance; a cap that shrinks later never flags an old entry) |
 | `public.v_open_lot_marks` | every open lot with its latest mark in its own unit |
 | `public.v_thesis_max_stake` | the edge-scaled cap per live thesis |
 
@@ -127,3 +127,11 @@ select private.rescore_all_thesis_confidence();
 ```
 
 QUANTANAMO rows priced from balanced broker fills get `pnl_source = 'fills'`, and the previous numbers are kept in `meta.repriced_from`. ODDSBORNE rows are priced from venue-keyed `pm_fills`: `fills` when buys equal sells, and `settlement` when the rest was held to resolution (the held quantity pays 1 if that side won, otherwise 0). Fees are the net venue fee, where maker rebates are negative. A fill with no venue execution id, or an aggregated placeholder, blocks pricing (`fills_suspect`). Venue liquidity rewards live in `pm_notes` and are never trade P/L. BANDIT fees come from `meme_fills.fee_sol`. The desk fees line shows `sum(meme_fills.fee_sol)`, not `meme_pnl.fees`.
+
+## Cap at entry
+
+`pm_orders`, `meme_orders`, `trade_intents` (buys) and `position_episodes` (new open lots) carry `max_stake_at_entry`, `max_stake_reason_at_entry` and `max_stake_snapshot_at`. Stewards pass the `max_stake` / `max_stake_reason` their guidance call returned; a row inserted without them gets the same `private.edge_max_stake` value from a BEFORE INSERT trigger (`private.snapshot_entry_max_stake`, never blocks). `entry_over_max_stake` compares with that snapshot only.
+
+## Session calendar
+
+`public.us_regular_session_open(timestamptz default now())` answers "is the NYSE core session open" with holidays and 13:00 ET early closes. The watchdog (`private.is_us_regular_session`), `position-decision` (`isRegularSession`), the broker gateway and the research schedule gate all use the same calendar (`packages/contracts/src/market-calendar.ts`, tested equal to the SQL rows). Add the next year to both when NYSE publishes it.

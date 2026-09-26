@@ -1,3 +1,5 @@
+import { usEquitySession } from '@quantanamo/contracts/market-calendar';
+
 export type MarketGate = {
   date: string;
   time: string;
@@ -37,11 +39,20 @@ export function marketGate(timestamp: number, forcedSlot?: string): MarketGate {
   ]);
   const weekday = !['Sat', 'Sun'].includes(local.weekday);
   const slot = forcedSlot || slots.get(local.time) || null;
-  const actionable = weekday && slot !== null;
+  // NYSE holidays and early closes: no research/trade window when the core session is shut.
+  const session = usEquitySession(timestamp);
+  const holiday = weekday && session.status === 'holiday';
+  const pastEarlyClose = weekday && session.calendar?.kind === 'early_close' && session.status === 'closed';
+  const actionable = weekday && !holiday && !pastEarlyClose && slot !== null;
   return {
     ...local,
     slot,
     actionable,
-    reason: actionable ? 'scheduled_research_window' : weekday ? 'dst_guard_or_unscheduled_time' : 'weekend',
+    reason: actionable
+      ? 'scheduled_research_window'
+      : !weekday ? 'weekend'
+      : holiday ? 'market_holiday'
+      : pastEarlyClose ? 'market_early_close'
+      : 'dst_guard_or_unscheduled_time',
   };
 }
