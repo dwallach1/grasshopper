@@ -280,7 +280,7 @@ describe('no global stop or drawdown limit (PR 7)', () => {
     expect(code).not.toContain('hard_loss');
     const orchestrator = await readFile(join(root, 'workers/research/src/research-orchestrator.ts'), 'utf8');
     expect(orchestrator).not.toContain('hard_loss_limit_percent');
-    expect(orchestrator).toContain("version: 'autonomous-equity-v7'");
+    expect(orchestrator).toContain("version: 'autonomous-equity-v8'");
     const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
     expect(doc).not.toMatch(/−8%|-8%/);
   });
@@ -368,5 +368,32 @@ describe('edge-scaled max stake and required invalidation', () => {
       expect(sql).toContain(`on public.${table} for each row execute function private.require_lot_invalidation();`);
     }
     expect(sql).toContain('create or replace view public.v_thesis_max_stake');
+  });
+});
+
+describe('ledger watchdog views and regular-session invalidation', () => {
+  const path = join(root, 'supabase/schemas/24_ledger_watchdog.sql');
+  const ackPath = join(root, 'supabase/schemas/25_integrity_untagged_ack.sql');
+
+  test('migrations are the schema files at the prod versions', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926180750_ledger_watchdog.sql'), 'utf8'))
+      .toBe(await readFile(path, 'utf8'));
+    expect(await readFile(join(root, 'supabase/migrations/20260926180825_integrity_untagged_ack.sql'), 'utf8'))
+      .toBe(await readFile(ackPath, 'utf8'));
+  });
+
+  test('views never invent a mark; equities breach only on a regular-session mark', async () => {
+    const sql = await readFile(path, 'utf8');
+    for (const view of ['v_open_lot_marks', 'v_invalidation_breaches', 'v_open_lots_missing_invalidation', 'v_ledger_integrity', 'v_ledger_watchdog']) {
+      expect(sql).toContain(`create or replace view public.${view}\nwith (security_invoker = true)`);
+    }
+    expect(sql).toContain('  and mark is not null\n  and mark <= invalidation_price;');
+    expect(sql).toContain("when lot_table = 'position_episodes' and not coalesce(mark_in_regular_session, false) then 'review_at_open'");
+    expect(sql).toContain("'watchdog', coalesce((select to_jsonb(w) from public.v_ledger_watchdog w), '{}'::jsonb)");
+    expect(sql).toContain("'scorecard', jsonb_build_object(");
+    const code = await readFile(join(root, 'workers/research/src/position-decision.ts'), 'utf8');
+    expect(code).toContain("trigger: 'lot_invalidation_price_extended_hours'");
+    const orchestrator = await readFile(join(root, 'workers/research/src/research-orchestrator.ts'), 'utf8');
+    expect(orchestrator).toContain("policy_version: 'autonomous-position-v5'");
   });
 });

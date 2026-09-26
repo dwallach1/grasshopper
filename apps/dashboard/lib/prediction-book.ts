@@ -52,6 +52,9 @@ export type PredictionPositionRow = {
   closed_at?: string | null;
   thesis_text: string | null;
   untagged?: string | null;
+  /** Steward-written lot invalidation in the row's own unit (outcome price / SOL per token). */
+  invalidation_price?: number | null;
+  invalidation_note?: string | null;
 };
 
 export type PredictionOrderRow = {
@@ -533,6 +536,8 @@ export function mapPredictionMarkets(input: {
       closed_at: row.closed_at == null ? null : requireIso(row.closed_at as string | Date, 'pm_positions.closed_at'),
       thesis_text: optionalText(row, 'thesis_text'),
       untagged: leanUntagged(row),
+      invalidation_price: asOptionalNumber(row.invalidation_price as string | number | null | undefined ?? null, 'pm_positions.invalidation_price'),
+      invalidation_note: optionalText(row, 'invalidation_note'),
     })),
     orders: (input.orders ?? []).map((row) => ({
       id: text(row, 'id'),

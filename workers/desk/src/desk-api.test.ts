@@ -106,6 +106,19 @@ describe('public desk Worker API', () => {
       stale_opens: 0,
       resolved_still_open: 0,
       stale_catalog: 0,
+      invalidation_breaches: 0,
+      lots_missing_invalidation: 0,
+      integrity_issues: 0,
+      watchdog: {
+        watchdog_available: false,
+        invalidation_breaches: 0,
+        breaches_actionable: 0,
+        breaches_review_at_open: 0,
+        lots_missing_invalidation: 0,
+        integrity_issues: 0,
+        integrity_errors: 0,
+        integrity: {},
+      },
       learning: {
         to_review: 0,
         lessons_open: 0,
@@ -210,7 +223,9 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain('pnl_start: pmPnl.pnl_start');
     expect(fn).toContain('pnl_start: memePnl.pnl_start');
     expect(fn).not.toContain('order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
-    expect(fn).toContain('closed_at,untagged:meta->>untagged&order=updated_at.desc&limit=200');
+    expect(fn).toContain('closed_at,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200');
+    expect(fn).toContain("['summary', 'v_ledger_watchdog?select=*']");
+    expect(fn).toContain('      watchdog,\n');
     expect(fn).not.toContain('source_count=gte.2');
     expect(fn).toContain('id.desc&limit=200');
     expect(fn).toContain("req.method !== 'GET'");
@@ -220,7 +235,7 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("'lessons'");
     expect(fn).toContain('position_episodes?select=');
     expect(fn).toContain('next_review_at,thesis_id,invalidation_price,invalidation_note,untagged:meta->>untagged');
-    expect(fn).toContain('thesis_text,untagged:meta->>untagged');
+    expect(fn).toContain('thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged');
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]beliefs['"]/);
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]lessons['"]/s);
     expect(fn).toContain('not_allowed');

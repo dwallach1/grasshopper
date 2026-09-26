@@ -1,16 +1,19 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, setSystemTime, test } from 'bun:test';
 
 import type { BrokerAccountSnapshot } from '@quantanamo/contracts/broker';
-import { decidePositionAction } from './position-decision';
+import { decidePositionAction, isRegularSession } from './position-decision';
 import { lotInvalidationFromEpisode } from './schemas';
 
 const now = new Date().toISOString();
 const basePosition = { symbol: 'ABCD', quantity: 10, sharesAvailableForSells: 10, averageBuyPrice: 100 };
-const snapshot: BrokerAccountSnapshot = {
-  accountKey: 'rh:test', accountLast4: '1234', observedAt: now,
-  totalValue: 10_000, equityValue: 1_000, cash: 9_000, buyingPower: 9_000,
-  positions: [basePosition], todayAgenticOrderCount: 0, todayAgenticOrderNotional: 0, pendingOrderSymbols: [],
-};
+function snapshotBase(): BrokerAccountSnapshot {
+  return {
+    accountKey: 'rh:test', accountLast4: '1234', observedAt: now,
+    totalValue: 10_000, equityValue: 1_000, cash: 9_000, buyingPower: 9_000,
+    positions: [basePosition], todayAgenticOrderCount: 0, todayAgenticOrderNotional: 0, pendingOrderSymbols: [],
+  };
+}
+const snapshot: BrokerAccountSnapshot = snapshotBase();
 const thesis = [{
   id: 't1', name: 'Test thesis', status: 'hardening', stance: 'bullish', confidence: 85, symbols: ['ABCD'],
   falsifier: 'The thesis is invalidated by a documented demand reversal.',
@@ -55,6 +58,8 @@ describe('autonomous position decisions', () => {
   });
 
   test('lot invalidation price is read first: hit exits, not hit holds', () => {
+    setSystemTime(new Date('2026-09-23T15:00:00Z')); // Wed 11:00 ET, regular session
+    const snapshot = { ...snapshotBase(), observedAt: new Date().toISOString() };
     const history = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null };
     const lot = { price: 96, note: 'Loses the post-earnings gap.' };
     // The model says hold, but the steward's own lot price is hit.
@@ -76,6 +81,31 @@ describe('autonomous position decisions', () => {
     );
     expect(priceOnly.action).toBe('hold');
     expect(priceOnly.evidence.exit_source).toBe('lot_invalidation_price_not_hit');
+    setSystemTime();
+  });
+
+  test('equities: only a regular-session print triggers the lot exit; extended hours flags review_at_open', () => {
+    const lot = { price: 96, note: null };
+    const history = { addsToday: 0, addsLifetime: 0, reductionsToday: 0, lastAddAt: null };
+    for (const at of ['2026-09-23T12:00:00Z', '2026-09-23T21:30:00Z', '2026-09-26T15:00:00Z']) {
+      // Wed 08:00 ET pre-market, Wed 17:30 ET after hours, Sat 11:00 ET
+      setSystemTime(new Date(at));
+      const snapshot = { ...snapshotBase(), observedAt: new Date().toISOString() };
+      const held = decidePositionAction(basePosition, snapshot, thesis, {}, context(95.5), history, lot);
+      expect(held.action).toBe('hold');
+      expect(held.evidence.review_at_open).toBe(true);
+      expect(held.evidence.trigger).toBe('lot_invalidation_price_extended_hours');
+    }
+    setSystemTime(new Date('2026-09-23T19:59:00Z')); // Wed 15:59 ET
+    const snapshot = { ...snapshotBase(), observedAt: new Date().toISOString() };
+    const hit = decidePositionAction(basePosition, snapshot, thesis, {}, context(95.5), history, lot);
+    expect(hit.action).toBe('exit');
+    expect(hit.evidence.regular_session).toBe(true);
+    setSystemTime();
+    expect(isRegularSession(Date.parse('2026-09-23T13:30:00Z'))).toBe(true); // 09:30 ET
+    expect(isRegularSession(Date.parse('2026-09-23T13:29:00Z'))).toBe(false);
+    expect(isRegularSession(Date.parse('2026-09-23T20:00:00Z'))).toBe(false); // 16:00 ET
+    expect(isRegularSession(Date.parse('2026-12-02T14:30:00Z'))).toBe(true); // EST: 09:30 ET
   });
 
   test('lot invalidation note comes before the thesis falsifier', () => {

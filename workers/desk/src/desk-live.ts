@@ -13,6 +13,7 @@ import type { JsonObjectRow } from '../../../apps/dashboard/lib/ledger-map';
 import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
 import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
 import { mapStewardScorecard } from '../../../apps/dashboard/lib/steward-scorecard';
+import { mapLedgerWatchdog } from '../../../apps/dashboard/lib/ledger-watchdog';
 
 /** Match the phone poll so a live GET does not re-assemble inside the interval. */
 export const LIVE_CACHE_MS = PUBLIC_LIVE_INTERVAL_MS;
@@ -159,6 +160,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
     meme?: { tokens?: unknown[]; positions?: unknown[]; orders?: unknown[]; fills?: unknown[]; pnl?: unknown[]; pnl_start?: unknown; notes?: unknown[] };
     team?: { agents?: unknown[]; domains?: unknown[]; stewards?: unknown[]; accounts?: unknown[] };
     scorecard?: unknown;
+    watchdog?: unknown;
   };
   const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
@@ -198,6 +200,7 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
       accounts: asUnknownRows(bag.team?.accounts),
     }),
     scorecard: mapStewardScorecard(bag.scorecard),
+    watchdog: mapLedgerWatchdog(bag.watchdog),
   });
   const published = toPublicDeskSnapshot({
     ...live,

@@ -599,6 +599,8 @@ export type DeskPayload = {
   team?: DeskTeamPayload;
   /** `v_steward_*` / `v_thesis_scorecard` outcome ledger. Measurement only. Empty when views are missing. */
   scorecard?: import('./steward-scorecard').StewardScorecardPayload;
+  /** `v_ledger_watchdog` backstop counts + breach / missing-invalidation lists. Read-only. */
+  watchdog?: import('./ledger-watchdog').LedgerWatchdog;
   theses: ThesisRow[];
   /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
   beliefs: import('./beliefs').BeliefUpdateRow[];

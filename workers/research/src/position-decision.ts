@@ -46,6 +46,22 @@ export type PositionAction = {
   evidence: DecisionJsonObject;
 };
 
+/**
+ * True when `ms` falls in the US equity regular session: Mon-Fri, 09:30-16:00 America/New_York.
+ * Exchange holidays are not modelled here; on a holiday the broker quote is not active, so the
+ * fresh-quote check above already yields insufficient_data.
+ */
+export function isRegularSession(ms: number): boolean {
+  if (!Number.isFinite(ms)) return false;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  if (get('weekday') === 'Sat' || get('weekday') === 'Sun') return false;
+  const minutes = Number(get('hour')) * 60 + Number(get('minute'));
+  return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+}
+
 function boundedSellQuantity(position: ManagedPosition, fraction: number): number {
   const available = Math.min(position.quantity, position.sharesAvailableForSells);
   return Math.floor(available * fraction * 1_000_000) / 1_000_000;
@@ -165,6 +181,23 @@ export function decidePositionAction(
   };
 
   // 1a. The steward's own per-lot price is hit: the lot is invalidated by its own definition.
+  // Equities: only a regular-session (09:30-16:00 ET) print counts. An extended-hours print at or
+  // below the price flags the lot for review at the open instead of exiting on a thin book.
+  const regularSession = isRegularSession(quoteAt);
+  if (lotPrice !== null && last <= lotPrice && !regularSession) {
+    return {
+      action: 'hold', symbol,
+      rationale: `Extended-hours print ${last} <= lot invalidation ${lotPrice}; review at the regular-session open.`,
+      evidence: {
+        ...commonEvidence,
+        ...lotEvidence,
+        trigger: 'lot_invalidation_price_extended_hours',
+        review_at_open: true,
+        quote_at: new Date(quoteAt).toISOString(),
+        regular_session: false,
+      },
+    };
+  }
   if (lotPrice !== null && last <= lotPrice) {
     const quantity = boundedSellQuantity(position, 1);
     if (quantity > 0) return {
@@ -175,6 +208,7 @@ export function decidePositionAction(
         ...lotEvidence,
         trigger: 'lot_invalidation_price',
         invalidation_source: 'lot',
+        regular_session: true,
       },
     };
   }

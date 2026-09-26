@@ -84,6 +84,9 @@ export async function loadDesk(accessToken: string): Promise<DeskPayload> {
 }
 
 export { loadDeskFromRest, REST_FETCH_MS } from './ledger-live';
+import { withScorecard } from './ledger-live';
+import { mapStewardScorecard, type StewardScorecardPayload } from './steward-scorecard';
+import { mapLedgerWatchdog, WATCHDOG_LIST_LIMIT, type LedgerWatchdog } from './ledger-watchdog';
 
 export async function loadDeskFromPostgres(): Promise<DeskPayload> {
   const sql = openSql();
@@ -379,12 +382,14 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const [prediction, meme, team] = await Promise.all([
+    const [prediction, meme, team, scorecard, watchdog] = await Promise.all([
       loadPredictionMarkets(sql),
       loadMemeCoins(sql),
       loadTeam(sql),
+      loadScorecard(sql),
+      loadWatchdog(sql),
     ]);
-    return assembleDesk('postgres', decorateDesk(theses, symbols, {
+    return withScorecard(assembleDesk('postgres', decorateDesk(theses, symbols, {
       beliefs: mapBeliefs(beliefs),
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
@@ -423,10 +428,74 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }, prediction, meme, team));
+    }, prediction, meme, team)), scorecard, watchdog);
   } finally {
     await sql.end({ timeout: 5 });
   }
+}
+
+/** Read-only views; a ledger without them (or without the grant) serves empty rows. */
+async function viewRows(label: string, query: Promise<unknown>): Promise<Record<string, unknown>[]> {
+  try {
+    return (await query) as unknown as Record<string, unknown>[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (isPostgresPermissionDenied(message) || isPostgresUndefinedRelation(message)) {
+      console.error(JSON.stringify({ event: 'ledger_view_skipped', view: label, error: message }));
+      return [];
+    }
+    throw error;
+  }
+}
+
+/** Same columns as ledger-live SCORECARD_QUERIES (operator direct-Postgres path). */
+async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
+  const [stewards, weekly, trend, theses] = await Promise.all([
+    viewRows('v_steward_scorecard', sql`select * from public.v_steward_scorecard order by sort_order`),
+    viewRows('v_steward_scorecard_weekly', sql`
+      select steward, unit, week_start, iso_week, is_current, trades, priced_trades, wins, hit_rate, realized_pnl
+      from public.v_steward_scorecard_weekly
+      order by week_start desc, steward asc
+      limit 60
+    `),
+    viewRows('v_steward_trend', sql`
+      select steward, recent_n, prior_n, recent_expectancy, prior_expectancy, thin, direction
+      from public.v_steward_trend
+    `),
+    viewRows('v_thesis_scorecard', sql`
+      select thesis_id, name, steward, stated_confidence, outcome_implied_confidence, confidence_gap,
+             priced_trades, wins, miscalibrated, thin
+      from public.v_thesis_scorecard
+      order by priced_trades desc
+    `),
+  ]);
+  return mapStewardScorecard({ stewards, weekly, trend, theses });
+}
+
+async function loadWatchdog(sql: Sql): Promise<LedgerWatchdog> {
+  const [summary, breaches, missing, issues] = await Promise.all([
+    viewRows('v_ledger_watchdog', sql`select * from public.v_ledger_watchdog`),
+    viewRows('v_invalidation_breaches', sql`
+      select steward, lot_table, lot_id, instrument, unit, thesis_id, invalidation_price, mark, mark_at,
+             mark_age_minutes, action_hint
+      from public.v_invalidation_breaches
+      order by mark_at desc
+      limit ${WATCHDOG_LIST_LIMIT}
+    `),
+    viewRows('v_open_lots_missing_invalidation', sql`
+      select steward, lot_table, lot_id, instrument, unit, thesis_id, mark, mark_at, opened_at
+      from public.v_open_lots_missing_invalidation
+      order by opened_at asc
+      limit ${WATCHDOG_LIST_LIMIT}
+    `),
+    viewRows('v_ledger_integrity', sql`
+      select check_name, severity, steward, ref_table, ref_id, instrument, detail, at
+      from public.v_ledger_integrity
+      order by at desc nulls last
+      limit ${WATCHDOG_LIST_LIMIT}
+    `),
+  ]);
+  return mapLedgerWatchdog({ summary, breaches, missing, issues });
 }
 
 async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload> {
@@ -444,6 +513,7 @@ async function loadPredictionMarkets(sql: Sql): Promise<PredictionMarketsPayload
       sql`
         select id, market_id, account_key, thesis_id, outcome, status, quantity,
                average_cost, mark, mark_at, opened_at, closed_at, thesis_text,
+               invalidation_price, invalidation_note,
                nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.pm_positions
         order by updated_at desc
@@ -567,6 +637,7 @@ async function loadMemeCoins(sql: Sql): Promise<MemeCoinsPayload> {
       sql`
         select id, token_id, account_key, thesis_id, status, quantity,
                average_cost_sol, mark_sol, mark_at, opened_at, closed_at, thesis_text,
+               invalidation_price, invalidation_note,
                nullif(btrim(coalesce(meta->>'untagged', '')), '') as untagged
         from public.meme_positions
         order by updated_at desc

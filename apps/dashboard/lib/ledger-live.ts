@@ -41,6 +41,12 @@ import {
   mapStewardScorecard,
   type StewardScorecardPayload,
 } from './steward-scorecard';
+import {
+  emptyLedgerWatchdog,
+  mapLedgerWatchdog,
+  WATCHDOG_QUERIES,
+  type LedgerWatchdog,
+} from './ledger-watchdog';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 import {
   emptyMemeCoins,
@@ -172,19 +178,30 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 
-  const [prediction, meme, team, scorecard] = await Promise.all([
+  const [prediction, meme, team, scorecard, watchdog] = await Promise.all([
     loadPredictionMarketsRest(auth),
     loadMemeCoinsRest(auth),
     loadTeamRest(auth),
     loadScorecardRest(auth),
+    loadWatchdogRest(auth),
   ]);
   return assembleDeskFromRestBag({
     theses, symbols, beliefs, evidence, scores, relations, runs, cloudRuns, cloudTasks,
     automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
     scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
     intents, proposals, fills, insights, predictions, riskControls, themes,
-    ontologySymbols, candidates, actions, prediction, meme, team, scorecard,
+    ontologySymbols, candidates, actions, prediction, meme, team, scorecard, watchdog,
   });
+}
+
+async function loadWatchdogRest(auth: DeskRestAuth): Promise<LedgerWatchdog> {
+  const [summary, breaches, missing, issues] = await Promise.all([
+    restOptional(WATCHDOG_QUERIES.summary, auth),
+    restOptional(WATCHDOG_QUERIES.breaches, auth),
+    restOptional(WATCHDOG_QUERIES.missing, auth),
+    restOptional(WATCHDOG_QUERIES.issues, auth),
+  ]);
+  return mapLedgerWatchdog({ summary, breaches, missing, issues });
 }
 
 async function loadScorecardRest(auth: DeskRestAuth): Promise<StewardScorecardPayload> {
@@ -235,6 +252,7 @@ export type RestDeskBag = {
   meme: MemeCoinsPayload;
   team: DeskTeamPayload;
   scorecard?: StewardScorecardPayload;
+  watchdog?: LedgerWatchdog;
 };
 
 /** Read-only scorecard views. Optional: a ledger without the outcome migration serves []. */
@@ -263,7 +281,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'prediction'
   | 'meme'
   | 'team'
-> & Partial<Pick<RestDeskBag, 'scorecard'>>): DeskPayload {
+> & Partial<Pick<RestDeskBag, 'scorecard' | 'watchdog'>>): DeskPayload {
   return withScorecard(assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
     beliefs: mapBeliefs(bag.beliefs),
     evidence: [],
@@ -303,11 +321,15 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       open_positions: 0,
       queued_tasks: 0,
     },
-  }, bag.prediction, bag.meme, bag.team)), bag.scorecard);
+  }, bag.prediction, bag.meme, bag.team)), bag.scorecard, bag.watchdog);
 }
 
-function withScorecard(desk: DeskPayload, scorecard: StewardScorecardPayload | undefined): DeskPayload {
-  return { ...desk, scorecard: scorecard ?? emptyStewardScorecard() };
+export function withScorecard(
+  desk: DeskPayload,
+  scorecard: StewardScorecardPayload | undefined,
+  watchdog?: LedgerWatchdog,
+): DeskPayload {
+  return { ...desk, scorecard: scorecard ?? emptyStewardScorecard(), watchdog: watchdog ?? emptyLedgerWatchdog() };
 }
 
 export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
@@ -361,7 +383,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }, prediction, meme, team)), bag.scorecard);
+  }, prediction, meme, team)), bag.scorecard, bag.watchdog);
 }
 
 async function loadTeamRest(auth: DeskRestAuth): Promise<DeskTeamPayload> {
@@ -377,7 +399,7 @@ async function loadTeamRest(auth: DeskRestAuth): Promise<DeskTeamPayload> {
 async function loadMemeCoinsRest(auth: DeskRestAuth): Promise<MemeCoinsPayload> {
   const [tokens, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
     restOptional('meme_tokens?select=id,venue,mint,symbol,name,status,bonding_curve_status,graduated_at,last_price_sol,last_mcap_sol,last_marked_at,thesis_id,kill_criteria&order=updated_at.desc&limit=200', auth),
-    restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
+    restOptional('meme_positions?select=id,token_id,account_key,thesis_id,status,quantity,average_cost_sol,mark_sol,mark_at,opened_at,closed_at,thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
     restOptional('meme_orders?select=id,token_id,account_key,thesis_id,side,order_type,size_sol,size_tokens,price_sol,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', auth),
     restOptional('meme_fills?select=id,order_id,position_id,account_key,side,quantity,price_sol,fee_sol,executed_at&order=executed_at.desc&limit=200', auth),
     restOptional(`meme_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash_sol,equity_sol,notes&order=as_of.desc,id.desc&limit=${PNL_TAIL_LIMIT}`, auth),
@@ -399,7 +421,7 @@ async function loadMemeCoinsRest(auth: DeskRestAuth): Promise<MemeCoinsPayload> 
 async function loadPredictionMarketsRest(auth: DeskRestAuth): Promise<PredictionMarketsPayload> {
   const [markets, positions, orders, fills, pnl, pnlFirst, notes] = await Promise.all([
     restOptional('pm_markets?select=id,venue,slug,question,status,close_time,last_yes,last_no,last_marked_at,thesis_id,rules_summary&order=close_time.asc.nullslast&limit=200', auth),
-    restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
+    restOptional('pm_positions?select=id,market_id,account_key,thesis_id,outcome,status,quantity,average_cost,mark,mark_at,opened_at,closed_at,thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200', auth),
     restOptional('pm_orders?select=id,market_id,thesis_id,outcome,side,order_type,size,price,status,mode,venue_order_id,submitted_at,created_at&order=created_at.desc&limit=200', auth),
     restOptional('pm_fills?select=id,order_id,position_id,outcome,side,quantity,price,executed_at&order=executed_at.desc&limit=200', auth),
     restOptional(`pm_pnl?select=id,account_key,as_of,realized,unrealized,fees,cash,equity,notes&order=as_of.desc,id.desc&limit=${PNL_TAIL_LIMIT}`, auth),

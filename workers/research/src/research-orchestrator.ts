@@ -355,7 +355,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
             // (David, 2026-09-26: "Kill the old rules!"). Adds are results-sized; exits come
             // from the lot's own invalidation (position_episodes.invalidation_price/_note), then
             // the linked thesis's (theses.falsifier), or the steward.
-            policy_version: 'autonomous-position-v4',
+            policy_version: 'autonomous-position-v5',
             exit_source: 'lot_invalidation_then_linked_thesis_falsifier_or_steward_judgment',
           },
         })),
@@ -916,6 +916,20 @@ async function processPositionTask(env: PublicationEnv, task: PositionReviewTask
     });
   }
 
+  // An extended-hours print through the lot invalidation flags the episode for review at the open
+  // (last_recommendation; meta is left untouched).
+  if (!recorded.duplicate && decision.evidence.review_at_open === true) {
+    await cloudControl(env, 'patch_position_episode', {
+      id: task.episodeId,
+      last_recommendation: {
+        recommendation: 'hold', review_at_open: true, trigger: decision.evidence.trigger,
+        last: decision.evidence.last, lot_invalidation_price: decision.evidence.lot_invalidation_price,
+        quote_at: decision.evidence.quote_at, observed_at: observedAt,
+      },
+      updated_at: observedAt,
+    });
+  }
+
   let approvedProposalId: number | null = null;
   const positionAction = decision.action === 'add' || decision.action === 'reduce' || decision.action === 'exit'
     ? decision.action
@@ -1029,7 +1043,7 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v7',
+    version: 'autonomous-equity-v8',
     // Size follows results with no hard cap per position, and no fixed rails (David,
     // 2026-09-26: "Kill the old rules!"): no trade count, spread block, 09:45-15:45 window
     // or global stop-loss. The notional was sized upstream (requested % x outcome

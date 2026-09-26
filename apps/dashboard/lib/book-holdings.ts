@@ -46,7 +46,7 @@ export type BookHolding = {
   untagged: string | null;
   rules_in_force: string[];
   clip_note: ClipNote | null;
-  /** Steward-written per-lot invalidation (live stock lots). Null when none is written. */
+  /** Steward-written per-lot invalidation in the row's unit (stock, outcome price, SOL/token). Null when none. */
   invalidation: HoldingInvalidation | null;
 };
 
@@ -214,6 +214,7 @@ function predictionHoldings(desk: DeskPayload): BookHolding[] {
         life: closed ? 'closed' : 'live',
         steward: 'oddsborne',
       }),
+      invalidation: lotInvalidation(row),
     }));
   }
   return rows;
@@ -252,6 +253,7 @@ function memeHoldings(desk: DeskPayload): BookHolding[] {
         life: closed ? 'closed' : 'live',
         steward: 'bandit',
       }),
+      invalidation: lotInvalidation(row),
     }));
   }
   return rows;
@@ -365,7 +367,7 @@ function equityLot(
   };
 }
 
-/** position_episodes.invalidation_price / invalidation_note, as the steward wrote them. */
+/** Lot invalidation_price / invalidation_note (any book), as the steward wrote them. */
 export function lotInvalidation(row: {
   invalidation_price?: number | null;
   invalidation_note?: string | null;
