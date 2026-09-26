@@ -73,7 +73,7 @@ const PositionSynthesisJsonSchema = {
     risks: { type: 'array', items: { type: 'string' } },
     catalyst: { type: 'string' },
     invalidation: { type: 'string' },
-    add_percent: { type: 'number', minimum: 0, maximum: 2 },
+    add_percent: { type: 'number', minimum: 0, maximum: 100 },
     reduce_percent: { type: 'number', minimum: 0, maximum: 100 },
     invalidation_confirmed: { type: 'boolean' },
     adverse_evidence: { type: 'boolean' },

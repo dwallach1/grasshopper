@@ -7,7 +7,7 @@ Before any real trade, Quantanamo should:
 3. Validate each symbol with Robinhood search/quotes/tradability.
 4. Check existing exposure across readable Robinhood accounts.
 5. Identify the catalyst, expected swing horizon, and invalidation.
-6. Read `config/trade_policy.json`; size each buy from the refreshed Robinhood total portfolio value (requested % × thesis outcome multiplier, no per-position cap) and limit it only by spendable cash (no margin).
+6. Read `config/trade_policy.json`; size each buy from the refreshed Robinhood total portfolio value (requested % × thesis outcome multiplier, no per-position cap) and limit it only by spendable cash (no margin). There are no fixed rails (trade count, spread block, 09:45–15:45 window, add %, reduce band, averaging-down ban); spread and session edges are guidance.
 7. Run bull-case, bear-case, and portfolio-risk reviews when practical.
 8. Use web research when the thesis depends on current events, 13F filings, articles, SEC filings, or fresh market context.
 9. Call Robinhood `review_equity_order` before any equity placement.

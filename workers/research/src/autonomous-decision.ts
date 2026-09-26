@@ -8,7 +8,7 @@ import {
   type FundamentalsRow,
   type MarketSymbolRow,
 } from './schemas';
-import { MAX_REQUEST_PERCENT, sizeBuyNotional, validMultiplier } from './sizing';
+import { MAX_REQUEST_PERCENT, MIN_ORDER_NOTIONAL, sizeBuyNotional, validMultiplier } from './sizing';
 
 export type DecisionJsonPrimitive = boolean | number | string | null;
 export type DecisionJsonValue =
@@ -69,8 +69,7 @@ export function actionableBrokerEvidence(
   const quoteAt = Date.parse(String(market.quoteAt || ''));
   if (!Number.isFinite(quoteAt) || Date.now() - quoteAt > 120_000) return { pass: false, reasons: ['stale_quote'] };
   if (market.tradable !== true || market.state !== 'active') return { pass: false, reasons: ['not_tradable'] };
-  const spreadBps = Number(market.spreadBps);
-  if (!Number.isFinite(spreadBps) || spreadBps > 80) return { pass: false, reasons: ['spread_too_wide'] };
+  // Spread is guidance only (no bps block); the gateway checks the quote is valid and uncrossed.
 
   for (const row of earningsResultRows(researched, symbol)) {
     if (!row.report || !row.eps || row.eps.actual == null) continue;
@@ -129,7 +128,7 @@ export function approvedCandidate(
   const multiplier = task.thesis.size_multiplier;
   if (!validMultiplier(multiplier)) return null;
   const requestedPercent = Number(decision.notional_percent);
-  if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > MAX_REQUEST_PERCENT) {
+  if (!Number.isFinite(requestedPercent) || requestedPercent <= 0 || requestedPercent > MAX_REQUEST_PERCENT) {
     return null;
   }
   // Size follows results: requested % of book x outcome multiplier. No per-position cap;
@@ -141,7 +140,7 @@ export function approvedCandidate(
     requestedPercent,
     multiplier,
   });
-  if (notional < 25) return null;
+  if (notional < MIN_ORDER_NOTIONAL) return null;
   return {
     symbol,
     notional,

@@ -76,6 +76,17 @@ describe('autonomous decision gates', () => {
     expect(candidate?.symbol).toBe('ABCD');
   });
 
+  test('a wide spread is guidance, not a block', () => {
+    const wide = context();
+    wide.market.symbols[0]!.spreadBps = 350;
+    expect(actionableBrokerEvidence(wide, 'ABCD').pass).toBe(true);
+    expect(approvedCandidate(thesisTask, modelDecision, wide, snapshot)?.notional).toBe(500);
+  });
+
+  test('a sub-1% request is sized, not rejected (no minimum request %)', () => {
+    expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 0.5 }, context(), snapshot)?.notional).toBe(50);
+  });
+
   test('rejects stale broker evidence', () => {
     const stale = new Date(Date.now() - 10 * 60_000).toISOString();
     expect(actionableBrokerEvidence(context(stale), 'ABCD').pass).toBe(false);

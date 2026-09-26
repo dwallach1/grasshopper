@@ -49,13 +49,14 @@ export const AutonomousEquityIntentSchema = z.object({
   quantity: z.number().positive().optional(),
   rationaleSha256: z.string().min(1),
   /**
-   * Deprecated since PR 4 (size follows results, no hard cap per position). The gateway
-   * ignores both. Orchestrators still send them so a pre-PR-4 gateway fails closed.
+   * Deprecated and ignored by the gateway. PR 4 removed the % size rails, and PR 6 removed
+   * the fixed trade-count and spread rails ("Kill the old rules!", David 2026-09-26).
+   * Kept optional only so intents from older orchestrators still parse.
    */
   maxTradePercent: z.number().positive().optional(),
   maxDailyNotionalPercent: z.number().positive().optional(),
-  maxTradesPerDay: z.number().int().positive(),
-  maxSpreadBps: z.number().positive(),
+  maxTradesPerDay: z.number().int().positive().optional(),
+  maxSpreadBps: z.number().positive().optional(),
 });
 
 export const AutonomousExecutionResultSchema = z.object({

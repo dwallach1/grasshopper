@@ -20,7 +20,6 @@
   "sizing": {
     "cash_reserve_percent_of_portfolio_value": 0,
     "max_total_deployed_percent_of_portfolio_value": 100,
-    "max_new_positions_per_run": 3,
     "sizing_method": "requested_percent_x_outcome_multiplier_limited_by_spendable_cash",
     "standing_cash_target_percent": 0,
     "tactical_swing_sleeve": {
@@ -34,9 +33,17 @@
       "buy_notional": "requested percent of live total_value x thesis outcome multiplier",
       "size_multiplier": "public.thesis_sizing(): half-Kelly on trade_outcomes, 0.25..1.0, thin samples (n<5) 0.5",
       "per_position_cap": null,
-      "mechanical_limits": ["spendable cash: min(cash, buying_power), no margin", "positive finite dollar amount"],
+      "mechanical_limits": [
+        "spendable cash: min(cash, buying_power), no margin",
+        "positive finite dollar amount or share quantity within available shares",
+        "fresh (<=120s), uncrossed quote",
+        "US regular session open (orders are regular-hours market orders)"
+      ],
       "autonomous_buy_gate": "thesis hardening, bullish, outcome-tempered confidence >= 80",
-      "decided": "2026-09-26 David: size follows results with no hard cap per position"
+      "decided": "2026-09-26 David: size follows results with no hard cap per position",
+      "entry_blocks": "rejected or killed thesis (all stewards); QUANTANAMO equity entries also need a hardening thesis at confidence >= 80",
+      "no_fixed_rails": "2026-09-26 David: 'Kill the old rules!' No trade count, spread block, execution window buffer, fixed add %, add count or spacing, reduce band, or averaging-down ban.",
+      "learned_rules": "Beliefs and lessons in force (belief_updates meta.kind = playbook_rule, research_lessons) are learned rules scored by outcomes and stay in force."
     }
   },
   "swing_filters": {
@@ -50,7 +57,11 @@
   },
   "review_process": {
     "use_subagents": true,
-    "required_reviews": ["bull_case", "bear_case", "portfolio_risk"],
+    "required_reviews": [
+      "bull_case",
+      "bear_case",
+      "portfolio_risk"
+    ],
     "persist_postmortems": true,
     "harden_or_soften_theses_after_outcomes": true,
     "allow_web_research": true
@@ -65,33 +76,32 @@
   "execution_gates": {
     "require_user_approval_per_trade": false,
     "require_us_regular_market_open": true,
-    "autonomous_execution_window_start": "09:45",
-    "autonomous_execution_window_end": "15:45",
     "regular_session_timezone": "America/New_York",
     "regular_session_start": "09:30",
     "regular_session_end": "16:00",
     "review_fresh_quote_immediately_before_placement": true,
     "max_quote_age_seconds": 120,
-    "max_spread_bps": 80,
-    "max_trades_per_day": 3,
     "fail_closed_on_any_broker_alert": true,
-    "require_new_version_4_ref_id_per_logical_order": true
+    "require_new_version_4_ref_id_per_logical_order": true,
+    "guidance_not_blocks": "Wide spreads and the first/last 15 minutes of the regular session are guidance for judgment, not blocks."
   },
   "position_management": {
-    "authorized_actions": ["hold", "add", "reduce", "exit"],
+    "authorized_actions": [
+      "hold",
+      "add",
+      "reduce",
+      "exit"
+    ],
     "require_user_approval_per_action": false,
-    "review_schedule": ["10:05", "13:05", "15:25"],
+    "review_schedule": [
+      "10:05",
+      "13:05",
+      "15:25"
+    ],
     "hard_loss_exit_percent": 8,
-    "max_add_percent_of_portfolio_value_per_review": 2,
-    "max_adds_per_position_lifetime": 2,
-    "max_adds_per_position_per_day": 1,
-    "minimum_hours_between_adds": 24,
-    "allow_averaging_down": false,
-    "reduce_percent_min": 25,
-    "reduce_percent_max": 50,
-    "max_reductions_per_position_per_day": 1,
     "require_deterministic_adverse_evidence_for_thesis_exit_or_reduce": true,
-    "risk_reducing_sells_bypass_buy_count_limit": true,
-    "same_symbol_pending_order_blocks_new_action": true
+    "same_symbol_pending_order_blocks_new_action": true,
+    "add_sizing": "requested percent of live total_value x thesis outcome multiplier, limited by spendable cash (no fixed add %, count, spacing or averaging-down rule)",
+    "reduce_sizing": "model-requested partial percent (0 < % < 100); no fixed band"
   }
 }

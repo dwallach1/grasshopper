@@ -86,7 +86,7 @@ sequenceDiagram
   RH-->>Bot: NAV, cash, buying power, fills
   Bot->>DB: account_snapshots, portfolio_exposure
   Bot->>DB: read theses, episodes, risk_controls
-  Note over Bot: Size from live NAV every order: requested % x outcome multiplier, no per-name cap. Equities only. 3 new buys/day.
+  Note over Bot: Size from live NAV every order: requested % x outcome multiplier, no per-name cap, no fixed rails. Equities only.
   alt Regular session open and every gate passes
     Bot->>RH: review_equity_order then place_equity_order
     RH-->>Bot: fill or reject
@@ -109,9 +109,9 @@ Live book: **Agentic** proof account (last4 7638). Starting capital is the first
 |---|---|---|
 | Asset class | Equities only | No options, crypto, margin, or shorting |
 | Per name | No hard cap | Size = requested % of **live** NAV × outcome multiplier ([`docs/sizing.md`](docs/sizing.md)); limited only by cash (no margin) |
-| Deployed | 80% of live NAV | Remainder cash |
-| New equity buys | 3 / day | Risk-reducing sells are a separate path |
-| Session | US regular hours | No after-hours queue |
+| Fixed rails | None | No trade count, spread block, 09:45–15:45 buffer, fixed add %, add count, reduce band or averaging-down ban (David, 2026-09-26). Spread and the session edges are guidance |
+| Entry gate | QUANTANAMO: hardening thesis at confidence ≥ 80 | Any steward: no new entries on a rejected or killed thesis |
+| Session | US regular hours open | Mechanical: orders are regular-hours market orders; no after-hours queue |
 | Review | `review_equity_order` immediately before `place_equity_order` | Any broker check blocks |
 
 Keep [`config/trade_policy.json`](config/trade_policy.json) aligned with this table when limits change.
@@ -145,7 +145,7 @@ bun run web:app    # same as: bash scripts/web-app.sh
 
 Open `http://localhost:5173`. Sign in with **email magic link** or a **passkey** (RP ID `localhost`). The publishable / anon key is the only Supabase key in the browser (`NEXT_PUBLIC_*`). `service_role` and `QUANTANAMO_DATABASE_URL` stay server-side. First confirmed user is claimed via `claim_ledger_operator`; later operators need a `public.ledger_operators` row. `anon` is revoked. The desk queries PostgREST as that JWT.
 
-It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410). The desk does not display retired worker caps (3 buys/day, RTH 09:45–15:45; there is no per-name cap); those contradict the live mandate. PLTR is a compliance skip, not a position.
+It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410). The desk does not display retired worker rails (trade counts, spread blocks, a 09:45–15:45 window, per-name caps); none of them are live. PLTR is a compliance skip, not a position.
 
 | Key | Tab | Shows |
 |---|---|---|
