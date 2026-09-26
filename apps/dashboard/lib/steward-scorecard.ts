@@ -24,6 +24,9 @@ export type StewardScoreRow = {
   thin: boolean;
   fees_recorded: number | null;
   fees_missing: number;
+  /** BANDIT: sum(meme_fills.fee_sol) across every fill (open lots too). Null elsewhere. */
+  fees_from_fills: number | null;
+  fills_missing_fee: number;
   from_fills: number;
   not_from_fills: number;
   unpriced: number;
@@ -135,6 +138,8 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         thin: row.thin === true || int(row.priced_trades) < SCORECARD_THIN_N,
         fees_recorded: num(row.fees_recorded),
         fees_missing: int(row.fees_missing),
+        fees_from_fills: num(row.fees_from_fills),
+        fills_missing_fee: int(row.fills_missing_fee),
         from_fills: int(row.from_fills),
         not_from_fills: int(row.not_from_fills),
         unpriced: int(row.unpriced),
@@ -224,7 +229,7 @@ export type StewardScorecardCard = {
   unrealized: number | null;
   open_positions: number;
   /** BANDIT: fees line. Null for other stewards. */
-  fees: { recorded: number | null; missing: number; trades: number } | null;
+  fees: { recorded: number | null; missing: number; of: number; noun: 'fills' | 'trades' } | null;
   theses: ThesisScoreRow[];
   skips: { logged: number; resolved: number; scored: number; would_have_won: number } | null;
   /** Trades not priced from venue fills (cash delta, settlement, manual, unpriced). */
@@ -240,6 +245,15 @@ function weekLabel(weekStart: string): string {
 }
 
 /** One steward's card, or null when the ledger has no scorecard row for it. */
+
+/** BANDIT fees line: real fee_sol from meme_fills when present, else closed-trade fees. */
+function banditFees(row: StewardScoreRow): NonNullable<StewardScorecardCard['fees']> {
+  if (row.fees_from_fills !== null) {
+    return { recorded: row.fees_from_fills, missing: row.fills_missing_fee, of: 0, noun: 'fills' };
+  }
+  return { recorded: row.fees_recorded, missing: row.fees_missing, of: row.trades, noun: 'trades' };
+}
+
 export function assembleStewardScorecard(
   payload: StewardScorecardPayload | null | undefined,
   steward: string,
@@ -275,9 +289,7 @@ export function assembleStewardScorecard(
     realized: row.realized_pnl,
     unrealized: row.unrealized_pnl,
     open_positions: row.open_positions,
-    fees: slug === 'bandit'
-      ? { recorded: row.fees_recorded, missing: row.fees_missing, trades: row.trades }
-      : null,
+    fees: slug === 'bandit' ? banditFees(row) : null,
     theses,
     skips: row.skips_logged > 0
       ? {

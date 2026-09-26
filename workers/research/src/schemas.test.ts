@@ -14,6 +14,23 @@ import {
 } from './schemas';
 
 describe('research cloud-control schemas', () => {
+  test('live thesis_sizing overrides stale snapshot confidence and attaches the multiplier', () => {
+    const snapshot = {
+      generated_at: '2026-09-26T12:00:00Z',
+      payload: { theses: [
+        { id: 'earnings_gap_structure', name: 'Gap', summary: 'Earnings gaps', confidence: 89, stance: 'bullish', symbols: ['SNOW'], status: 'hardening' },
+        { id: 'other', name: 'Other', summary: 'No live row', confidence: 85, stance: 'bullish', symbols: ['X'] },
+      ] },
+    };
+    const parsed = parseTheses({
+      snapshot,
+      thesis_sizing: [{ thesis_id: 'earnings_gap_structure', confidence: 72, status: 'hardening', multiplier: 0.5, multiplier_basis: 'thin_default' }],
+    });
+    expect(parsed[0]).toMatchObject({ id: 'earnings_gap_structure', confidence: 72, size_multiplier: 0.5, sizing_basis: 'thin_default' });
+    expect(parsed[1]).toMatchObject({ id: 'other', confidence: 85, size_multiplier: null });
+    expect(parseTheses({ snapshot })[0]).toMatchObject({ confidence: 89, size_multiplier: null });
+  });
+
   test('parses theses and approved proposals from context', () => {
     const context = {
       snapshot: {

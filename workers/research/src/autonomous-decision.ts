@@ -8,6 +8,7 @@ import {
   type FundamentalsRow,
   type MarketSymbolRow,
 } from './schemas';
+import { SINGLE_POSITION_CAP_PERCENT, sizeBuyNotional, validMultiplier } from './sizing';
 
 export type DecisionJsonPrimitive = boolean | number | string | null;
 export type DecisionJsonValue =
@@ -34,6 +35,9 @@ export type DecisionThesisTask = {
     stance: string;
     confidence: number;
     symbols: string[];
+    /** Outcome multiplier from public.thesis_sizing() (0.25..1). Missing = no order. */
+    size_multiplier?: number | null;
+    sizing_basis?: string | null;
   };
 };
 
@@ -122,13 +126,20 @@ export function approvedCandidate(
   if (snapshot.positions.some((position) => position.symbol === symbol && position.quantity > 0)) return null;
   const evidence = actionableBrokerEvidence(brokerContext, symbol);
   if (!evidence.pass) return null;
+  const multiplier = task.thesis.size_multiplier;
+  if (!validMultiplier(multiplier)) return null;
   const requestedPercent = Number(decision.notional_percent);
-  if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > 5) return null;
-  const notional = Math.floor(Math.min(
-    snapshot.totalValue * requestedPercent / 100,
-    snapshot.totalValue * 0.05,
-    snapshot.buyingPower,
-  ) * 100) / 100;
+  if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > SINGLE_POSITION_CAP_PERCENT) {
+    return null;
+  }
+  // Size follows results: requested x outcome multiplier, hard-capped at 20% of the book.
+  const notional = sizeBuyNotional({
+    totalValue: snapshot.totalValue,
+    buyingPower: snapshot.buyingPower,
+    requestedPercent,
+    multiplier,
+    currentPositionValue: 0,
+  });
   if (notional < 25) return null;
   return {
     symbol,
@@ -138,6 +149,10 @@ export function approvedCandidate(
       reasons: evidence.reasons,
       decision_confidence: decision.decision_confidence ?? null,
       requested_percent: requestedPercent,
+      size_multiplier: multiplier,
+      sizing_basis: task.thesis.sizing_basis ?? null,
+      sized_percent: Math.round(notional / snapshot.totalValue * 10_000) / 100,
+      single_position_cap_percent: SINGLE_POSITION_CAP_PERCENT,
     },
   };
 }

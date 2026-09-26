@@ -104,7 +104,11 @@ export function StewardScorecard({
                 ? <b>{signedAmount(-card.fees.recorded, unit)}</b>
                 : <b className="muted">not captured</b>}
               {card.fees.missing > 0 && (
-                <span className="score-unit">fee_sol 0 on {card.fees.missing} of {card.fees.trades}</span>
+                <span className="score-unit">
+                  {card.fees.noun === 'fills'
+                    ? `fee_sol missing on ${card.fees.missing} fills`
+                    : `fee_sol 0 on ${card.fees.missing} of ${card.fees.of}`}
+                </span>
               )}
             </dd>
           </div>

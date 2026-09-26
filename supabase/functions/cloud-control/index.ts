@@ -251,12 +251,15 @@ function buildRunObservability(tasks: unknown[]): {
 }
 
 async function context(): Promise<unknown> {
-  const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals] = await Promise.all([
+  const [snapshotRows, openPositions, recentTasks, riskControls, approvedProposals, thesisSizing] = await Promise.all([
     rest('dashboard_snapshots?id=eq.current&select=generated_at,payload'),
     rest('position_episodes?status=in.(proposed,open,closing)&select=*&order=updated_at.desc&limit=100'),
     rest('cloud_tasks?task_type=eq.thesis_research&status=eq.complete&select=entity_key,input_sha256&order=queued_at.desc&limit=500'),
     rest('risk_controls?status=eq.active&select=control_key,scope,control_type,threshold_json,enforcement_level,status,updated_at'),
     rest('trade_proposals?status=eq.approved&notional=gt.0&select=id,thesis_id,symbol,side,notional,order_type,status,rationale,created_at,broker_alerts&order=created_at.asc&limit=20'),
+    // Live outcome-tempered confidence + size multiplier per thesis. A failure here means
+    // no multipliers, and the worker then approves no autonomous buys (fails closed).
+    rest('rpc/thesis_sizing', { method: 'POST', body: '{}' }).catch(() => []),
   ]);
   const rows = Array.isArray(snapshotRows) ? snapshotRows : [];
   const latestInputs: Record<string, string> = {};
@@ -273,6 +276,7 @@ async function context(): Promise<unknown> {
     latest_thesis_input_sha256: latestInputs,
     risk_controls: Array.isArray(riskControls) ? riskControls : [],
     approved_proposals: Array.isArray(approvedProposals) ? approvedProposals : [],
+    thesis_sizing: Array.isArray(thesisSizing) ? thesisSizing : [],
     broker_gateway: { available: true, mode: 'robinhood_mcp' },
   };
 }

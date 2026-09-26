@@ -91,9 +91,16 @@ describe('assembleStewardScorecard', () => {
     expect(card?.skips).toBeNull();
   });
 
+  test('BANDIT fees line prefers sum(meme_fills.fee_sol) over closed-trade fees', () => {
+    const raw = structuredClone(RAW) as { stewards: Record<string, unknown>[] };
+    raw.stewards[2] = { ...raw.stewards[2], fees_recorded: 0.0025, fees_missing: 0, fees_from_fills: 0.002521, fills_missing_fee: 0 };
+    const bandit = assembleStewardScorecard(mapStewardScorecard(raw), 'BANDIT');
+    expect(bandit?.fees).toEqual({ recorded: 0.002521, missing: 0, of: 0, noun: 'fills' });
+  });
+
   test('BANDIT carries the fees line; ODDSBORNE carries skips', () => {
     const bandit = assembleStewardScorecard(payload, 'bandit');
-    expect(bandit?.fees).toEqual({ recorded: null, missing: 34, trades: 34 });
+    expect(bandit?.fees).toEqual({ recorded: null, missing: 34, of: 34, noun: 'trades' });
     expect(bandit?.thin).toBe(false);
     const odds = assembleStewardScorecard(payload, 'oddsborne');
     expect(odds?.skips).toEqual({ logged: 7, resolved: 6, scored: 5, would_have_won: 2 });
@@ -137,7 +144,7 @@ describe('outcome ledger SQL', () => {
 
   test('backfill migration is keyed and idempotent', async () => {
     const sql = await readFile(
-      join(import.meta.dir, '../../../supabase/migrations/20260926170100_trade_outcomes_backfill.sql'),
+      join(import.meta.dir, '../../../supabase/migrations/20260926165149_trade_outcomes_backfill.sql'),
       'utf8',
     );
     expect(sql.match(/on conflict \(source_table, source_id\) do nothing/g)?.length).toBe(4);

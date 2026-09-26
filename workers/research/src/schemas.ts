@@ -24,7 +24,18 @@ export const ThesisSchema = z.object({
   falsifier: z.string().nullable().optional(),
   symbols: z.array(z.string()).max(8).default([]),
   recent_investigations: z.array(z.unknown()).max(8).optional(),
+  /** Outcome multiplier (0.25..1) from public.thesis_sizing(); null = no autonomous buy. */
+  size_multiplier: z.number().min(0.25).max(1).nullable().optional(),
+  sizing_basis: z.string().nullable().optional(),
 });
+
+const ThesisSizingRowSchema = z.object({
+  thesis_id: z.string().min(1),
+  confidence: z.coerce.number().nullable().optional(),
+  status: z.string().nullable().optional(),
+  multiplier: z.coerce.number().min(0.25).max(1),
+  multiplier_basis: z.string().nullable().optional(),
+}).passthrough();
 
 export type Thesis = z.infer<typeof ThesisSchema>;
 
@@ -82,6 +93,7 @@ const CloudContextSchema = z.object({
   latest_thesis_input_sha256: z.record(z.string(), z.unknown()).optional(),
   approved_proposals: z.array(z.unknown()).optional(),
   risk_controls: z.array(z.unknown()).optional(),
+  thesis_sizing: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const FinalizeRunSchema = z.object({
@@ -97,16 +109,30 @@ export function parseTheses(context: unknown): Thesis[] {
   if (!parsed.success) return [];
   const rows = parsed.data.snapshot?.payload?.theses;
   if (!rows) return [];
+  // Live ledger values (confidence after outcome re-score, status, size multiplier)
+  // override the published snapshot, which can lag a re-score by a full cycle.
+  const sizing = new Map<string, z.infer<typeof ThesisSizingRowSchema>>();
+  for (const row of parsed.data.thesis_sizing ?? []) {
+    const live = ThesisSizingRowSchema.safeParse(row);
+    if (live.success) sizing.set(live.data.thesis_id, live.data);
+  }
   const theses: Thesis[] = [];
   for (const row of rows) {
     const thesis = ThesisSchema.safeParse(row);
     if (!thesis.success) continue;
+    const live = sizing.get(thesis.data.id);
     theses.push({
       ...thesis.data,
+      confidence: typeof live?.confidence === 'number' && Number.isFinite(live.confidence)
+        ? live.confidence
+        : thesis.data.confidence,
+      status: live?.status ?? thesis.data.status,
       symbols: thesis.data.symbols.slice(0, 8),
       variant_perception: thesis.data.variant_perception ?? null,
       falsifier: thesis.data.falsifier ?? null,
       recent_investigations: thesis.data.recent_investigations?.slice(0, 6),
+      size_multiplier: live ? live.multiplier : null,
+      sizing_basis: live?.multiplier_basis ?? null,
     });
   }
   return theses.slice(0, MAX_THESES_PER_RUN);
@@ -401,6 +427,7 @@ const PositionThesisSchema = z.object({
   confidence: z.number(),
   symbols: z.array(z.string()),
   falsifier: z.string().nullable().optional(),
+  size_multiplier: z.number().min(0.25).max(1).nullable().optional(),
 });
 
 export const CloudTaskSchema = z.discriminatedUnion('kind', [
