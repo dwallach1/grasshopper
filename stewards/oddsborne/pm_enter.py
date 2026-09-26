@@ -8,7 +8,7 @@ Pipeline (refuses at the first failing gate, never invents prices or ids):
      fee_per_contract = THETA * price * (1 - price)   (desk formula, THETA = 0.0695;
      "Fee = Θ × C × p × (1−p)" from afternoon_full_*/morning_full_* scripts, C = 1 contract).
      Refuse if edge_after_costs <= 0. That is the ONLY edge rule (no cent bar, no %-of-book cap).
-  3. public.steward_sizing_guidance('oddsborne', thesis_id, slug, requested, invalidation). --invalidation
+  3. public.steward_sizing_guidance('oddsborne', thesis_id, slug, requested, invalidation, price). --invalidation
      (outcome price, 0 < inval < price) is required. Refuse if entry_allowed is false (unknown/rejected/killed
      thesis, missing_invalidation, stale_book). sized_notional = min(requested, edge-scaled
      max_stake, cash). quantity = floor(sized_notional/price),
@@ -241,9 +241,13 @@ def status_from_venue(state: str | None) -> str:
 
 
 # ----------------------------------------------------------------- DB helpers
-def sizing_guidance(cur, thesis_id: str, instrument: str, requested: float, invalidation: float) -> dict:
-    cur.execute("select * from public.steward_sizing_guidance(%s, %s, %s, %s, %s)",
-                (STEWARD, thesis_id, instrument, Decimal(str(requested)), Decimal(str(invalidation))))
+def sizing_guidance(cur, thesis_id: str, instrument: str, requested: float, invalidation: float,
+                    entry_price: float | None = None) -> dict:
+    # 6th arg (migration 41): the entry price lets guidance fit the entry inside the 10%-of-book
+    # open-risk budget using only (entry - invalidation) / entry as risk; without it the whole notional counts.
+    cur.execute("select * from public.steward_sizing_guidance(%s, %s, %s, %s, %s, %s)",
+                (STEWARD, thesis_id, instrument, Decimal(str(requested)), Decimal(str(invalidation)),
+                 None if entry_price is None else Decimal(str(entry_price))))
     row = cur.fetchone()
     if row is None:
         return None
@@ -453,7 +457,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         edge["price_vs_book"] = {"outcome_bid": book["bid"], "outcome_ask": book["ask"]}
 
         # ---- 3. sizing
-        g = sizing_guidance(cur, thesis_id, slug, requested_usd, invalidation)
+        g = sizing_guidance(cur, thesis_id, slug, requested_usd, invalidation, price)
         conn.rollback()
         summary["guidance"] = g
         check_guidance(g)
@@ -461,7 +465,10 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         summary["sizing"] = {**sz, "sized_notional": g["sized_notional"],
                              "spendable_cash": g.get("spendable_cash"),
                              "max_stake": g.get("max_stake"), "max_stake_reason": g.get("max_stake_reason"),
-                             "book_equity": g.get("book_equity"), "thesis_status": g.get("thesis_status")}
+                             "book_equity": g.get("book_equity"), "thesis_status": g.get("thesis_status"),
+                             "open_risk": g.get("open_risk"), "risk_budget": g.get("risk_budget"),
+                             "risk_headroom": g.get("risk_headroom"),
+                             "entry_risk_fraction": g.get("entry_risk_fraction")}
         check_quantity(sz)
         qty = sz["quantity"]
 

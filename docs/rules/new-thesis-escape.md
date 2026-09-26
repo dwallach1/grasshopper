@@ -1,6 +1,6 @@
 # New-thesis escape from a loss-reduced cap
 
-`rule_id: new-thesis-escape` · status: **repealed** · verdict: **strike** · ruling 2026-09-26 · next review 2026-10-26 · **needs David**
+`rule_id: new-thesis-escape` · status: **repealed** · verdict: **strike** · ruling 2026-09-26 · next review 2026-10-26
 
 ## Purpose (failure prevented)
 The problem: per-thesis halving could be escaped by registering a new thesis. The first fix (steward-wide cap on every unproven thesis, #97) pinned QUANTANAMO themes at $62.50 and was reverted (#98).
@@ -11,6 +11,7 @@ Resolved structurally. Loss halving is struck, and the only loss response is ste
 Code paths:
 - `supabase/schemas/34_revert_steward_wide_starter.sql`
 - `supabase/schemas/37_court_rulings.sql`
+- `supabase/schemas/41_court_decisions.sql`
 
 ## The court
 
@@ -20,7 +21,7 @@ Code paths:
 
 **STATISTICS.** Punishing unrelated theses for one thesis's streak treats noise as signal.
 
-**INCENTIVES / GAMING.** Remaining gap (David): for QUANTANAMO, a new thesis's confidence starts at the steward's own stated number, so a new thesis stated at >= 80 passes the autonomous gate with zero evidence. See quantanamo-80-gate.
+**INCENTIVES / GAMING.** The remaining gap (a new QUANTANAMO thesis stated at >= 80 passed the gate with zero evidence) is closed by migration 41: the gate reads only the results score, and a thesis with < 3 effective trades is unscored and needs David. See quantanamo-80-gate.
 
 ## Evidence
 #97 live numbers: every unproven QUANTANAMO theme at $62.50; reverted by #98 (migration 34).

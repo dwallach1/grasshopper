@@ -2,6 +2,7 @@
   python3 tools/court/build_rules.py            # writes docs/rules/*.md
   python3 tools/court/build_rules.py --sql A|B  # prints the full registry upsert (A: status now, B: after)
   python3 tools/court/build_rules.py --status-updates  # prints status-only updates (A -> B)
+  python3 tools/court/build_rules.py --upsert id1,id2  # registry upsert (final status) for the named rules
   python3 tools/court/build_rules.py --checksum A|B  # md5 to compare with the live registry (query in docs/rules/README.md)"""
 import os, sys, pathlib, hashlib
 from rules_data import RULES, RULING_DATE
@@ -69,6 +70,17 @@ def seed(phase):
             "\non conflict (rule_id) do update set " + ", ".join(f"{c.strip()} = excluded.{c.strip()}" for c in cols.split(",")[1:]) +
             ", updated_at = now();\n")
 
+def upsert_rules(ids):
+    keep = set(ids)
+    global RULES
+    saved = RULES
+    try:
+        RULES = [r for r in saved if r["id"] in keep]
+        assert len(RULES) == len(keep), "unknown rule id"
+        return seed("B")
+    finally:
+        RULES = saved
+
 def status_updates():
     out = []
     for r in RULES:
@@ -86,6 +98,8 @@ def checksum(phase):
     return hashlib.md5(s.encode()).hexdigest()
 
 if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[1] == "--upsert":
+        print(upsert_rules(sys.argv[2].split(",")), end=""); sys.exit(0)
     if len(sys.argv) > 2 and sys.argv[1] == "--checksum":
         print(checksum(sys.argv[2])); sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "--status-updates":

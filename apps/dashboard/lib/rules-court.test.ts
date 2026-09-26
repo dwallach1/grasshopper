@@ -73,6 +73,8 @@ describe('rules court', () => {
       ['37_court_rulings.sql', '20260926214819_court_rulings.sql'],
       ['38_edge_max_stake_null_thesis.sql', '20260926214848_edge_max_stake_null_thesis.sql'],
       ['39_desk_rules_paths_sync.sql', '20260926214953_desk_rules_paths_sync.sql'],
+      ['41_court_decisions.sql', '20260926220243_court_decisions.sql'],
+      ['42_court_decisions_registry.sql', '20260926220333_court_decisions_registry.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -94,7 +96,7 @@ describe('rules court', () => {
     expect(sql).toContain('round(least(p_requested, ms.max_stake, greatest(coalesce(ca.cash, 0), 0)), 6)');
     expect(sql).not.toContain('p_requested * v_mult');
     expect(sql).toContain("when dd.x >= 0.40 then 0.5");
-    // The 80 gate is David's call and is unchanged.
+    // 37 left the 80 gate on stated confidence; 41 moved it to the results score.
     expect(sql).toContain("th.status = 'hardening' and coalesce(th.confidence, 0) >= 80");
     const seed = await readFile(join(root, 'supabase/schemas/36_desk_rules_seed.sql'), 'utf8');
     expect(seed).toContain("('quantanamo-80-gate', ");
@@ -110,5 +112,22 @@ describe('rules court', () => {
       const src = await readFile(join(root, f), 'utf8');
       expect(src).not.toMatch(/\[["']multiplier(_basis)?["']\]|get\(["']multiplier/);
     }
+  });
+
+  test('41: v=3% starter, results-score gate, expectancy re-score, 10% exposure cap', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/41_court_decisions.sql'), 'utf8');
+    for (const id of ['starter-stake', 'quantanamo-80-gate', 'outcome-rescore-confidence', 'portfolio-exposure', 'new-thesis-escape']) {
+      expect(sql).toContain(`-- court-ruling: docs/rules/${id}.md`);
+    }
+    expect(sql).toContain('round(0.03 / private.steward_bet_vol(p_steward), 5)');
+    expect(sql).toContain("th.status = 'hardening' and coalesce(th.results_confidence, 0) >= 80");
+    expect(sql).not.toContain('coalesce(th.confidence, 0) >= 80');
+    expect(sql).toContain("'quantanamo_unscored'");
+    expect(sql).toContain("'exposure_cap'");
+    expect(sql).toContain('create or replace function private.risk_budget_share()');
+    expect(sql).toContain('create trigger theses_results_guard');
+    const registry = await readFile(join(root, 'supabase/schemas/42_court_decisions_registry.sql'), 'utf8');
+    expect(registry).toContain("('portfolio-exposure', ");
+    expect(registry).not.toMatch(/, true, 'docs\/rules\//);
   });
 });

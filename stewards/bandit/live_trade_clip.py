@@ -6,7 +6,7 @@ Usage:
   add --dry-run to print guidance + size and exit without trading.
 
 Buys exactly sized_notional from steward_sizing_guidance('bandit','meme_4h_momentum_clip',<SYM>,<request>,<invalidation>).
-sized_notional = min(request, edge-scaled max_stake, cash). The invalidation (SOL/token) defaults to
+sized_notional = min(request, edge-scaled max_stake, cash, 10%-of-book exposure fit). The invalidation (SOL/token) defaults to
 0.6 x the Jupiter pre-trade price (--invalidation-price overrides) and is written on the meme_positions lot;
 guidance refuses (missing_invalidation) and the DB rejects a new open lot without one. meme_orders carries thesis_id.
 Aborts if entry_allowed is false. No max-open or daily-stop rail (removed per David). 3% price-impact abort stays.
@@ -118,8 +118,8 @@ def jup_order(api_key: str, slippage_bps: int | None) -> dict:
     return order
 
 
-def planned_invalidation_sol(api_key: str) -> Decimal:
-    """Pre-trade price in SOL per token from Jupiter price v3, x KILL_FRACTION."""
+def pretrade_price_sol(api_key: str) -> Decimal:
+    """Pre-trade price in SOL per token from Jupiter price v3."""
     r = requests.get(JUP_PRICE, params={"ids": f"{MINT},{SOL_MINT}"}, headers={"x-api-key": api_key}, timeout=30)
     if not r.ok:
         raise RuntimeError(f"price/v3 HTTP {r.status_code}: {r.text[:300]}")
@@ -128,7 +128,12 @@ def planned_invalidation_sol(api_key: str) -> Decimal:
     sol = (data.get(SOL_MINT) or {}).get("usdPrice")
     if not tok or not sol or Decimal(str(sol)) <= 0 or Decimal(str(tok)) <= 0:
         raise RuntimeError("no Jupiter price for the mint or SOL; cannot set invalidation; no trade")
-    return (Decimal(str(tok)) / Decimal(str(sol)) * KILL_FRACTION).quantize(Decimal("1e-18"))
+    return (Decimal(str(tok)) / Decimal(str(sol))).quantize(Decimal("1e-18"))
+
+
+def planned_invalidation_sol(entry_price_sol: Decimal) -> Decimal:
+    """Default invalidation: KILL_FRACTION x the pre-trade price."""
+    return (entry_price_sol * KILL_FRACTION).quantize(Decimal("1e-18"))
 
 
 def jup_execute(api_key: str, signed_b64: str, request_id: str) -> dict:
@@ -283,16 +288,26 @@ def main() -> int:
     global DECIMALS, SIZE_SOL, SIZE_LAMPORTS, GUIDANCE, PLANNED_INVALIDATION
     # Entry requires an invalidation (guidance returns missing_invalidation without one, and
     # meme_positions rejects a new open lot without invalidation_price).
+    # The pre-trade price also goes to guidance as p_entry_price (6th arg, migration 41) so the entry is
+    # fitted inside the 10%-of-book open-risk budget on (entry - invalidation) / entry, not full notional.
+    pretrade_price = None
+    try:
+        pretrade_price = pretrade_price_sol(secrets["JUPITER_API_KEY"])
+    except (RuntimeError, requests.RequestException) as e:
+        if PLANNED_INVALIDATION is None:
+            raise
+        print(f"WARN no pre-trade price ({e}); guidance counts the whole notional as risk")
     if PLANNED_INVALIDATION is None:
-        PLANNED_INVALIDATION = planned_invalidation_sol(secrets["JUPITER_API_KEY"])
+        PLANNED_INVALIDATION = planned_invalidation_sol(pretrade_price)
     if PLANNED_INVALIDATION <= 0:
         raise RuntimeError("invalidation price must be > 0")
-    print(f"planned_invalidation_sol_per_token={PLANNED_INVALIDATION}")
+    print(f"pretrade_price_sol_per_token={pretrade_price} planned_invalidation_sol_per_token={PLANNED_INVALIDATION}")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT * FROM steward_sizing_guidance('bandit', %s, %s, %s, %s)",
-                (THESIS_ID, SYMBOL, str(REQUEST_SOL), str(PLANNED_INVALIDATION)),
+                "SELECT * FROM steward_sizing_guidance('bandit', %s, %s, %s, %s, %s)",
+                (THESIS_ID, SYMBOL, str(REQUEST_SOL), str(PLANNED_INVALIDATION),
+                 None if pretrade_price is None else str(pretrade_price)),
             )
             cols = [d[0] for d in cur.description]
             row = cur.fetchone()
@@ -302,7 +317,8 @@ def main() -> int:
     GUIDANCE = {k: (str(v) if isinstance(v, (Decimal,)) or hasattr(v, "isoformat") else v) for k, v in g.items()}
     print("GUIDANCE=" + json.dumps({k: GUIDANCE.get(k) for k in (
         "requested", "max_stake", "max_stake_reason", "sized_notional",
-        "spendable_cash", "sample_trades", "thesis_confidence", "thesis_status", "invalidation_price",
+        "spendable_cash", "sample_trades", "thesis_confidence", "results_confidence", "thesis_status",
+        "invalidation_price", "open_risk", "risk_budget", "risk_headroom", "entry_risk_fraction",
         "book_age_minutes", "entry_allowed", "entry_blocked_reason")}))
     if not g.get("entry_allowed"):
         raise RuntimeError(f"entry_allowed=false: {g.get('entry_blocked_reason')}")

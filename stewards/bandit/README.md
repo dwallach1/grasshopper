@@ -4,7 +4,7 @@ BANDIT trades Solana meme coins in SOL. The entry contract shared by all steward
 
 ## Entry: `live_trade_clip.py`
 
-- Guidance first: `steward_sizing_guidance('bandit', thesis, mint, requested_sol, invalidation_sol_per_token)`. Trade exactly `sized_notional`; stop if `entry_allowed = false`.
+- Guidance first: `steward_sizing_guidance('bandit', thesis, mint, requested_sol, invalidation_sol_per_token, pretrade_price_sol_per_token)`. Trade exactly `sized_notional`; stop if `entry_allowed = false` (including `exposure_cap`: open risk to invalidation already at 10% of book).
 - The thesis is `meme_4h_momentum_clip`. Caps are per thesis; see `docs/sizing.md` and `docs/rules/`.
 - The lot carries `invalidation_price` (SOL per token). The order carries `thesis_id`, `max_stake_at_entry` and `max_stake_reason_at_entry`.
 

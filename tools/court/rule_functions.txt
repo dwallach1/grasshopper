@@ -15,3 +15,8 @@ private.snapshot_entry_max_stake
 private.is_us_regular_session
 private.steward_spendable_cash
 private.steward_book_equity
+private.thesis_results_score
+private.steward_bet_vol
+private.steward_open_risk
+private.risk_budget_share
+private.theses_results_guard

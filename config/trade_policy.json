@@ -31,8 +31,8 @@
     },
     "results_driven_sizing": {
       "buy_notional": "min(requested percent of live total_value, edge-scaled max_stake, spendable cash)",
-      "max_stake": "private.edge_max_stake via steward_sizing_guidance / public.v_thesis_max_stake: starter while unproven (n<10 or LCB<=0; QUANTANAMO $250, ODDSBORNE $15, BANDIT 0.10 SOL); proven: max(starter, min(book x 0.5 x LCB/sd^2, starter x 2^(1+(n-10)/5))); x0.5 per straight loss (max two)",
-      "entry_requires": "invalidation_price passed to steward_sizing_guidance (else missing_invalidation) and written on the new open lot (DB-enforced); book observation <= 6h (else stale_book)",
+      "max_stake": "private.edge_max_stake via steward_sizing_guidance / public.v_thesis_max_stake: starter while unproven (n_eff<10 or LCB<=0) = 0.03 x book / steward bet vol (sd of return on stake, floor 0.25; 1.0 under 5 trades); proven: max(starter, min(book x 0.5 x LCB/sd^2, starter x 2^(1+(n_eff-10)/5))); x steward drawdown scale (1 within 10% of closing high, to 0.5 at 40% below)",
+      "entry_requires": "invalidation_price passed to steward_sizing_guidance (else missing_invalidation) and written on the new open lot (DB-enforced); book observation <= 6h (else stale_book); open risk to invalidation <= 10% of book (entry fitted via p_entry_price, else exposure_cap)",
       "size_multiplier": "retired: the outcome multiplier no longer scales size (docs/rules/confidence-multiplier.md); steward_sizing_guidance no longer returns it",
       "per_position_cap": null,
       "mechanical_limits": [
@@ -41,9 +41,9 @@
         "fresh (<=120s), uncrossed quote",
         "US regular session open (orders are regular-hours market orders)"
       ],
-      "autonomous_buy_gate": "thesis hardening, bullish, outcome-tempered confidence >= 80",
+      "autonomous_buy_gate": "thesis hardening, bullish, results score (theses.results_confidence, P(expected return per trade > 0) on >= 3 effective trades) >= 80; unscored -> quantanamo_unscored (David approves); stated confidence never opens the gate",
       "decided": "2026-09-26 David: size follows results with no hard cap per position",
-      "entry_blocks": "unknown, rejected or killed thesis, missing invalidation, stale book (all stewards); QUANTANAMO equity entries also need a hardening thesis at confidence >= 80",
+      "entry_blocks": "unknown, rejected or killed thesis, missing invalidation, stale book, exposure_cap (all stewards); QUANTANAMO equity entries also need a hardening thesis with results score >= 80",
       "no_fixed_rails": "2026-09-26 David: 'Kill the old rules!' No trade count, spread block, execution window buffer, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss or portfolio drawdown limit.",
       "learned_rules": "Beliefs and lessons in force (belief_updates meta.kind = playbook_rule, research_lessons) are learned rules scored by outcomes and stay in force."
     }
