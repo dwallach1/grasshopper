@@ -157,3 +157,39 @@ describe('no hard cap per position SQL (PR 4)', () => {
     expect(doc).not.toContain('20% of book is the hard cap');
   });
 });
+
+describe('confidence gate scope SQL (PR 5)', () => {
+  const gatePath = join(root, 'supabase/schemas/15_sizing_gate_scope.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926172826_sizing_gate_scope.sql'), 'utf8'))
+      .toBe(await readFile(gatePath, 'utf8'));
+  });
+
+  test('>= 80 gate applies only to quantanamo; rejected thesis blocks entries for all stewards', async () => {
+    const sql = await readFile(gatePath, 'utf8');
+    expect(sql).toContain("v_gate_applies boolean := p_steward = 'quantanamo';");
+    expect(sql).toContain("v_rejected := coalesce(th.status = 'rejected', false);");
+    expect(sql).toContain("th.status = 'hardening' and coalesce(th.confidence, 0) >= 80");
+    expect(sql).toMatch(/else\s+v_gate := not v_rejected;\s+v_allowed := not v_rejected;/);
+    expect(sql).toContain('when v_rejected then 0::numeric');
+    for (const field of ['gate_applies boolean', 'thesis_rejected boolean', 'entry_allowed boolean', 'entry_blocked_reason text']) {
+      expect(sql).toContain(field);
+    }
+    expect(sql).not.toMatch(/\* 0\.20|cap_notional|add_headroom/);
+  });
+
+  test('security: search_path pinned, workers only', async () => {
+    const sql = await readFile(gatePath, 'utf8');
+    expect(sql).toContain("security definer\nset search_path = ''");
+    expect(sql).toContain('revoke all on function public.steward_sizing_guidance(text, text, text, numeric) from public, anon, authenticated');
+    expect(sql).toMatch(/grant execute on function public\.steward_sizing_guidance\(text, text, text, numeric\)\s+to quantanamo_worker, oddsborne_worker, bandit_worker, service_role/);
+    expect(sql).not.toMatch(/grant[^;]*to (anon|authenticated)/);
+  });
+
+  test('docs scope the gate to QUANTANAMO', async () => {
+    const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
+    expect(doc).toContain('**QUANTANAMO equity entries only**');
+    expect(doc).toContain('`entry_allowed`');
+  });
+});
