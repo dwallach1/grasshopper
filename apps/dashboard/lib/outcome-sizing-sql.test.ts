@@ -34,7 +34,7 @@ describe('outcome re-score + sizing SQL (PR 2)', () => {
     expect(sql).toContain('least(1.0, greatest(0.25,');
   });
 
-  test('cap is 20% of book, entries/adds only; no DB guard rejects steward order writes', async () => {
+  test('historical #84 file: 20% cap (superseded by 14), no DB guard rejects steward order writes', async () => {
     const sql = await readFile(schemaPath, 'utf8');
     expect(sql).toContain('round(eq.equity * 0.20, 6)');
     expect(sql).toContain('greatest(v_cap - coalesce(v_pos, 0), 0)');
@@ -106,5 +106,54 @@ describe('ODDSBORNE fills re-price SQL (PR 3)', () => {
     expect(run).toContain('enable trigger pm_positions_touch_oddsborne');
     expect(run).not.toMatch(/update public\.pm_positions\s+set[^;]*(status|closed_at)\s*=/);
     expect(run.indexOf("reprice_trade_outcomes('oddsborne')")).toBeLessThan(run.indexOf('rescore_all_thesis_confidence'));
+  });
+});
+
+describe('no hard cap per position SQL (PR 4)', () => {
+  const noCapPath = join(root, 'supabase/schemas/14_no_position_cap.sql');
+
+  test('migration is the schema file at the prod version', async () => {
+    expect(await readFile(join(root, 'supabase/migrations/20260926172239_no_position_cap.sql'), 'utf8'))
+      .toBe(await readFile(noCapPath, 'utf8'));
+  });
+
+  test('guidance is requested x multiplier limited by spendable cash; no cap fields', async () => {
+    const sql = await readFile(noCapPath, 'utf8');
+    expect(sql).toContain('drop function if exists public.steward_sizing_guidance(text, text, text);');
+    expect(sql).toContain('least(p_requested * v_mult, greatest(coalesce(ca.cash, 0), 0))');
+    expect(sql).toContain("th.status = 'hardening' and coalesce(th.confidence, 0) >= 80");
+    expect(sql).not.toMatch(/\* 0\.20|cap_notional|\bcap_pct|add_headroom|v_cap\b/);
+    expect(sql).toContain('drop view if exists public.v_sizing_cap_breaches;');
+    expect(sql).not.toContain('create or replace view');
+  });
+
+  test('risk_controls drop the % rails and retire thesis-notional', async () => {
+    const sql = await readFile(noCapPath, 'utf8');
+    expect(sql).toContain("set status = 'retired'");
+    expect(sql).toContain("where control_key = 'thesis-notional'");
+    expect(sql).toContain("threshold_json - 'max_single_trade_percent' - 'max_daily_notional_percent'");
+    expect(sql).toContain("threshold_json - 'max_total_position_percent'");
+  });
+
+  test('security: search_path pinned, workers only on the 4-arg guidance', async () => {
+    const sql = await readFile(noCapPath, 'utf8');
+    for (const body of sql.split(/create or replace function /).slice(1)) {
+      expect(body.slice(0, 900)).toContain("set search_path = ''");
+    }
+    expect(sql).toContain('revoke all on function public.steward_sizing_guidance(text, text, text, numeric) from public, anon, authenticated');
+    expect(sql).toContain('revoke all on function private.steward_spendable_cash(text) from public, anon, authenticated');
+    expect(sql).toMatch(/grant execute on function public\.steward_sizing_guidance\(text, text, text, numeric\)\s+to quantanamo_worker, oddsborne_worker, bandit_worker, service_role/);
+    expect(sql).not.toMatch(/grant[^;]*to (anon|authenticated)/);
+  });
+
+  test('trade policy and docs carry no per-position cap', async () => {
+    const policy = JSON.parse(await readFile(join(root, 'config/trade_policy.json'), 'utf8'));
+    const text = JSON.stringify(policy);
+    expect(text).not.toMatch(/max_single_trade_percent|max_percent_per_position|max_total_position_percent|max_daily_notional_percent|single_position_cap/);
+    expect(await readFile(join(root, 'supabase/functions/dashboard-publication/trade-policy.json'), 'utf8'))
+      .toBe(await readFile(join(root, 'config/trade_policy.json'), 'utf8'));
+    const doc = await readFile(join(root, 'docs/sizing.md'), 'utf8');
+    expect(doc).toContain('| Per-position cap | **None** |');
+    expect(doc).not.toContain('20% of book is the hard cap');
   });
 });

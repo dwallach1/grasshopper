@@ -11,7 +11,7 @@ import {
   asBrokerResearchContext,
   PositionAiOutputSchema,
 } from './schemas';
-import { SINGLE_POSITION_CAP_PERCENT, positionCapHeadroom, validMultiplier } from './sizing';
+import { sizeBuyNotional, validMultiplier } from './sizing';
 
 export type ManagedPosition = BrokerAccountSnapshot['positions'][number];
 
@@ -216,14 +216,15 @@ export function decidePositionAction(
     const evidence = actionableBrokerEvidence(researched, symbol);
     const requestedPercent = Number(decision.add_percent);
     const multiplier = supportingThesis.size_multiplier;
-    const currentNotional = position.quantity * last;
-    // 20% of book per position; an oversize position (grandfathered) has 0 headroom: no add.
-    const remainingCapacity = positionCapHeadroom(snapshot.totalValue, currentNotional);
-    const dollarAmount = validMultiplier(multiplier) ? Math.floor(Math.min(
-      snapshot.totalValue * Math.min(2, Math.max(1, requestedPercent)) / 100 * multiplier,
-      remainingCapacity,
-      snapshot.buyingPower,
-    ) * 100) / 100 : 0;
+    // Results-driven add: the per-review add % (1..2, autonomous-position-management) x the
+    // thesis multiplier. No per-position cap; only spendable cash (no margin) limits it.
+    const dollarAmount = validMultiplier(multiplier) ? sizeBuyNotional({
+      totalValue: snapshot.totalValue,
+      buyingPower: snapshot.buyingPower,
+      cash: snapshot.cash,
+      requestedPercent: Math.min(2, Math.max(1, Number.isFinite(requestedPercent) ? requestedPercent : 1)),
+      multiplier,
+    }) : 0;
     if (evidence.pass && dollarAmount >= 25) return {
       action: 'add', symbol, dollarAmount,
       rationale: `Evidence-backed add to ${supportingThesis.name}: ${String(decision.summary || '').slice(0, 1200)}`,
@@ -232,7 +233,6 @@ export function decidePositionAction(
         trigger: 'hardening_thesis_add',
         thesis_id: supportingThesis.id,
         broker_evidence: evidence.reasons,
-        post_trade_position_cap_percent: SINGLE_POSITION_CAP_PERCENT,
         size_multiplier: multiplier ?? null,
       },
     };

@@ -20,26 +20,23 @@
   "sizing": {
     "cash_reserve_percent_of_portfolio_value": 0,
     "max_total_deployed_percent_of_portfolio_value": 100,
-    "max_single_trade_percent_of_portfolio_value": 20,
     "max_new_positions_per_run": 3,
-    "sizing_method": "requested_percent_x_outcome_multiplier_capped_at_single_position_cap",
+    "sizing_method": "requested_percent_x_outcome_multiplier_limited_by_spendable_cash",
     "standing_cash_target_percent": 0,
     "tactical_swing_sleeve": {
       "target_percent_of_portfolio_value": 20,
       "purpose": "Short-horizon, catalyst-driven swing trades that pass every validation and execution gate.",
       "target_positions": 2,
-      "max_percent_per_position": 20,
       "allow_transient_cash_only_when_market_closed_or_no_candidate_passes_gates": true,
       "re_screen_transient_cash_at_next_regular_session": true
     },
-    "default_max_thesis_percent_of_portfolio_value": 20,
-    "single_position_cap": {
-      "percent_of_book": 20,
-      "applies_to": ["open", "add"],
-      "never_blocks": ["sell", "reduce", "exit", "kill", "time_stop"],
-      "grandfathered": "existing oversize positions: no forced trims, no adds",
+    "results_driven_sizing": {
+      "buy_notional": "requested percent of live total_value x thesis outcome multiplier",
       "size_multiplier": "public.thesis_sizing(): half-Kelly on trade_outcomes, 0.25..1.0, thin samples (n<5) 0.5",
-      "decided": "2026-09-26 David: size follows results, hard cap 20%"
+      "per_position_cap": null,
+      "mechanical_limits": ["spendable cash: min(cash, buying_power), no margin", "positive finite dollar amount"],
+      "autonomous_buy_gate": "thesis hardening, bullish, outcome-tempered confidence >= 80",
+      "decided": "2026-09-26 David: size follows results with no hard cap per position"
     }
   },
   "swing_filters": {
@@ -77,8 +74,6 @@
     "max_quote_age_seconds": 120,
     "max_spread_bps": 80,
     "max_trades_per_day": 3,
-    "max_daily_notional_percent_of_portfolio_value": 20,
-    "max_single_live_trade_percent_of_portfolio_value": 20,
     "fail_closed_on_any_broker_alert": true,
     "require_new_version_4_ref_id_per_logical_order": true
   },
@@ -87,7 +82,6 @@
     "require_user_approval_per_action": false,
     "review_schedule": ["10:05", "13:05", "15:25"],
     "hard_loss_exit_percent": 8,
-    "max_total_position_percent_of_portfolio_value": 20,
     "max_add_percent_of_portfolio_value_per_review": 2,
     "max_adds_per_position_lifetime": 2,
     "max_adds_per_position_per_day": 1,
@@ -97,7 +91,7 @@
     "reduce_percent_max": 50,
     "max_reductions_per_position_per_day": 1,
     "require_deterministic_adverse_evidence_for_thesis_exit_or_reduce": true,
-    "risk_reducing_sells_bypass_buy_count_and_buy_notional_caps": true,
+    "risk_reducing_sells_bypass_buy_count_limit": true,
     "same_symbol_pending_order_blocks_new_action": true
   }
 }

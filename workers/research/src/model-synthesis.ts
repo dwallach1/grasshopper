@@ -40,7 +40,7 @@ const ThesisSynthesisJsonSchema = {
     actions: { type: 'array', items: { type: 'string' } },
     trade_decision: { type: 'string', enum: ['no_trade', 'buy'] },
     symbol: { type: 'string' },
-    notional_percent: { type: 'number', minimum: 0, maximum: 20 },
+    notional_percent: { type: 'number', minimum: 0, maximum: 100 },
     decision_confidence: { type: 'integer', minimum: 0, maximum: 100 },
     catalyst: { type: 'string' },
     invalidation: { type: 'string' },

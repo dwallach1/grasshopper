@@ -86,7 +86,7 @@ sequenceDiagram
   RH-->>Bot: NAV, cash, buying power, fills
   Bot->>DB: account_snapshots, portfolio_exposure
   Bot->>DB: read theses, episodes, risk_controls
-  Note over Bot: Size from live NAV every order. Equities only. 20% per name, 80% deployed, 3 new buys/day.
+  Note over Bot: Size from live NAV every order: requested % x outcome multiplier, no per-name cap. Equities only. 3 new buys/day.
   alt Regular session open and every gate passes
     Bot->>RH: review_equity_order then place_equity_order
     RH-->>Bot: fill or reject
@@ -108,7 +108,7 @@ Live book: **Agentic** proof account (last4 7638). Starting capital is the first
 | Limit | Value | Note |
 |---|---|---|
 | Asset class | Equities only | No options, crypto, margin, or shorting |
-| Per name | 20% of **live** NAV | Recalculate from the fresh Robinhood total every order |
+| Per name | No hard cap | Size = requested % of **live** NAV × outcome multiplier ([`docs/sizing.md`](docs/sizing.md)); limited only by cash (no margin) |
 | Deployed | 80% of live NAV | Remainder cash |
 | New equity buys | 3 / day | Risk-reducing sells are a separate path |
 | Session | US regular hours | No after-hours queue |
@@ -145,7 +145,7 @@ bun run web:app    # same as: bash scripts/web-app.sh
 
 Open `http://localhost:5173`. Sign in with **email magic link** or a **passkey** (RP ID `localhost`). The publishable / anon key is the only Supabase key in the browser (`NEXT_PUBLIC_*`). `service_role` and `QUANTANAMO_DATABASE_URL` stay server-side. First confirmed user is claimed via `claim_ledger_operator`; later operators need a `public.ledger_operators` row. `anon` is revoked. The desk queries PostgREST as that JWT.
 
-It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410). The desk does not display retired worker caps (3 buys/day, 20% name, RTH 09:45–15:45); those contradict the live mandate. PLTR is a compliance skip, not a position.
+It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired (410). The desk does not display retired worker caps (3 buys/day, RTH 09:45–15:45; there is no per-name cap); those contradict the live mandate. PLTR is a compliance skip, not a position.
 
 | Key | Tab | Shows |
 |---|---|---|
@@ -214,7 +214,7 @@ That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and
 2. HTTP `Cache-Control: no-store`. A failed live read is **503** `{ error: 'Desk ledger unavailable' }` — never yesterday’s copy.
 3. `PUT /internal/snapshot` is gone (405). The public SPA only fetches `/api/desk`. There are no write routes, no auth, no admin chrome, and no `NEXT_PUBLIC_SUPABASE_*` in the public build.
 
-**Show-me — role and tables.** Role `desk_public_reader` (`nologin`, granted to `authenticator`). `GRANT SELECT` + policy `desk_public_reader_select` on: `theses`, `thesis_symbols`, `thesis_evidence`, `thesis_scores`, `thesis_relations`, `runs`, `cloud_runs`, `cloud_tasks`, `codex_automations`, `catalysts`, `research_queue`, `research_lessons`, `postmortems`, `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts`, `agent_runs`, `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `trade_proposals`, `broker_fills`, `insights`, `predictions`, `risk_controls`, `ontology_themes`, `symbols`, `ontology_candidates`, `ontology_management_actions`, `belief_updates`, `thesis_domains`, view `active_playbook_rules`, ODDSBORNE `pm_*`, BANDIT `meme_*`, Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts`. No INSERT/UPDATE/DELETE. No `dashboard_snapshots`. `anon` stays revoked on live tables. Never put `service_role` or `QUANTANAMO_DATABASE_URL` on this Worker. Stewards load rules before size — [`docs/playbook-rules.md`](docs/playbook-rules.md). Size follows outcomes (half-Kelly multiplier, 20% of book single-position cap, entries/adds only) — [`docs/sizing.md`](docs/sizing.md).
+**Show-me — role and tables.** Role `desk_public_reader` (`nologin`, granted to `authenticator`). `GRANT SELECT` + policy `desk_public_reader_select` on: `theses`, `thesis_symbols`, `thesis_evidence`, `thesis_scores`, `thesis_relations`, `runs`, `cloud_runs`, `cloud_tasks`, `codex_automations`, `catalysts`, `research_queue`, `research_lessons`, `postmortems`, `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts`, `agent_runs`, `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `trade_proposals`, `broker_fills`, `insights`, `predictions`, `risk_controls`, `ontology_themes`, `symbols`, `ontology_candidates`, `ontology_management_actions`, `belief_updates`, `thesis_domains`, view `active_playbook_rules`, ODDSBORNE `pm_*`, BANDIT `meme_*`, Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts`. No INSERT/UPDATE/DELETE. No `dashboard_snapshots`. `anon` stays revoked on live tables. Never put `service_role` or `QUANTANAMO_DATABASE_URL` on this Worker. Stewards load rules before size — [`docs/playbook-rules.md`](docs/playbook-rules.md). Size follows outcomes (half-Kelly multiplier, no hard cap per position) — [`docs/sizing.md`](docs/sizing.md).
 
 `pm_*` and `meme_*` rows map into the **same** Book / Theses / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for QUANTANAMO.
 

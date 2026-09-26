@@ -7,7 +7,6 @@ import {
 
 import { marketGate } from './market-clock';
 import { approvedCandidate } from './autonomous-decision';
-import { SINGLE_POSITION_CAP_PERCENT } from './sizing';
 import { decidePositionAction, type PositionHistory, type PositionThesis } from './position-decision';
 import {
   synthesizePositionDecision,
@@ -59,6 +58,10 @@ type PublicationEnv = Omit<Cloudflare.Env, 'ROBINHOOD_BROKER_AGENT'> & {
 // quantanamo-research-orchestrator. The final topology has no publication Workflow.
 const PROMPT_VERSION = SYNTHESIS_PROMPT_VERSION;
 const MAX_CONTROL_BYTES = 512 * 1024;
+// Compatibility values for a broker gateway older than PR 4 (which required these
+// fields and rejected maxTradePercent > 5). The current gateway ignores them.
+const LEGACY_GATEWAY_MAX_TRADE_PERCENT = 5;
+const LEGACY_GATEWAY_MAX_DAILY_NOTIONAL_PERCENT = 20;
 
 type DeduplicationResult = { duplicate: boolean };
 
@@ -353,7 +356,6 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           monitor_policy: {
             policy_version: 'autonomous-position-v1',
             hard_loss_limit_percent: 8,
-            max_total_position_percent: SINGLE_POSITION_CAP_PERCENT,
             max_add_percent_per_review: 2,
             max_reduce_percent_per_review: 50,
           },
@@ -1018,10 +1020,11 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v3',
-    // 20% of book per single position (David, 2026-09-26). Sells are never capped.
-    maxTradePercent: SINGLE_POSITION_CAP_PERCENT,
-    maxDailyNotionalPercent: 20,
+    version: 'autonomous-equity-v4',
+    // Size follows results with no hard cap per position (David, 2026-09-26). The
+    // notional was already sized upstream (requested % x outcome multiplier, limited
+    // by spendable cash); the gateway only re-checks mechanical limits.
+    sizing: 'requested_percent_x_outcome_multiplier',
     maxTradesPerDay: 3,
     maxSpreadBps: 80,
     quoteMaxAgeSeconds: 120,
@@ -1035,8 +1038,11 @@ async function processTradeExecutionTask(
     positionAction,
     ...(proposal.side === 'buy' ? { dollarAmount: proposal.notional } : { quantity: proposal.quantity }),
     rationaleSha256,
-    maxTradePercent: policy.maxTradePercent,
-    maxDailyNotionalPercent: policy.maxDailyNotionalPercent,
+    // Legacy fields, ignored by the gateway since PR 4. They are still sent so a
+    // gateway older than PR 4 fails closed on buys above 5% of book (and still
+    // accepts sells) instead of reading undefined limits.
+    maxTradePercent: LEGACY_GATEWAY_MAX_TRADE_PERCENT,
+    maxDailyNotionalPercent: LEGACY_GATEWAY_MAX_DAILY_NOTIONAL_PERCENT,
     maxTradesPerDay: policy.maxTradesPerDay,
     maxSpreadBps: policy.maxSpreadBps,
   };

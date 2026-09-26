@@ -34,18 +34,14 @@ export function validateBrokerExecutionPolicy(
   }
 
   if (intent.side === 'buy') {
+    // Size is results-driven upstream. No % rail per order or per position here; only
+    // mechanical checks: a trade count, buying power, and no margin (settled cash).
     if (snapshot.todayAgenticOrderCount >= intent.maxTradesPerDay) throw new Error('Daily buy trade-count limit reached');
     if (requested > snapshot.buyingPower) throw new Error('Order exceeds current buying power');
-    if (requested > snapshot.totalValue * intent.maxTradePercent / 100) throw new Error('Order exceeds the per-trade portfolio cap');
-    if (snapshot.todayAgenticOrderNotional + requested > snapshot.totalValue * intent.maxDailyNotionalPercent / 100) {
-      throw new Error('Order exceeds the daily notional cap');
-    }
+    if (!Number.isFinite(snapshot.cash) || requested > snapshot.cash) throw new Error('Order would use margin (exceeds cash)');
   }
   if (intent.positionAction === 'add' && position && markPrice !== undefined) {
     if (!Number.isFinite(markPrice) || markPrice <= 0) throw new Error('A valid add price is required');
-    if (position.quantity * markPrice + requested > snapshot.totalValue * intent.maxTradePercent / 100) {
-      throw new Error('Add would exceed the total position portfolio cap');
-    }
     if (position.averageBuyPrice !== null && markPrice < position.averageBuyPrice) {
       throw new Error('Autonomous averaging down is not permitted');
     }

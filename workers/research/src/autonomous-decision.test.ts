@@ -103,17 +103,17 @@ describe('autonomous decision gates', () => {
     const candidate = approvedCandidate(half, modelDecision, context(), snapshot);
     expect(candidate?.notional).toBe(250);
     expect(candidate?.evidence.size_multiplier).toBe(0.5);
-    expect(candidate?.evidence.single_position_cap_percent).toBe(20);
+    expect(candidate?.evidence.sizing).toBe('requested_percent_x_outcome_multiplier');
   });
 
-  test('allows up to the 20% single-position cap, never above', () => {
-    const at20 = approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 20 }, context(), snapshot);
-    expect(at20?.notional).toBe(2_000);
-    expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 21 }, context(), snapshot)).toBeNull();
+  test('no per-position cap: a large results-driven request passes; only > 100% of book is invalid', () => {
+    const big = approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 40 }, context(), snapshot);
+    expect(big?.notional).toBe(4_000);
+    expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 101 }, context(), snapshot)).toBeNull();
   });
 
-  test('buying power still bounds the size', () => {
-    const thin = { ...snapshot, buyingPower: 487.76 };
+  test('spendable cash (no margin) still bounds the size', () => {
+    const thin = { ...snapshot, buyingPower: 487.76, cash: 487.76 };
     expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 20 }, context(), thin)?.notional).toBe(487.76);
   });
 
