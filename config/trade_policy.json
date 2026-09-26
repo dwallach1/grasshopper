@@ -20,7 +20,7 @@
   "sizing": {
     "cash_reserve_percent_of_portfolio_value": 0,
     "max_total_deployed_percent_of_portfolio_value": 100,
-    "sizing_method": "requested_percent_x_outcome_multiplier_limited_by_spendable_cash",
+    "sizing_method": "requested_percent_limited_by_max_stake_and_spendable_cash",
     "standing_cash_target_percent": 0,
     "tactical_swing_sleeve": {
       "target_percent_of_portfolio_value": 20,
@@ -30,10 +30,10 @@
       "re_screen_transient_cash_at_next_regular_session": true
     },
     "results_driven_sizing": {
-      "buy_notional": "min(requested percent of live total_value x thesis outcome multiplier, edge-scaled max_stake, spendable cash)",
+      "buy_notional": "min(requested percent of live total_value, edge-scaled max_stake, spendable cash)",
       "max_stake": "private.edge_max_stake via steward_sizing_guidance / public.v_thesis_max_stake: starter while unproven (n<10 or LCB<=0; QUANTANAMO $250, ODDSBORNE $15, BANDIT 0.10 SOL); proven: max(starter, min(book x 0.5 x LCB/sd^2, starter x 2^(1+(n-10)/5))); x0.5 per straight loss (max two)",
       "entry_requires": "invalidation_price passed to steward_sizing_guidance (else missing_invalidation) and written on the new open lot (DB-enforced); book observation <= 6h (else stale_book)",
-      "size_multiplier": "public.thesis_sizing(): half-Kelly on trade_outcomes, 0.25..1.0, thin samples (n<5) 0.5",
+      "size_multiplier": "retired: the outcome multiplier no longer scales size (docs/rules/confidence-multiplier.md); steward_sizing_guidance no longer returns it",
       "per_position_cap": null,
       "mechanical_limits": [
         "spendable cash: min(cash, buying_power), no margin",
@@ -103,7 +103,7 @@
     "exit_source": "the lot's own invalidation first (position_episodes.invalidation_price: exit when the price is at or below it; invalidation_note), then the linked thesis's (theses.falsifier); with none written, the steward's judgment and learned beliefs. No global stop-loss.",
     "require_deterministic_adverse_evidence_for_thesis_exit_or_reduce": true,
     "same_symbol_pending_order_blocks_new_action": true,
-    "add_sizing": "requested percent of live total_value x thesis outcome multiplier, limited by spendable cash (no fixed add %, count, spacing or averaging-down rule)",
+    "add_sizing": "requested percent of live total_value, limited by edge-scaled max_stake and spendable cash (no fixed add %, count, spacing or averaging-down rule)",
     "reduce_sizing": "model-requested partial percent (0 < % < 100); no fixed band"
   }
 }
