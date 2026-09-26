@@ -3,8 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   halfKellyMultiplier,
   outcomePosteriorConfidence,
-  positionCapHeadroom,
   sizeBuyNotional,
+  spendableCash,
 } from './sizing';
 
 describe('outcome re-score (mirror of private.outcome_posterior_confidence)', () => {
@@ -39,26 +39,35 @@ describe('half-Kelly multiplier (mirror of private.half_kelly_multiplier)', () =
     expect(halfKellyMultiplier(10, 0, null, 50)).toBe(0.25);
   });
 
-  test('scales half-Kelly against the 20% cap, clamped to 1.0', () => {
+  test('scales half-Kelly against the 20% reference, clamped to 1.0', () => {
     expect(halfKellyMultiplier(10, 6, 100, 100)).toBe(0.5); // f* 0.2 -> half 0.1 -> 0.1 / 0.2
     expect(halfKellyMultiplier(10, 7, 100, 50)).toBe(1); // f* 0.55 -> clamp
     expect(halfKellyMultiplier(10, 10, 100, null)).toBe(1); // no losses
   });
 });
 
-describe('20% single-position cap', () => {
-  test('grandfathered oversize position has zero headroom', () => {
-    expect(positionCapHeadroom(5_500.65, 2_780)).toBe(0); // CODA ~50% of book
-    expect(positionCapHeadroom(10_000, 1_500)).toBe(500);
+describe('no hard cap per position: requested x multiplier, then spendable cash', () => {
+  test('entry size = requested % of book x multiplier, no % rail', () => {
+    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 20, multiplier: 0.5 })).toBe(1_000);
+    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 60, multiplier: 1 })).toBe(6_000);
+    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 100, multiplier: 0.25 })).toBe(2_500);
   });
 
-  test('entry size = requested x multiplier, then cap and buying power', () => {
-    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 20, multiplier: 0.5 })).toBe(1_000);
-    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 30, multiplier: 1 })).toBe(2_000);
+  test('only mechanical limits: spendable cash (no margin), valid inputs', () => {
     expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 400, requestedPercent: 20, multiplier: 1 })).toBe(400);
-    expect(sizeBuyNotional({
-      totalValue: 10_000, buyingPower: 10_000, requestedPercent: 10, multiplier: 1, currentPositionValue: 1_900,
-    })).toBe(100);
+    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 9_000, cash: 1_000, requestedPercent: 50, multiplier: 1 })).toBe(1_000);
     expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 10, multiplier: 0 })).toBe(0);
+    expect(sizeBuyNotional({ totalValue: 10_000, buyingPower: 10_000, requestedPercent: 101, multiplier: 1 })).toBe(0);
+    expect(sizeBuyNotional({ totalValue: 0, buyingPower: 10_000, requestedPercent: 10, multiplier: 1 })).toBe(0);
+    expect(spendableCash(9_000, 1_000)).toBe(1_000);
+    expect(spendableCash(500)).toBe(500);
+    expect(spendableCash(500, -20)).toBe(0);
+  });
+
+  test('QUANTANAMO at the 2026-09-26 NAV: thin thesis 0.5 x request, bounded by $487.76 cash', () => {
+    const nav = { totalValue: 5_500.65, buyingPower: 487.76, cash: 487.76, multiplier: 0.5 };
+    expect(sizeBuyNotional({ ...nav, requestedPercent: 5 })).toBe(137.51);
+    expect(sizeBuyNotional({ ...nav, requestedPercent: 10 })).toBe(275.03);
+    expect(sizeBuyNotional({ ...nav, requestedPercent: 20 })).toBe(487.76);
   });
 });

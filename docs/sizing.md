@@ -1,17 +1,18 @@
-# Sizing: outcomes set the size, 20% of book is the hard cap
+# Sizing: results set the size, no hard cap per position
 
-Position size follows results. Each thesis's confidence gets re-scored from its closed trades, and each new entry or add gets scaled by a half-Kelly multiplier. There is one hard cap: **a single position may not exceed 20% of that steward's book**. This replaces the old 5% rule. There are no other new hard caps.
+Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, and each new entry or add is scaled by a half-Kelly multiplier. The only hard limit on size is mechanical: a buy can't spend more cash than the steward actually has (no margin).
 
 ## The rules
 
 | Rule | Value |
 |---|---|
-| Single-position cap | 20% of the steward's own book (QUANTANAMO: Agentic 7638 total value, ODDSBORNE: latest `pm_pnl.equity`, BANDIT: latest `meme_pnl.equity_sol`) |
-| Applies to | New entries and **adds** only |
+| Per-position cap | **None** |
+| Multiplier | Half-Kelly from the thesis's closed `trade_outcomes`: `clamp((kelly / 2) / 0.20, 0.25, 1.0)`. Uses **0.5 when n < 5**, 0.25 when there are no wins yet (or no edge), 1.0 when there are no losses yet. The 0.20 is only a scale reference (a half-Kelly of 20% of book = full size); it does not cap anything |
+| Size | `requested × multiplier`, limited only by spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
+| Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
-| Existing oversize positions | Grandfathered. No forced trim, but no adds while above the cap (`add_headroom = 0`) |
-| Multiplier | Half-Kelly from the thesis's closed `trade_outcomes`: `clamp((kelly / 2) / 0.20, 0.25, 1.0)`. Uses **0.5 when n < 5**, 0.25 when there are no wins yet, 1.0 when there are no losses yet |
-| Size | `requested × multiplier`, then capped at `add_headroom` (and at buying power / wallet cash) |
+| Autonomous QUANTANAMO buys | Only on a `hardening` thesis with outcome-adjusted confidence ≥ 80 |
+| Clip sizes (BANDIT, ODDSBORNE) | No fixed clip. A steward's usual clip is the *requested* size; the multiplier sets what actually goes on |
 
 ## Confidence re-scoring
 
@@ -24,24 +25,26 @@ Position size follows results. Each thesis's confidence gets re-scored from its 
 
 ## QUANTANAMO: enforced in code
 
-`workers/research` (`approvedCandidate` / `sizeBuyNotional`, position-decision adds / `positionCapHeadroom`) takes the thesis multiplier from `public.thesis_sizing()` (through cloud-control context) and fails closed when it's missing. The broker gateway policy rejects any buy that would take a name above 20% of total value. Sells are never capped.
+`workers/research` (`approvedCandidate` / `sizeBuyNotional`, position-decision adds) takes the thesis multiplier from `public.thesis_sizing()` (through cloud-control context) and fails closed when it's missing. The notional is `requested % of live NAV × multiplier`, limited by `min(cash, buying_power)`. The broker gateway has **no % rail**. It only runs mechanical checks: a valid quantity and notional, the buy count, buying power, and cash (a buy that would need margin is rejected). The execution rails that don't size anything stay: 3 buys a day, spread ≤ 80 bps, regular hours 09:45–15:45 ET, no averaging down, adds of 1–2% of NAV per review (at most one a day and two per position), and reduces of 25–50%.
+
+The intent still carries the deprecated `maxTradePercent: 5` / `maxDailyNotionalPercent: 20` fields. A new gateway ignores them. If an older gateway build is still live, it fails closed on buys above 5% instead of reading missing fields as "no limit".
 
 ## ODDSBORNE and BANDIT: guidance (not a DB guard)
 
 Before any **buy/add**, call:
 
 ```sql
--- BANDIT: instrument = mint or symbol; unit is SOL
-select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', '<mint>');
+-- BANDIT: instrument = mint or symbol; unit is SOL; requested = the clip you'd take at full size
+select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', '<mint>', 0.45);
 -- ODDSBORNE: instrument = pm_markets.slug or id; unit is USD
-select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>');
+select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>', <requested usd>);
 ```
 
-The call returns `book_equity`, `cap_notional` (20% of book), `current_position_value`, `add_headroom`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Size = `min(requested × multiplier, add_headroom)`. If `add_headroom = 0`, do not add. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
+The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, `multiplier` (+ `multiplier_basis`, sample stats, `half_kelly_fraction`), `sized_notional = min(requested × multiplier, spendable_cash)`, the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`, and `autonomous_buy_gate_pass`. Leave out `requested` to get just the multiplier. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
 
-Example: with a 1.88 SOL book, BANDIT's cap is about 0.376 SOL per position, so the old 0.45 SOL standard clip is now over the cap.
+Example (ledger on 2026-09-26): BANDIT's book is 1.84 SOL, with 1.46 SOL cash. A 0.45 SOL clip on `meme_4h_momentum_clip` (1 closed trade, so the multiplier is 0.5) sizes to **0.225 SOL**. With no thesis, the steward multiplier is 0.25 (34 trades, no edge) → 0.1125 SOL.
 
-The cap is **not** a DB reject guard. ODDSBORNE and BANDIT record orders after the venue accepts them, so a reject trigger would drop ledger rows for trades that really happened instead of preventing them. The audit view `public.v_sizing_cap_breaches` lists any live buy that exceeded 20% of book at the time of the order.
+Size is **not** a DB reject guard. ODDSBORNE and BANDIT record orders after the venue accepts them. The cap-breach audit view from #84 has been dropped, and the `thesis-notional` risk control is retired.
 
 ## Re-pricing after fill backfills
 

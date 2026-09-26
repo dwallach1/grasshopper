@@ -8,7 +8,7 @@ import {
   type FundamentalsRow,
   type MarketSymbolRow,
 } from './schemas';
-import { SINGLE_POSITION_CAP_PERCENT, sizeBuyNotional, validMultiplier } from './sizing';
+import { MAX_REQUEST_PERCENT, sizeBuyNotional, validMultiplier } from './sizing';
 
 export type DecisionJsonPrimitive = boolean | number | string | null;
 export type DecisionJsonValue =
@@ -129,16 +129,17 @@ export function approvedCandidate(
   const multiplier = task.thesis.size_multiplier;
   if (!validMultiplier(multiplier)) return null;
   const requestedPercent = Number(decision.notional_percent);
-  if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > SINGLE_POSITION_CAP_PERCENT) {
+  if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > MAX_REQUEST_PERCENT) {
     return null;
   }
-  // Size follows results: requested x outcome multiplier, hard-capped at 20% of the book.
+  // Size follows results: requested % of book x outcome multiplier. No per-position cap;
+  // only spendable cash (no margin) limits the order.
   const notional = sizeBuyNotional({
     totalValue: snapshot.totalValue,
     buyingPower: snapshot.buyingPower,
+    cash: snapshot.cash,
     requestedPercent,
     multiplier,
-    currentPositionValue: 0,
   });
   if (notional < 25) return null;
   return {
@@ -152,7 +153,7 @@ export function approvedCandidate(
       size_multiplier: multiplier,
       sizing_basis: task.thesis.sizing_basis ?? null,
       sized_percent: Math.round(notional / snapshot.totalValue * 10_000) / 100,
-      single_position_cap_percent: SINGLE_POSITION_CAP_PERCENT,
+      sizing: 'requested_percent_x_outcome_multiplier',
     },
   };
 }

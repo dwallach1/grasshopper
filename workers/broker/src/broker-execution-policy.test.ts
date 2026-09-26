@@ -40,26 +40,35 @@ describe('broker position-action policy', () => {
     )).toThrow('pending');
   });
 
-  const cap20 = { ...base, maxTradePercent: 20 };
   const fresh = { ...snapshot, todayAgenticOrderCount: 0, todayAgenticOrderNotional: 0, positions: [] };
+  const modern = { ...base, maxTradePercent: undefined, maxDailyNotionalPercent: undefined };
 
-  test('20% single-position cap: an open at 20% passes, above it fails', () => {
-    expect(validateBrokerExecutionPolicy({ ...cap20, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 2_000 }, fresh))
-      .toBe(2_000);
-    expect(() => validateBrokerExecutionPolicy(
-      { ...cap20, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 2_000.01 }, fresh,
-    )).toThrow('per-trade portfolio cap');
+  test('no % rail: a results-driven open far above the old 5% / 20% caps passes when cash covers it', () => {
+    expect(validateBrokerExecutionPolicy({ ...modern, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 6_000 }, fresh))
+      .toBe(6_000);
+    // Legacy fields from an older orchestrator are ignored rather than enforced.
+    expect(validateBrokerExecutionPolicy({ ...base, symbol: 'WXYZ', side: 'buy', positionAction: 'open', dollarAmount: 6_000 }, fresh))
+      .toBe(6_000);
   });
 
-  test('grandfathered oversize position: adds rejected, full exit allowed', () => {
-    const oversize = {
+  test('mechanical limits only: buying power, no margin, daily trade count, positive size', () => {
+    const open = { ...modern, symbol: 'WXYZ', side: 'buy' as const, positionAction: 'open' as const };
+    expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 9_000.01 }, fresh)).toThrow('buying power');
+    const marginAccount = { ...fresh, cash: 1_000, buyingPower: 9_000 };
+    expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 1_000.01 }, marginAccount)).toThrow('margin');
+    expect(validateBrokerExecutionPolicy({ ...open, dollarAmount: 1_000 }, marginAccount)).toBe(1_000);
+    expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 100 }, { ...fresh, todayAgenticOrderCount: 3 }))
+      .toThrow('trade-count');
+    expect(() => validateBrokerExecutionPolicy({ ...open, dollarAmount: 0 }, fresh)).toThrow('positive');
+  });
+
+  test('large existing position: adds are not capped by position size; sells still allowed', () => {
+    const large = {
       ...fresh,
       positions: [{ symbol: 'ABCD', quantity: 50, sharesAvailableForSells: 50, averageBuyPrice: 90 }],
     };
-    expect(() => validateBrokerExecutionPolicy(
-      { ...cap20, side: 'buy', positionAction: 'add', dollarAmount: 100 }, oversize, 100,
-    )).toThrow('total position portfolio cap');
-    expect(validateBrokerExecutionPolicy({ ...cap20, side: 'sell', positionAction: 'exit', quantity: 50 }, oversize)).toBe(50);
-    expect(validateBrokerExecutionPolicy({ ...cap20, side: 'sell', positionAction: 'reduce', quantity: 20 }, oversize)).toBe(20);
+    expect(validateBrokerExecutionPolicy({ ...modern, side: 'buy', positionAction: 'add', dollarAmount: 100 }, large, 100)).toBe(100);
+    expect(validateBrokerExecutionPolicy({ ...modern, side: 'sell', positionAction: 'exit', quantity: 50 }, large)).toBe(50);
+    expect(validateBrokerExecutionPolicy({ ...modern, side: 'sell', positionAction: 'reduce', quantity: 20 }, large)).toBe(20);
   });
 });

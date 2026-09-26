@@ -46,7 +46,7 @@ describe('autonomous position decisions', () => {
     expect(result.quantity).toBe(4);
   });
 
-  test('adds within the 20% total position cap at full multiplier', () => {
+  test('adds at full multiplier', () => {
     const smaller = { ...basePosition, quantity: 2 };
     const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, thesis, {
       position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
@@ -99,23 +99,25 @@ describe('autonomous position decisions', () => {
     const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, half, addDecision, context());
     expect(result.action).toBe('add');
     expect(result.dollarAmount).toBe(100);
-    expect(result.evidence?.post_trade_position_cap_percent).toBe(20);
+    expect(result.evidence?.size_multiplier).toBe(0.5);
   });
 
-  test('add is capped by remaining 20% headroom', () => {
-    const near = { ...basePosition, quantity: 18.5 }; // 18.5 x 105 = 1,942.50 of 10,000
-    const result = decidePositionAction(near, { ...snapshot, positions: [near] }, thesis, addDecision, context());
+  test('no position cap: a large position can still add at the results-driven size', () => {
+    const large = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 }; // ~50% of book
+    const result = decidePositionAction(large, { ...snapshot, positions: [large] }, thesis, addDecision, context());
+    expect(result.action).toBe('add');
+    expect(result.dollarAmount).toBe(200);
+  });
+
+  test('add is limited only by spendable cash', () => {
+    const smaller = { ...basePosition, quantity: 2 };
+    const poor = { ...snapshot, cash: 57.5, buyingPower: 57.5, positions: [smaller] };
+    const result = decidePositionAction(smaller, poor, thesis, addDecision, context());
     expect(result.action).toBe('add');
     expect(result.dollarAmount).toBe(57.5);
   });
 
-  test('grandfathered oversize position: no add, no forced trim', () => {
-    const oversize = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 }; // ~50% of book
-    const result = decidePositionAction(oversize, { ...snapshot, positions: [oversize] }, thesis, addDecision, context());
-    expect(result.action).toBe('hold');
-  });
-
-  test('sells are never capped: hard-loss exit on an oversize position', () => {
+  test('hard-loss exit on a large position', () => {
     const oversize = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 };
     const result = decidePositionAction(oversize, { ...snapshot, positions: [oversize] }, thesis, {}, context(91));
     expect(result.action).toBe('exit');

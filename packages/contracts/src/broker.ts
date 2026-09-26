@@ -48,8 +48,12 @@ export const AutonomousEquityIntentSchema = z.object({
   dollarAmount: z.number().positive().optional(),
   quantity: z.number().positive().optional(),
   rationaleSha256: z.string().min(1),
-  maxTradePercent: z.number().positive(),
-  maxDailyNotionalPercent: z.number().positive(),
+  /**
+   * Deprecated since PR 4 (size follows results, no hard cap per position). The gateway
+   * ignores both. Orchestrators still send them so a pre-PR-4 gateway fails closed.
+   */
+  maxTradePercent: z.number().positive().optional(),
+  maxDailyNotionalPercent: z.number().positive().optional(),
   maxTradesPerDay: z.number().int().positive(),
   maxSpreadBps: z.number().positive(),
 });
