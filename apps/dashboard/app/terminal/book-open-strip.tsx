@@ -7,6 +7,7 @@ import { holdingLifeLabel, holdingTicket, type BookHolding } from '../../lib/boo
 import { isMarkStale } from '../../lib/desk-freshness';
 import { formatAmount, ledgerAmount } from '../../lib/money-units';
 import type { BookOpen, BookOpenTicket } from '../../lib/book-open-strip';
+import { exposureLine, type ExposureUsage } from '../../lib/ledger-watchdog';
 import { HISTORICAL_UNTAGGED } from '../../lib/position-thesis';
 import { QUIET_STEWARD_FACE, type StewardFace } from '../../lib/steward-face';
 import { DeskLiveline } from './desk-liveline';
@@ -19,11 +20,14 @@ export function BookOpenStrip({
   holdings = [],
   faces,
   now = null,
+  exposure = [],
 }: {
   open: BookOpen;
   holdings?: readonly BookHolding[];
   faces?: ReadonlyMap<string, StewardFace>;
   now?: number | null;
+  /** Open risk to invalidation vs the 10% budget per steward (v_exposure_usage). */
+  exposure?: readonly ExposureUsage[];
 }) {
   const tickets = useMemo(() => open.rows.flatMap((row) => row.tickets), [open.rows]);
   const rows = holdings.length ? holdings : [];
@@ -45,6 +49,20 @@ export function BookOpenStrip({
           </span>
         ))}
       </p>
+      {exposure.length ? (
+        <p className="book-exposure" aria-label="Open risk to invalidation vs budget">
+          {exposure.map((row) => (
+            <span
+              key={row.steward}
+              className={`book-exposure-item${row.over ? ' is-over' : ''}`}
+              title={`${EXPOSURE_NAME[row.steward]}: open risk to invalidation vs the 10%-of-book budget${row.over ? '. Over budget: new entries wait until risk comes down.' : ''}`}
+            >
+              {EXPOSURE_NAME[row.steward]} {exposureLine(row)}
+              {row.over ? <em> · over</em> : null}
+            </span>
+          ))}
+        </p>
+      ) : null}
       <div className="book-holdings-table" role="table">
         <div className="book-holdings-head" role="row">
           <span className="book-holdings-icon-col" aria-hidden="true" />
@@ -123,6 +141,12 @@ export function BookOpenStrip({
     </section>
   );
 }
+
+const EXPOSURE_NAME: Record<ExposureUsage['steward'], string> = {
+  quantanamo: 'QUANTANAMO',
+  oddsborne: 'ODDSBORNE',
+  bandit: 'BANDIT',
+};
 
 function HoldingDetail({
   row,

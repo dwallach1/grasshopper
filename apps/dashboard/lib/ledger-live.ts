@@ -143,7 +143,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     candidates,
     actions,
   ] = await Promise.all([
-    restRows('theses?select=id,name,summary,status,confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', auth),
+    restRows('theses?select=id,name,summary,status,confidence,stated_confidence,results_confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', auth),
     restRows('thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc', auth),
     restOptional('belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&order=observed_at.desc,id.desc&limit=80', auth),
     restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200', auth),
@@ -260,7 +260,7 @@ export const SCORECARD_QUERIES = {
   stewards: 'v_steward_scorecard?select=*&order=sort_order.asc',
   weekly: 'v_steward_scorecard_weekly?select=steward,unit,week_start,iso_week,is_current,trades,priced_trades,wins,hit_rate,realized_pnl&order=week_start.desc,steward.asc&limit=60',
   trend: 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction',
-  theses: 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin&order=priced_trades.desc',
+  theses: 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,results_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin&order=priced_trades.desc',
 } as const;
 
 /** Phone Worker path — skip operator tables the public snapshot already drops. */

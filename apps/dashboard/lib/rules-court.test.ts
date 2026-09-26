@@ -75,6 +75,7 @@ describe('rules court', () => {
       ['39_desk_rules_paths_sync.sql', '20260926214953_desk_rules_paths_sync.sql'],
       ['41_court_decisions.sql', '20260926220243_court_decisions.sql'],
       ['42_court_decisions_registry.sql', '20260926220333_court_decisions_registry.sql'],
+      ['43_thesis_scorecard_results.sql', '20260926221039_thesis_scorecard_results.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))

@@ -35,6 +35,10 @@ export type ThesisRosterRow = {
   stance: string;
   status: ThesisStatus;
   confidence: number;
+  /** Earned results score; null = unscored. The roster shows this, never the stated number alone. */
+  results_confidence: number | null;
+  /** The steward's stated view (display secondary). */
+  stated_confidence: number;
   domain: string;
   steward: string;
   steward_name: string;
@@ -94,6 +98,19 @@ export function thesisDomainLabel(
   if (slug === 'oddsborne') return 'Predictions';
   if (slug === 'bandit') return 'Coins';
   return 'Stocks';
+}
+
+/** Results score label: "score 79" when earned, "unscored" otherwise (never the stated number). */
+export function thesisScoreLabel(row: Pick<ThesisRosterRow, 'results_confidence'>): string {
+  return row.results_confidence === null ? 'unscored' : `score ${Math.round(row.results_confidence)}`;
+}
+
+/** Tooltip: what the score is and what the steward stated, so a stated 85 is never read as earned. */
+export function thesisScoreTitle(row: Pick<ThesisRosterRow, 'results_confidence' | 'stated_confidence'>): string {
+  const earned = row.results_confidence === null
+    ? 'Unscored: fewer than 3 effective trades'
+    : `Results score ${Math.round(row.results_confidence)}: P(expected return per trade > 0)`;
+  return `${earned}. Stated ${row.stated_confidence}.`;
 }
 
 export function thesisForId(
@@ -167,6 +184,8 @@ function rowFrom(
     stance: thesis.stance,
     status: thesis.status,
     confidence: thesis.confidence,
+    results_confidence: thesis.results_confidence ?? null,
+    stated_confidence: thesis.stated_confidence ?? thesis.confidence,
     domain: thesisDomainLabel(thesis, themes),
     steward: slug,
     steward_name: card?.display_name ?? thesisStewardName(slug),

@@ -27,7 +27,12 @@ export type ThesisRow = {
   name: string;
   summary: string;
   status: ThesisStatus;
+  /** Display number: the results score when scored, else the steward's stated view (migration 41). */
   confidence: number;
+  /** The steward's stated view. Never opens the QUANTANAMO gate. */
+  stated_confidence?: number | null;
+  /** Earned results score (expected return per trade); null = unscored (< 3 effective trades). */
+  results_confidence?: number | null;
   time_horizon: string;
   stance: string;
   variant_perception: string | null;

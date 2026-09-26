@@ -41,6 +41,7 @@ export function BookPanel({
         holdings={holdings.rows}
         faces={faces}
         now={nowIso ? Date.parse(nowIso) : null}
+        exposure={desk.watchdog?.exposure ?? []}
       />
       <BookHealthStrip health={health} now={nowIso ? Date.parse(nowIso) : null} />
     </div>

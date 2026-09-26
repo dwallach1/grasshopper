@@ -7,6 +7,8 @@ import {
   isLiveThesis,
   thesisDomainLabel,
   thesisForId,
+  thesisScoreLabel,
+  thesisScoreTitle,
   thesisStewardAccent,
   thesisStewardSlug,
 } from './thesis-roster';
@@ -20,6 +22,8 @@ function thesis(id: string, extra: Partial<ThesisRow> = {}): ThesisRow {
     summary: extra.summary ?? `${id} sentence`,
     status: extra.status ?? 'hardening',
     confidence: extra.confidence ?? 70,
+    stated_confidence: extra.stated_confidence,
+    results_confidence: extra.results_confidence,
     time_horizon: extra.time_horizon ?? 'medium',
     stance: extra.stance ?? 'bullish',
     variant_perception: extra.variant_perception ?? null,
@@ -104,6 +108,24 @@ function evidence(thesisId: string, extra: Partial<ThesisEvidenceRow> = {}): The
 }
 
 describe('thesis roster', () => {
+  test('shows the earned results score, or unscored, never a stated number alone', () => {
+    const roster = assembleThesisRoster({
+      theses: [
+        thesis('neocloud_compute', { confidence: 85, stated_confidence: 85, results_confidence: null }),
+        thesis('weather_same_day_high', { confidence: 79, stated_confidence: 80, results_confidence: 79 }),
+        thesis('legacy_row', { confidence: 60 }),
+      ],
+      ontology_themes: [],
+      team: team(),
+    });
+    const byId = new Map(roster.rows.map((row) => [row.id, row]));
+    expect(thesisScoreLabel(byId.get('neocloud_compute')!)).toBe('unscored');
+    expect(thesisScoreTitle(byId.get('neocloud_compute')!)).toContain('Stated 85');
+    expect(thesisScoreLabel(byId.get('weather_same_day_high')!)).toBe('score 79');
+    expect(byId.get('weather_same_day_high')?.stated_confidence).toBe(80);
+    expect(byId.get('legacy_row')).toMatchObject({ results_confidence: null, stated_confidence: 60 });
+  });
+
   test('lists ledger theses with stance, status, domain, and steward — no book facts', () => {
     const roster = assembleThesisRoster({
       theses: [

@@ -4174,6 +4174,11 @@ a:focus-visible {
   color: var(--ink-2, var(--text-2));
 }
 
+.thesis-conf.is-unscored {
+  color: var(--ink-3, var(--text-3));
+  font-style: italic;
+}
+
 .thesis-card.is-on {
   border-color: rgba(184, 137, 45, 0.28);
 }
@@ -5057,6 +5062,24 @@ a:focus-visible {
 .book-open-age {
   letter-spacing: 0.04em;
   text-transform: none;
+}
+
+/* Quiet exposure line: plain ink, never P/L colors; over budget is a soft gold note. */
+.book-exposure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 8px;
+  color: var(--ink-3, var(--text-3));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-exposure-item.is-over,
+.book-exposure-item em {
+  color: var(--gold, var(--warn));
+  font-style: normal;
 }
 
 .book-holdings-table {
