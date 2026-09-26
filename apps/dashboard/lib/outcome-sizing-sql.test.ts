@@ -72,3 +72,39 @@ describe('outcome re-score + sizing SQL (PR 2)', () => {
     expect(run.indexOf('reprice_trade_outcomes')).toBeLessThan(run.indexOf('rescore_all_thesis_confidence'));
   });
 });
+
+describe('ODDSBORNE fills re-price SQL (PR 3)', () => {
+  test('migrations are the schema files', async () => {
+    for (const [schema, migration] of [
+      ['12_pm_fills_reprice.sql', '20260926171206_pm_fills_reprice.sql'],
+      ['13_scorecard_fill_backed.sql', '20260926171322_scorecard_fill_backed.sql'],
+    ]) {
+      expect(await readFile(join(root, 'supabase/migrations', migration!), 'utf8'))
+        .toBe(await readFile(join(root, 'supabase/schemas', schema!), 'utf8'));
+    }
+  });
+
+  test('backfill rows price from fills or fills + settlement; placeholders block pricing', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/12_pm_fills_reprice.sql'), 'utf8');
+    expect(sql).toContain("return 'fills_suspect';");
+    expect(sql).toContain("f.venue_fill_id like '%-partial-%'");
+    expect(sql).toContain("v_source := 'settlement';");
+    expect(sql).toContain('realized_pnl = round(v_proceeds - pm.bc - pm.fe, 6)');
+    expect(sql).toContain("case when n_fills > 0 then fee_sum else private.try_numeric(pos.meta->>'fees') end");
+    expect(sql).toContain('return private.reprice_pm_backfill_outcome(o.id);');
+    for (const body of sql.split(/create or replace function /).slice(1)) {
+      expect(body.slice(0, 400)).toContain("set search_path = ''");
+    }
+  });
+
+  test('data run verifies the placeholder before deleting it and keeps a copy; heartbeat untouched', async () => {
+    const run = await readFile(join(root, 'supabase/migrations/20260926171239_oddsborne_fills_reprice_run.sql'), 'utf8');
+    expect(run).toContain("raise exception 'placeholder check failed");
+    expect(run).toContain("'removed_placeholder_fill', to_jsonb(v_ph)");
+    expect(run.indexOf("'removed_placeholder_fill'")).toBeLessThan(run.indexOf('delete from public.pm_fills'));
+    expect(run).toContain('disable trigger pm_positions_touch_oddsborne');
+    expect(run).toContain('enable trigger pm_positions_touch_oddsborne');
+    expect(run).not.toMatch(/update public\.pm_positions\s+set[^;]*(status|closed_at)\s*=/);
+    expect(run.indexOf("reprice_trade_outcomes('oddsborne')")).toBeLessThan(run.indexOf('rescore_all_thesis_confidence'));
+  });
+});
