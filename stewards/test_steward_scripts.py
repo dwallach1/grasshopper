@@ -31,13 +31,16 @@ class StewardScripts(unittest.TestCase):
             for pattern in SECRET_PATTERNS:
                 self.assertIsNone(pattern.search(text), f"{path.name}: credential-looking literal ({pattern.pattern[:30]})")
 
-    def test_guidance_gets_five_args_including_invalidation(self) -> None:
+    def test_guidance_gets_invalidation_and_entry_price(self) -> None:
+        # 5th arg: invalidation (required); 6th: entry price for the 10%-of-book exposure fit (migration 41).
         bandit = SCRIPTS["bandit"].read_text()
-        self.assertIn("steward_sizing_guidance('bandit', %s, %s, %s, %s)", bandit)
+        self.assertIn("steward_sizing_guidance('bandit', %s, %s, %s, %s, %s)", bandit)
+        self.assertIn("None if pretrade_price is None else str(pretrade_price)", bandit)
         self.assertIn("PLANNED_INVALIDATION", bandit)
         self.assertIn('raise RuntimeError("invalidation price must be > 0")', bandit)
         odds = SCRIPTS["oddsborne"].read_text()
-        self.assertIn("public.steward_sizing_guidance(%s, %s, %s, %s, %s)", odds)
+        self.assertIn("public.steward_sizing_guidance(%s, %s, %s, %s, %s, %s)", odds)
+        self.assertIn("sizing_guidance(cur, thesis_id, slug, requested_usd, invalidation, price)", odds)
         self.assertIn("missing_invalidation", odds)
 
     def test_refuses_when_entry_not_allowed(self) -> None:

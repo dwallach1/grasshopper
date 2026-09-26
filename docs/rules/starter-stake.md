@@ -1,16 +1,17 @@
-# Starter stake for unproven theses
+# Starter stake for unproven theses (equal 3% book risk per bet)
 
-`rule_id: starter-stake` · status: **in_force** · verdict: **amend** · ruling 2026-09-26 · next review 2026-10-10 · **needs David**
+`rule_id: starter-stake` · status: **in_force** · verdict: **amend** · ruling 2026-09-26 · next review 2026-10-10
 
 ## Purpose (failure prevented)
 Lets an unproven thesis trade (learning comes from trade count, not size) without a big loss before there is evidence.
 
 ## Mechanism
-Was fixed dollars: QUANTANAMO $250, ODDSBORNE $15, BANDIT 0.10 SOL. Now a share of the current book: 4.545% / 5.418% / 5.546%. That is today's values re-expressed, so nothing changes at today's book.
+starter = 0.03 x current book / steward bet volatility (`private.steward_bet_vol`: sd of return on stake over the steward's closed priced non-paper trades, floored at 0.25; 1.0 while n < 5), x the steward drawdown scale. On 2026-09-26: QUANTANAMO sd 0.222 -> floor 0.25 -> 12% of book = $660; BANDIT sd 0.449 -> 6.68% = 0.1205 SOL (x0.987 = 0.119); ODDSBORNE sd 1.957 -> 1.53% = $4.24 (x0.5 = $2.12). History: fixed dollars ($250 / $15 / 0.10 SOL) until migration 37, then the same as a book share until migration 41.
 
 Code paths:
 - `supabase/schemas/22_edge_scaled_stake.sql`
 - `supabase/schemas/37_court_rulings.sql`
+- `supabase/schemas/41_court_decisions.sql`
 
 ## The court
 
@@ -26,13 +27,13 @@ Code paths:
 MC (grid2.json): QUANTANAMO at Sharpe 0.1/0.2, P(2x in a year) is 10.7%/44.7% at today's starter vs 18.5%/55.6% at v = 4% (16% of book), with P(DD50) <= 0.3% either way (<= 1.5% with a 5% chance of a -40% gap per trade). ODDSBORNE at zero edge: P(DD50) 50.8% at today's 5.4% vs 1.1% at v = 4% (2.0% of book).
 
 ## Ruling
-**AMEND.** Amend (shipped): book share, not fixed dollars. The starter LEVEL (vol-normalized v) is a risk-budget choice for David, so it is not shipped. See docs/rules/SIMULATION.md for the options.
+**AMEND.** Amend (shipped in two steps): book share, not fixed dollars (37); level set to equal risk per bet at v = 3% (41, decided 2026-09-26 by the parent agent under David's delegation). The 0.25 sd floor stops a lucky low-variance sample from inflating the starter (max starter 12% of book).
 
-Amendment: starter = share x current book equity, shares QUANTANAMO 0.04545, ODDSBORNE 0.05418, BANDIT 0.05546 (= the 2026-09-26 dollar starters / that day's book).
+Amendment: starter = 0.03 x book / max(steward sd of return on stake, 0.25) (1.0 while the steward has < 5 trades), x drawdown scale. Proven theses keep half-Kelly on the LCB, never below the starter.
 
 | Growth cost | Ruin-risk reduction |
 |---|---|
-| None today; compounds after gains. | Shrinks with the book: ODDSBORNE MC ruin 10.1% -> 0.1%. |
+| Negative for QUANTANAMO ($250 -> $660: MC P(2x) at Sharpe 0.2 rises from 44.7% toward the v = 3-4% range); ODDSBORNE smaller ($15 -> $4.24 before scale). | ODDSBORNE zero-edge P(DD50) 50.8% at 5.4% of book vs ~1-2% at v = 3-4%; QUANTANAMO P(DD50) stays <= 1.5% with gap stress. |
 
 ## Interactions
 edge-max-stake, drawdown-scaling.

@@ -41,13 +41,13 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | Rule | Verdict | Status | Key number |
 |---|---|---|---|
 | [edge-max-stake](edge-max-stake.md) | amend | in force | half-Kelly on 1σ LCB kept; 2σ would cut BANDIT median growth at Sharpe 0.2 from 28x to 10x |
-| [starter-stake](starter-stake.md) | amend (share of book); level → David | in force | fixed-$ starter: ODDSBORNE ruin 10.1% vs 0.1% book-scaled (zero edge) |
+| [starter-stake](starter-stake.md) | amend (equal risk, v = 3%) | in force | 0.03 × book / bet vol: QUANTANAMO $660, ODDSBORNE $4.24, BANDIT 0.1205 SOL (2026-09-26) |
 | [loss-streak-halving](loss-streak-halving.md) | strike | repealed | P(loss \| loss) 0.53 vs P(loss) 0.51; drawdown scaling beats it on growth and drawdown |
 | [drawdown-scaling](drawdown-scaling.md) | enact | in force | BANDIT P(DD50) 35.9% → 9.3% at zero edge |
 | [new-thesis-escape](new-thesis-escape.md) | resolved structurally | repealed | #97's fix cut QUANTANAMO themes $250 → $62.50 with no ruin case |
 | [confidence-multiplier](confidence-multiplier.md) | strike from sizing | repealed | gameable (request 2x → 1x); hit-rate noise ±22 pts at n = 5 |
-| [outcome-rescore-confidence](outcome-rescore-confidence.md) | amend → David | in force | demotes 41% of true Sharpe-0.1 theses after 5 trades |
-| [quantanamo-80-gate](quantanamo-80-gate.md) | uphold → David | in force | 2 of 12 theses pass; at n = 0 it reads self-stated confidence |
+| [outcome-rescore-confidence](outcome-rescore-confidence.md) | amend (expected return per trade) | in force | old rule demoted 41% of true Sharpe-0.1 theses after 5 trades; no status changes on re-run |
+| [quantanamo-80-gate](quantanamo-80-gate.md) | amend (results score only) | in force | 0 theses pass on 2026-09-26; stated confidence no longer opens it |
 | [required-invalidation](required-invalidation.md) | uphold | in force | zero growth cost |
 | [regular-session-invalidation](regular-session-invalidation.md) | uphold | in force | — |
 | [stale-book-6h](stale-book-6h.md) | uphold | in force | — |
@@ -56,5 +56,5 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | [listed-equity-registry](listed-equity-registry.md) | uphold | in force | — |
 | [entry-cap-snapshot](entry-cap-snapshot.md) | uphold | in force | — |
 | [backtest-evidence-credit](backtest-evidence-credit.md) | enact | in force | proven in 7 vs 13 trades at Sharpe 0.2; overfit case P(DD50) +0.4 pt |
-| [portfolio-exposure](portfolio-exposure.md) | proposed → David | proposed | QUANTANAMO holds 82% of its book in 3 lots (36% in one theme) |
+| [portfolio-exposure](portfolio-exposure.md) | enact (10% of book at risk) | in force | QUANTANAMO at 11.9% on enactment → `exposure_cap` |
 | [shadow-exits](shadow-exits.md) | uphold | in force | — |

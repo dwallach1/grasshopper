@@ -1,15 +1,16 @@
-# Outcome re-score of thesis confidence (Beta on hit rate; cap 60 / demote at n >= 5 with negative P/L)
+# Results re-score of thesis confidence (expected return per trade)
 
-`rule_id: outcome-rescore-confidence` · status: **in_force** · verdict: **amend** · ruling 2026-09-26 · next review David decision · **needs David**
+`rule_id: outcome-rescore-confidence` · status: **in_force** · verdict: **amend** · ruling 2026-09-26 · next review 2026-10-26
 
 ## Purpose (failure prevented)
 Tempers a steward's stated confidence with realized outcomes. Feeds the QUANTANAMO >= 80 gate and hardening/forming status.
 
 ## Mechanism
-confidence = (10 x stated + wins) / (10 + n). If n >= 5 and summed P/L < 0: cap at 60 and demote hardening -> forming. `private.outcome_posterior_confidence`.
+`private.thesis_results_score`: n_eff = live trades + min(0.5 x backtest n, 20); mean_eff pools the live mean return on stake with the backtest mean haircut 50%; sd_eff = max(pooled sd, 0.25); results_confidence = round(100 x Phi(mean_eff / (sd_eff / sqrt(n_eff)))) when n_eff >= 3, else null (unscored). Demote hardening -> forming only when the live upper bound mean + max(sd, 0.25)/sqrt(n) < 0, or n >= 10 with mean < 0; kill only when n >= 10 and the upper bound < 0. theses.confidence (display) = results_confidence when scored, else the stated number. Only the re-score writes the results columns (guard trigger). Was: Beta on hit rate, cap 60 and demote at n >= 5 with negative P/L.
 
 Code paths:
 - `supabase/schemas/11_outcome_rescore_sizing.sql`
+- `supabase/schemas/41_court_decisions.sql`
 
 ## The court
 
@@ -25,13 +26,13 @@ Code paths:
 Closed-form above; ledger payoff stats (QUANTANAMO 7 trades: hit 29%, payoff ratio 2.7).
 
 ## Ruling
-**AMEND.** Amend (recommended), but it changes which theses pass David's 80 gate, so it isn't shipped.
+**AMEND.** Amend (shipped in migration 41; decided 2026-09-26 by the parent agent under David's delegation). Status changes on the 2026-09-26 re-run: none (no thesis has a negative upper bound or n >= 10).
 
-Amendment: Proposed: confidence = stated tempered by P(mean return > 0) from the same shrunken moments as edge-max-stake (including backtest credit). Demote only when the upper bound is below zero (mean + sd/sqrt(n) < 0) or n >= 10 with mean < 0.
+Amendment: Score on expected return per trade (above). Stated confidence is display only.
 
 | Growth cost | Ruin-risk reduction |
 |---|---|
-| Current rule: large (blocks asymmetric theses permanently). | Current rule: small. |
+| Removes the permanent block on asymmetric theses. | Demotion/kill now needs real evidence of negative edge. |
 
 ## Interactions
 quantanamo-80-gate, edge-max-stake, backtest-evidence-credit.

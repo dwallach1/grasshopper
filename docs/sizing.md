@@ -1,6 +1,6 @@
 # Sizing: results set the size, no hard cap per position, no fixed rails
 
-Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss, or portfolio drawdown limit. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis's confidence is re-scored from its closed trades, and each entry is bounded by an **edge-scaled max stake** that starts at a share of the book and grows only with measured, proven edge (live trades plus discounted out-of-sample backtests), scaled down only when the steward's whole book is in drawdown (see below). Every rule here has a court ruling in [`docs/rules/`](rules/README.md). A buy also can't spend more cash than the steward actually has (no margin).
+Position size follows results, and there is **no hard cap per position** (David, 2026-09-26). The other fixed trading rails are gone too ("Kill the old rules!"): no trade count, spread block, 09:45–15:45 window, fixed add %, add count or spacing, reduce band, averaging-down ban, global stop-loss, or portfolio drawdown limit. This reverses the 20%-of-book cap from #84, and the old fixed 5% per-order rule is gone too. Each thesis gets a results score from its expected return per trade (live trades plus discounted out-of-sample backtests), each entry is bounded by an **edge-scaled max stake** that starts at an equal-risk share of the book (v = 3% / bet volatility) and grows only with measured, proven edge (live trades plus discounted out-of-sample backtests), scaled down only when the steward's whole book is in drawdown (see below), and each steward's open risk to invalidation stays within 10% of its book. Every rule here has a court ruling in [`docs/rules/`](rules/README.md). A buy also can't spend more cash than the steward actually has (no margin).
 
 ## The rules
 
@@ -8,11 +8,12 @@ Position size follows results, and there is **no hard cap per position** (David,
 |---|---|
 | Per-position cap | **None** |
 | Multiplier | **Retired** by the 2026-09-26 court ruling ([confidence-multiplier](rules/confidence-multiplier.md)): it was gameable and noise at small n, and `max_stake` does the small-sample work. Guidance no longer returns `multiplier` / `multiplier_basis` / `half_kelly_fraction` (migration 40). `public.thesis_sizing()` still computes it for the retired `workers/research` code only |
-| Max stake | Edge-scaled per thesis, in the book's unit (see [Edge-scaled max stake](#edge-scaled-max-stake)). Starter while unproven: a share of current book (QUANTANAMO 4.545%, ODDSBORNE 5.418%, BANDIT 5.546%; = $250 / $15 / 0.10 SOL at the 2026-09-26 books), × the steward drawdown scale |
-| Size | `min(requested, max_stake, spendable cash)`. Spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
+| Max stake | Edge-scaled per thesis, in the book's unit (see [Edge-scaled max stake](#edge-scaled-max-stake)). Starter while unproven: 0.03 × current book / steward bet volatility (QUANTANAMO 12%, ODDSBORNE 1.53%, BANDIT 6.68% of book on 2026-09-26 = $660 / $4.24 / 0.1205 SOL), × the steward drawdown scale |
+| Size | `min(requested, max_stake, spendable cash, exposure fit)` (see [Portfolio exposure](#portfolio-exposure-10-of-book-at-risk)). Spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
 | Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
-| Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with outcome-adjusted confidence ≥ 80 |
+| Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with **results score** (`theses.results_confidence`) ≥ 80. Stated confidence never opens the gate; an unscored thesis (< 3 effective trades) returns `quantanamo_unscored` and David approves |
+| Portfolio exposure | Open risk to invalidation ≤ 10% of book per steward; guidance sizes a new entry down to fit, or returns `exposure_cap` |
 | ODDSBORNE and BANDIT | No confidence gate; `max_stake` is the throttle. They may enter at the returned size at any confidence |
 | Rejected or killed thesis | No new entries for any steward (`entry_allowed = false`, `sized_notional = 0`, reason `thesis_rejected` / `thesis_killed`) |
 | Learned rules | Beliefs and lessons in force (`belief_updates` with `meta.kind = 'playbook_rule'`, `research_lessons`) stay in force. They're scored by outcomes, not fixed rails |
@@ -24,33 +25,55 @@ Position size follows results, and there is **no hard cap per position** (David,
 
 - `r_i = realized_pnl / cost` for each priced, non-paper closed trade on the thesis (the whole steward's trades when the thesis is null). `n`, `mean(r)`, `sd(r)`.
 - **Backtest evidence.** An active row in `public.thesis_backtest_evidence` that is `out_of_sample`, `costs_included`, and linked to a `strategy_tests` row with status `survived` and `deflated_sharpe > 0` adds `w = min(0.5 × n_backtest, 20)` effective trades with its mean haircut 50%: `n_eff = n + w`, `mean = (n·mean_live + w·0.5·mean_bt) / n_eff`, pooled variance. One-sigma lower bound `LCB = mean − sd / √n_eff`.
-- **Unproven** (n_eff < 10, or LCB ≤ 0): `max_stake = starter` = share × current book.
+- **Unproven** (n_eff < 10, or LCB ≤ 0): `max_stake = starter` = `0.03 / bet_vol` × current book. `bet_vol` (`private.steward_bet_vol`) is the sd of return on stake over the steward's closed priced non-paper trades, floored at 0.25 (so the starter is at most 12% of book), and 1.0 while the steward has fewer than 5 trades. Every unproven bet therefore risks about the same 3% of book in volatility terms, whatever the instrument.
 - **Proven** (n_eff ≥ 10 and LCB > 0): `max_stake = max(starter, min(book_equity × 0.5 × LCB / sd², starter × 2^(1 + (n_eff − 10) / 5)))`. That is half-Kelly on the lower bound, never faster than doubling every 5 proven trades.
 - **Drawdown scale (steward-wide).** × 1 while the book is within 10% of its closing high-water mark (max of each UTC day's last book observation), falling linearly to × 0.5 at ≥ 40% below it (`private.steward_drawdown`). It applies to every thesis, new or old, so registering a new thesis never escapes it. The old per-thesis consecutive-loss halving is **repealed** ([loss-streak-halving](rules/loss-streak-halving.md): loss streaks carried no information, P(loss | loss) 0.53 vs P(loss) 0.51).
 
-| Steward | Unit | Starter share | Starter at the 2026-09-26 book | Drawdown scale on 2026-09-26 |
-|---|---|---|---|---|
-| QUANTANAMO | USD | 4.545% | $250 (book $5,501) | × 1 (9.8% below $6,099) |
-| ODDSBORNE | USD | 5.418% | $15 (book $277) | × 0.5 (47.2% below $525) → $7.50 |
-| BANDIT | SOL | 5.546% | 0.10 SOL (book 1.80) | × 0.987 (10.8% below 2.02) → 0.0987 |
+| Steward | Unit | Bet vol (sd of return on stake) | Starter share | Starter at the 2026-09-26 book | Drawdown scale on 2026-09-26 |
+|---|---|---|---|---|---|
+| QUANTANAMO | USD | 0.222 → floor 0.25 | 12% | $660 (book $5,501) | × 1 (9.8% below $6,099) |
+| ODDSBORNE | USD | 1.957 | 1.53% | $4.24 (book $277) | × 0.5 (47.2% below $525) → $2.12 |
+| BANDIT | SOL | 0.449 | 6.68% | 0.1205 SOL (book 1.80) | × 0.987 (10.8% below 2.02) → 0.119 |
 
-The starter LEVEL is a David decision (the court's vol-normalized options are in [SIMULATION.md](rules/SIMULATION.md)). The cap grows with n_eff and LCB and shrinks only in a book drawdown. `public.v_thesis_max_stake` (or `public.thesis_max_stakes()`) lists the current value, reason, n and LCB per live thesis. Guidance returns `max_stake`, `max_stake_reason`, `edge_trades` and `edge_lcb`. The Beta-prior re-score (k = 10) already makes confidence sample-size aware.
+The level v = 3% was decided on 2026-09-26 (migration 41; the court's options are in [SIMULATION.md](rules/SIMULATION.md)). The share moves as each steward's bet volatility moves. The cap grows with n_eff and LCB and shrinks only in a book drawdown. `public.v_thesis_max_stake` (or `public.thesis_max_stakes()`) lists the current value, reason, n and LCB per live thesis. Guidance returns `max_stake`, `max_stake_reason`, `edge_trades` and `edge_lcb`. The results score (below) is sample-size aware through its standard error.
 
 ## Required invalidation and a fresh book
 
-- **Invalidation.** Pass the planned `invalidation_price` as the 5th guidance argument: USD per share, outcome price, or SOL per token. Without it, guidance returns `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'missing_invalidation'`. The database enforces the same rule: `private.require_lot_invalidation` rejects any insert (or re-open, or clear) of an `open` row in `position_episodes`, `pm_positions` or `meme_positions` whose `invalidation_price` is null (SQLSTATE 23514, message `missing_invalidation`). Lots that existed before this change are grandfathered.
+- **Invalidation.** Pass the planned `invalidation_price` as the 5th guidance argument (and the entry price as the optional 6th, `p_entry_price`, in the same unit): USD per share, outcome price, or SOL per token. Without it, guidance returns `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'missing_invalidation'`. The database enforces the same rule: `private.require_lot_invalidation` rejects any insert (or re-open, or clear) of an `open` row in `position_episodes`, `pm_positions` or `meme_positions` whose `invalidation_price` is null (SQLSTATE 23514, message `missing_invalidation`). Lots that existed before this change are grandfathered.
 - **Fresh book.** Guidance sizes only from a book and cash observation no older than 6 hours (`book_age_minutes`). Otherwise it returns `entry_blocked_reason = 'stale_book'` with size 0. QUANTANAMO: record a fresh `account_snapshots` row before sizing. ODDSBORNE and BANDIT: refresh `pm_pnl` / `meme_pnl` first.
 
-Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quantanamo_requires_thesis` > `quantanamo_confidence_gate` > `missing_invalidation` > `stale_book`.
+Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quantanamo_requires_thesis` > `quantanamo_unscored` > `quantanamo_confidence_gate` > `missing_invalidation` > `stale_book` > `exposure_cap` (ODDSBORNE and BANDIT skip the three `quantanamo_*` reasons).
 
-## Confidence re-scoring
+## Portfolio exposure: 10% of book at risk
 
-`private.rescore_thesis_confidence(thesis_id)` uses a Beta prior with k = 10 pseudo-trades, centered on the thesis's **stated** confidence (`theses.stated_confidence`, i.e. the latest numeric belief update written by a steward). It then updates on wins / trades from `trade_outcomes`: `round(100 × (k·p + wins) / (k + n))`. When n ≥ 5 and summed P/L is negative, confidence is capped at 60 and a `hardening` thesis is demoted to `forming`.
+Court ruling [portfolio-exposure](rules/portfolio-exposure.md), migration 41. Per steward, **open risk** = the sum over open lots of `qty × max(mark − invalidation_price, 0)` in the book's unit: what the book loses if every open lot falls to its own invalidation. A lot with no invalidation counts at its full value; an unmarked lot counts 0 and is flagged (`lots_unmarked`). The budget is `private.risk_budget_share()` = 10% of book.
 
-- The re-score runs from a trigger after every insert on `trade_outcomes` (and on updates to realized P/L, thesis or paper flag).
-- Wrapper for a nightly or manual run: `select private.rescore_all_thesis_confidence();`
-- Every change is written to `belief_updates` with `meta.kind = 'outcome_rescore'`.
-- A steward that writes `theses.confidence` sets its stated view. The trigger then tempers that by outcomes, so `theses.confidence` always shows the outcome-adjusted number. The desk chips read this number.
+- Guidance sizes a new entry to fit the headroom: `exposure fit = headroom / ((entry − invalidation) / entry)`. Pass the entry price as the 6th argument (`p_entry_price`); without it the whole notional counts as risk, so the fit is smaller.
+- No headroom left: `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'exposure_cap'`. Sells never apply. Risk comes down by exiting, or by raising a lot's invalidation toward its mark.
+- Guidance also returns `open_risk`, `risk_budget`, `risk_headroom` and `entry_risk_fraction`.
+- `public.v_exposure_usage` (or `private.steward_open_risk(steward)`) lists usage per steward. `v_ledger_watchdog` has `exposure_over_budget` and an `exposure` summary.
+
+On 2026-09-26 QUANTANAMO's open risk was $654 = 11.9% of $5,501 (NBIS $161, CIFR $186, CODA $308 at the 9/25 marks), over budget, so its new entries return `exposure_cap` until risk falls. ODDSBORNE and BANDIT had no open lots (0%).
+
+## Results score and re-scoring
+
+Court rulings [outcome-rescore-confidence](rules/outcome-rescore-confidence.md) and [quantanamo-80-gate](rules/quantanamo-80-gate.md), migration 41. A thesis is scored on **expected return per trade**, not hit rate, so an asymmetric winner earns its score.
+
+`private.thesis_results_score(thesis_id)`:
+
+- Live: `r_i = realized_pnl / cost` over the thesis's priced, non-paper closed trades (`n`, mean, sd).
+- Backtest: qualifying evidence (same test as the max stake) adds `w = min(0.5 × n_bt, 20)` effective trades with its mean haircut 50%. `n_eff = n + w`, pooled mean, `sd_eff = max(pooled sd, 0.25)`.
+- `results_confidence = round(100 × Φ(mean_eff / (sd_eff / √n_eff)))` when `n_eff ≥ 3`, else null (**unscored**). It is P(expected return per trade > 0).
+- Backtest only: `n_eff = min(0.5 × n_bt, 20)`, so a score needs `n_bt ≥ 6`. Passing 80 needs z ≥ 0.84; at full weight (`n_bt ≥ 40`) and sd 0.25 that is a backtest mean of at least 9.4% per trade.
+
+`private.rescore_thesis_confidence(thesis_id)` writes `theses.results_confidence`, `results_basis` and `results_scored_at`, and sets `theses.confidence` (the display number the desk chips read) to the results score when scored, else the stated number (`theses.stated_confidence`).
+
+- **Demote** `hardening → forming` only when the live upper bound `mean + max(sd, 0.25)/√n < 0`, or `n ≥ 10` with a negative mean. **Kill** only when `n ≥ 10` and the upper bound is below 0. (Was: Beta on hit rate, cap 60, demote at n ≥ 5 with negative P/L.)
+- Runs from a trigger after every `trade_outcomes` insert (and updates to realized P/L, thesis or paper flag) and after changes to `thesis_backtest_evidence`. Manual or nightly: `select private.rescore_all_thesis_confidence();`
+- Every change goes to `belief_updates` with `meta.kind = 'outcome_rescore'`, rule `results_score_v2`.
+- A steward that writes `theses.confidence` sets its stated view only; a steward write never changes status. Only the re-score writes the results columns (trigger `theses_results_guard` ignores anything else).
+
+Scores on 2026-09-26: `weather_same_day_high` 79, `meme_4h_momentum_clip` 60, `earnings_gap_structure` 56; `neocloud_compute` (1 trade) and `semis_photonics` (0) unscored. No QUANTANAMO thesis passes the gate, so every QUANTANAMO entry needs David until one earns ≥ 80.
 
 ## QUANTANAMO: enforced in code
 
@@ -103,14 +126,14 @@ Entry fields:
 | Field | QUANTANAMO | ODDSBORNE / BANDIT |
 |---|---|---|
 | `gate_applies` | `true` | `false` |
-| `autonomous_buy_gate_pass` | `hardening` and confidence ≥ 80 (null with no thesis) | `true` unless the thesis is rejected or killed |
+| `autonomous_buy_gate_pass` | `hardening` and `results_confidence` ≥ 80 (null with no thesis) | `true` unless the thesis is rejected or killed |
 | `thesis_rejected` / `thesis_killed` | `theses.status` = `'rejected'` / `'killed'` | same |
-| `entry_allowed` | the gate passes, an invalidation is given, and the book is fresh | the thesis is known and not rejected or killed, an invalidation is given, and the book is fresh |
-| `entry_blocked_reason` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `quantanamo_requires_thesis`, `quantanamo_confidence_gate`, `missing_invalidation`, `stale_book` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation`, `stale_book` or null |
+| `entry_allowed` | the gate passes, an invalidation is given, the book is fresh, and there is exposure headroom | the thesis is known and not rejected or killed, an invalidation is given, the book is fresh, and there is exposure headroom |
+| `entry_blocked_reason` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `quantanamo_requires_thesis`, `quantanamo_unscored`, `quantanamo_confidence_gate`, `missing_invalidation`, `stale_book`, `exposure_cap` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation`, `stale_book`, `exposure_cap` or null |
 
 **Before a buy, read `entry_allowed`, then size to `sized_notional`.** A rejected or killed thesis returns `sized_notional = 0`. Sells and exits never go through this call.
 
-Example (ledger on 2026-09-26 ~14:50 PT, after the court rulings): a 0.45 SOL BANDIT clip on `meme_4h_momentum_clip` (4 closed trades, unproven) sizes to `max_stake` **0.0987 SOL** (starter 0.10 × drawdown scale 0.987). ODDSBORNE's $200 Miami request sizes to **$7.50** (starter $15 × 0.5, book 47% below its high). A QUANTANAMO $1,000 request on `neocloud_compute` sizes to **$250**.
+Example (ledger on 2026-09-26 ~15:00 PT, after migration 41): a 0.45 SOL BANDIT clip on `meme_4h_momentum_clip` (unproven) sizes to `max_stake` **0.119 SOL** (starter 0.1205 × drawdown scale 0.987). An ODDSBORNE $20 request sizes to **$2.12** (starter $4.24 × 0.5, book 47% below its high). A QUANTANAMO request on `neocloud_compute` is blocked (`quantanamo_unscored`, and QUANTANAMO is also over its exposure budget); its `max_stake` would be **$660**.
 
 Size is **not** a DB reject guard (the invalidation is). ODDSBORNE and BANDIT record orders after the venue accepts them. The cap-breach audit view from #84 has been dropped, and the `thesis-notional` risk control is retired.
 
