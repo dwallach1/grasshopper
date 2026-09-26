@@ -35,7 +35,6 @@ import { BookPanel } from './book-panel';
 import { DeskPager } from './desk-pager';
 import { LeaderboardPanel } from './leaderboard-panel';
 import { TeamPanel } from './team-panel';
-import { ThesesWorld } from './theses-world';
 import { VenueFilterBar, VenueMark } from './venue-filter';
 import {
   age,
@@ -61,7 +60,6 @@ export function TerminalApp({
   const [now, setNow] = useState<number | null>(null);
   const [help, setHelp] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [selectedThesisId, setSelectedThesisId] = useState(initial.theses?.[0]?.id ?? '');
   const [selectedTestId, setSelectedTestId] = useState(initial.tests?.[0]?.id ?? null);
   const [goArmed, setGoArmed] = useState(false);
   const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
@@ -177,24 +175,16 @@ export function TerminalApp({
         return;
       }
       if (event.key === 'Escape') setHelp(false);
-      if (event.key === 'j' || event.key === 'k') {
-        if (surface === 'backtests') {
-          const ids = (desk.tests ?? []).map((row) => row.id);
-          const index = ids.indexOf(selectedTestId ?? -1);
-          const next = event.key === 'j' ? Math.min(ids.length - 1, Math.max(0, index) + 1) : Math.max(0, index - 1);
-          if (ids[next] !== undefined) setSelectedTestId(ids[next]);
-          return;
-        }
-        const ids = desk.theses.map((row) => row.id);
-        const index = ids.indexOf(selectedThesisId);
-        const next = event.key === 'j' ? Math.min(ids.length - 1, index + 1) : Math.max(0, index - 1);
-        if (ids[next]) setSelectedThesisId(ids[next]);
+      if ((event.key === 'j' || event.key === 'k') && surface === 'backtests') {
+        const ids = (desk.tests ?? []).map((row) => row.id);
+        const index = ids.indexOf(selectedTestId ?? -1);
+        const next = event.key === 'j' ? Math.min(ids.length - 1, Math.max(0, index) + 1) : Math.max(0, index - 1);
+        if (ids[next] !== undefined) setSelectedTestId(ids[next]);
       }
-      if (event.key === 'Enter' && surface !== 'theses') go('/theses');
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [desk.tests, desk.theses, goArmed, selectedTestId, selectedThesisId, surface]);
+  }, [desk.tests, goArmed, selectedTestId, surface]);
 
   const freshness = assembleDeskFreshness(desk);
   const nowIso = now === null ? desk.generated_at : new Date(now).toISOString();
@@ -203,7 +193,7 @@ export function TerminalApp({
   const swipe = isSwipeSurface(surface);
 
   return (
-    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}${surface === 'theses' ? ' is-theses' : ''}`}>
+    <div className={`${publicView ? 'term term-public' : 'term'}${surface === 'leaderboard' || surface === 'book' ? ' is-line' : ''}${swipe ? ' is-swipe' : ''}`}>
       <header className="term-top">
         <a
           className="term-brand"
@@ -239,13 +229,10 @@ export function TerminalApp({
           >
             {{
               leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
-              book: <BookPanel desk={desk} nowIso={nowIso} />,
-              theses: (
-                <ThesesWorld
+              book: (
+                <BookPanel
                   desk={desk}
-                  reduceMotion={reduceMotion}
-                  selectedId={selectedThesisId}
-                  onSelect={setSelectedThesisId}
+                  nowIso={nowIso}
                   canReview={!publicView}
                   canIncorporate={!publicView}
                   onReviewed={publicView ? undefined : () => {
@@ -273,7 +260,7 @@ export function TerminalApp({
         <span>POS {rollup.open_lots}</span>
         <span>ASOF {desk.book.observed_at ? nyStamp(desk.book.observed_at) : NOT_IN_LEDGER}</span>
         <span>Q {desk.counts.open_research}</span>
-        <span className="term-kbd">1-6 panels · g then letter · j/k thesis · r refresh · ? help</span>
+        <span className="term-kbd">1-5 panels · g then letter · j/k test · r refresh · ? help</span>
       </footer>
       <nav className={`term-dock${publicView ? ' is-indicator' : ''}`} aria-label="Desk tabs">
         {tabs.map((item) => (
@@ -290,9 +277,9 @@ export function TerminalApp({
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 Board · 2 Book · 3 Theses · 4 Events · 5 Tests · 6 Team</p>
-          <p>g p board · g b book · g t theses · g c events · g e tests · g m team</p>
-          <p>j/k move thesis or test · Enter open theses · r reload ledger · Esc close</p>
+          <p>1 Board · 2 Books · 3 Events · 4 Tests · 5 Team</p>
+          <p>g p board · g b books · g c events · g e tests · g m team</p>
+          <p>j/k move test · Esc close detail · r reload ledger</p>
         </aside>
       )}
     </div>

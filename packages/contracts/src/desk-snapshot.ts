@@ -488,10 +488,12 @@ export const PUBLIC_DESK_REDIRECTS = [
   { source: '/board', destination: '/' },
   { source: '/ranks', destination: '/' },
   { source: '/catalysts', destination: '/events' },
-  { source: '/ontology', destination: '/theses' },
+  { source: '/books', destination: '/book' },
+  { source: '/theses', destination: '/book' },
+  { source: '/ontology', destination: '/book' },
   { source: '/risk', destination: '/book' },
   { source: '/runs', destination: '/book' },
-  { source: '/learnings', destination: '/theses' },
+  { source: '/learnings', destination: '/book' },
   { source: '/mates', destination: '/team' },
 ] as const;
 

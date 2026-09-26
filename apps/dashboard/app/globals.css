@@ -6203,3 +6203,347 @@ a:focus-visible {
     min-height: 160px;
   }
 }
+
+/* ——— Books: one page per steward (replaced Book + Theses) ———
+   Plain header line, open rows with one muted why line, Watching / Closed folds.
+   Ink only; P/L carries .up / .down by sign; over budget is a soft gold note. */
+
+.books-stage {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.books {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.books-stage[data-reading="1"] .books {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.books-mast {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.books-lede {
+  margin: 0;
+  color: var(--ink-3, var(--text-3));
+  font-size: 13px;
+}
+
+.books-steward {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: var(--r-card, 14px);
+  background: var(--card, var(--elevated));
+  box-shadow: var(--shadow-card, none);
+}
+
+.books-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.books-name {
+  margin: 0;
+  color: var(--ink, var(--text));
+  font-family: var(--font-brand);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.books-line {
+  margin: 0;
+  color: var(--ink, var(--text));
+  font-size: 15px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.books-risk,
+.books-sep {
+  color: var(--ink-2, var(--text-2));
+}
+
+.books-over {
+  color: var(--gold, var(--warn));
+  font-style: normal;
+}
+
+.books-lots,
+.books-ideas,
+.books-checks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.books-lots > li + li,
+.books-ideas > li + li {
+  border-top: 1px solid var(--card-line, var(--line));
+}
+
+.books-lot,
+.books-idea {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 0;
+  border: 0;
+  background: none;
+  color: var(--ink, var(--text));
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.books-lot-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name pnl"
+    "amt amt";
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.books-lot-top b,
+.books-idea b {
+  grid-area: name;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.books-idea b {
+  font-size: 16px;
+}
+
+.books-lot-amt {
+  grid-area: amt;
+  color: var(--ink-2, var(--text-2));
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.books-lot-pnl {
+  grid-area: pnl;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.books-lot-why {
+  color: var(--ink-3, var(--text-3));
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.books-lots.is-closed .books-lot-top b {
+  font-size: 16px;
+}
+
+.books-none {
+  margin: 2px 0 4px;
+  color: var(--ink-3, var(--text-3));
+  font-size: 13px;
+}
+
+.books-checks li {
+  color: var(--ink-2, var(--text-2));
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.books-fold {
+  border-top: 1px solid var(--card-line, var(--line));
+}
+
+.books-fold-toggle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 0 8px;
+  border: 0;
+  background: none;
+  color: var(--ink-2, var(--text-2));
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.books-fold-toggle i {
+  color: var(--ink-3, var(--text-3));
+  font-size: 12px;
+  font-style: normal;
+}
+
+.books-fold-body {
+  padding-bottom: 4px;
+}
+
+.books-subhead,
+.books-section-label {
+  margin: 12px 0 2px !important;
+  color: var(--ink-3, var(--text-3)) !important;
+  font-family: var(--font-ui) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.books-ideas.is-aside .books-idea b {
+  color: var(--ink-2, var(--text-2));
+}
+
+.books-operator {
+  padding: 0 2px;
+}
+
+.books-operator .books-fold-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Detail: the thesis page, reached in one tap from a row. */
+.books-detail {
+  z-index: 5;
+  overscroll-behavior-y: contain;
+}
+
+.books-detail h3 {
+  margin: 0 0 8px;
+  color: var(--ink, var(--text));
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.books-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid var(--card-line, var(--line));
+  border-radius: var(--r-card, 14px);
+  background: var(--card, var(--elevated));
+}
+
+.books-facts dt {
+  color: var(--ink-3, var(--text-3));
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.books-facts dd {
+  margin: 2px 0 0;
+  color: var(--ink, var(--text));
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.books-facts dd.up { color: var(--green); }
+.books-facts dd.down { color: var(--down); }
+.books-facts dd.muted { color: var(--ink-3, var(--text-3)); }
+
+.books-chart {
+  margin: 0 0 14px;
+}
+
+.books-detail .books-note,
+.books-detail .books-track {
+  margin: 0 0 10px;
+  color: var(--ink-2, var(--text-2));
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.books-detail .books-note b,
+.books-detail .thesis-page-falsifier b {
+  color: var(--ink, var(--text));
+  font-weight: 600;
+}
+
+.books-detail .books-note.is-muted {
+  color: var(--ink-3, var(--text-3));
+}
+
+.books-thesis {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--card-line, var(--line));
+}
+
+.books-detail .books-thesis > p {
+  margin-bottom: 10px;
+}
+
+.books-detail .books-track {
+  margin-top: 12px;
+}
+
+.books-detail .thesis-beliefs,
+.books-detail .thesis-evidence {
+  margin-top: 6px;
+}
+
+.books-outcomes .books-lot {
+  padding: 8px 0;
+}
+
+.books-outcomes .books-lot-top b {
+  font-size: 16px;
+}
+
+.books-more {
+  align-self: flex-start;
+  margin: 8px 0 0;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2, var(--text-2));
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

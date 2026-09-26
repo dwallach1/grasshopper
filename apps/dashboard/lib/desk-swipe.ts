@@ -1,5 +1,5 @@
 /**
- * Board / Book / Theses / Team are one horizontal deck. Labels are an indicator.
+ * Board / Books / Team are one horizontal deck. Labels are an indicator.
  * The rail is circular: Board swipe-back lands on Team, Team swipe-forward
  * lands on Board. Team itself is a vertical stack on that rail, so a horizontal
  * drag on a steward card changes tabs. The Board rank handle (`data-card-dragger`)
@@ -28,12 +28,11 @@ export const PAGER_PIN_SETTLE_MS = 400;
 
 export type SwipeAxisLock = 'x' | 'y' | null;
 
-/** Clone the ends so native snap can wrap: Team | Board | Book | Theses | Team | Board */
+/** Clone the ends so native snap can wrap: Team | Board | Books | Team | Board */
 export const DESK_PAGER_SLOTS = [
   { id: 'team', clone: true },
   { id: 'leaderboard', clone: false },
   { id: 'book', clone: false },
-  { id: 'theses', clone: false },
   { id: 'team', clone: false },
   { id: 'leaderboard', clone: true },
 ] as const satisfies readonly { id: DeskSwipeSurface; clone: boolean }[];
@@ -68,7 +67,7 @@ export function wrapSwipeSurface(id: DeskSwipeSurface, delta: number): DeskSwipe
   return DESK_SWIPE_SURFACES[next] ?? id;
 }
 
-/** First ↔ last only. A two-step hop (Board → Theses) is not a wrap. */
+/** First ↔ last only. Board ↔ Team is the wrap; Books sits between them. */
 export function isSwipeWrap(from: DeskSwipeSurface, to: DeskSwipeSurface): boolean {
   const a = swipeSurfaceIndex(from);
   const b = swipeSurfaceIndex(to);

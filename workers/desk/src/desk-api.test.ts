@@ -160,7 +160,9 @@ describe('public desk Worker API', () => {
     expect(redirectFor('/ranks')).toBe('/');
     expect(redirectFor('/book')).toBeNull();
     expect(redirectFor('/catalysts')).toBe('/events');
-    expect(redirectFor('/ontology')).toBe('/theses');
+    expect(redirectFor('/ontology')).toBe('/book');
+    expect(redirectFor('/theses')).toBe('/book');
+    expect(redirectFor('/books')).toBe('/book');
     expect(redirectFor('/mates')).toBe('/team');
     expect(redirectFor('/risk')).toBe('/book');
     expect(redirectFor('/runs')).toBe('/book');

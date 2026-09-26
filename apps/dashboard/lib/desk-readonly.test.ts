@@ -45,11 +45,15 @@ describe('read-only operator desk', () => {
     expect(app).not.toContain('SessionControls');
     expect(pub).not.toContain('/api/ontology/review');
     expect(pub).not.toContain('/api/lessons/incorporate');
-    const world = await readDashboard('app/terminal/theses-world.tsx');
-    expect(world).toContain('canReview={canReview}');
-    expect(world).toContain('canIncorporate={canIncorporate}');
-    expect(world).not.toContain('canReview={true}');
-    expect(world).not.toContain('canIncorporate={true}');
+    const books = await readDashboard('app/terminal/book-panel.tsx');
+    expect(books).toContain('canReview={canReview}');
+    expect(books).toContain('canIncorporate={canIncorporate}');
+    expect(books).not.toContain('canReview={true}');
+    expect(books).not.toContain('canIncorporate={true}');
+    // The operator review fold renders only when a write path is allowed (never on the public desk).
+    expect(books).toContain('{canReview || canIncorporate ? (');
+    expect(app).toContain('canReview={!publicView}');
+    expect(app).toContain('canIncorporate={!publicView}');
   });
 
   test('ontology review writes only through the operator route', async () => {
