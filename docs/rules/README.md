@@ -56,5 +56,5 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | [listed-equity-registry](listed-equity-registry.md) | uphold | in force | — |
 | [entry-cap-snapshot](entry-cap-snapshot.md) | uphold | in force | — |
 | [backtest-evidence-credit](backtest-evidence-credit.md) | enact | in force | proven in 7 vs 13 trades at Sharpe 0.2; overfit case P(DD50) +0.4 pt |
-| [portfolio-exposure](portfolio-exposure.md) | enact (10% of book at risk) | in force | QUANTANAMO at 11.9% on enactment → `exposure_cap` |
+| [portfolio-exposure](portfolio-exposure.md) | enact (10% of book at risk); gap-prone at full notional | in force | binaries and memes at full notional (BANDIT ≈ one clip); QUANTANAMO 6.4% after raising its lines |
 | [shadow-exits](shadow-exits.md) | uphold | in force | — |

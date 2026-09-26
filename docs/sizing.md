@@ -13,7 +13,7 @@ Position size follows results, and there is **no hard cap per position** (David,
 | Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
 | Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with **results score** (`theses.results_confidence`) ≥ 80. Stated confidence never opens the gate; an unscored thesis (< 3 effective trades) returns `quantanamo_unscored` and David approves |
-| Portfolio exposure | Open risk to invalidation ≤ 10% of book per steward; guidance sizes a new entry down to fit, or returns `exposure_cap` |
+| Portfolio exposure | Open risk ≤ 10% of book per steward: equities to invalidation, ODDSBORNE binaries and BANDIT memes at full notional (`risk_basis`); guidance sizes a new entry down to fit, or returns `exposure_cap` |
 | ODDSBORNE and BANDIT | No confidence gate; `max_stake` is the throttle. They may enter at the returned size at any confidence |
 | Rejected or killed thesis | No new entries for any steward (`entry_allowed = false`, `sized_notional = 0`, reason `thesis_rejected` / `thesis_killed`) |
 | Learned rules | Beliefs and lessons in force (`belief_updates` with `meta.kind = 'playbook_rule'`, `research_lessons`) stay in force. They're scored by outcomes, not fixed rails |
@@ -46,14 +46,22 @@ Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quant
 
 ## Portfolio exposure: 10% of book at risk
 
-Court ruling [portfolio-exposure](rules/portfolio-exposure.md), migration 41. Per steward, **open risk** = the sum over open lots of `qty × max(mark − invalidation_price, 0)` in the book's unit: what the book loses if every open lot falls to its own invalidation. A lot with no invalidation counts at its full value; an unmarked lot counts 0 and is flagged (`lots_unmarked`). The budget is `private.risk_budget_share()` = 10% of book.
+Court ruling [portfolio-exposure](rules/portfolio-exposure.md), migrations 41 and 44. Per steward, **open risk** is the sum over open lots in the book's unit, on the book's `risk_basis`:
 
-- Guidance sizes a new entry to fit the headroom: `exposure fit = headroom / ((entry − invalidation) / entry)`. Pass the entry price as the 6th argument (`p_entry_price`); without it the whole notional counts as risk, so the fit is smaller.
+| Steward | `risk_basis` | Per lot |
+|---|---|---|
+| QUANTANAMO | `to_invalidation` | `qty × max(mark − invalidation_price, 0)`: what the lot loses if it falls to its own line. No invalidation: `qty × mark`. Unmarked: 0, flagged (`lots_unmarked`). |
+| ODDSBORNE | `full_notional` | `contracts × price` (mark, else average cost). A binary goes to 0 on one score, so the line bounds nothing. |
+| BANDIT | `full_notional` | full cost basis, `qty × average cost` (else `qty × mark`). A meme can rug in one block. |
+
+The budget is `private.risk_budget_share()` = 10% of book. `public.v_exposure_lots` lists each lot's risk.
+
+- Guidance sizes a new entry to fit the headroom: `exposure fit = headroom / risk fraction`. The fraction is 1 on the `full_notional` books; for equities it is `(entry − invalidation) / entry` when you pass the entry price as the 6th argument (`p_entry_price`), else 1. BANDIT's budget (0.180 SOL on 2026-09-26) against its 0.119 SOL starter makes it effectively one clip at a time (one open clip leaves 0.061 SOL of headroom); ODDSBORNE's $27.69 budget holds about 13 of today's $2.12 tickets.
 - No headroom left: `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'exposure_cap'`. Sells never apply. Risk comes down by exiting, or by raising a lot's invalidation toward its mark.
-- Guidance also returns `open_risk`, `risk_budget`, `risk_headroom` and `entry_risk_fraction`.
+- Guidance also returns `open_risk`, `risk_budget`, `risk_headroom`, `entry_risk_fraction` and `risk_basis`.
 - `public.v_exposure_usage` (or `private.steward_open_risk(steward)`) lists usage per steward. `v_ledger_watchdog` has `exposure_over_budget` and an `exposure` summary.
 
-On 2026-09-26 QUANTANAMO's open risk was $654 = 11.9% of $5,501 (NBIS $161, CIFR $186, CODA $308 at the 9/25 marks), over budget, so its new entries return `exposure_cap` until risk falls. ODDSBORNE and BANDIT had no open lots (0%).
+On 2026-09-26 QUANTANAMO's open risk was $654 = 11.9% of $5,501 (NBIS $161, CIFR $186, CODA $308 at the 9/25 after-hours marks), over budget. At 3:08 PM PT it raised all three lines above cost (NBIS 220.80, CIFR 16.50, CODA 10.35), which brought it to $351 = 6.4% (NBIS $80, CIFR $79, CODA $193). ODDSBORNE and BANDIT had no open lots (0%).
 
 ## Results score and re-scoring
 

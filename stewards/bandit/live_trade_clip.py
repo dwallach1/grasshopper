@@ -6,7 +6,7 @@ Usage:
   add --dry-run to print guidance + size and exit without trading.
 
 Buys exactly sized_notional from steward_sizing_guidance('bandit','meme_4h_momentum_clip',<SYM>,<request>,<invalidation>).
-sized_notional = min(request, edge-scaled max_stake, cash, 10%-of-book exposure fit). The invalidation (SOL/token) defaults to
+sized_notional = min(request, edge-scaled max_stake, cash, 10%-of-book exposure fit; memes count at full cost basis). The invalidation (SOL/token) defaults to
 0.6 x the Jupiter pre-trade price (--invalidation-price overrides) and is written on the meme_positions lot;
 guidance refuses (missing_invalidation) and the DB rejects a new open lot without one. meme_orders carries thesis_id.
 Aborts if entry_allowed is false. No max-open or daily-stop rail (removed per David). 3% price-impact abort stays.
@@ -318,7 +318,7 @@ def main() -> int:
     print("GUIDANCE=" + json.dumps({k: GUIDANCE.get(k) for k in (
         "requested", "max_stake", "max_stake_reason", "sized_notional",
         "spendable_cash", "sample_trades", "thesis_confidence", "results_confidence", "thesis_status",
-        "invalidation_price", "open_risk", "risk_budget", "risk_headroom", "entry_risk_fraction",
+        "invalidation_price", "open_risk", "risk_budget", "risk_headroom", "entry_risk_fraction", "risk_basis",
         "book_age_minutes", "entry_allowed", "entry_blocked_reason")}))
     if not g.get("entry_allowed"):
         raise RuntimeError(f"entry_allowed=false: {g.get('entry_blocked_reason')}")

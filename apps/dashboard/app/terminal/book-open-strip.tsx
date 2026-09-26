@@ -50,12 +50,12 @@ export function BookOpenStrip({
         ))}
       </p>
       {exposure.length ? (
-        <p className="book-exposure" aria-label="Open risk to invalidation vs budget">
+        <p className="book-exposure" aria-label="Open risk vs budget">
           {exposure.map((row) => (
             <span
               key={row.steward}
               className={`book-exposure-item${row.over ? ' is-over' : ''}`}
-              title={`${EXPOSURE_NAME[row.steward]}: open risk to invalidation vs the 10%-of-book budget${row.over ? '. Over budget: new entries wait until risk comes down.' : ''}`}
+              title={`${EXPOSURE_NAME[row.steward]}: open risk ${row.risk_basis === 'full_notional' ? 'at full notional (gap-prone)' : 'to invalidation'} vs the 10%-of-book budget${row.over ? '. Over budget: new entries wait until risk comes down.' : ''}`}
             >
               {EXPOSURE_NAME[row.steward]} {exposureLine(row)}
               {row.over ? <em> · over</em> : null}

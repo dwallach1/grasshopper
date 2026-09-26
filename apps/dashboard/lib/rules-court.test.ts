@@ -76,6 +76,8 @@ describe('rules court', () => {
       ['41_court_decisions.sql', '20260926220243_court_decisions.sql'],
       ['42_court_decisions_registry.sql', '20260926220333_court_decisions_registry.sql'],
       ['43_thesis_scorecard_results.sql', '20260926221039_thesis_scorecard_results.sql'],
+      ['44_exposure_gap_full_notional.sql', '20260926221414_exposure_gap_full_notional.sql'],
+      ['45_exposure_gap_registry.sql', '20260926221455_exposure_gap_registry.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -130,5 +132,20 @@ describe('rules court', () => {
     const registry = await readFile(join(root, 'supabase/schemas/42_court_decisions_registry.sql'), 'utf8');
     expect(registry).toContain("('portfolio-exposure', ");
     expect(registry).not.toMatch(/, true, 'docs\/rules\//);
+  });
+
+  test('44: gap-prone lots count at full notional; equities keep to-invalidation; risk_basis is reported', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/44_exposure_gap_full_notional.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/portfolio-exposure.md');
+    expect(sql).toContain("when m.lot_table = 'pm_positions' then m.quantity * coalesce(m.mark, c.average_cost, 0)");
+    expect(sql).toContain("when m.lot_table = 'meme_positions' then m.quantity * coalesce(c.average_cost, m.mark, 0)");
+    expect(sql).toContain('else m.quantity * greatest(m.mark - m.invalidation_price, 0)');
+    expect(sql).toContain("when p_steward in ('oddsborne', 'bandit') then 'full_notional' else 'to_invalidation'");
+    expect(sql).toContain("when ex.risk_basis = 'full_notional' then 1");
+    expect(sql).toContain("'risk_basis', x.risk_basis");
+    const ret = sql.slice(sql.indexOf('create function public.steward_sizing_guidance('), sql.indexOf('language plpgsql'));
+    expect(ret).toMatch(/entry_risk_fraction numeric,\s+risk_basis text\s*\)/);
+    const registry = await readFile(join(root, 'supabase/schemas/45_exposure_gap_registry.sql'), 'utf8');
+    expect(registry).toContain('gap-prone lots at full notional');
   });
 });
