@@ -594,6 +594,8 @@ export type DeskPayload = {
   meme_coins?: MemeCoinsPayload;
   /** `desk_agents` / `desk_domains` roster. Empty object when those tables are missing. */
   team?: DeskTeamPayload;
+  /** `v_steward_*` / `v_thesis_scorecard` outcome ledger. Measurement only. Empty when views are missing. */
+  scorecard?: import('./steward-scorecard').StewardScorecardPayload;
   theses: ThesisRow[];
   /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
   beliefs: import('./beliefs').BeliefUpdateRow[];

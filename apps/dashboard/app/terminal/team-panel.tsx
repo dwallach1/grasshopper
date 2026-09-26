@@ -6,7 +6,9 @@ import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { assembleTeamRoster } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { assembleStewardScorecard } from '../../lib/steward-scorecard';
 import { StewardAvatar } from './steward-avatar';
+import { StewardScorecard } from './steward-scorecard';
 import { age } from './format';
 
 export function TeamPanel({
@@ -35,8 +37,9 @@ export function TeamPanel({
         <ul className="team-roster" aria-label="Stewards">
           {cards.map((card) => {
             const face = faces.get(card.slug) ?? QUIET_STEWARD_FACE;
+            const score = assembleStewardScorecard(desk.scorecard, card.slug);
             return (
-              <li key={card.slug}>
+              <li key={card.slug} className="team-li">
                 <article className="team-card" data-steward={card.slug}>
                   <StewardAvatar
                     slug={card.slug}
@@ -51,6 +54,7 @@ export function TeamPanel({
                     <span>pulse {age(card.heartbeat_at ?? undefined, now)}</span>
                   </div>
                 </article>
+                {score && <StewardScorecard card={score} name={card.display_name} />}
               </li>
             );
           })}

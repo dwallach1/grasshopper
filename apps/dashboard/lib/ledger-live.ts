@@ -36,6 +36,11 @@ import {
   type JsonObjectRow,
 } from './ledger-map';
 import { assembleTeam, emptyTeam } from './desk-team';
+import {
+  emptyStewardScorecard,
+  mapStewardScorecard,
+  type StewardScorecardPayload,
+} from './steward-scorecard';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 import {
   emptyMemeCoins,
@@ -167,18 +172,29 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 
-  const [prediction, meme, team] = await Promise.all([
+  const [prediction, meme, team, scorecard] = await Promise.all([
     loadPredictionMarketsRest(auth),
     loadMemeCoinsRest(auth),
     loadTeamRest(auth),
+    loadScorecardRest(auth),
   ]);
   return assembleDeskFromRestBag({
     theses, symbols, beliefs, evidence, scores, relations, runs, cloudRuns, cloudTasks,
     automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
     scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
     intents, proposals, fills, insights, predictions, riskControls, themes,
-    ontologySymbols, candidates, actions, prediction, meme, team,
+    ontologySymbols, candidates, actions, prediction, meme, team, scorecard,
   });
+}
+
+async function loadScorecardRest(auth: DeskRestAuth): Promise<StewardScorecardPayload> {
+  const [stewards, weekly, trend, theses] = await Promise.all([
+    restOptional(SCORECARD_QUERIES.stewards, auth),
+    restOptional(SCORECARD_QUERIES.weekly, auth),
+    restOptional(SCORECARD_QUERIES.trend, auth),
+    restOptional(SCORECARD_QUERIES.theses, auth),
+  ]);
+  return mapStewardScorecard({ stewards, weekly, trend, theses });
 }
 
 export type RestDeskBag = {
@@ -218,7 +234,16 @@ export type RestDeskBag = {
   prediction: PredictionMarketsPayload;
   meme: MemeCoinsPayload;
   team: DeskTeamPayload;
+  scorecard?: StewardScorecardPayload;
 };
+
+/** Read-only scorecard views. Optional: a ledger without the outcome migration serves []. */
+export const SCORECARD_QUERIES = {
+  stewards: 'v_steward_scorecard?select=*&order=sort_order.asc',
+  weekly: 'v_steward_scorecard_weekly?select=steward,unit,week_start,iso_week,is_current,trades,priced_trades,wins,hit_rate,realized_pnl&order=week_start.desc,steward.asc&limit=60',
+  trend: 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction',
+  theses: 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin&order=priced_trades.desc',
+} as const;
 
 /** Phone Worker path — skip operator tables the public snapshot already drops. */
 export function assemblePublicDeskFromRestBag(bag: Pick<
@@ -238,8 +263,8 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'prediction'
   | 'meme'
   | 'team'
->): DeskPayload {
-  return assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
+> & Partial<Pick<RestDeskBag, 'scorecard'>>): DeskPayload {
+  return withScorecard(assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
     beliefs: mapBeliefs(bag.beliefs),
     evidence: [],
     scores: [],
@@ -278,7 +303,11 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       open_positions: 0,
       queued_tasks: 0,
     },
-  }, bag.prediction, bag.meme, bag.team));
+  }, bag.prediction, bag.meme, bag.team)), bag.scorecard);
+}
+
+function withScorecard(desk: DeskPayload, scorecard: StewardScorecardPayload | undefined): DeskPayload {
+  return { ...desk, scorecard: scorecard ?? emptyStewardScorecard() };
 }
 
 export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
@@ -291,7 +320,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
     proposals, fills, insights, predictions, riskControls, themes,
     ontologySymbols, candidates, actions, prediction, meme, team,
   } = bag;
-  return assembleDesk('postgrest', decorateDesk(theses, symbols, {
+  return withScorecard(assembleDesk('postgrest', decorateDesk(theses, symbols, {
     beliefs: mapBeliefs(bag.beliefs),
     evidence: mapEvidence(evidence),
     scores: mapScores(scores),
@@ -332,7 +361,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }, prediction, meme, team));
+  }, prediction, meme, team)), bag.scorecard);
 }
 
 async function loadTeamRest(auth: DeskRestAuth): Promise<DeskTeamPayload> {
