@@ -7,6 +7,7 @@ import {
 
 import { marketGate } from './market-clock';
 import { approvedCandidate } from './autonomous-decision';
+import { SINGLE_POSITION_CAP_PERCENT } from './sizing';
 import { decidePositionAction, type PositionHistory, type PositionThesis } from './position-decision';
 import {
   synthesizePositionDecision,
@@ -352,7 +353,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           monitor_policy: {
             policy_version: 'autonomous-position-v1',
             hard_loss_limit_percent: 8,
-            max_total_position_percent: 5,
+            max_total_position_percent: SINGLE_POSITION_CAP_PERCENT,
             max_add_percent_per_review: 2,
             max_reduce_percent_per_review: 50,
           },
@@ -416,6 +417,7 @@ export class CloudResearchWorkflow extends WorkflowEntrypoint<PublicationEnv, Re
           .map((thesis) => ({
             id: thesis.id, name: thesis.name, status: thesis.status, stance: thesis.stance,
             confidence: thesis.confidence, symbols: thesis.symbols, falsifier: thesis.falsifier,
+            size_multiplier: thesis.size_multiplier ?? null,
           }));
         const monitor = this.env.POSITION_MONITOR.getByName(positionKey);
         await monitor.configure({
@@ -1016,8 +1018,9 @@ async function processTradeExecutionTask(
   const refId = await deterministicUuidV4(task.idempotencyKey);
   const rationaleSha256 = await sha256({ rationale: proposal.rationale, proposalId: proposal.id });
   const policy = {
-    version: 'autonomous-equity-v2',
-    maxTradePercent: 5,
+    version: 'autonomous-equity-v3',
+    // 20% of book per single position (David, 2026-09-26). Sells are never capped.
+    maxTradePercent: SINGLE_POSITION_CAP_PERCENT,
     maxDailyNotionalPercent: 20,
     maxTradesPerDay: 3,
     maxSpreadBps: 80,

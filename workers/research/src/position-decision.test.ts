@@ -13,6 +13,7 @@ const snapshot: BrokerAccountSnapshot = {
 const thesis = [{
   id: 't1', name: 'Test thesis', status: 'hardening', stance: 'bullish', confidence: 85, symbols: ['ABCD'],
   falsifier: 'The thesis is invalidated by a documented demand reversal.',
+  size_multiplier: 1,
 }];
 
 function context(last = 105, previousClose = last - 4, open = last - 2) {
@@ -45,7 +46,7 @@ describe('autonomous position decisions', () => {
     expect(result.quantity).toBe(4);
   });
 
-  test('adds only within the five-percent total position cap', () => {
+  test('adds within the 20% total position cap at full multiplier', () => {
     const smaller = { ...basePosition, quantity: 2 };
     const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, thesis, {
       position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
@@ -83,6 +84,48 @@ describe('autonomous position decisions', () => {
       position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
       portfolio_risk_pass: true, bull_case_pass: true, bear_case_answered: true,
     }, context(), { addsToday: 0, addsLifetime: 0, reductionsToday: 1, lastAddAt: null });
+    expect(result.action).toBe('hold');
+  });
+
+  const addDecision = {
+    position_action: 'add', decision_confidence: 95, thesis_state: 'intact', add_percent: 2,
+    portfolio_risk_pass: true, bull_case_pass: true, bear_case_answered: true,
+    summary: 'Fresh evidence strengthens the existing position.',
+  };
+
+  test('add size follows the outcome multiplier', () => {
+    const smaller = { ...basePosition, quantity: 2 };
+    const half = [{ ...thesis[0]!, size_multiplier: 0.5 }];
+    const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, half, addDecision, context());
+    expect(result.action).toBe('add');
+    expect(result.dollarAmount).toBe(100);
+    expect(result.evidence?.post_trade_position_cap_percent).toBe(20);
+  });
+
+  test('add is capped by remaining 20% headroom', () => {
+    const near = { ...basePosition, quantity: 18.5 }; // 18.5 x 105 = 1,942.50 of 10,000
+    const result = decidePositionAction(near, { ...snapshot, positions: [near] }, thesis, addDecision, context());
+    expect(result.action).toBe('add');
+    expect(result.dollarAmount).toBe(57.5);
+  });
+
+  test('grandfathered oversize position: no add, no forced trim', () => {
+    const oversize = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 }; // ~50% of book
+    const result = decidePositionAction(oversize, { ...snapshot, positions: [oversize] }, thesis, addDecision, context());
+    expect(result.action).toBe('hold');
+  });
+
+  test('sells are never capped: hard-loss exit on an oversize position', () => {
+    const oversize = { ...basePosition, quantity: 48, sharesAvailableForSells: 48 };
+    const result = decidePositionAction(oversize, { ...snapshot, positions: [oversize] }, thesis, {}, context(91));
+    expect(result.action).toBe('exit');
+    expect(result.quantity).toBe(48);
+  });
+
+  test('missing outcome multiplier fails closed on adds', () => {
+    const smaller = { ...basePosition, quantity: 2 };
+    const unsized = [{ ...thesis[0]!, size_multiplier: null }];
+    const result = decidePositionAction(smaller, { ...snapshot, positions: [smaller] }, unsized, addDecision, context());
     expect(result.action).toBe('hold');
   });
 });

@@ -17,6 +17,8 @@ const thesisTask = {
     confidence: 85,
     stance: 'bullish',
     symbols: ['ABCD'],
+    size_multiplier: 1,
+    sizing_basis: 'half_kelly',
   },
 };
 
@@ -94,5 +96,36 @@ describe('autonomous decision gates', () => {
       context(),
       snapshot,
     )).toBeNull();
+  });
+
+  test('size follows results: requested percent x outcome multiplier', () => {
+    const half = { ...thesisTask, thesis: { ...thesisTask.thesis, size_multiplier: 0.5 } };
+    const candidate = approvedCandidate(half, modelDecision, context(), snapshot);
+    expect(candidate?.notional).toBe(250);
+    expect(candidate?.evidence.size_multiplier).toBe(0.5);
+    expect(candidate?.evidence.single_position_cap_percent).toBe(20);
+  });
+
+  test('allows up to the 20% single-position cap, never above', () => {
+    const at20 = approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 20 }, context(), snapshot);
+    expect(at20?.notional).toBe(2_000);
+    expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 21 }, context(), snapshot)).toBeNull();
+  });
+
+  test('buying power still bounds the size', () => {
+    const thin = { ...snapshot, buyingPower: 487.76 };
+    expect(approvedCandidate(thesisTask, { ...modelDecision, notional_percent: 20 }, context(), thin)?.notional).toBe(487.76);
+  });
+
+  test('missing or out-of-range multiplier fails closed', () => {
+    for (const size_multiplier of [null, undefined, 0, 0.1, 1.5]) {
+      const task = { ...thesisTask, thesis: { ...thesisTask.thesis, size_multiplier } };
+      expect(approvedCandidate(task, modelDecision, context(), snapshot)).toBeNull();
+    }
+  });
+
+  test('a re-scored thesis below 80 loses autonomous buys until it re-earns them', () => {
+    const rescored = { ...thesisTask, thesis: { ...thesisTask.thesis, confidence: 72 } };
+    expect(approvedCandidate(rescored, modelDecision, context(), snapshot)).toBeNull();
   });
 });

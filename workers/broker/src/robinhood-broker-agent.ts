@@ -567,7 +567,8 @@ export class RobinhoodBrokerAgent extends Agent<Cloudflare.Env> {
     const symbol = intent.symbol.trim().toUpperCase();
     if (!/^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)) throw new Error('Invalid equity symbol');
     if (!/^[0-9a-f]{64}$/.test(intent.rationaleSha256)) throw new Error('A rationale hash is required');
-    if (intent.maxTradePercent <= 0 || intent.maxTradePercent > 5) throw new Error('Trade cap exceeds the gateway maximum');
+    // Gateway maximum = the 20%-of-book single-position cap. Applies to buys (open/add) only.
+    if (intent.maxTradePercent <= 0 || intent.maxTradePercent > 20) throw new Error('Trade cap exceeds the gateway maximum');
     if (intent.maxDailyNotionalPercent <= 0 || intent.maxDailyNotionalPercent > 20) throw new Error('Daily cap exceeds the gateway maximum');
     if (!Number.isInteger(intent.maxTradesPerDay) || intent.maxTradesPerDay < 1 || intent.maxTradesPerDay > 3) {
       throw new Error('Daily trade-count cap exceeds the gateway maximum');

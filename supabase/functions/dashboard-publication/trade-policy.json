@@ -20,19 +20,27 @@
   "sizing": {
     "cash_reserve_percent_of_portfolio_value": 0,
     "max_total_deployed_percent_of_portfolio_value": 100,
-    "max_single_trade_percent_of_portfolio_value": 5,
+    "max_single_trade_percent_of_portfolio_value": 20,
     "max_new_positions_per_run": 3,
-    "sizing_method": "percent_of_fresh_broker_equity_with_execution_gates",
+    "sizing_method": "requested_percent_x_outcome_multiplier_capped_at_single_position_cap",
     "standing_cash_target_percent": 0,
     "tactical_swing_sleeve": {
       "target_percent_of_portfolio_value": 20,
       "purpose": "Short-horizon, catalyst-driven swing trades that pass every validation and execution gate.",
       "target_positions": 2,
-      "max_percent_per_position": 5,
+      "max_percent_per_position": 20,
       "allow_transient_cash_only_when_market_closed_or_no_candidate_passes_gates": true,
       "re_screen_transient_cash_at_next_regular_session": true
     },
-    "default_max_thesis_percent_of_portfolio_value": 5
+    "default_max_thesis_percent_of_portfolio_value": 20,
+    "single_position_cap": {
+      "percent_of_book": 20,
+      "applies_to": ["open", "add"],
+      "never_blocks": ["sell", "reduce", "exit", "kill", "time_stop"],
+      "grandfathered": "existing oversize positions: no forced trims, no adds",
+      "size_multiplier": "public.thesis_sizing(): half-Kelly on trade_outcomes, 0.25..1.0, thin samples (n<5) 0.5",
+      "decided": "2026-09-26 David: size follows results, hard cap 20%"
+    }
   },
   "swing_filters": {
     "time_horizon": "days_to_weeks",
@@ -70,7 +78,7 @@
     "max_spread_bps": 80,
     "max_trades_per_day": 3,
     "max_daily_notional_percent_of_portfolio_value": 20,
-    "max_single_live_trade_percent_of_portfolio_value": 5,
+    "max_single_live_trade_percent_of_portfolio_value": 20,
     "fail_closed_on_any_broker_alert": true,
     "require_new_version_4_ref_id_per_logical_order": true
   },
@@ -79,7 +87,7 @@
     "require_user_approval_per_action": false,
     "review_schedule": ["10:05", "13:05", "15:25"],
     "hard_loss_exit_percent": 8,
-    "max_total_position_percent_of_portfolio_value": 5,
+    "max_total_position_percent_of_portfolio_value": 20,
     "max_add_percent_of_portfolio_value_per_review": 2,
     "max_adds_per_position_lifetime": 2,
     "max_adds_per_position_per_day": 1,
