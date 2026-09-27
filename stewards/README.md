@@ -86,11 +86,38 @@ Numbers may be JSON numbers or numeric strings.
 
 The views only measure. Promoting a rule is a steward decision, recorded as a playbook rule.
 
+## Box environment (venvs)
+
+Each steward runs its scripts with its own venv: `/workspace/bandit/.venv` and `/workspace/oddsborne/.venv`. The pinned dependencies are in `bandit/requirements.txt` and `oddsborne/requirements.txt` (full `pip freeze` of the working envs). QUANTANAMO doesn't use Python.
+
+**Why the venvs disappear.** The box's durable store restores `/workspace` and `/home/box` after a box refresh, but its default ignore list skips `.venv/`, `venv/`, `.cache/` (so the pip cache), `node_modules/`, `__pycache__/` and `build/`/`dist/` directories. Every refresh therefore wipes the venvs while the scripts, the requirements and the secret mirrors survive. Re-including `.venv/` wouldn't be enough: pip ships its own `build/` directory, which the store would still drop.
+
+**What survives, and the one command to rebuild.** These are all plain files, so they survive a refresh:
+- The requirements, both in this repo and mirrored to `/workspace/<steward>/requirements.txt`.
+- The wheel cache at `/workspace/.steward-wheelhouse`.
+
+Any steward, after a refresh or whenever `doctor.sh` says broken, runs:
+
+```bash
+bash /workspace/grasshopper/stewards/sync_box.sh
+```
+
+It is idempotent:
+- It syncs the scripts and requirements to the box. It skips this step with `--env`, or when the checkout isn't on `main`.
+- It creates, repairs or rebuilds each venv. It installs offline from the wheel cache first, falling back to PyPI and refilling the cache.
+- It then runs `doctor.sh` and exits with its status.
+
+A rebuild takes about 10 s, and no network is needed once the cache exists.
+
+- `bash /workspace/grasshopper/stewards/doctor.sh` checks that each venv exists, that its imports work (including the box `db_connect` and `load_secrets`), and that the invoked files are present. It prints one line per steward and exits 1 when anything is broken. The ledger health routine runs it too.
+- `live_trade_clip.py`, `paper_bank20.py` and `pm_enter.py` check their imports before any venue or DB call. When the env is missing or broken, they stop with exit code 3 and the message `Python env not ready … Nothing was sent. Run: bash /workspace/grasshopper/stewards/sync_box.sh`, instead of failing halfway through an order. Set `GRASSHOPPER_REPO` if the checkout lives elsewhere.
+- Credentials follow the durable-secrets pattern: env → `box-secrets.json` → the agent's private mirror under `/home/box/agent-data/agents/<id>/private/`, healing `box-secrets.json` from the mirror.
+
 ## The box copies
 
 `/workspace/bandit/live_trade_clip.py`, `/workspace/bandit/paper_bank20.py` and `/workspace/oddsborne/pm_enter.py` are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
 - The scripts put the directory they are invoked from first on `sys.path`. On the box, they therefore keep using the box's own `load_secrets.py` and `db_connect.py`.
-- After a merge, run `bash stewards/sync_box.sh`. It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
+- After a merge, run `bash stewards/sync_box.sh` (it also repairs the venvs; see above). It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
 
 ## Checks
 
