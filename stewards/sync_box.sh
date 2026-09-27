@@ -67,6 +67,16 @@ py_version() { "$1" -c 'import sys; print(sys.version.split()[0])' 2>/dev/null |
 want_py="$(py_version "$base_py")"
 [ -n "$want_py" ] || { echo "no base interpreter: $base_py" >&2; exit 1; }
 pip_q=(-q --disable-pip-version-check)
+# Keep every pinned wheel in the persisted cache (a satisfied install downloads nothing, so fill it explicitly).
+fill_wheelhouse() { # <python> <requirements> <steward>
+  local mark="$wheelhouse/.$3.requirements"
+  mkdir -p "$wheelhouse"
+  [ "$(cat "$mark" 2>/dev/null)" = "$want" ] && return 0
+  if ! "$1" -m pip download "${pip_q[@]}" --no-index --find-links "$wheelhouse" -d "$wheelhouse" -r "$2" >/dev/null 2>&1; then
+    "$1" -m pip download "${pip_q[@]}" -d "$wheelhouse" -r "$2" || { echo "$3: wheel cache not refreshed (offline?)" >&2; return 0; }
+  fi
+  echo "$want" > "$mark"
+}
 for steward in "${stewards[@]}"; do
   dir="$box/$steward"
   [ -d "$dir" ] || { echo "$steward: skip env (no $dir)"; continue; }
@@ -79,6 +89,7 @@ for steward in "${stewards[@]}"; do
   imports_ok() { DOCTOR_IMPORTS_ONLY=1 bash "$here/doctor.sh" "$steward" >/dev/null 2>&1; }
   if [ "$have_py" = "$want_py" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && imports_ok; then
     echo "$steward: env current ($venv)"
+    fill_wheelhouse "$py" "$req" "$steward"
     continue
   fi
   if [ "$have_py" != "$want_py" ] || [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
@@ -89,11 +100,10 @@ for steward in "${stewards[@]}"; do
   else
     echo "$steward: repairing $venv against $req"
   fi
-  mkdir -p "$wheelhouse"
-  # Offline from the persisted wheel cache first; fall back to PyPI and refill the cache.
+  # Offline from the persisted wheel cache (PyPI only when a pinned wheel isn't cached yet).
+  fill_wheelhouse "$py" "$req" "$steward"
   if ! "$py" -m pip install "${pip_q[@]}" --no-index --find-links "$wheelhouse" -r "$req" >/dev/null 2>&1; then
-    "$py" -m pip download "${pip_q[@]}" -d "$wheelhouse" -r "$req"
-    "$py" -m pip install "${pip_q[@]}" --no-index --find-links "$wheelhouse" -r "$req"
+    "$py" -m pip install "${pip_q[@]}" --find-links "$wheelhouse" -r "$req"
   fi
   imports_ok || { echo "$steward: imports still broken after install" >&2; bash "$here/doctor.sh" "$steward" >&2 || true; exit 1; }
   echo "$want" > "$stamp"

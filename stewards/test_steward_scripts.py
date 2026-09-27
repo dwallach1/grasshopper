@@ -133,7 +133,7 @@ class StewardScripts(unittest.TestCase):
         self.assertIn('"bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets|', doctor)
         self.assertIn('"oddsborne|polymarket_us psycopg db_connect load_secrets|', doctor)
         sync = (HERE / "sync_box.sh").read_text()
-        for needle in ('--find-links "$wheelhouse"', 'wheelhouse="$box/.steward-wheelhouse"', 'exec bash "$here/doctor.sh"',
+        for needle in ('--find-links "$wheelhouse"', 'fill_wheelhouse "$py" "$req" "$steward"', 'wheelhouse="$box/.steward-wheelhouse"', 'exec bash "$here/doctor.sh"',
                        '"$here/bandit/requirements.txt:$box/bandit/requirements.txt"', '"$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"'):
             self.assertIn(needle, sync)
 
