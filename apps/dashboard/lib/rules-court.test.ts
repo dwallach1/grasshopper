@@ -79,6 +79,7 @@ describe('rules court', () => {
       ['44_exposure_gap_full_notional.sql', '20260926221414_exposure_gap_full_notional.sql'],
       ['45_exposure_gap_registry.sql', '20260926221455_exposure_gap_registry.sql'],
       ['46_backtest_evidence_symmetric.sql', '20260927232545_backtest_evidence_symmetric.sql'],
+      ['47_backtest_credit_live_gated.sql', '20260927233853_backtest_credit_live_gated.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -169,6 +170,38 @@ describe('rules court', () => {
     expect(sql).toContain('create or replace view public.v_backtest_tests_unlogged');
     // Test 31 is logged against its own thesis and the re-score job runs; no hand-set score.
     expect(sql).toContain("select 'earnings_gap_structure', t.id, 714, -0.003457, 0.062007");
+    expect(sql).toContain('select private.rescore_all_thesis_confidence();');
+    expect(sql).not.toMatch(/update public\.theses/);
+    expect(sql).toContain("('backtest-evidence-credit', ");
+  });
+
+  test('47: backtest credit is live-gated, capped, deflated-Sharpe mean, verified tests only', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/47_backtest_credit_live_gated.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/backtest-evidence-credit.md');
+    expect(sql).toContain('-- court-ruling: docs/rules/outcome-rescore-confidence.md');
+    // No credit below 3 live trades; pooled weight <= min(5, live / 2); a thesis is scored only at >= 3 live trades.
+    expect(sql).toContain('where coalesce(p_n_live, 0) >= 3');
+    expect(sql).toContain('least(sum(r.base), 5, p_n_live / 2.0)');
+    expect(sql).toContain('if v_n >= 3 then');
+    // Per-test weight min(0.5n, 5) x (1 - missing share) for survivors-only; credited mean = deflated Sharpe x spread.
+    expect(sql).toContain('least(0.5 * new.n_trades, 5) * v_f');
+    expect(sql).toContain('t.deflated_sharpe::numeric * new.sd_ret');
+    expect(sql).not.toContain('0.5 * e.mean_ret_deflated');
+    // Unverified tests earn nothing.
+    expect(sql).toContain('ineligible_reason');
+    expect(sql).toContain('rules_locked_at < results_at');
+    // No row for unverified point-in-time inputs or a filtered subset of another test (test 32), in the
+    // derive trigger and in the unlogged-tests view.
+    expect(sql).toContain("has unverified point-in-time inputs (%): no evidence row");
+    expect(sql).toContain('is a subset of test % on the same thesis');
+    expect(sql.match(/e\.key ~ '\(\^\|_\)point_in_time\$'/g)?.length).toBe(2);
+    expect(sql).toContain("where p.id = case when t.params_json ->> 'parent_test_id' ~ '^[0-9]+$'");
+    // 46's strategy_tests read grant to ODDSBORNE / BANDIT stays.
+    expect(sql).not.toMatch(/revoke select on public\.strategy_tests/);
+    expect(sql).not.toMatch(/drop policy if exists steward_select/);
+    expect(sql).not.toMatch(/strategy_test_id = 32/);
+    // Test 30 logged once, test 31 re-derived, then the re-score job; no hand-set score.
+    expect(sql).toContain('and not exists (select 1 from public.thesis_backtest_evidence b where b.strategy_test_id = 30)');
     expect(sql).toContain('select private.rescore_all_thesis_confidence();');
     expect(sql).not.toMatch(/update public\.theses/);
     expect(sql).toContain("('backtest-evidence-credit', ");

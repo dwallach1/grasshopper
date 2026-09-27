@@ -24,3 +24,4 @@ private.open_risk_lots
 private.steward_risk_basis
 private.expected_max_normal
 private.backtest_evidence_derive
+private.backtest_evidence_sync

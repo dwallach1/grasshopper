@@ -32,7 +32,7 @@ Assumptions are in [SIMULATION.md](SIMULATION.md).
 3. Any migration numbered ≥ 35 that defines one of the rule functions (`tools/court/rule_functions.txt`) must carry a `-- court-ruling: docs/rules/<rule_id>.md` line naming an existing ruling. `bun run test` fails otherwise (`apps/dashboard/lib/rules-court.test.ts`).
 4. Fill in the court section of the PR template.
 
-Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27).
+Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27), 47 (backtest credit live-gated and small, 2026-09-27).
 
 Enforcement today is the test suite plus the PR checklist. For a hard merge block, move `docs/rules/court-ci.yml` to `.github/workflows/` (this needs a token with `workflow` scope) and make it a required status check.
 
@@ -55,6 +55,6 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | [cash-only-no-margin](cash-only-no-margin.md) | uphold | in force | removes negative-equity paths |
 | [listed-equity-registry](listed-equity-registry.md) | uphold | in force | — |
 | [entry-cap-snapshot](entry-cap-snapshot.md) | uphold | in force | — |
-| [backtest-evidence-credit](backtest-evidence-credit.md) | amend (2026-09-27) | in force | every preregistered test counts, pass or fail, trial-deflated; zero-edge false proofs 43% → 27% (QUANTANAMO); test 31 moves earnings_gap_structure 56 → 52 |
+| [backtest-evidence-credit](backtest-evidence-credit.md) | amend (2026-09-27, 46 + 47) | in force | pass or fail counts; no credit below 3 live trades, weight ≤ min(5, live/2) × survivor factor, mean = deflated Sharpe × spread; earnings_gap_structure 56 → 54 |
 | [portfolio-exposure](portfolio-exposure.md) | enact (10% of book at risk); gap-prone at full notional | in force | binaries and memes at full notional (BANDIT ≈ one clip); QUANTANAMO 6.4% after raising its lines |
 | [shadow-exits](shadow-exits.md) | uphold | in force | — |

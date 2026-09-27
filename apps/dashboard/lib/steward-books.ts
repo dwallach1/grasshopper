@@ -93,7 +93,7 @@ export function plainWords(slug: string): string {
 }
 
 type TrackRow = Pick<ThesisScoreRow, 'priced_trades' | 'wins' | 'results_confidence'>
-  & Partial<Pick<ThesisScoreRow, 'backtest_tests' | 'backtest_trades' | 'backtest_mean_ret' | 'backtest_effect'>>;
+  & Partial<Pick<ThesisScoreRow, 'backtest_tests' | 'backtest_trades' | 'backtest_weight' | 'backtest_mean_ret' | 'backtest_effect'>>;
 
 function wholeCount(value: number | undefined): number {
   return value !== undefined && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
@@ -109,7 +109,9 @@ export function backtestLine(row: TrackRow | null | undefined): string | null {
   if (mean !== null && mean !== undefined && Number.isFinite(mean)) {
     parts.push(`${mean > 0 ? '+' : ''}${(mean * 100).toFixed(2)}% per trade after costs`);
   }
-  if (row.backtest_effect === 'for') parts.push('counts for the score');
+  // Rule 47: backtests earn no weight until the thesis has 3 live trades.
+  if (row.backtest_weight !== undefined && row.backtest_weight !== null && Number(row.backtest_weight) === 0) parts.push('counts once the thesis has 3 live trades');
+  else if (row.backtest_effect === 'for') parts.push('counts for the score');
   else if (row.backtest_effect === 'against') parts.push('counts against the score');
   return parts.join(', ');
 }

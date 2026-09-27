@@ -6,11 +6,12 @@
 Tempers a steward's stated confidence with realized outcomes. Feeds the QUANTANAMO >= 80 gate and hardening/forming status.
 
 ## Mechanism
-`private.thesis_results_score`: n_eff = live trades + the pooled backtest weight (every logged test, pass or fail: min(0.5 x n, 20) each, x0.5 survivors-only, capped at 20; see backtest-evidence-credit); mean_eff pools the live mean return on stake with the trial-deflated backtest mean shrunk 50% toward zero, either sign; sd_eff = max(pooled sd, 0.25); results_confidence = round(100 x Phi(mean_eff / (sd_eff / sqrt(n_eff)))) when n_eff >= 3, else null (unscored). Demote hardening -> forming only when the live upper bound mean + max(sd, 0.25)/sqrt(n) < 0, or n >= 10 with mean < 0; kill only when n >= 10 and the upper bound < 0. theses.confidence (display) = results_confidence when scored, else the stated number. Only the re-score writes the results columns (guard trigger). Was: Beta on hit rate, cap 60 and demote at n >= 5 with negative P/L.
+`private.thesis_results_score`: scored only with >= 3 live trades (else null, unscored). n_eff = live trades + the backtest weight (backtest-evidence-credit: verified tests, pass or fail, none below 3 live trades, then min(sum 0.5 x n, 5, live / 2) x survivor factor); mean_eff pools the live mean return on stake with the backtest deflated Sharpe x spread; sd_eff = max(live sd, 0.25); results_confidence = round(100 x Phi(mean_eff / (sd_eff / sqrt(n_eff)))). Demote hardening -> forming only when the live upper bound mean + max(sd, 0.25)/sqrt(n) < 0, or n >= 10 with mean < 0; kill only when n >= 10 and the upper bound < 0 (live only). theses.confidence (display) = results_confidence when scored, else the stated number. Only the re-score writes the results columns (guard trigger). Was: Beta on hit rate, cap 60 and demote at n >= 5 with negative P/L.
 
 Code paths:
 - `supabase/schemas/11_outcome_rescore_sizing.sql`
 - `supabase/schemas/41_court_decisions.sql`
+- `supabase/schemas/47_backtest_credit_live_gated.sql`
 
 ## The court
 

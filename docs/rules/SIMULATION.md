@@ -1,6 +1,6 @@
 # Rules-court simulation (2026-09-26, backtest evidence 2026-09-27)
 
-Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.
+Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/evidence_gate.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.
 
 ## Assumptions
 
@@ -447,3 +447,47 @@ All values are then x the drawdown scale (ODDSBORNE x0.5 today). See Grid 2 for 
 | ruling (test 31 logged) | 48 | 57 | 73 | 66 | 60 | 52 |
 
 The same test with the sign flipped (+0.7699% deflated) would score 55: the evidence enters the pooled mean with the same coefficient either way (weight x 0.5), so the move is about ±1.5 points around the score of a zero-mean test (54); the asymmetry vs 56 is only the dilution of the live mean. Without the survivors-only discount (weight 20) the score would be 50.
+
+## Live-gated backtest credit (2026-09-27, migration 47)
+
+`evidence_gate.py`. Each thesis has 2 preregistered tests of 200 trades at 17 trials (E[max] = 1.8281), one survivors-only with 35% of events missing; 1500 paths, one year at ledger pace, starter 0.03 x book / max(sd, 0.25), drawdown scaling. `rule_46` is migration 46 (credit from trade 0, weight up to 20, emax-deflated mean shrunk 50%). `rule_47` is this ruling (no credit or score below 3 live trades, weight min(sum 0.5 n, 5, live / 2) x survivor factor, credited mean = deflated Sharpe x spread, live spread). Scenarios: `honest` (test means = true mean + noise), `overfit` (tests carry a fake +0.2 Sharpe at true edge 0), `mismatch` (real live edge, mechanical backtest has none). `gate80<10` = P(the results score reaches 80 before 10 live trades). `score@n` = mean results score after n live trades.
+
+| steward | true Sharpe | scenario | rule | medX | P2x | DD50 | ruin | Pproven | tProven | gate80<10 | score@3/6/10/20 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| quantanamo | 0.0 | honest | no_backtest | 0.956 | 0.025 | 0.002 | 0.0 | 0.475 | 17.0 | 0.312 | 48.2/49.8/49.8/50.1 |
+| quantanamo | 0.0 | honest | rule_46 | 0.968 | 0.011 | 0.0 | 0.0 | 0.296 | 33.0 | 0.029 | 41.1/42.1/42.7/44.1 |
+| quantanamo | 0.0 | honest | rule_47 | 0.966 | 0.022 | 0.001 | 0.0 | 0.412 | 22.0 | 0.209 | 46.4/46.8/45.9/47.1 |
+| quantanamo | 0.1 | honest | no_backtest | 1.225 | 0.179 | 0.004 | 0.0 | 0.796 | 18.5 | 0.426 | 52.7/56.5/58.4/62.2 |
+| quantanamo | 0.1 | honest | rule_46 | 1.258 | 0.119 | 0.0 | 0.0 | 0.706 | 31.0 | 0.097 | 49.7/52.2/54.2/58.4 |
+| quantanamo | 0.1 | honest | rule_47 | 1.242 | 0.165 | 0.002 | 0.0 | 0.771 | 22.0 | 0.325 | 52.1/55.2/56.7/60.9 |
+| quantanamo | 0.2 | honest | no_backtest | 1.871 | 0.55 | 0.005 | 0.0 | 0.976 | 14.0 | 0.506 | 57.3/63.0/66.6/73.1 |
+| quantanamo | 0.2 | honest | rule_46 | 1.741 | 0.485 | 0.001 | 0.0 | 0.965 | 20.0 | 0.244 | 58.3/62.2/65.5/71.8 |
+| quantanamo | 0.2 | honest | rule_47 | 1.859 | 0.537 | 0.003 | 0.0 | 0.975 | 15.0 | 0.468 | 57.9/63.5/67.1/73.4 |
+| bandit | 0.0 | honest | no_backtest | 0.813 | 0.125 | 0.285 | 0.0 | 0.613 | 21.0 | 0.387 | 48.4/47.9/48.1/49.1 |
+| bandit | 0.0 | honest | rule_46 | 0.831 | 0.122 | 0.245 | 0.0 | 0.449 | 64.0 | 0.056 | 36.9/38.3/39.6/42.2 |
+| bandit | 0.0 | honest | rule_47 | 0.818 | 0.126 | 0.261 | 0.0 | 0.56 | 29.0 | 0.289 | 45.6/44.3/43.5/45.8 |
+| bandit | 0.1 | honest | no_backtest | 2.271 | 0.725 | 0.105 | 0.0 | 0.959 | 22.0 | 0.499 | 54.3/55.7/57.8/62.3 |
+| bandit | 0.1 | honest | rule_46 | 2.383 | 0.743 | 0.04 | 0.0 | 0.941 | 43.0 | 0.187 | 49.5/51.2/53.5/58.5 |
+| bandit | 0.1 | honest | rule_47 | 2.302 | 0.729 | 0.081 | 0.0 | 0.953 | 25.0 | 0.423 | 53.3/54.4/56.1/61.0 |
+| bandit | 0.2 | honest | no_backtest | 28.606 | 0.991 | 0.257 | 0.0 | 1.0 | 14.0 | 0.615 | 60.2/63.3/67.0/74.1 |
+| bandit | 0.2 | honest | rule_46 | 25.001 | 0.993 | 0.151 | 0.0 | 1.0 | 16.0 | 0.433 | 62.1/63.9/67.0/73.4 |
+| bandit | 0.2 | honest | rule_47 | 28.179 | 0.993 | 0.231 | 0.0 | 1.0 | 13.0 | 0.591 | 61.0/64.1/68.0/74.6 |
+| quantanamo | 0.0 | overfit | rule_46 | 0.966 | 0.019 | 0.0 | 0.0 | 0.442 | 22.0 | 0.124 | 54.3/54.7/54.2/53.7 |
+| quantanamo | 0.0 | overfit | rule_47 | 0.962 | 0.024 | 0.001 | 0.0 | 0.477 | 17.0 | 0.266 | 49.7/51.7/52.2/51.9 |
+| bandit | 0.0 | overfit | rule_46 | 0.826 | 0.126 | 0.253 | 0.0 | 0.597 | 23.0 | 0.25 | 56.4/54.5/53.5/53.1 |
+| bandit | 0.0 | overfit | rule_47 | 0.81 | 0.126 | 0.282 | 0.0 | 0.623 | 21.0 | 0.359 | 50.1/50.2/50.8/51.0 |
+| quantanamo | 0.2 | mismatch | rule_46 | 1.661 | 0.415 | 0.0 | 0.0 | 0.925 | 31.0 | 0.085 | 45.0/49.6/54.2/63.1 |
+| quantanamo | 0.2 | mismatch | rule_47 | 1.772 | 0.512 | 0.003 | 0.0 | 0.961 | 20.0 | 0.38 | 54.5/58.7/61.1/69.4 |
+| bandit | 0.2 | mismatch | rule_46 | 21.435 | 0.993 | 0.114 | 0.0 | 1.0 | 32.0 | 0.155 | 42.6/47.9/53.5/63.8 |
+| bandit | 0.2 | mismatch | rule_47 | 26.147 | 0.993 | 0.197 | 0.0 | 1.0 | 18.0 | 0.493 | 56.6/58.5/61.2/70.2 |
+
+**Replay: earnings_gap_structure** (live returns on stake -0.03%, +18.42%, +41.47%, -16.43%, -15.10%, -19.40%; tests 31 and 30 from their stored rows).
+
+| after live trade | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| no backtest | unscored | unscored | 92 | 81 | 69 | 56 |
+| rule 46 (test 31) | 48 | 57 | 73 | 66 | 60 | 52 |
+| rule 47 (tests 31 + 30) | unscored | unscored | 88 | 77 | 66 | 54 |
+| rule 47 backtest weight | 0.0 | 0.0 | 0.988 | 1.317 | 1.646 | 1.976 |
+
+With both tests' signs flipped the rule-47 score after 6 trades would be 56.

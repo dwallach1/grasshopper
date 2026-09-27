@@ -13,6 +13,7 @@ Code paths:
 - `supabase/schemas/23_edge_stake_reason.sql`
 - `supabase/schemas/37_court_rulings.sql`
 - `supabase/schemas/38_edge_max_stake_null_thesis.sql`
+- `supabase/schemas/47_backtest_credit_live_gated.sql`
 
 ## The court
 
@@ -30,7 +31,7 @@ MC grid (tools/court/grid.json, grid2.json). Live: every thesis is unproven toda
 ## Ruling
 **AMEND.** Uphold the proven-edge formula at 1 sigma. Amend so n and the moments include discounted backtest evidence (backtest-evidence-credit) and so the cap is multiplied by the steward drawdown scale instead of per-thesis loss halving.
 
-Amendment: n_eff = n_live + min(0.5 x n_backtest, 20), with the backtest mean haircut 50%. The cap is multiplied by the scale from `private.steward_drawdown`. The starter is a share of current book.
+Amendment: n_eff = n_live + backtest weight (backtest-evidence-credit: none below 3 live trades, then min(sum 0.5 x n_backtest, 5, n_live / 2) x survivor factor), with the backtest mean = deflated Sharpe x spread; the spread is the live spread (migration 47). The cap is multiplied by the scale from `private.steward_drawdown`. The starter is a share of current book.
 
 | Growth cost | Ruin-risk reduction |
 |---|---|
