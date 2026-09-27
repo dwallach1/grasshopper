@@ -78,6 +78,7 @@ describe('rules court', () => {
       ['43_thesis_scorecard_results.sql', '20260926221039_thesis_scorecard_results.sql'],
       ['44_exposure_gap_full_notional.sql', '20260926221414_exposure_gap_full_notional.sql'],
       ['45_exposure_gap_registry.sql', '20260926221455_exposure_gap_registry.sql'],
+      ['46_backtest_evidence_symmetric.sql', '20260927232545_backtest_evidence_symmetric.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -147,5 +148,29 @@ describe('rules court', () => {
     expect(ret).toMatch(/entry_risk_fraction numeric,\s+risk_basis text\s*\)/);
     const registry = await readFile(join(root, 'supabase/schemas/45_exposure_gap_registry.sql'), 'utf8');
     expect(registry).toContain('gap-prone lots at full notional');
+  });
+
+  test('46: backtest evidence counts pass or fail, preregistered, trial-deflated, survivors discounted', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/46_backtest_evidence_symmetric.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/backtest-evidence-credit.md');
+    expect(sql).toContain('-- court-ruling: docs/rules/outcome-rescore-confidence.md');
+    expect(sql).toContain('check (rules_locked_at < results_at)');
+    expect(sql).toContain('check (trials >= 1)');
+    // No pass requirement: a killed test counts, and the old survivors-only filter is gone.
+    expect(sql).not.toContain("t.status = 'survived' and t.deflated_sharpe > 0");
+    expect(sql).toContain("t.status in ('survived', 'killed')");
+    expect(sql).toContain('case when new.survivors_only then 0.5 else 1 end');
+    expect(sql).toContain('private.expected_max_normal(new.trials) * new.sd_ret / sqrt(new.n_trades::numeric)');
+    expect(sql).toContain("new.rules_locked_at := (t.params_json ->> 'preregistered_at')::timestamptz");
+    // Append-only for stewards, one row per test.
+    expect(sql).toContain('revoke update on public.thesis_backtest_evidence from quantanamo_worker, oddsborne_worker, bandit_worker');
+    expect(sql).toContain('with check (active)');
+    expect(sql).toContain('on public.thesis_backtest_evidence (thesis_id, strategy_test_id)');
+    expect(sql).toContain('create or replace view public.v_backtest_tests_unlogged');
+    // Test 31 is logged against its own thesis and the re-score job runs; no hand-set score.
+    expect(sql).toContain("select 'earnings_gap_structure', t.id, 714, -0.003457, 0.062007");
+    expect(sql).toContain('select private.rescore_all_thesis_confidence();');
+    expect(sql).not.toMatch(/update public\.theses/);
+    expect(sql).toContain("('backtest-evidence-credit', ");
   });
 });

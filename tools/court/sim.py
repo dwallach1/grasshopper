@@ -22,15 +22,19 @@ def run(steward, mu, policy, n_trades, paths=4000, seed=7, bt=None, tail=None):
     for p in range(paths):
         eq = 1.0; peak = 1.0; mdd = 0.0; n = 0; S = 0.0; SS = 0.0; streak = 0
         # optional backtest evidence: n_bt pseudo-trades with mean = mu + bias, weight w
-        bt_n = bt_mean = bt_sd = 0
-        if bt:
+        bt_n = bt_mean = bt_sd = 0; bt_w = 0.0
+        if bt and 'sample' in bt:
+            # per-path evidence (evidence.py): pooled weight, pooled mean before the 50% shrink, sd
+            bt_w, bt_mean, bt_sd = bt['sample'](rng, mu)
+        elif bt:
             bt_n = bt['n']; bt_mean = mu + bt['bias'] + rng.normal(0, base.std() / np.sqrt(bt['n'])); bt_sd = base.std()
+            bt_w = bt['w'] * bt_n
         for t in range(n_trades):
             m_live = S / n if n else 0.0
             sd_live = np.sqrt(max((SS - n * m_live * m_live) / (n - 1), 0.0)) if n >= 2 else 0.0
-            if bt:
-                w = bt['w']; ne = n + w * bt_n
-                mean = (n * m_live + w * bt_n * bt_mean * bt['haircut']) / ne if ne else 0
+            if bt and bt_w > 0:
+                ne = n + bt_w
+                mean = (n * m_live + bt_w * bt_mean * bt['haircut']) / ne if ne else 0
                 sd = sd_live if n >= 2 else bt_sd
                 sd = max(sd, bt_sd * 0.5)
                 lcb = mean - P.get('z', 1) * sd / np.sqrt(ne) if ne >= 2 else -1

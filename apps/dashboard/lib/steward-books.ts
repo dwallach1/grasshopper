@@ -29,8 +29,10 @@ export type BooksTrack = {
   trades: number;
   wins: number | null;
   score: number | null;
-  /** `6 trades, score 56` · `1 trade, not scored yet` · `no track record yet` */
+  /** `6 trades, score 56` · `6 trades + 1 backtest, score 52` · `1 trade, not scored yet` · `no track record yet` */
   label: string;
+  /** `Backtests: 1 logged (714 trades), -0.35% per trade after costs, counts against the score` · null */
+  backtest: string | null;
 };
 
 export type BooksLot = {
@@ -90,20 +92,47 @@ export function plainWords(slug: string): string {
   return slug.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-export function trackRecord(row: Pick<ThesisScoreRow, 'priced_trades' | 'wins' | 'results_confidence'> | null | undefined): BooksTrack {
+type TrackRow = Pick<ThesisScoreRow, 'priced_trades' | 'wins' | 'results_confidence'>
+  & Partial<Pick<ThesisScoreRow, 'backtest_tests' | 'backtest_trades' | 'backtest_mean_ret' | 'backtest_effect'>>;
+
+function wholeCount(value: number | undefined): number {
+  return value !== undefined && Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+/** Plain line for logged backtests (real rows only; null when none count). */
+export function backtestLine(row: TrackRow | null | undefined): string | null {
+  const tests = wholeCount(row?.backtest_tests);
+  if (!row || tests === 0) return null;
+  const trades = wholeCount(row.backtest_trades);
+  const mean = row.backtest_mean_ret;
+  const parts = [`Backtests: ${tests} logged${trades > 0 ? ` (${trades} trades)` : ''}`];
+  if (mean !== null && mean !== undefined && Number.isFinite(mean)) {
+    parts.push(`${mean > 0 ? '+' : ''}${(mean * 100).toFixed(2)}% per trade after costs`);
+  }
+  if (row.backtest_effect === 'for') parts.push('counts for the score');
+  else if (row.backtest_effect === 'against') parts.push('counts against the score');
+  return parts.join(', ');
+}
+
+export function trackRecord(row: TrackRow | null | undefined): BooksTrack {
   const trades = row && Number.isFinite(row.priced_trades) ? Math.max(0, Math.round(row.priced_trades)) : 0;
-  if (!row || trades === 0) {
-    return { trades: 0, wins: null, score: null, label: 'no track record yet' };
+  const tests = wholeCount(row?.backtest_tests);
+  if (!row || (trades === 0 && tests === 0)) {
+    return { trades: 0, wins: null, score: null, label: 'no track record yet', backtest: null };
   }
   const score = row.results_confidence === null || !Number.isFinite(row.results_confidence)
     ? null
     : Math.round(row.results_confidence);
-  const count = `${trades} ${trades === 1 ? 'trade' : 'trades'}`;
+  const counts = [
+    trades > 0 ? `${trades} ${trades === 1 ? 'trade' : 'trades'}` : null,
+    tests > 0 ? `${tests} ${tests === 1 ? 'backtest' : 'backtests'}` : null,
+  ].filter((part): part is string => part !== null).join(' + ');
   return {
     trades,
-    wins: Number.isFinite(row.wins) ? row.wins : null,
+    wins: trades > 0 && Number.isFinite(row.wins) ? row.wins : null,
     score,
-    label: score === null ? `${count}, not scored yet` : `${count}, score ${score}`,
+    label: score === null ? `${counts}, not scored yet` : `${counts}, score ${score}`,
+    backtest: backtestLine(row),
   };
 }
 

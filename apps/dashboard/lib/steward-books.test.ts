@@ -73,6 +73,24 @@ describe('Books plain words', () => {
     expect(trackRecord(null).label).toBe('no track record yet');
   });
 
+  test('track record: logged backtests count in the label and get a plain line, pass or fail', () => {
+    const gap = trackRecord({
+      priced_trades: 6, wins: 2, results_confidence: 52,
+      backtest_tests: 1, backtest_trades: 714, backtest_mean_ret: -0.003457, backtest_effect: 'against',
+    });
+    expect(gap.label).toBe('6 trades + 1 backtest, score 52');
+    expect(gap.backtest).toBe('Backtests: 1 logged (714 trades), -0.35% per trade after costs, counts against the score');
+    expect(gap.wins).toBe(2);
+    const onlyBacktests = trackRecord({
+      priced_trades: 0, wins: 0, results_confidence: 61,
+      backtest_tests: 2, backtest_trades: 400, backtest_mean_ret: 0.004, backtest_effect: 'for',
+    });
+    expect(onlyBacktests.label).toBe('2 backtests, score 61');
+    expect(onlyBacktests.wins).toBeNull();
+    expect(onlyBacktests.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
+    expect(trackRecord({ priced_trades: 6, wins: 2, results_confidence: 56 }).backtest).toBeNull();
+  });
+
   test('exit line reads the lot’s own exit price in its unit', () => {
     expect(exitLine(holding())).toBe('exits below $220.80');
     expect(exitLine(holding({ invalidation: { price: null, note: 'close on a no-bid' } }))).toBe('exit noted');

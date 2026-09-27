@@ -78,7 +78,24 @@ export type ThesisScoreRow = {
   wins: number;
   miscalibrated: boolean;
   thin: boolean;
+  /** Logged out-of-sample backtests that count (pass or fail; migration 46). */
+  backtest_tests: number;
+  backtest_trades: number;
+  /** Pooled weight in effective trades (capped at 20). */
+  backtest_weight: number;
+  /** Weight-pooled mean return per trade after costs, before trial deflation; null = none logged. */
+  backtest_mean_ret: number | null;
+  /** Whether the logged backtests pull the score up or down (after trial deflation). */
+  backtest_effect: BacktestEffect;
 };
+
+export type BacktestEffect = 'for' | 'against' | null;
+
+function backtestEffect(value: string | null): BacktestEffect {
+  if (value === 'for') return 'for';
+  if (value === 'against') return 'against';
+  return null;
+}
 
 export type StewardScorecardPayload = {
   stewards: StewardScoreRow[];
@@ -207,6 +224,11 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         wins: int(row.wins),
         miscalibrated: gap !== null && Math.abs(gap) > THESIS_GAP_FLAG,
         thin: int(row.priced_trades) < SCORECARD_THIN_N,
+        backtest_tests: int(row.backtest_tests),
+        backtest_trades: int(row.backtest_trades),
+        backtest_weight: num(row.backtest_weight) ?? 0,
+        backtest_mean_ret: num(row.backtest_mean_ret),
+        backtest_effect: backtestEffect(str(row.backtest_effect)),
       }];
     }),
   };
