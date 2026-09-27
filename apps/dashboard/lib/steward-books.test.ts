@@ -82,12 +82,17 @@ describe('Books plain words', () => {
     expect(gap.backtest).toBe('Backtests: 1 logged (714 trades), -0.35% per trade after costs, counts against the score');
     expect(gap.wins).toBe(2);
     const onlyBacktests = trackRecord({
-      priced_trades: 0, wins: 0, results_confidence: 61,
-      backtest_tests: 2, backtest_trades: 400, backtest_mean_ret: 0.004, backtest_effect: 'for',
+      priced_trades: 0, wins: 0, results_confidence: null,
+      backtest_tests: 2, backtest_trades: 400, backtest_weight: 0, backtest_mean_ret: 0.004, backtest_effect: 'for',
     });
-    expect(onlyBacktests.label).toBe('2 backtests, score 61');
+    expect(onlyBacktests.label).toBe('2 backtests, not scored yet');
     expect(onlyBacktests.wins).toBeNull();
-    expect(onlyBacktests.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
+    expect(onlyBacktests.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts once the thesis has 3 live trades');
+    const scored = trackRecord({
+      priced_trades: 4, wins: 3, results_confidence: 61,
+      backtest_tests: 2, backtest_trades: 400, backtest_weight: 2, backtest_mean_ret: 0.004, backtest_effect: 'for',
+    });
+    expect(scored.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
     expect(trackRecord({ priced_trades: 6, wins: 2, results_confidence: 56 }).backtest).toBeNull();
   });
 

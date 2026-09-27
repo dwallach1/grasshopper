@@ -6,7 +6,7 @@
 David approves anything below 80; autonomy only for strong theses.
 
 ## Mechanism
-`steward_sizing_guidance`: QUANTANAMO entry_allowed needs status = hardening and theses.results_confidence >= 80 (reason `quantanamo_unscored` when unscored, else `quantanamo_confidence_gate`). Backtest credit maps to a score through the same math: a thesis with only backtest evidence has n_eff = min(0.5 x n_bt, 20) (>= 3 needs n_bt >= 6) and scores Phi(0.5 x mean_bt / (max(sd_bt, 0.25) / sqrt(n_eff))); passing 80 needs z >= 0.84, e.g. at full weight (n_bt >= 40) and sd 0.25 a backtest mean >= 9.4% per trade.
+`steward_sizing_guidance`: QUANTANAMO entry_allowed needs status = hardening and theses.results_confidence >= 80 (reason `quantanamo_unscored` when unscored, else `quantanamo_confidence_gate`). Backtests alone can never open it: a thesis is unscored until it has 3 live trades, and backtest credit is then at most min(5, live / 2) effective trades (migration 47, backtest-evidence-credit).
 
 Code paths:
 - `supabase/schemas/22_edge_scaled_stake.sql`
@@ -29,7 +29,7 @@ Live theses 2026-09-26.
 ## Ruling
 **AMEND.** Amend (shipped in migration 41; decided 2026-09-26 by the parent agent under David's delegation): the 80 threshold stays, but it reads the results score only. On 2026-09-26 no thesis passes: neocloud_compute (1 trade) and semis_photonics (0) are unscored, earnings_gap_structure scores 56; every QUANTANAMO entry needs David until a thesis earns >= 80 or gets qualifying backtest credit.
 
-Amendment: Gate on results_confidence >= 80; unscored (< 3 effective trades) fails and asks David; stated confidence is display only.
+Amendment: Gate on results_confidence >= 80; unscored (< 3 live trades) fails and asks David; stated confidence is display only.
 
 | Growth cost | Ruin-risk reduction |
 |---|---|

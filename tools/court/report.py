@@ -6,7 +6,7 @@ ev = json.load(open(H / 'evidence.json'))
 L = json.load(open(H / 'ledger.json'))
 import numpy as np
 out = ["# Rules-court simulation (2026-09-26, backtest evidence 2026-09-27)", "",
-"Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.", "",
+"Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/evidence_gate.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.", "",
 "## Assumptions", "",
 "- **Trades are sequential**, one position at a time. The Monte Carlo can't see concurrent correlated positions; see portfolio-exposure.",
 "- **Returns are bootstrapped** from the steward's real returns on stake, then re-centred to a hypothetical true mean `mu = Sharpe/trade x sd`, floored at -1.06. Shape (fat tails, rugs, binary payoffs) comes from the ledger; the level of edge is the scenario.",
@@ -62,5 +62,19 @@ out += ["", f"**Replay: earnings_gap_structure.** Six live returns on stake, in 
 "| old rule (test 31 can't be logged) | " + " | ".join(str(x) if x is not None else "unscored" for x in rep['score_after_each_trade_old_rule']) + " |",
 "| ruling (test 31 logged) | " + " | ".join(str(x) for x in rep['score_after_each_trade_new_rule']) + " |", "",
 f"The same test with the sign flipped (+{-t31['mean_deflated']:.4%} deflated) would score {rep['score_positive_mirror']}: the evidence enters the pooled mean with the same coefficient either way (weight x 0.5), so the move is about ±1.5 points around the score of a zero-mean test (54); the asymmetry vs 56 is only the dilution of the live mean. Without the survivors-only discount (weight 20) the score would be {rep['score_new_rule_no_survivor_discount']}."]
+eg = json.load(open(H / 'evidence_gate.json')); gp = eg['params']; gr = eg['replay']
+out += ["", "## Live-gated backtest credit (2026-09-27, migration 47)", "",
+f"`evidence_gate.py`. Each thesis has {gp['tests']} preregistered tests of {gp['n_bt']} trades at {gp['trials']} trials (E[max] = {gp['expected_max']}), one survivors-only with {gp['missing_share']:.0%} of events missing; {gp['paths']} paths, one year at ledger pace, starter 0.03 x book / max(sd, 0.25), drawdown scaling. `rule_46` is migration 46 (credit from trade 0, weight up to 20, emax-deflated mean shrunk 50%). `rule_47` is this ruling (no credit or score below 3 live trades, weight min(sum 0.5 n, 5, live / 2) x survivor factor, credited mean = deflated Sharpe x spread, live spread). Scenarios: `honest` (test means = true mean + noise), `overfit` (tests carry a fake +0.2 Sharpe at true edge 0), `mismatch` (real live edge, mechanical backtest has none). `gate80<10` = P(the results score reaches 80 before 10 live trades). `score@n` = mean results score after n live trades.", "",
+"| steward | true Sharpe | scenario | rule | medX | P2x | DD50 | ruin | Pproven | tProven | gate80<10 | score@3/6/10/20 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+for r in eg['grid']:
+    ms = r['mean_score']; sc = "/".join(str(ms[k]) for k in ('3', '6', '10', '20'))
+    out.append(f"| {r['steward']} | {r['sharpe']} | {r['scenario']} | {r['rule']} | {r['median_x']} | {r['p2x']} | {r['p_dd50']} | {r['p_ruin80']} | {r['p_proven']} | {r['med_trades_to_proven']} | {r['p_gate80_before_10_live']} | {sc} |")
+out += ["", "**Replay: earnings_gap_structure** (live returns on stake " + ", ".join(f"{x:+.2%}" for x in gr['live_returns']) + "; tests 31 and 30 from their stored rows).", "",
+"| after live trade | 1 | 2 | 3 | 4 | 5 | 6 |", "|---|---|---|---|---|---|---|",
+"| no backtest | " + " | ".join(str(a['no_backtest']) if a['no_backtest'] is not None else "unscored" for a in gr['after_trade']) + " |",
+"| rule 46 (test 31) | " + " | ".join(str(a['rule_46_test31']) for a in gr['after_trade']) + " |",
+"| rule 47 (tests 31 + 30) | " + " | ".join(str(a['rule_47_tests31_30']) if a['rule_47_tests31_30'] is not None else "unscored" for a in gr['after_trade']) + " |",
+"| rule 47 backtest weight | " + " | ".join(str(a['rule_47_weight']) for a in gr['after_trade']) + " |", "",
+f"With both tests' signs flipped the rule-47 score after 6 trades would be {gr['rule_47_positive_mirror']}."]
 (H.parents[1] / 'docs' / 'rules' / 'SIMULATION.md').write_text("\n".join(out) + "\n")
 print("ok")
