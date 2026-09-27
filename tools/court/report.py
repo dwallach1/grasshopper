@@ -2,10 +2,11 @@
 import json, pathlib
 H = pathlib.Path(__file__).resolve().parent
 g = json.load(open(H / 'grid.json')); g2 = json.load(open(H / 'grid2.json')); rp = json.load(open(H / 'replay.json'))
+ev = json.load(open(H / 'evidence.json'))
 L = json.load(open(H / 'ledger.json'))
 import numpy as np
-out = ["# Rules-court simulation (2026-09-26)", "",
-"Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.", "",
+out = ["# Rules-court simulation (2026-09-26, backtest evidence 2026-09-27)", "",
+"Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.", "",
 "## Assumptions", "",
 "- **Trades are sequential**, one position at a time. The Monte Carlo can't see concurrent correlated positions; see portfolio-exposure.",
 "- **Returns are bootstrapped** from the steward's real returns on stake, then re-centred to a hypothetical true mean `mu = Sharpe/trade x sd`, floored at -1.06. Shape (fat tails, rugs, binary payoffs) comes from the ledger; the level of edge is the scenario.",
@@ -13,7 +14,7 @@ out = ["# Rules-court simulation (2026-09-26)", "",
 "- **The rules are simulated as coded**: starter; proven at n ≥ 10 with 1σ LCB > 0; half-Kelly on the LCB; growth ≤ starter x 2^(1+(n-10)/5); cash only (stake ≤ equity). The sim tracks a single thesis per steward.",
 "- **Drawdown scaling** is x1 at ≤ 10% below peak, linear to x0.5 at ≥ 40%.",
 "- **QUANTANAMO stress**: with 7 trades, the worst return on stake is -19%, which understates gap risk. The stress rows add a 5% chance per trade of a -40% gap.",
-"- **Backtest credit**: 30 backtest trades at weight 0.5 with a 50% mean haircut. The backtest mean = true mean + estimation noise (+ a fake +0.2 Sharpe in the overfit case).",
+"- **Backtest credit** (grid 2, 2026-09-26): 30 backtest trades at weight 0.5 with a 50% mean haircut. The backtest mean = true mean + estimation noise (+ a fake +0.2 Sharpe in the overfit case). The 2026-09-27 evidence runs are described in their own section.",
 "- **Metrics**: `medX` is the median terminal multiple. `P2x` / `P10x` are the chance of touching 2x or 10x within the year. `DD50` is P(a peak-to-trough drawdown ≥ 50%). `ruin` is P(book < 20% of start).",
 "- **Limits**: the samples are tiny (QUANTANAMO 7, ODDSBORNE 8, BANDIT 35), so the real edge is unknown; that's why every table is conditional on the true Sharpe. Nothing here is a P/L forecast.", "",
 "## Ledger statistics (return on stake)", "", "| Steward | n | mean | sd | 1σ LCB | hit | P(loss) | P(loss \\| prev loss) | lag-1 corr |", "|---|---|---|---|---|---|---|---|---|"]
@@ -50,5 +51,16 @@ out += ["", "The actual QUANTANAMO change includes unrealized gains on open lots
 "| v = 3% | $660 (12%) | 0.12 SOL (6.7%) | $4.24 (1.5%) |",
 "| v = 4% | $880 (16%) | 0.16 SOL (8.9%) | $5.66 (2.0%) |", "",
 "All values are then x the drawdown scale (ODDSBORNE x0.5 today). See Grid 2 for P(2x) and P(DD50) under each option."]
+pp = ev['params']; rep = ev['replay']; t31 = rep['test31']
+out += ["", "## Backtest evidence both ways (2026-09-27)", "",
+f"`evidence.py`. A steward runs {pp['tests']} preregistered, out-of-sample, cost-inclusive tests of one thesis ({pp['n_bt']} trades each; each test's mean is the true mean plus noise sd/sqrt(n)), then trades it live for a year. `credit_only_honest` is the old rule: the first test is logged only if it survives trial deflation. `credit_only_cherry` is the old rule gamed: only the best of the {pp['tests']} is logged, claiming one trial. `symmetric_all` is the ruling: every test is logged pass or fail, each deflated by E[max of {pp['tests']}] = {pp['expected_max_M']} standard errors, pooled weight capped at 20, mean shrunk 50% either sign. `gate80@0` / `proven@0` are the chances that the 80 gate is open or the thesis is proven before any live trade. `tProven` is the median trades to proven; `Pproven` is P(proven within the year), which at true Sharpe 0 is the false-proof rate.", "",
+"| steward | true Sharpe | rule | gate80@0 | proven@0 | medX | P2x | DD50 | tProven | Pproven |", "|---|---|---|---|---|---|---|---|---|---|"]
+for r in ev['grid']:
+    out.append(f"| {r['steward']} | {r['sharpe']} | {r['rule']} | {r['gate80_before_live']} | {r['proven_before_live']} | {r['median_x']} | {r['p2x']} | {r['p_dd50']} | {r['med_trades_to_proven']} | {r['p_proven']} |")
+out += ["", f"**Replay: earnings_gap_structure.** Six live returns on stake, in order: {', '.join(f'{x:+.2%}' for x in rep['live_returns'])}. Test 31 (trial 17): n {t31['n']}, mean {t31['mean']:+.4%}, sd {t31['sd']:.4%}, survivors only, so weight {t31['weight']} (20 x 0.5); trial deflation {t31['expected_max_17']} x sd/sqrt(n) = {t31['trial_deflation']:.4%}, deflated mean {t31['mean_deflated']:+.4%}.", "",
+"| after live trade | 1 | 2 | 3 | 4 | 5 | 6 |", "|---|---|---|---|---|---|---|",
+"| old rule (test 31 can't be logged) | " + " | ".join(str(x) if x is not None else "unscored" for x in rep['score_after_each_trade_old_rule']) + " |",
+"| ruling (test 31 logged) | " + " | ".join(str(x) for x in rep['score_after_each_trade_new_rule']) + " |", "",
+f"The same test with the sign flipped (+{-t31['mean_deflated']:.4%} deflated) would score {rep['score_positive_mirror']}: the evidence enters the pooled mean with the same coefficient either way (weight x 0.5), so the move is about ±1.5 points around the score of a zero-mean test (54); the asymmetry vs 56 is only the dilution of the live mean. Without the survivors-only discount (weight 20) the score would be {rep['score_new_rule_no_survivor_discount']}."]
 (H.parents[1] / 'docs' / 'rules' / 'SIMULATION.md').write_text("\n".join(out) + "\n")
 print("ok")

@@ -46,7 +46,7 @@ const RAW = {
     { steward: 'quantanamo', recent_n: 0, prior_n: 6, thin: true, direction: 'bogus' },
   ],
   theses: [
-    { thesis_id: 'earnings_gap_structure', name: 'Earnings gap structure', steward: 'quantanamo', stated_confidence: 89, outcome_implied_confidence: '25.0', priced_trades: 4, wins: 1 },
+    { thesis_id: 'earnings_gap_structure', name: 'Earnings gap structure', steward: 'quantanamo', stated_confidence: 89, outcome_implied_confidence: '25.0', priced_trades: 4, wins: 1, backtest_tests: 1, backtest_trades: '714', backtest_weight: '10.0000', backtest_mean_ret: '-0.003457', backtest_effect: 'against' },
     { thesis_id: 'nfl-mia-ml-vs-sf-20260920', steward: 'oddsborne', stated_confidence: 15, outcome_implied_confidence: 0, priced_trades: 1, wins: 0 },
     { thesis_id: 'weather_same_day_high', steward: 'oddsborne', stated_confidence: 78, outcome_implied_confidence: 50, priced_trades: 4, wins: 2 },
   ],
@@ -70,6 +70,20 @@ describe('mapStewardScorecard', () => {
     expect(byId.get('earnings_gap_structure')?.miscalibrated).toBe(true);
     expect(byId.get('nfl-mia-ml-vs-sf-20260920')?.miscalibrated).toBe(false);
     expect(byId.get('weather_same_day_high')?.miscalibrated).toBe(true);
+  });
+
+  test('logged backtests come through as numbers; none logged stays zero and null', () => {
+    const byId = new Map(mapStewardScorecard(RAW).theses.map((row) => [row.thesis_id, row]));
+    const gap = byId.get('earnings_gap_structure');
+    expect(gap?.backtest_tests).toBe(1);
+    expect(gap?.backtest_trades).toBe(714);
+    expect(gap?.backtest_weight).toBe(10);
+    expect(gap?.backtest_mean_ret).toBeCloseTo(-0.003457, 6);
+    expect(gap?.backtest_effect).toBe('against');
+    const weather = byId.get('weather_same_day_high');
+    expect(weather?.backtest_tests).toBe(0);
+    expect(weather?.backtest_mean_ret).toBeNull();
+    expect(weather?.backtest_effect).toBeNull();
   });
 
   test('garbage in stays empty, never invented', () => {

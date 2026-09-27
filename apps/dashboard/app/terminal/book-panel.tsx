@@ -406,6 +406,7 @@ function BooksDetail({
           thesis={thesis}
           nested={Boolean(h)}
           track={lot?.track.label ?? trackFor(books, thesis.id)}
+          backtest={lot?.track.backtest ?? backtestFor(books, thesis.id)}
           wins={scoreWins(books, thesis.id)}
           lots={lotsForThesis(books, thesis.id).filter((row) => row.holding.id !== h?.id)}
           lessons={books.lessons_by_thesis.get(thesis.id) ?? []}
@@ -429,6 +430,7 @@ function ThesisBody({
   thesis,
   nested,
   track,
+  backtest,
   wins,
   lots,
   lessons,
@@ -437,6 +439,7 @@ function ThesisBody({
   thesis: ThesisRosterRow;
   nested: boolean;
   track: string;
+  backtest: string | null;
   wins: number | null;
   lots: BooksLot[];
   lessons: LessonRow[];
@@ -464,6 +467,7 @@ function ThesisBody({
         {wins !== null ? ` · ${wins} ${wins === 1 ? 'win' : 'wins'}` : ''}
         {` · steward's own confidence ${Math.round(thesis.stated_confidence)}`}
       </p>
+      {backtest ? <p className="books-track books-backtest">{backtest}</p> : null}
       {thesis.beliefs.length ? (
         <>
           <p className="books-section-label">Beliefs</p>
@@ -566,6 +570,15 @@ function trackFor(books: StewardBooks, thesisId: string): string {
     if (lot) return lot.track.label;
   }
   return 'no track record yet';
+}
+
+function backtestFor(books: StewardBooks, thesisId: string): string | null {
+  for (const section of books.sections) {
+    const hit = [...section.watching, ...section.set_aside].find((row) => row.thesis.id === thesisId)
+      ?? [...section.open, ...section.closed].find((row) => row.holding.thesis_id === thesisId);
+    if (hit) return hit.track.backtest;
+  }
+  return null;
 }
 
 function scoreWins(books: StewardBooks, thesisId: string): number | null {

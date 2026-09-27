@@ -1,6 +1,6 @@
-# Rules-court simulation (2026-09-26)
+# Rules-court simulation (2026-09-26, backtest evidence 2026-09-27)
 
-Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.
+Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && python3 tools/court/replay.py && python3 tools/court/evidence.py && python3 tools/court/report.py`. `ledger.json` holds each steward's closed, priced, non-paper returns on stake (`realized_pnl / cost`), in order, exported from `trade_outcomes`.
 
 ## Assumptions
 
@@ -10,7 +10,7 @@ Reproduce with `python3 tools/court/grid.py && python3 tools/court/grid2.py && p
 - **The rules are simulated as coded**: starter; proven at n ≥ 10 with 1σ LCB > 0; half-Kelly on the LCB; growth ≤ starter x 2^(1+(n-10)/5); cash only (stake ≤ equity). The sim tracks a single thesis per steward.
 - **Drawdown scaling** is x1 at ≤ 10% below peak, linear to x0.5 at ≥ 40%.
 - **QUANTANAMO stress**: with 7 trades, the worst return on stake is -19%, which understates gap risk. The stress rows add a 5% chance per trade of a -40% gap.
-- **Backtest credit**: 30 backtest trades at weight 0.5 with a 50% mean haircut. The backtest mean = true mean + estimation noise (+ a fake +0.2 Sharpe in the overfit case).
+- **Backtest credit** (grid 2, 2026-09-26): 30 backtest trades at weight 0.5 with a 50% mean haircut. The backtest mean = true mean + estimation noise (+ a fake +0.2 Sharpe in the overfit case). The 2026-09-27 evidence runs are described in their own section.
 - **Metrics**: `medX` is the median terminal multiple. `P2x` / `P10x` are the chance of touching 2x or 10x within the year. `DD50` is P(a peak-to-trough drawdown ≥ 50%). `ruin` is P(book < 20% of start).
 - **Limits**: the samples are tiny (QUANTANAMO 7, ODDSBORNE 8, BANDIT 35), so the real edge is unknown; that's why every table is conditional on the true Sharpe. Nothing here is a P/L forecast.
 
@@ -407,3 +407,43 @@ A vol-normalized starter gives the same book risk per unproven bet: stake = v x 
 | v = 4% | $880 (16%) | 0.16 SOL (8.9%) | $5.66 (2.0%) |
 
 All values are then x the drawdown scale (ODDSBORNE x0.5 today). See Grid 2 for P(2x) and P(DD50) under each option.
+
+## Backtest evidence both ways (2026-09-27)
+
+`evidence.py`. A steward runs 5 preregistered, out-of-sample, cost-inclusive tests of one thesis (200 trades each; each test's mean is the true mean plus noise sd/sqrt(n)), then trades it live for a year. `credit_only_honest` is the old rule: the first test is logged only if it survives trial deflation. `credit_only_cherry` is the old rule gamed: only the best of the 5 is logged, claiming one trial. `symmetric_all` is the ruling: every test is logged pass or fail, each deflated by E[max of 5] = 1.1926 standard errors, pooled weight capped at 20, mean shrunk 50% either sign. `gate80@0` / `proven@0` are the chances that the 80 gate is open or the thesis is proven before any live trade. `tProven` is the median trades to proven; `Pproven` is P(proven within the year), which at true Sharpe 0 is the false-proof rate.
+
+| steward | true Sharpe | rule | gate80@0 | proven@0 | medX | P2x | DD50 | tProven | Pproven |
+|---|---|---|---|---|---|---|---|---|---|
+| quantanamo | 0.0 | no_backtest | 0.0 | 0.0 | 0.97 | 0.013 | 0.0 | 17.0 | 0.471 |
+| quantanamo | 0.0 | credit_only_honest | 0.0 | 0.0 | 0.972 | 0.018 | 0.0 | 15.0 | 0.431 |
+| quantanamo | 0.0 | credit_only_cherry | 0.0 | 0.0 | 0.978 | 0.01 | 0.0 | 18.0 | 0.403 |
+| quantanamo | 0.0 | symmetric_all | 0.0 | 0.0 | 0.984 | 0.007 | 0.0 | 28.0 | 0.27 |
+| quantanamo | 0.1 | no_backtest | 0.0 | 0.0 | 1.06 | 0.107 | 0.001 | 17.0 | 0.775 |
+| quantanamo | 0.1 | credit_only_honest | 0.0 | 0.0 | 1.068 | 0.085 | 0.001 | 19.0 | 0.763 |
+| quantanamo | 0.1 | credit_only_cherry | 0.0001 | 0.0 | 1.068 | 0.085 | 0.0 | 16.0 | 0.799 |
+| quantanamo | 0.1 | symmetric_all | 0.0 | 0.0 | 1.079 | 0.064 | 0.0 | 30.0 | 0.695 |
+| quantanamo | 0.2 | no_backtest | 0.0 | 0.0 | 1.514 | 0.447 | 0.003 | 14.0 | 0.957 |
+| quantanamo | 0.2 | credit_only_honest | 0.0004 | 0.0001 | 1.508 | 0.395 | 0.0 | 11.0 | 0.972 |
+| quantanamo | 0.2 | credit_only_cherry | 0.0036 | 0.0014 | 1.594 | 0.435 | 0.001 | 4.0 | 0.985 |
+| quantanamo | 0.2 | symmetric_all | 0.0 | 0.0 | 1.436 | 0.35 | 0.0 | 18.0 | 0.959 |
+| bandit | 0.0 | no_backtest | 0.0 | 0.0 | 0.875 | 0.083 | 0.093 | 20.0 | 0.634 |
+| bandit | 0.0 | credit_only_honest | 0.0 | 0.0 | 0.867 | 0.081 | 0.11 | 21.0 | 0.627 |
+| bandit | 0.0 | credit_only_cherry | 0.0 | 0.0 | 0.881 | 0.082 | 0.075 | 22.0 | 0.611 |
+| bandit | 0.0 | symmetric_all | 0.0 | 0.0 | 0.887 | 0.072 | 0.065 | 48.0 | 0.496 |
+| bandit | 0.1 | no_backtest | 0.0 | 0.0 | 1.977 | 0.629 | 0.099 | 20.0 | 0.963 |
+| bandit | 0.1 | credit_only_honest | 0.0 | 0.0 | 1.989 | 0.637 | 0.084 | 19.0 | 0.966 |
+| bandit | 0.1 | credit_only_cherry | 0.0001 | 0.0 | 1.998 | 0.639 | 0.077 | 11.0 | 0.977 |
+| bandit | 0.1 | symmetric_all | 0.0 | 0.0 | 2.002 | 0.641 | 0.049 | 37.0 | 0.956 |
+| bandit | 0.2 | no_backtest | 0.0 | 0.0 | 28.417 | 0.987 | 0.29 | 13.0 | 1.0 |
+| bandit | 0.2 | credit_only_honest | 0.0062 | 0.0001 | 24.365 | 0.989 | 0.211 | 6.0 | 1.0 |
+| bandit | 0.2 | credit_only_cherry | 0.0301 | 0.0014 | 26.357 | 0.985 | 0.233 | 2.0 | 1.0 |
+| bandit | 0.2 | symmetric_all | 0.0 | 0.0 | 22.415 | 0.991 | 0.18 | 13.0 | 1.0 |
+
+**Replay: earnings_gap_structure.** Six live returns on stake, in order: -0.03%, +18.42%, +41.47%, -16.43%, -15.10%, -19.40%. Test 31 (trial 17): n 714, mean -0.3457%, sd 6.2007%, survivors only, so weight 10.0 (20 x 0.5); trial deflation 1.8281 x sd/sqrt(n) = 0.4242%, deflated mean -0.7699%.
+
+| after live trade | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| old rule (test 31 can't be logged) | unscored | unscored | 92 | 81 | 69 | 56 |
+| ruling (test 31 logged) | 48 | 57 | 73 | 66 | 60 | 52 |
+
+The same test with the sign flipped (+0.7699% deflated) would score 55: the evidence enters the pooled mean with the same coefficient either way (weight x 0.5), so the move is about ±1.5 points around the score of a zero-mean test (54); the asymmetry vs 56 is only the dilution of the live mean. Without the survivors-only discount (weight 20) the score would be 50.

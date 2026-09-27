@@ -12,7 +12,7 @@ def md(r):
     paths = "\n".join(f"- `{p}`" for p in r["paths"]) or "- (not in force)"
     return f"""# {r['title']}
 
-`rule_id: {r['id']}` · status: **{r['status'] if os.environ.get('COURT_PHASE') == 'A' else r['status_after']}** · verdict: **{r['verdict']}** · ruling {RULING_DATE} · next review {r['next_review']}{' · **needs David**' if r['needs_david'] else ''}
+`rule_id: {r['id']}` · status: **{r['status'] if os.environ.get('COURT_PHASE') == 'A' else r['status_after']}** · verdict: **{r['verdict']}** · ruling {r.get('ruling_date', RULING_DATE)} · next review {r['next_review']}{' · **needs David**' if r['needs_david'] else ''}
 
 ## Purpose (failure prevented)
 {r['purpose']}
@@ -63,7 +63,7 @@ def seed(phase):
         rows.append("  (" + ", ".join([q(r["id"]), q(r["title"]), q(r["purpose"]), q(r["mechanism"]), arr(r["paths"]), q(st),
             q(r["verdict"]), q(r["ruling"] + " Amendment: " + r["amendment"]), q(r["growth_cost"]), q(r["ruin_reduction"]),
             q(r["statistics"]), q(r["incentives"]), q(r["interactions"]), "true" if r["needs_david"] else "false",
-            q(f"docs/rules/{r['id']}.md"), q(RULING_DATE) + "::date", (q(nr) + "::date") if nr else "null"]) + ")")
+            q(f"docs/rules/{r['id']}.md"), q(r.get("ruling_date", RULING_DATE)) + "::date", (q(nr) + "::date") if nr else "null"]) + ")")
     cols = ("rule_id, title, purpose, mechanism, owner_paths, status, verdict, ruling_summary, growth_cost, "
             "ruin_risk_reduction, statistics_note, gaming_analysis, interactions, needs_david, ruling_file, ruling_date, next_review_date")
     return (f"insert into public.desk_rules ({cols}) values\n" + ",\n".join(rows) +
