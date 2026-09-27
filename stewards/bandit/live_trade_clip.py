@@ -23,10 +23,34 @@ from decimal import Decimal, getcontext
 
 import os
 
-import base58
-import requests
-from solders.keypair import Keypair
-from solders.transaction import VersionedTransaction
+
+def _require_runtime(steward: str, modules: tuple[str, ...]) -> None:
+    """Fail fast, before any venue or DB call, when the steward venv is missing or broken.
+
+    The box's durable store never keeps `.venv/`, so a box refresh wipes it; sync_box.sh rebuilds it.
+    """
+    broken = []
+    for module in modules:
+        try:
+            __import__(module)
+        except Exception as exc:  # ImportError, or a broken binary wheel
+            broken.append(f"{module} ({type(exc).__name__})")
+    if broken:
+        repo = os.environ.get("GRASSHOPPER_REPO") or os.path.join(os.sep, "workspace", "grasshopper")
+        sys.stderr.write(
+            f"{steward}: Python env not ready: {', '.join(broken)} (interpreter {sys.executable}).\n"
+            f"Nothing was sent. Run:  bash {os.path.join(repo, 'stewards', 'sync_box.sh')}\n"
+            f"then retry with {os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), '.venv', 'bin', 'python')}.\n"
+        )
+        raise SystemExit(3)
+
+
+_require_runtime("bandit", ("base58", "requests", "solders.keypair", "solders.transaction", "psycopg"))
+
+import base58  # noqa: E402
+import requests  # noqa: E402
+from solders.keypair import Keypair  # noqa: E402
+from solders.transaction import VersionedTransaction  # noqa: E402
 
 # Helpers resolve from the directory the script is invoked from first (the box copy in
 # /workspace/bandit keeps its own load_secrets/db_connect), then from this repo directory.

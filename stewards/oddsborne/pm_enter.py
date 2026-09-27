@@ -51,6 +51,27 @@ for _p in (os.environ.get("ODDSBORNE_HOME"), _HERE):
     if _p and _p not in sys.path:
         sys.path.insert(0, _p)
 
+
+def _require_runtime(steward: str, modules: tuple[str, ...]) -> None:
+    """Fail fast, before any venue or DB call, when the steward venv is missing or broken.
+
+    The box's durable store never keeps `.venv/`, so a box refresh wipes it; sync_box.sh rebuilds it.
+    """
+    broken = []
+    for module in modules:
+        try:
+            __import__(module)
+        except Exception as exc:  # ImportError, or a broken binary wheel
+            broken.append(f"{module} ({type(exc).__name__})")
+    if broken:
+        repo = os.environ.get("GRASSHOPPER_REPO") or os.path.join(os.sep, "workspace", "grasshopper")
+        sys.stderr.write(
+            f"{steward}: Python env not ready: {', '.join(broken)} (interpreter {sys.executable}).\n"
+            f"Nothing was sent. Run:  bash {os.path.join(repo, 'stewards', 'sync_box.sh')}\n"
+            f"then retry with {os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), '.venv', 'bin', 'python')}.\n"
+        )
+        raise SystemExit(3)
+
 STEWARD = "oddsborne"
 ACCOUNT = "polymarket-us-primary"
 THETA = 0.0695  # desk fee parameter: fee = THETA * C * p * (1 - p)
@@ -634,6 +655,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
 
 
 def main(argv=None) -> int:
+    _require_runtime(STEWARD, ("polymarket_us", "psycopg"))
     ap = argparse.ArgumentParser(
         prog="pm_enter.py",
         description="ODDSBORNE Polymarket US entry (the one path for every buy). LIVE unless --dry-run.")

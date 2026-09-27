@@ -111,7 +111,7 @@ The automated position monitor is retired, so the ledger watches itself with rea
 | `public.v_open_lot_marks` | every open lot with its latest mark in its own unit |
 | `public.v_thesis_max_stake` | the edge-scaled cap per live thesis |
 
-The counts are in `/api/health` (`watchdog`), in the desk payload (`watchdog`), and in `build_dashboard_snapshot()` (`watchdog`, plus `scorecard`). The ledger health routine should run `select * from public.v_ledger_watchdog;` and list the rows from the breach, missing and integrity views when a count is above zero.
+The counts are in `/api/health` (`watchdog`), in the desk payload (`watchdog`), and in `build_dashboard_snapshot()` (`watchdog`, plus `scorecard`). The ledger health routine should run `select * from public.v_ledger_watchdog;` and list the rows from the breach, missing and integrity views when a count is above zero. On the box it should also run `bash /workspace/grasshopper/stewards/doctor.sh`: exit 1 means a steward's Python env is missing or broken (a box refresh wipes `.venv/`). Report it, and fix it with `bash /workspace/grasshopper/stewards/sync_box.sh` (see `stewards/README.md`). The database can't see the box, so this check isn't in `v_ledger_watchdog`.
 
 The deprecated intent fields (`maxTradePercent`, `maxDailyNotionalPercent`, `maxTradesPerDay`, `maxSpreadBps`) are no longer sent, and the gateway ignores them.
 
