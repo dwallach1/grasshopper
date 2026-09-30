@@ -32,7 +32,7 @@ Assumptions are in [SIMULATION.md](SIMULATION.md).
 3. Any migration numbered ≥ 35 that defines one of the rule functions (`tools/court/rule_functions.txt`) must carry a `-- court-ruling: docs/rules/<rule_id>.md` line naming an existing ruling. `bun run test` fails otherwise (`apps/dashboard/lib/rules-court.test.ts`).
 4. Fill in the court section of the PR template.
 
-Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27), 47 (backtest credit live-gated and small, 2026-09-27).
+Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27), 47 (backtest credit live-gated and small, 2026-09-27), 48 (QUANTANAMO 80 gate shrunk for small samples, 2026-09-30).
 
 Enforcement today is the test suite plus the PR checklist. For a hard merge block, move `docs/rules/court-ci.yml` to `.github/workflows/` (this needs a token with `workflow` scope) and make it a required status check.
 
@@ -47,7 +47,7 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | [new-thesis-escape](new-thesis-escape.md) | resolved structurally | repealed | #97's fix cut QUANTANAMO themes $250 → $62.50 with no ruin case |
 | [confidence-multiplier](confidence-multiplier.md) | strike from sizing | repealed | gameable (request 2x → 1x); hit-rate noise ±22 pts at n = 5 |
 | [outcome-rescore-confidence](outcome-rescore-confidence.md) | amend (expected return per trade) | in force | old rule demoted 41% of true Sharpe-0.1 theses after 5 trades; no status changes on re-run |
-| [quantanamo-80-gate](quantanamo-80-gate.md) | amend (results score only) | in force | 0 theses pass on 2026-09-26; stated confidence no longer opens it |
+| [quantanamo-80-gate](quantanamo-80-gate.md) | amend (small-sample shrink, migration 48) | in force | false opens before 10 live trades 31% → 8.5%; shown scores unchanged |
 | [required-invalidation](required-invalidation.md) | uphold | in force | zero growth cost |
 | [regular-session-invalidation](regular-session-invalidation.md) | uphold | in force | — |
 | [stale-book-6h](stale-book-6h.md) | uphold | in force | — |

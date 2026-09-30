@@ -76,5 +76,29 @@ out += ["", "**Replay: earnings_gap_structure** (live returns on stake " + ", ".
 "| rule 47 (tests 31 + 30) | " + " | ".join(str(a['rule_47_tests31_30']) if a['rule_47_tests31_30'] is not None else "unscored" for a in gr['after_trade']) + " |",
 "| rule 47 backtest weight | " + " | ".join(str(a['rule_47_weight']) for a in gr['after_trade']) + " |", "",
 f"With both tests' signs flipped the rule-47 score after 6 trades would be {gr['rule_47_positive_mirror']}."]
+g8 = json.load(open(H / 'gate80.json'))
+out += ["", "## Small-sample 80 gate (2026-09-30, migration 48)", "",
+"`gate80.py`. QUANTANAMO ledger returns, centered, 4,000 paths, 80 trades. The shown results score is unchanged. `raw` is the gate reading that score. `prior 16` (the ruling, applied only to the gate) multiplies z by sqrt(n_live / (n_live + 16)). `lower bound` is gate score = 100 Phi(z - 0.84). `four in a row` requires the raw score to stay at or above 80 for four consecutive live trades. `false<10` is the chance the gate has opened at some point before 10 live trades. `med` is the median trade of the first open, among paths that open by trade 80.", "",
+"| true Sharpe | rule | false<10 | open by 20 | open by 40 | open by 80 | median trade |",
+"|---|---|---|---|---|---|---|"]
+labels = (('raw','raw score'), ('shrink_16','prior 16 (ruling)'), ('lcb_0.84','lower bound z-0.84'), ('streak_4','four in a row'))
+for sh in (0.0, 0.2, 0.4):
+    for mech, label in labels:
+        r = next(x for x in g8['comparison'] if x['sharpe']==sh and x['mech']==mech)
+        out.append(f"| {sh} | {label} | {r['false_open_before_10']} | {r['p_open_by_20']} | {r['p_open_by_40']} | {r['p_open_by_80']} | {r['median_trades_to_open']} |")
+ov = {r['mech']: r for r in g8['overfit']}
+out += ["", f"A fake +0.2 Sharpe backtest on a zero-edge thesis (rule-47 weight) moves false opens from {ov['raw_overfit']['false_open_before_10']} under the raw gate to {ov['gate_prior_16_overfit']['false_open_before_10']} under the ruling: logging tests cannot spend the prior down.", "",
+"Sizing does not read the gate, so doubling odds are identical before and after (1,500 paths, one year, current stake rule, no backtests):", "",
+"| true Sharpe | median multiple | P(2x) | P(DD50) | ruin |", "|---|---|---|---|---|"]
+for r in g8['growth']:
+    out.append(f"| {r['sharpe']} | {r['median_x']} | {r['p2x']} | {r['p_dd50']} | {r['p_ruin']} |")
+rp = g8['replay']
+def grows(name, key):
+    return "| " + name + " | " + " | ".join(str(a[key]) if a[key] is not None else "unscored" for a in rp['earnings_gap_structure']) + " |"
+out += ["", "**Replay, earnings_gap_structure** (six live trades, tests 30 and 31 under rule 47). The shown score is the raw score; the gate reads the shrunk one.", "",
+"| | 1 | 2 | 3 | 4 | 5 | 6 |", "|---|---|---|---|---|---|---|",
+grows('shown score', 'score'), grows('gate score', 'gate_score'), "",
+"With no backtest the shown score after trade 3 was 92 and the gate score is 71, so the path that used to clear 80 no longer opens the gate. Other scored theses, final trade: meme_4h_momentum_clip shown 60, gate 55; weather_same_day_high shown 79, gate 64 (the 80 gate does not apply to ODDSBORNE or BANDIT); neocloud_compute has 2 live trades and is still unscored.", ""]
+
 (H.parents[1] / 'docs' / 'rules' / 'SIMULATION.md').write_text("\n".join(out) + "\n")
 print("ok")

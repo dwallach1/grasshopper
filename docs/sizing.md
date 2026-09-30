@@ -12,7 +12,7 @@ Position size follows results, and there is **no hard cap per position** (David,
 | Size | `min(requested, max_stake, spendable cash, exposure fit)` (see [Portfolio exposure](#portfolio-exposure-10-of-book-at-risk)). Spendable cash: QUANTANAMO `min(cash, buying_power)` on Agentic 7638, ODDSBORNE latest `pm_pnl.cash`, BANDIT latest `meme_pnl.cash_sol` |
 | Applies to | New entries and **adds** |
 | Never applies to | Sells, trims, closes, kill-criteria exits, time stops |
-| Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with **results score** (`theses.results_confidence`) ≥ 80. Stated confidence never opens the gate; an unscored thesis (< 3 effective trades) returns `quantanamo_unscored` and David approves |
+| Confidence gate | **QUANTANAMO equity entries only**: autonomous buys need a `hardening` thesis with **gate score** ≥ 80 (`results_basis.gate_score`: the results score shrunk toward 50 by a prior of 16 zero-mean trades, so 3–9 live trades have to be surer than the raw score says). The shown results score is not the gate. Stated confidence never opens it; an unscored thesis (< 3 live trades) returns `quantanamo_unscored` and David approves |
 | Portfolio exposure | Open risk ≤ 10% of book per steward: equities to invalidation, ODDSBORNE binaries and BANDIT memes at full notional (`risk_basis`); guidance sizes a new entry down to fit, or returns `exposure_cap` |
 | ODDSBORNE and BANDIT | No confidence gate; `max_stake` is the throttle. They may enter at the returned size at any confidence |
 | Rejected or killed thesis | No new entries for any steward (`entry_allowed = false`, `sized_notional = 0`, reason `thesis_rejected` / `thesis_killed`) |
