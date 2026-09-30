@@ -491,3 +491,42 @@ The same test with the sign flipped (+0.7699% deflated) would score 55: the evid
 | rule 47 backtest weight | 0.0 | 0.0 | 0.988 | 1.317 | 1.646 | 1.976 |
 
 With both tests' signs flipped the rule-47 score after 6 trades would be 56.
+
+## Small-sample 80 gate (2026-09-30, migration 48)
+
+`gate80.py`. QUANTANAMO ledger returns, centered, 4,000 paths, 80 trades. The shown results score is unchanged. `raw` is the gate reading that score. `prior 16` (the ruling, applied only to the gate) multiplies z by sqrt(n_live / (n_live + 16)). `lower bound` is gate score = 100 Phi(z - 0.84). `four in a row` requires the raw score to stay at or above 80 for four consecutive live trades. `false<10` is the chance the gate has opened at some point before 10 live trades. `med` is the median trade of the first open, among paths that open by trade 80.
+
+| true Sharpe | rule | false<10 | open by 20 | open by 40 | open by 80 | median trade |
+|---|---|---|---|---|---|---|
+| 0.0 | raw score | 0.31 | 0.41 | 0.478 | 0.544 | 7.0 |
+| 0.0 | prior 16 (ruling) | 0.085 | 0.186 | 0.284 | 0.38 | 21.0 |
+| 0.0 | lower bound z-0.84 | 0.079 | 0.113 | 0.141 | 0.166 | 10.0 |
+| 0.0 | four in a row | 0.107 | 0.212 | 0.294 | 0.38 | 17.0 |
+| 0.2 | raw score | 0.48 | 0.673 | 0.83 | 0.935 | 9.0 |
+| 0.2 | prior 16 (ruling) | 0.188 | 0.442 | 0.708 | 0.894 | 21.0 |
+| 0.2 | lower bound z-0.84 | 0.151 | 0.264 | 0.42 | 0.637 | 26.0 |
+| 0.2 | four in a row | 0.223 | 0.483 | 0.716 | 0.892 | 18.0 |
+| 0.4 | raw score | 0.698 | 0.897 | 0.984 | 1.0 | 6.0 |
+| 0.4 | prior 16 (ruling) | 0.372 | 0.77 | 0.964 | 0.998 | 12.0 |
+| 0.4 | lower bound z-0.84 | 0.309 | 0.577 | 0.835 | 0.986 | 16.0 |
+| 0.4 | four in a row | 0.417 | 0.795 | 0.967 | 0.999 | 11.0 |
+
+A fake +0.2 Sharpe backtest on a zero-edge thesis (rule-47 weight) moves false opens from 0.269 under the raw gate to 0.058 under the ruling: logging tests cannot spend the prior down.
+
+Sizing does not read the gate, so doubling odds are identical before and after (1,500 paths, one year, current stake rule, no backtests):
+
+| true Sharpe | median multiple | P(2x) | P(DD50) | ruin |
+|---|---|---|---|---|
+| 0.0 | 0.952 | 0.033 | 0.003 | 0.0 |
+| 0.2 | 1.87 | 0.541 | 0.004 | 0.0 |
+| 0.4 | 53.94 | 0.995 | 0.001 | 0.0 |
+
+**Replay, earnings_gap_structure** (six live trades, tests 30 and 31 under rule 47). The shown score is the raw score; the gate reads the shrunk one.
+
+| | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| shown score | unscored | unscored | 88 | 77 | 66 | 54 |
+| gate score | unscored | unscored | 68 | 63 | 58 | 52 |
+
+With no backtest the shown score after trade 3 was 92 and the gate score is 71, so the path that used to clear 80 no longer opens the gate. Other scored theses, final trade: meme_4h_momentum_clip shown 60, gate 55; weather_same_day_high shown 79, gate 64 (the 80 gate does not apply to ODDSBORNE or BANDIT); neocloud_compute has 2 live trades and is still unscored.
+

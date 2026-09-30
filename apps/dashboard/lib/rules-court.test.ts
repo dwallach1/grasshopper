@@ -80,6 +80,7 @@ describe('rules court', () => {
       ['45_exposure_gap_registry.sql', '20260926221455_exposure_gap_registry.sql'],
       ['46_backtest_evidence_symmetric.sql', '20260927232545_backtest_evidence_symmetric.sql'],
       ['47_backtest_credit_live_gated.sql', '20260927233853_backtest_credit_live_gated.sql'],
+      ['48_quantanamo_gate_small_sample.sql', '20260930192137_quantanamo_gate_small_sample.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -205,5 +206,21 @@ describe('rules court', () => {
     expect(sql).toContain('select private.rescore_all_thesis_confidence();');
     expect(sql).not.toMatch(/update public\.theses/);
     expect(sql).toContain("('backtest-evidence-credit', ");
+  });
+
+  test('48: the 80 gate reads a small-sample shrunk score; the shown score is unchanged', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/48_quantanamo_gate_small_sample.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/quantanamo-80-gate.md');
+    // Prior of 16 zero-mean trades, fading with live trades, gate only.
+    expect(sql).toContain('v_gate_z := v_z * sqrt(v_n / (v_n + 16))');
+    expect(sql).toContain("round(100 * private.normal_cdf(v_gate_z))");
+    expect(sql).toContain("'gate_score', sc.gate_score, 'gate_prior', 16");
+    expect(sql).toContain("coalesce((th.results_basis ->> 'gate_score')::int, 0) >= 80");
+    // The shown score is still the unshrunk one, and only the re-score writes it.
+    expect(sql).toContain('round(100 * private.normal_cdf(v_z))');
+    expect(sql).toContain('results_confidence = sc.score');
+    expect(sql).not.toMatch(/results_confidence = \d/);
+    expect(sql).toContain('select private.rescore_all_thesis_confidence();');
+    expect(sql).toContain("('quantanamo-80-gate', ");
   });
 });
