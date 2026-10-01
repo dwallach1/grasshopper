@@ -344,6 +344,54 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
+  test('earnings gap detail keeps process rules beside kill and negative_result', async () => {
+    const payload = desk();
+    payload.beliefs = [
+      belief({
+        id: 'b-80',
+        observed_at: '2026-10-01T18:00:00.000Z',
+        rationale: 'Walk-forward autopsy: kill.',
+        rules: ['kill'],
+      }),
+      belief({
+        id: 'b-79',
+        observed_at: '2026-10-01T17:00:00.000Z',
+        rationale: 'Walk-forward autopsy: negative result.',
+        rules: ['negative_result'],
+      }),
+      belief({
+        id: 'b-78',
+        observed_at: '2026-10-01T16:00:00.000Z',
+        rationale: 'Earlier negative result, same slug.',
+        rules: ['negative_result'],
+      }),
+      belief({
+        id: 'b-quality',
+        observed_at: '2026-09-18T15:00:00.000Z',
+        rationale: 'Drawdown into the print can still be the structure.',
+        rules: ['quality_drawdown_into_print'],
+      }),
+      belief({
+        id: 'b-recycle',
+        observed_at: '2026-09-17T15:00:00.000Z',
+        rules: ['recycle_over_exact_tp'],
+      }),
+      belief(),
+    ];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
+    });
+    const notes = [...view.host.querySelectorAll('.books-detail .books-note')].map((node) => node.textContent ?? '');
+    expect(notes.find((note) => note.startsWith('Rules in force'))).toBe(
+      'Rules in force quality drawdown into print · recycle over exact tp · no chase already printed leftovers · kill · negative result',
+    );
+    const detail = view.host.querySelector('.books-detail')?.textContent ?? '';
+    expect(detail).toContain('Walk-forward autopsy: kill.');
+    expect(detail).toContain('Drawdown into the print can still be the structure.');
+    view.unmount();
+  });
+
   test('Watching folds theses with nothing open; a tap opens that thesis', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
     const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');

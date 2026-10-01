@@ -148,7 +148,7 @@ function desk(partial: Record<string, unknown> = {}): DeskPayload {
         id: 'b-older-gap',
         thesis_id: 'earnings_gap_structure',
         observed_at: '2026-09-01T00:00:00.000Z',
-        rules: ['stale_rule'],
+        rules: ['quality_drawdown_into_print'],
       }),
       belief({
         id: 'b-trail',
@@ -287,7 +287,7 @@ describe('assembleLearningPulse', () => {
       to_review: 1,
       lessons_open: 2,
       lessons_incorporated: 1,
-      beliefs_in_force: 2,
+      beliefs_in_force: 3,
       open_books: 4,
       open_books_tagged: 1,
       open_books_gate_ok: 1,
@@ -295,9 +295,59 @@ describe('assembleLearningPulse', () => {
       open_books_missing_gate: 3,
     });
     expect(formatLearningPulse(pulse)).toBe(
-      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 tagged lot · 0 legacy untagged · 3 missing gates',
+      '1 to review · 2 open / 1 in playbook · 3 beliefs in force · 1 tagged lot · 0 legacy untagged · 3 missing gates',
     );
     expect(learningPulseSummary(pulse)).toEqual(pulse);
+  });
+
+  test('kill and negative_result lessons do not retire other playbook beliefs', () => {
+    const pulse = assembleLearningPulse(desk({
+      beliefs: [
+        belief({
+          id: 'b-80',
+          observed_at: '2026-10-01T18:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rules: ['kill'],
+        }),
+        belief({
+          id: 'b-79',
+          observed_at: '2026-10-01T17:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rules: ['negative_result'],
+        }),
+        belief({
+          id: 'b-78',
+          observed_at: '2026-10-01T16:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rules: ['negative_result'],
+        }),
+        belief({
+          id: 'b-quality',
+          observed_at: '2026-09-18T15:00:00.000Z',
+          rules: ['quality_drawdown_into_print'],
+        }),
+        belief({
+          id: 'b-recycle',
+          observed_at: '2026-09-17T15:00:00.000Z',
+          rules: ['recycle_over_exact_tp'],
+        }),
+        belief({
+          id: 'b-residual',
+          observed_at: '2026-09-16T15:00:00.000Z',
+          rules: ['residual_bp_watch_only'],
+        }),
+        belief({
+          id: 'b-missed',
+          observed_at: '2026-09-15T15:00:00.000Z',
+          rules: ['missed_swing'],
+        }),
+        belief(),
+      ],
+    }));
+    expect(pulse.beliefs_in_force).toBe(7);
   });
 
   test('To-review matches the ranked queue cap and drops junk, not the grind backlog', () => {
@@ -521,7 +571,7 @@ describe('assembleLearningPulse', () => {
     expect(pulse.open_books_legacy_untagged).toBe(2);
     expect(pulse.open_books_missing_gate).toBe(0);
     expect(formatLearningPulse(pulse)).toBe(
-      '1 to review · 2 open / 1 in playbook · 2 beliefs in force · 1 tagged lot · 2 legacy untagged · 0 missing gates',
+      '1 to review · 2 open / 1 in playbook · 3 beliefs in force · 1 tagged lot · 2 legacy untagged · 0 missing gates',
     );
     expect(formatLearningPulse(pulse)).not.toContain('open books tagged');
     expect(learningPulseSummary(pulse).open_books_missing_gate).toBe(0);
