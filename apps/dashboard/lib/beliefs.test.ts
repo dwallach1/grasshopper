@@ -78,16 +78,26 @@ describe('belief mapping', () => {
     expect(row?.rationale).toContain('FEIM leftover');
   });
 
-  test('newest playbook_rule per thesis/domain wins; older siblings drop', () => {
-    const older = belief({
+  test('newest belief keeps a repeated slug; a distinct older slug stays', () => {
+    const olderDistinct = belief({
       id: '8e941fc9-62e1-4ddf-80cc-1dc153dfe046',
       observed_at: '2026-09-10T20:30:06.932Z',
       prior_confidence: 78,
       new_confidence: 80,
       meta: {
         kind: PLAYBOOK_RULE_KIND,
-        rules: ['soft_rth_confirmation_sector_conditional'],
+        rules: ['soft_rth_confirmation_sector_conditional', 'no_chase_already_printed_leftovers'],
         steward: 'quantanamo',
+      },
+    });
+    const sameSlugOlder = belief({
+      id: '11111111-1111-4111-8111-111111111111',
+      observed_at: AT,
+      meta: {
+        kind: PLAYBOOK_RULE_KIND,
+        rules: ['no_chase_already_printed_leftovers'],
+        steward: 'quantanamo',
+        research_lesson_id: 1,
       },
     });
     const weather = belief({
@@ -103,22 +113,44 @@ describe('belief mapping', () => {
         steward: 'oddsborne',
       },
     });
-    const rules = assemblePlaybookRules(mapBeliefs([older, belief(), weather]));
-    expect(rules).toHaveLength(2);
-    expect(rules[0]?.thesis_id).toBe('earnings_gap_structure');
-    expect(rules[0]?.new_confidence).toBe(84);
-    expect(rules[0]?.research_lesson_id).toBe('36');
-    expect(rules[0]?.rules[0]).toBe('no_chase_already_printed_leftovers');
-    expect(rules[1]?.thesis_id).toBe('weather_same_day_high');
-    expect(rules.find((row) => row.id === older.id)).toBeUndefined();
+    const rules = assemblePlaybookRules(mapBeliefs([olderDistinct, sameSlugOlder, belief(), weather]));
+    const gap = rules.filter((row) => row.thesis_id === 'earnings_gap_structure');
+    expect(gap.map((row) => row.id)).toEqual([
+      '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
+      olderDistinct.id,
+    ]);
+    expect(gap[0]?.rules).toEqual([
+      'no_chase_already_printed_leftovers',
+      'ignored_mcap_floor_50_100m',
+      'never_pltr',
+      'extra_rule',
+    ]);
+    expect(gap[0]?.new_confidence).toBe(84);
+    expect(gap[0]?.research_lesson_id).toBe('36');
+    expect(gap[1]?.rules).toEqual(['soft_rth_confirmation_sector_conditional']);
+    expect(rules.find((row) => row.id === sameSlugOlder.id)).toBeUndefined();
+    expect(rules.find((row) => row.thesis_id === 'weather_same_day_high')?.rules).toEqual([
+      'mid_ge_0.70_half_or_trail',
+    ]);
   });
 
-  test('rules in force are at most three ledger slugs; missing thesis is empty', () => {
+  test('rules in force keep process slugs and append kill or negative_result', () => {
     const beliefs = mapBeliefs([belief()]);
     expect(rulesInForceFor({
       thesisId: 'earnings_gap_structure',
       domainId: null,
       beliefs,
+    })).toEqual([
+      'no_chase_already_printed_leftovers',
+      'ignored_mcap_floor_50_100m',
+      'never_pltr',
+      'extra_rule',
+    ]);
+    expect(rulesInForceFor({
+      thesisId: 'earnings_gap_structure',
+      domainId: null,
+      beliefs,
+      cap: 3,
     })).toEqual([
       'no_chase_already_printed_leftovers',
       'ignored_mcap_floor_50_100m',
@@ -142,8 +174,117 @@ describe('belief mapping', () => {
       'no_chase_already_printed_leftovers',
       'ignored_mcap_floor_50_100m',
       'never_pltr',
+      'extra_rule',
     ]);
+    expect(rulesInForceFor({
+      thesisId: null,
+      domainId: null,
+      beliefs,
+    })).toEqual([]);
     expect(humanizeRule('no_chase_already_printed_leftovers')).toBe('no chase already printed leftovers');
+  });
+
+  test('earnings_gap_structure keeps process rules beside lessons 78/79/80', () => {
+    const process = [
+      ['quality_drawdown_into_print', '2026-09-18T15:00:00.000Z', 'b-quality'],
+      ['recycle_over_exact_tp', '2026-09-17T15:00:00.000Z', 'b-recycle'],
+      ['residual_bp_watch_only', '2026-09-16T15:00:00.000Z', 'b-residual'],
+      ['missed_swing', '2026-09-15T15:00:00.000Z', 'b-missed'],
+    ] as const;
+    const rows = [
+      belief({
+        id: 'b-80',
+        observed_at: '2026-10-01T18:00:00.000Z',
+        prior_confidence: null,
+        new_confidence: null,
+        rationale: 'Walk-forward autopsy: kill the earnings-gap clip.',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['kill'],
+          research_lesson_id: 80,
+          lesson_type: 'kill',
+        },
+      }),
+      belief({
+        id: 'b-79',
+        observed_at: '2026-10-01T17:00:00.000Z',
+        prior_confidence: null,
+        new_confidence: null,
+        rationale: 'Walk-forward autopsy: negative result.',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['negative_result'],
+          research_lesson_id: 79,
+          lesson_type: 'negative_result',
+        },
+      }),
+      belief({
+        id: 'b-78',
+        observed_at: '2026-10-01T16:00:00.000Z',
+        prior_confidence: null,
+        new_confidence: null,
+        rationale: 'Earlier negative result, same slug.',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['negative_result'],
+          research_lesson_id: 78,
+          lesson_type: 'negative_result',
+        },
+      }),
+      ...process.map(([slug, observed_at, id]) => belief({
+        id,
+        observed_at,
+        prior_confidence: null,
+        new_confidence: null,
+        rationale: slug,
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: [slug],
+          research_lesson_id: id,
+        },
+      })),
+      belief(),
+    ];
+    const beliefs = mapBeliefs(rows);
+    const assembled = assemblePlaybookRules(beliefs).filter((row) => row.thesis_id === 'earnings_gap_structure');
+    expect(assembled.map((row) => row.id)).toEqual([
+      'b-80',
+      'b-79',
+      'b-quality',
+      'b-recycle',
+      'b-residual',
+      'b-missed',
+      '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
+    ]);
+    expect(assembled.find((row) => row.id === 'b-78')).toBeUndefined();
+    expect(rulesInForceFor({
+      thesisId: 'earnings_gap_structure',
+      domainId: null,
+      beliefs,
+      cap: 3,
+    })).toEqual([
+      'quality_drawdown_into_print',
+      'recycle_over_exact_tp',
+      'residual_bp_watch_only',
+      'kill',
+      'negative_result',
+    ]);
+    expect(rulesInForceFor({
+      thesisId: 'earnings_gap_structure',
+      domainId: null,
+      beliefs,
+    })).toEqual([
+      'quality_drawdown_into_print',
+      'recycle_over_exact_tp',
+      'residual_bp_watch_only',
+      'missed_swing',
+      'no_chase_already_printed_leftovers',
+      'ignored_mcap_floor_50_100m',
+      'never_pltr',
+      'extra_rule',
+      'kill',
+      'negative_result',
+    ]);
   });
 
   test('trail truncates rationale and stays newest-first', () => {

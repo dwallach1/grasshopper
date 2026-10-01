@@ -182,6 +182,81 @@ describe('assembleBeliefsInForce', () => {
     });
   });
 
+  test('earnings_gap_structure keeps process rules beside kill and negative_result', () => {
+    const rows = assembleBeliefsInForce(desk({
+      beliefs: [
+        belief({
+          id: 'b-80',
+          observed_at: '2026-10-01T18:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rationale: 'Walk-forward autopsy: kill.',
+          rules: ['kill'],
+          research_lesson_id: '80',
+        }),
+        belief({
+          id: 'b-79',
+          observed_at: '2026-10-01T17:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rationale: 'Walk-forward autopsy: negative result.',
+          rules: ['negative_result'],
+          research_lesson_id: '79',
+        }),
+        belief({
+          id: 'b-78',
+          observed_at: '2026-10-01T16:00:00.000Z',
+          prior_confidence: null,
+          new_confidence: null,
+          rationale: 'Earlier negative result.',
+          rules: ['negative_result'],
+          research_lesson_id: '78',
+        }),
+        belief({
+          id: 'b-quality',
+          observed_at: '2026-09-18T15:00:00.000Z',
+          rationale: 'Drawdown into the print can still be the structure.',
+          rules: ['quality_drawdown_into_print'],
+        }),
+        belief({
+          id: 'b-recycle',
+          observed_at: '2026-09-17T15:00:00.000Z',
+          rules: ['recycle_over_exact_tp'],
+        }),
+        belief({
+          id: 'b-residual',
+          observed_at: '2026-09-16T15:00:00.000Z',
+          rules: ['residual_bp_watch_only'],
+        }),
+        belief({
+          id: 'b-missed',
+          observed_at: '2026-09-15T15:00:00.000Z',
+          rules: ['missed_swing'],
+        }),
+        belief(),
+      ],
+    }));
+    const gap = rows.filter((row) => row.thesis_id === 'earnings_gap_structure');
+    expect(gap.map((row) => row.id)).toEqual([
+      'b-80',
+      'b-79',
+      'b-quality',
+      'b-recycle',
+      'b-gap',
+      'b-residual',
+      'b-missed',
+    ]);
+    expect(gap.flatMap((row) => row.rules)).toEqual([
+      'kill',
+      'negative_result',
+      'quality_drawdown_into_print',
+      'recycle_over_exact_tp',
+      'no_chase_already_printed_leftovers',
+      'residual_bp_watch_only',
+      'missed_swing',
+    ]);
+  });
+
   test('keeps rationale when the linked lesson is off the parchment queue', () => {
     const rows = assembleBeliefsInForce(desk({
       lessons: [lesson(37)],

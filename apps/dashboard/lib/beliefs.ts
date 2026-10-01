@@ -1,6 +1,8 @@
 /**
  * Lean belief_updates on the desk. Playbook rules are meta.kind = playbook_rule.
- * Newest per thesis/domain is "in force." Never invent a rule or a close lesson.
+ * A slug stays in force on the newest belief that lists it for that thesis and
+ * domain. A later kill or negative_result lesson does not retire older process
+ * slugs. Never invent a rule or a close lesson.
  */
 import { z } from 'zod';
 
@@ -10,8 +12,15 @@ import type { JsonObjectRow } from './ledger-map';
 
 export const PLAYBOOK_RULE_KIND = 'playbook_rule';
 export const BELIEF_RATIONALE_CAP = 180;
-export const RULES_IN_FORCE_CAP = 3;
+/**
+ * Process and structure slugs on a lot. `kill` and `negative_result` append
+ * after this cap so an autopsy lesson cannot be the only rule in force.
+ */
+export const RULES_IN_FORCE_CAP = 8;
 export const BELIEF_TRAIL_CAP = 8;
+
+/** Incorporated walk-forward outcomes. Real learning; not standing process. */
+const AUTOPSY_OUTCOME_SLUGS = new Set(['kill', 'negative_result']);
 
 export type BeliefUpdateRow = {
   id: string;
@@ -112,29 +121,30 @@ export function mapBeliefs(rows: JsonObjectRow[]): BeliefUpdateRow[] {
   });
 }
 
-/** Newest playbook_rule per thesis + domain. Payload stays lean. */
+/**
+ * Playbook beliefs that still own a slug. Each slug is kept on the newest
+ * playbook_rule for that thesis + domain that lists it. A newer row wins only
+ * the slugs it repeats.
+ */
 export function assemblePlaybookRules(beliefs: readonly BeliefUpdateRow[]): PlaybookRule[] {
-  const newest = new Map<string, BeliefUpdateRow>();
+  const newestBySlug = new Map<string, BeliefUpdateRow>();
   for (const row of beliefs) {
     if (!isPlaybookRule(row)) continue;
-    const key = `${row.thesis_id}\0${row.domain_id ?? ''}`;
-    const current = newest.get(key);
-    if (!current || newerBelief(row, current)) newest.set(key, row);
+    for (const slug of row.rules) {
+      const key = slugKey(row, slug);
+      const current = newestBySlug.get(key);
+      if (!current || newerBelief(row, current)) newestBySlug.set(key, row);
+    }
   }
-  return [...newest.values()]
-    .sort((a, b) => b.observed_at.localeCompare(a.observed_at) || a.thesis_id.localeCompare(b.thesis_id) || a.id.localeCompare(b.id))
-    .map((row) => ({
-      id: row.id,
-      thesis_id: row.thesis_id,
-      domain_id: row.domain_id,
-      steward: row.steward,
-      rules: row.rules,
-      rationale: truncateRationale(row.rationale),
-      observed_at: row.observed_at,
-      prior_confidence: row.prior_confidence,
-      new_confidence: row.new_confidence,
-      research_lesson_id: row.research_lesson_id,
-    }));
+
+  const byId = new Map<string, BeliefUpdateRow>();
+  for (const row of newestBySlug.values()) {
+    if (!byId.has(row.id)) byId.set(row.id, row);
+  }
+
+  return [...byId.values()]
+    .sort(compareBeliefs)
+    .map((row) => toPlaybookRule(row, ownedSlugs(row, newestBySlug)));
 }
 
 export function beliefTrailFor(
@@ -158,11 +168,23 @@ export function rulesInForceFor(input: {
 }): string[] {
   const cap = input.cap ?? RULES_IN_FORCE_CAP;
   const rules = assemblePlaybookRules(input.beliefs);
-  const match = input.thesisId
-    ? rules.find((row) => row.thesis_id === input.thesisId)
-    : rules.find((row) => input.domainId && row.domain_id === input.domainId);
-  if (!match) return [];
-  return match.rules.filter(Boolean).slice(0, cap);
+  const matched = input.thesisId
+    ? rules.filter((row) => row.thesis_id === input.thesisId)
+    : input.domainId
+      ? rules.filter((row) => row.domain_id === input.domainId)
+      : [];
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const row of matched) {
+    for (const slug of row.rules) {
+      if (!slug || seen.has(slug)) continue;
+      seen.add(slug);
+      ordered.push(slug);
+    }
+  }
+  const process = ordered.filter((slug) => !isAutopsyOutcomeSlug(slug));
+  const outcomes = ordered.filter((slug) => isAutopsyOutcomeSlug(slug));
+  return [...process.slice(0, Math.max(0, cap)), ...outcomes];
 }
 
 export function clipNoteFor(input: {
@@ -256,6 +278,50 @@ function clipBelief(row: BeliefUpdateRow): ClipBeliefNote | null {
 function newerBelief(next: BeliefUpdateRow, current: BeliefUpdateRow): boolean {
   return next.observed_at.localeCompare(current.observed_at) > 0
     || (next.observed_at === current.observed_at && next.id.localeCompare(current.id) > 0);
+}
+
+function compareBeliefs(a: BeliefUpdateRow, b: BeliefUpdateRow): number {
+  return b.observed_at.localeCompare(a.observed_at)
+    || a.thesis_id.localeCompare(b.thesis_id)
+    || a.id.localeCompare(b.id);
+}
+
+function slugKey(row: Pick<BeliefUpdateRow, 'thesis_id' | 'domain_id'>, slug: string): string {
+  return `${row.thesis_id}\0${row.domain_id ?? ''}\0${slug}`;
+}
+
+function ownedSlugs(
+  row: BeliefUpdateRow,
+  newestBySlug: ReadonlyMap<string, BeliefUpdateRow>,
+): string[] {
+  const slugs: string[] = [];
+  const seen = new Set<string>();
+  for (const slug of row.rules) {
+    if (!slug || seen.has(slug)) continue;
+    if (newestBySlug.get(slugKey(row, slug))?.id !== row.id) continue;
+    seen.add(slug);
+    slugs.push(slug);
+  }
+  return slugs;
+}
+
+function toPlaybookRule(row: BeliefUpdateRow, rules: string[]): PlaybookRule {
+  return {
+    id: row.id,
+    thesis_id: row.thesis_id,
+    domain_id: row.domain_id,
+    steward: row.steward,
+    rules,
+    rationale: truncateRationale(row.rationale),
+    observed_at: row.observed_at,
+    prior_confidence: row.prior_confidence,
+    new_confidence: row.new_confidence,
+    research_lesson_id: row.research_lesson_id,
+  };
+}
+
+function isAutopsyOutcomeSlug(slug: string): boolean {
+  return AUTOPSY_OUTCOME_SLUGS.has(slug.trim().toLowerCase());
 }
 
 function asMeta(value: unknown): Record<string, unknown> {

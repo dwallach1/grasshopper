@@ -6,7 +6,7 @@
  * - open books — live lots from `assembleBookHoldings` (same rows the learning
  *   pulse counts as `open_books`)
  * - beliefs in force — `assembleBeliefsInForce` (the Theses inspect list:
- *   newest playbook rule per thesis/domain)
+ *   playbook beliefs that still own a distinct rule slug)
  * - steward posture — `stewardPresences` for quantanamo, oddsborne, and bandit
  *   (the circle+eyes faces on this Board)
  *

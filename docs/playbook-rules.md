@@ -1,6 +1,6 @@
 # Playbook rules — load before size
 
-Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Books detail shows up to three of those rules on a position and the thesis's confidence trail and playbook rows in force (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
+Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Books detail shows the slugs still in force on a position — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
 ## Open with thesis_id
 
@@ -81,6 +81,8 @@ order by thesis_id, domain_id, observed_at desc, created_at desc, id desc;
 ```
 
 `/api/desk` includes a lean `beliefs[]` (id, thesis, domain, confidences, rationale, observed_at, kind, rules, steward). Newest-first, cap 80. Public snapshot keeps this field. Do not size from BIDNESS chat.
+
+The operator desk does not collapse that array to one belief per thesis. Each distinct rule slug stays, carried by the newest `playbook_rule` for that thesis and domain that lists it. Incorporating a `kill` or `negative_result` lesson adds that outcome; it does not hide older process slugs (`quality_drawdown_into_print`, `recycle_over_exact_tp`, and the rest) on the Books chip or the learning-pulse beliefs list. A repeated slug still resolves to the newer belief only. The steward view above remains newest-row-per-thesis; this paragraph is the desk binding.
 
 ## Close with belief / lesson
 
