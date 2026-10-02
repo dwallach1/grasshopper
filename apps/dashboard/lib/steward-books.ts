@@ -1,8 +1,10 @@
 /**
  * Book: one phone page that replaces the old Book and Theses tabs.
  * Organized by steward. Each section is a plain header (book value, change since
- * start, risk used of budget), the open positions with a one-line why / exit /
- * track record, and a collapsed Watching list of theses with nothing open.
+ * start, risk used of budget). A collapsed position is one or two sentences:
+ * why it is held, and the exit price. Score, backtests, and rule names stay in
+ * the detail. A prediction row uses a short name; the full question stays in
+ * the detail. One watched idea is its own line; several fold until opened.
  * Closed lots collapse beside it. Every value comes from the ledger payload;
  * a missing mark or P/L stays missing, never invented.
  */
@@ -37,15 +39,15 @@ export type BooksTrack = {
 
 export type BooksLot = {
   holding: BookHolding;
-  /** Display name: the symbol, or `YES · <market question>` for a prediction (never the raw slug when a question exists). */
+  /** Short name: the symbol, or a prediction side a person would say (`Dolphins`). */
   name: string;
+  /** Full market question. Shown only in the detail. Null for stocks and coins. */
+  question: string | null;
   thesis: ThesisRosterRow | null;
   /** Plain why: thesis name, or why there is none. */
   why: string;
   /** `exits below $220.80` · `exit noted` · null */
   exit: string | null;
-  /** `Rules in force no chase already printed leftovers` · null when none, or when the lot is closed */
-  rules: string | null;
   track: BooksTrack;
 };
 
@@ -140,11 +142,95 @@ export function trackRecord(row: TrackRow | null | undefined): BooksTrack {
   };
 }
 
-/** Plain rules still in force on an open lot. Closed lots keep this off the row. */
+/** Rule names for the detail. The collapsed row does not use this line. */
 export function openRulesLine(slugs: readonly string[]): string | null {
   const words = slugs.map(plainWords).filter(Boolean);
   if (!words.length) return null;
   return `Rules in force ${words.join(' · ')}`;
+}
+
+/** One or two sentences: why the position is held, then the exit price. */
+export function rowSentence(why: string, exit: string | null): string {
+  const held = asSentence(why);
+  if (!exit) return held;
+  const leave = asSentence(exit);
+  return leave ? `${held} ${leave}` : held;
+}
+
+function asSentence(text: string): string {
+  const trimmed = text.trim().replace(/[.]+$/g, '').trim();
+  if (!trimmed) return '';
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}.`;
+}
+
+const WIN_PREFIX = /^who will win(?::| in the upcoming \w+ event)?\s+/i;
+const MONTH = 'jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec';
+
+/**
+ * Spoken name for a prediction row. Head-to-head markets use the side
+ * (`Dolphins`, `Titans`). The full question stays off this string.
+ */
+export function predictionShortName(question: string, outcome: string): string {
+  const q = question.trim().replace(/\s+/g, ' ');
+  const side = outcome.trim().toLowerCase();
+  if (!q) return side ? side.toUpperCase() : 'Market';
+  const matchup = matchupNicknames(q);
+  if (matchup) return side === 'no' ? matchup.no : matchup.yes;
+  const phrase = shortMarketPhrase(q);
+  if (side === 'no') return `No on ${phrase}`;
+  return phrase;
+}
+
+function matchupNicknames(question: string): { yes: string; no: string } | null {
+  if (!/^who will win\b/i.test(question)) return null;
+  const vs = question.match(/\s+vs\.?\s+/i);
+  if (!vs || vs.index === undefined) return null;
+  const left = teamNickname(trimMatchupSide(question.slice(0, vs.index).replace(WIN_PREFIX, '')));
+  const right = teamNickname(trimMatchupSide(question.slice(vs.index + vs[0].length)));
+  if (!left || !right) return null;
+  return { yes: left, no: right };
+}
+
+function trimMatchupSide(side: string): string {
+  let text = side.split('(')[0] ?? side;
+  text = text.split(/\s+scheduled\b/i)[0] ?? text;
+  text = text.replace(new RegExp(`\\s+(?:${MONTH})[a-z]*\\.?\\s+\\d{1,2}\\b.*$`, 'i'), '');
+  return text.replace(/[?].*$/, '').trim();
+}
+
+function teamNickname(team: string): string {
+  const words = team.split(/\s+/).filter(Boolean);
+  return words[words.length - 1] ?? '';
+}
+
+function shortMarketPhrase(question: string): string {
+  const weather = question.match(/^Highest temperature in (.+?) on .+?\?\s*(?:[—–-]\s*)?(.+)$/i);
+  if (weather?.[1] && weather[2]) {
+    return `${weather[1].trim()}, ${weather[2].trim().replace(/[?.]+$/g, '')}`;
+  }
+  const fed = question.match(/^Fed Decision in [A-Za-z]+\s*[—–-]\s*(.+)$/i);
+  if (fed?.[1]) return fedPhrase(fed[1]);
+  const dash = question.split(/\s+[—–]\s+|\s+-\s+/);
+  const left = dash[0]?.trim() ?? '';
+  if (dash.length >= 2 && left && left.length <= 48) return left.replace(/[?.]+$/g, '');
+  return clipPhrase(question);
+}
+
+function fedPhrase(bit: string): string {
+  const text = bit.trim().replace(/[?.]+$/g, '');
+  if (/no change/i.test(text)) return 'Fed, no change';
+  const bps = text.match(/(\d+)\s*bps/i);
+  if (bps && /increase|hike|higher/i.test(text)) return `Fed, up ${bps[1]} bps`;
+  if (bps && /decrease|cut|lower/i.test(text)) return `Fed, down ${bps[1]} bps`;
+  return `Fed, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+}
+
+function clipPhrase(text: string, max = 42): string {
+  const clean = text.trim().replace(/[?.]+$/g, '');
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  return (space > 16 ? cut.slice(0, space) : cut).trim();
 }
 
 export function exitLine(holding: Pick<BookHolding, 'invalidation' | 'unit'>): string | null {
@@ -272,10 +358,11 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
   const alerts = assembleDeskBookHealth(desk, nowMs).alerts;
   const predictions = predictionDesk(desk);
   const questions = new Map(predictions.markets.map((row) => [row.id, row.question?.trim() ?? '']));
-  const pmNames = new Map(predictions.positions.map((row) => {
+  const pmCopy = new Map(predictions.positions.map((row) => {
     const question = questions.get(row.market_id) ?? '';
-    const side = row.outcome.trim().toUpperCase();
-    return [`pm:${row.id}`, question ? `${side ? `${side} · ` : ''}${question}` : ''];
+    return [row.id, question
+      ? { name: predictionShortName(question, row.outcome), question }
+      : null];
   }));
 
   const lot = (holding: BookHolding): BooksLot => {
@@ -283,13 +370,14 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
     const why = holding.thesis_id
       ? plainThesisName(thesis?.name ?? holding.thesis_name ?? holding.thesis_id, holding.thesis_id)
       : untaggedWhy(holding);
+    const copy = holding.id.startsWith('pm:') ? pmCopy.get(holding.id.slice(3)) : undefined;
     return {
       holding,
-      name: pmNames.get(holding.id) || holding.name,
+      name: copy?.name || holding.name,
+      question: copy?.question || null,
       thesis,
       why,
       exit: holding.life === 'live' ? exitLine(holding) : null,
-      rules: holding.life === 'live' ? openRulesLine(holding.rules_in_force) : null,
       track: holding.thesis_id ? trackRecord(scores.get(holding.thesis_id)) : trackRecord(null),
     };
   };

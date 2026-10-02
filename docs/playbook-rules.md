@@ -1,6 +1,6 @@
 # Playbook rules — load before size
 
-Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book page shows the slugs still in force on an open position (and again in the detail) — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
+Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book page shows the rules still in force in the position detail, behind the tap — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). The collapsed row does not list those names. This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
 ## Open with thesis_id
 
