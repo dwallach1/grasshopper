@@ -41,10 +41,12 @@ type Reading =
 const LESSONS_SHOWN = 5;
 
 /**
- * Books: one page per steward replacing the old Book and Theses tabs.
- * Header line, open positions with a one-line why, Watching and Closed folds.
- * A tap opens the detail (thesis text, beliefs, outcomes). The operator-only
- * review queue renders only when `canReview` (never on the public desk).
+ * Book: one page per steward replacing the old Book and Theses tabs.
+ * Header line, open positions with a one-line why and rules in force,
+ * a short Watching line, and a Closed fold.
+ * A tap opens the detail (thesis text, beliefs, outcomes). One watched idea
+ * opens on that tap. The operator-only review queue renders only when
+ * `canReview` (never on the public desk).
  */
 export function BookPanel({
   desk,
@@ -103,10 +105,9 @@ export function BookPanel({
         data-desk-nested-scroll="1"
         aria-hidden={open ? true : undefined}
       >
-        <h1 className="visually-hidden">Books</h1>
+        <h1 className="visually-hidden">Book</h1>
         <header className="books-mast">
-          <p className="paper-title">Books</p>
-          <p className="books-lede">Each steward: money, open positions, and why.</p>
+          <p className="paper-title">Book</p>
         </header>
         {books.sections.map((section) => (
           <StewardSection
@@ -164,6 +165,7 @@ function StewardSection({
 }) {
   const change = changeText(section.return_pct);
   const ideas = section.watching.length + section.set_aside.length;
+  const watched = section.watching.length === 1 ? section.watching[0] : undefined;
   return (
     <section className="books-steward" data-steward={section.slug} aria-label={section.name}>
       <header className="books-head">
@@ -208,7 +210,11 @@ function StewardSection({
           {section.checks.map((row) => <li key={row.id}>{row.text}</li>)}
         </ul>
       ) : null}
-      {ideas ? (
+      {watched && section.set_aside.length === 0 ? (
+        <ul className="books-ideas">
+          <li><IdeaRow idea={watched} onOpen={onOpenIdea} watch /></li>
+        </ul>
+      ) : ideas ? (
         <Fold label={`Watching · ${section.watching.length} ${section.watching.length === 1 ? 'idea' : 'ideas'}${section.set_aside.length ? ` · ${section.set_aside.length} set aside` : ''}`}>
           <ul className="books-ideas">
             {section.watching.map((idea) => (
@@ -289,19 +295,29 @@ function LotRow({ lot, onOpen }: { lot: BooksLot; onOpen: (id: string) => void }
         <span className={`books-lot-pnl ${pnlClass(pnl.sign)}`}>{pnl.text}</span>
       </span>
       <span className="books-lot-why">{why}</span>
+      {lot.rules ? <span className="books-lot-rules">{lot.rules}</span> : null}
     </button>
   );
 }
 
-function IdeaRow({ idea, onOpen }: { idea: BooksIdea; onOpen: (id: string) => void }) {
+function IdeaRow({
+  idea,
+  onOpen,
+  watch = false,
+}: {
+  idea: BooksIdea;
+  onOpen: (id: string) => void;
+  watch?: boolean;
+}) {
   return (
     <button
       type="button"
       className="books-idea"
       data-thesis={idea.thesis.id}
+      data-watch={watch ? '1' : undefined}
       onClick={() => onOpen(idea.thesis.id)}
     >
-      <b>{idea.name}</b>
+      <b>{watch ? `Watching · ${idea.name}` : idea.name}</b>
       <span className="books-lot-why">{idea.lean} · {idea.track.label}</span>
     </button>
   );
@@ -339,7 +355,7 @@ function BooksDetail({
   return (
     <article ref={ref} className="books-detail thesis-page" data-desk-nested-scroll="1" aria-label={title}>
       <button type="button" className="thesis-page-back" onClick={onClose}>
-        Back to books
+        Back to book
       </button>
       <p className="thesis-page-kicker">{kicker}</p>
       <h2>{title}</h2>

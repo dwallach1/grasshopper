@@ -49,7 +49,7 @@ flowchart LR
 | **QUANTANAMO (Grok Bot)** | Research and trading brain. Writes the ledger. Places equities through Robinhood MCP when gates pass. |
 | **Supabase** `xqungxapqicdmboniezz` | Canonical store: theses, runs, `account_snapshots`, `position_episodes`, `trade_intents`, `portfolio_exposure`, … |
 | **Local desk** | `bun run web:app` / `bash scripts/web-app.sh`. Reads the ledger as the signed-in operator. Does not run the bot. |
-| **Public phone desk** | Cloudflare Worker `grasshopper-desk`. Same Board/Books/Team chrome (Events/Tests stay operator-only). `GET /api/desk` is a live SELECT as `desk_public_reader`. No KV copy, no publish step, no Supabase keys in the browser. |
+| **Public phone desk** | Cloudflare Worker `grasshopper-desk`. Same Board/Book/Team chrome (Events/Tests stay operator-only). `GET /api/desk` is a live SELECT as `desk_public_reader`. No KV copy, no publish step, no Supabase keys in the browser. |
 | **X connector** | Bookmark seeds from `@wallachworld`. Not the reconnect-OAuth path on the desk. |
 | **Robinhood Agentic** | Live proof account, nickname **Agentic**, last4 **7638**. Official MCP only. |
 
@@ -96,7 +96,7 @@ sequenceDiagram
   end
   Bot->>DB: runs, evidence
   Desk->>DB: GET /api/ledger JWT
-  DB-->>Desk: Board, Books, Events, Tests, Team
+  DB-->>Desk: Board, Book, Events, Tests, Team
 ```
 
 ---
@@ -151,14 +151,14 @@ It does not ingest X, call Robinhood, or run Grok. `/api/x/authorize` is retired
 | Key | Tab | Shows |
 |---|---|---|
 | 1 | Board | Landing (`/`). Quiet parchment [Liveline](https://benji.org/liveline) of every live steward’s **% vs that book’s own start** (QUANTANAMO / ODDSBORNE / BANDIT). Shared % axis, no FX, no summed USD+SOL NAV. Idle when every plotted book is stale. Standings rank the same %. Missing start is **not ranked**, not 0%. `/leaderboard` redirects here. See [`docs/liveline-pnl.md`](docs/liveline-pnl.md). |
-| 2 | Books | `/book` (replaced the old Book and Theses tabs; `/theses` and `/books` redirect here). One section per steward (QUANTANAMO, ODDSBORNE, BANDIT; COINTANAMO only once it has a book). The header is one line: book value, % since that book's start, and open risk vs the 10% budget (`$5,496 · +9.9% since start · risk $351 of $550`; a soft gold **over budget** note only when over). Open positions list symbol, value (or size when unmarked), and P/L colored by sign, with one muted line: the thesis in plain words, the lot's exit price (`exits below $220.80`), and the track record (`6 trades, score 56` / `no track record yet`). Theses with nothing open fold into **Watching** (plus **set aside** for rejected ones); closed lots fold into **Closed**. A tap opens the detail: position facts, price line, exit plan, rules in force, lesson on close, then the thesis text, what would prove it wrong, track record, beliefs, evidence, other positions on the idea, and its lessons. No raw ids or internal flags on the surface; never invented marks or P/L. The operator desk adds a collapsed **Operator review** fold (To review + lesson incorporate); the public phone never renders it. |
+| 2 | Book | `/book` (replaced the old Book and Theses tabs; `/theses` and `/books` redirect here). One section per steward (QUANTANAMO, ODDSBORNE, BANDIT; COINTANAMO only once it has a book). The header is one line: book value, % since that book's start, and open risk vs the 10% budget (`$5,496 · +9.9% since start · risk $351 of $550`; a soft gold **over budget** note only when over). Open positions list symbol, value (or size when unmarked), and P/L colored by sign, with one muted line: the thesis in plain words, the lot's exit price (`exits below $220.80`), and the track record (`6 trades, score 56` / `no track record yet`). When playbook rules are in force they sit on that same row (`Rules in force no chase already printed leftovers`). One idea with nothing open is a short **Watching** line and opens on tap; several ideas (plus **set aside**) stay behind that line until it opens. Closed lots fold into **Closed**. A tap opens the detail: position facts, price line, exit plan, rules in force, lesson on close, then the thesis text, what would prove it wrong, track record, beliefs, evidence, other positions on the idea, and its lessons. No raw ids or internal flags on the surface; never invented marks or P/L. The operator desk adds a collapsed **Operator review** fold (To review + lesson incorporate); the public phone never renders it. |
 | 3 | Events | Dated catalysts and `pm_markets.close_time` on one sheet + `research_queue`. `/catalysts` redirects here. |
 | 4 | Tests | Backtests from `strategy_tests` + `backtest_artifacts`. Equity curve and trades only when those artifacts exist. Prices from Financial Datasets. Missing artifact or null metric → **not in ledger**. |
 | 5 | Team | One scrollable stack of parchment steward cards from `desk_agents` (QUANTANAMO, ODDSBORNE, BANDIT, plus COINTANAMO if present). Circle+eyes face, name, domain, and pulse (heartbeat age). No carousel, win rate, hold, size, or NAV. Empty `desk_agents` is an honest empty. `/mates` redirects here. |
 
 Last QUANTANAMO scan/autopsy is a chrome **chip** (from `public.runs` + `apps/dashboard/lib/routines.ts`), not a tab. Retired routes keep chrome mounted: `/leaderboard` and `/board` → `/`; `/risk` and `/runs` → `/book`; `/catalysts` → `/events`; `/theses`, `/books`, `/ontology` and `/learnings` → `/book`; `/mates` → `/team`. Risk controls stay in the database and are not a settings page.
 
-Chrome stays mounted. Tab switches paint from the in-memory ledger payload. On the phone, Board / Books / Team are one circular swipe deck; the dock labels are a thin indicator, not a second nav. Pull down at the top of a pane to re-fetch `/api/desk` (or `/api/ledger` on the operator desk). Books (`/book`) is one page per steward on that same rail — tap a position or a watched thesis for the detail; Esc or **Back to books** returns. Keyboard: `1–5`, `g` then letter (`p/b/c/e/m`), `j/k` test, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Events — not a search box.
+Chrome stays mounted. Tab switches paint from the in-memory ledger payload. On the phone, Board / Book / Team are one circular swipe deck; the dock labels are a thin indicator, not a second nav. Pull down at the top of a pane to re-fetch `/api/desk` (or `/api/ledger` on the operator desk). Book (`/book`) is one page per steward on that same rail — tap a position or a watched thesis for the detail; Esc or **Back to book** returns. Keyboard: `1–5`, `g` then letter (`p/b/c/e/m`), `j/k` test, `r` refresh, `?` help. Venue chips (All / STOCKS / PREDICTIONS / COINS) filter Events — not a search box.
 
 Canonical reads: `account_snapshots`, `portfolio_exposure` (latest last4 7638), `trade_intents`, `broker_fills`, `theses`, `thesis_symbols`, `trade_proposals`, `runs`, `strategy_tests`, `backtest_artifacts`, plus ODDSBORNE `pm_markets` / `pm_positions` / `pm_orders` / `pm_fills` / `pm_pnl` / `pm_notes` when those relations exist, plus BANDIT `meme_tokens` / `meme_positions` / `meme_orders` / `meme_fills` / `meme_pnl` / `meme_notes` when those relations exist, plus Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts` when those relations exist. Missing `pm_*`, `meme_*`, or `desk_*` tables yield an empty slice — the desk still loads. Not `dashboard_snapshots.current`. Equity book names come from the 7638 exposure snapshot, not `position_episodes`.
 
@@ -200,7 +200,7 @@ workers/                 retired Cloudflare ingest — not the live brain
 
 ## Public phone desk
 
-The operator desk stays localhost-only (`bun run web:app`). The public site is the same desk (Board / Books / Team; Events and Tests stay operator-only) hosted on Cloudflare Workers static assets. Board is Liveline-first. It never talks to PostgREST from the browser.
+The operator desk stays localhost-only (`bun run web:app`). The public site is the same desk (Board / Book / Team; Events and Tests stay operator-only) hosted on Cloudflare Workers static assets. Board is Liveline-first. It never talks to PostgREST from the browser.
 
 ```
 phone  →  Worker GET /api/desk  →  PostgREST as desk_public_reader (live ledger)
@@ -216,7 +216,7 @@ That is the only path. There is no KV snapshot, no `PUT /internal/snapshot`, and
 
 **Show-me — role and tables.** Role `desk_public_reader` (`nologin`, granted to `authenticator`). `GRANT SELECT` + policy `desk_public_reader_select` on: `theses`, `thesis_symbols`, `thesis_evidence`, `thesis_scores`, `thesis_relations`, `runs`, `cloud_runs`, `cloud_tasks`, `codex_automations`, `catalysts`, `research_queue`, `research_lessons`, `postmortems`, `research_cycles`, `strategy_tests`, `test_scenarios`, `backtest_artifacts`, `agent_runs`, `account_snapshots`, `position_episodes`, `portfolio_exposure`, `trade_intents`, `trade_proposals`, `broker_fills`, `insights`, `predictions`, `risk_controls`, `ontology_themes`, `symbols`, `ontology_candidates`, `ontology_management_actions`, `belief_updates`, `thesis_domains`, view `active_playbook_rules`, ODDSBORNE `pm_*`, BANDIT `meme_*`, Team `desk_agents` / `desk_domains` / `desk_domain_stewards` / `desk_accounts`. No INSERT/UPDATE/DELETE. No `dashboard_snapshots`. `anon` stays revoked on live tables. Never put `service_role` or `QUANTANAMO_DATABASE_URL` on this Worker. Stewards load rules before size — [`docs/playbook-rules.md`](docs/playbook-rules.md). Size follows outcomes (half-Kelly multiplier, no hard cap per position) — [`docs/sizing.md`](docs/sizing.md).
 
-`pm_*` and `meme_*` rows map into the **same** Books / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for QUANTANAMO.
+`pm_*` and `meme_*` rows map into the **same** Book / Events language as equities. Empty tables stay empty; no invented P/L. New domain lanes need `desk_public_reader_select` RLS (`using (true)`) in addition to `quantanamo_worker_select` for QUANTANAMO.
 
 ### Deploy
 

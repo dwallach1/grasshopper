@@ -1,5 +1,5 @@
 /**
- * Books: one phone page that replaces the old Book and Theses tabs.
+ * Book: one phone page that replaces the old Book and Theses tabs.
  * Organized by steward. Each section is a plain header (book value, change since
  * start, risk used of budget), the open positions with a one-line why / exit /
  * track record, and a collapsed Watching list of theses with nothing open.
@@ -44,6 +44,8 @@ export type BooksLot = {
   why: string;
   /** `exits below $220.80` · `exit noted` · null */
   exit: string | null;
+  /** `Rules in force no chase already printed leftovers` · null when none, or when the lot is closed */
+  rules: string | null;
   track: BooksTrack;
 };
 
@@ -136,6 +138,13 @@ export function trackRecord(row: TrackRow | null | undefined): BooksTrack {
     label: score === null ? `${counts}, not scored yet` : `${counts}, score ${score}`,
     backtest: backtestLine(row),
   };
+}
+
+/** Plain rules still in force on an open lot. Closed lots keep this off the row. */
+export function openRulesLine(slugs: readonly string[]): string | null {
+  const words = slugs.map(plainWords).filter(Boolean);
+  if (!words.length) return null;
+  return `Rules in force ${words.join(' · ')}`;
 }
 
 export function exitLine(holding: Pick<BookHolding, 'invalidation' | 'unit'>): string | null {
@@ -280,6 +289,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       thesis,
       why,
       exit: holding.life === 'live' ? exitLine(holding) : null,
+      rules: holding.life === 'live' ? openRulesLine(holding.rules_in_force) : null,
       track: holding.thesis_id ? trackRecord(scores.get(holding.thesis_id)) : trackRecord(null),
     };
   };

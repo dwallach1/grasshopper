@@ -1,7 +1,7 @@
 /**
  * Desk surfaces. Tab switches must not remount this shell or refetch the ledger.
  *
- * Board (`/`) is home. Books (`/book`) is one page per steward that replaced the
+ * Board (`/`) is home. Book (`/book`) is one page per steward that replaced the
  * old Book and Theses tabs; `/theses` folds into it. Chrome stays mounted; tab
  * changes paint from in-memory state and `history.pushState`.
  * Keep README.md "Local desk" in the same PR when this list changes.
@@ -27,14 +27,14 @@ export type DeskTab = {
 
 export const DESK_TABS: readonly DeskTab[] = [
   { href: '/', id: 'leaderboard', key: '1', label: 'Board', go: 'p' },
-  { href: '/book', id: 'book', key: '2', label: 'Books', go: 'b' },
+  { href: '/book', id: 'book', key: '2', label: 'Book', go: 'b' },
   { href: '/events', id: 'events', key: '3', label: 'Events', go: 'c' },
   { href: '/backtests', id: 'backtests', key: '4', label: 'Tests', go: 'e' },
   { href: '/team', id: 'team', key: '5', label: 'Team', go: 'm' },
 ] as const;
 
 /**
- * Phone deck matches the public bottom nav: Board Books Team.
+ * Phone deck matches the public bottom nav: Board Book Team.
  * Operator Events / Tests stay off this rail.
  */
 export const DESK_SWIPE_SURFACES = ['leaderboard', 'book', 'team'] as const;

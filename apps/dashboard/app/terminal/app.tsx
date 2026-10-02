@@ -277,8 +277,8 @@ export function TerminalApp({
       {help && (
         <aside className="term-help">
           <b>Keyboard</b>
-          <p>1 Board · 2 Books · 3 Events · 4 Tests · 5 Team</p>
-          <p>g p board · g b books · g c events · g e tests · g m team</p>
+          <p>1 Board · 2 Book · 3 Events · 4 Tests · 5 Team</p>
+          <p>g p board · g b book · g c events · g e tests · g m team</p>
           <p>j/k move test · Esc close detail · r reload ledger</p>
         </aside>
       )}
