@@ -6204,8 +6204,9 @@ a:focus-visible {
   }
 }
 
-/* ——— Books: one page per steward (replaced Book + Theses) ———
-   Plain header line, open rows with one muted why line, Watching / Closed folds.
+/* ——— Book: one page per steward (replaced Book + Theses) ———
+   Plain header line, open rows with one muted why line and rules in force,
+   a short Watching line, and a Closed fold.
    Ink only; P/L carries .up / .down by sign; over budget is a soft gold note. */
 
 .books-stage {
@@ -6239,12 +6240,6 @@ a:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.books-lede {
-  margin: 0;
-  color: var(--ink-3, var(--text-3));
-  font-size: 13px;
 }
 
 .books-steward {
@@ -6362,7 +6357,8 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.books-lot-why {
+.books-lot-why,
+.books-lot-rules {
   color: var(--ink-3, var(--text-3));
   font-size: 12.5px;
   line-height: 1.4;

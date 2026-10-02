@@ -289,6 +289,8 @@ describe('Books page: one section per steward', () => {
     expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
     expect(coda.querySelector('.books-lot-why')?.textContent)
       .toBe('Earnings gap structure · exits below $10.35 · 6 trades, score 56');
+    expect(coda.querySelector('.books-lot-rules')?.textContent)
+      .toBe('Rules in force no chase already printed leftovers');
     expect(view.host.querySelector('[data-steward="oddsborne"] .books-none')?.textContent).toBe('Nothing open right now.');
     expect(view.host.textContent).not.toContain('Operator review');
     expect(view.host.textContent).not.toContain('To review');
@@ -298,9 +300,6 @@ describe('Books page: one section per steward', () => {
 
   test('visible surface has no ids, stated, or inval jargon', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
-    await act(async () => {
-      button(view.host, '[data-steward="quantanamo"] .books-fold-toggle').click();
-    });
     const text = view.host.textContent ?? '';
     expect(text).not.toContain(EARNINGS);
     expect(text).not.toContain(WEATHER);
@@ -392,18 +391,12 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
-  test('Watching folds theses with nothing open; a tap opens that thesis', async () => {
+  test('one watched idea is a short line; a tap opens that thesis', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
-    const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');
-    expect(toggle.textContent).toContain('Watching · 1 idea');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(view.host.querySelector('button.books-idea')).toBeNull();
-    await act(async () => {
-      toggle.click();
-    });
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(view.host.querySelector('[data-steward="quantanamo"] .books-fold-toggle')).toBeNull();
     const idea = button(view.host, `button.books-idea[data-thesis="${WEATHER}"]`);
-    expect(idea.textContent).toContain('Same-day city-high weather');
+    expect(idea.getAttribute('data-watch')).toBe('1');
+    expect(idea.textContent).toContain('Watching · Same-day city-high weather');
     expect(idea.textContent).toContain('expects up · no track record yet');
     await act(async () => {
       idea.click();
@@ -417,6 +410,41 @@ describe('Books page: one section per steward', () => {
       button(view.host, '.thesis-page-back').click();
     });
     expect(view.host.querySelector('.books-detail')).toBeNull();
+    view.unmount();
+  });
+
+  test('several watched ideas stay behind one line until it opens', async () => {
+    const payload = desk();
+    payload.theses = [...payload.theses, {
+      id: 'second_watch',
+      name: 'Second watch idea',
+      summary: 'Another idea with nothing open.',
+      status: 'hardening',
+      confidence: 60,
+      time_horizon: 'days',
+      stance: 'neutral',
+      variant_perception: null,
+      falsifier: null,
+      created_at: AT,
+      updated_at: AT,
+      symbols: [],
+      lots: [],
+    }];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');
+    expect(toggle.textContent).toContain('Watching · 2 ideas');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(view.host.querySelector('button.books-idea')).toBeNull();
+    await act(async () => {
+      toggle.click();
+    });
+    const idea = button(view.host, `button.books-idea[data-thesis="${WEATHER}"]`);
+    expect(idea.getAttribute('data-watch')).toBeNull();
+    expect(idea.textContent).toContain('Same-day city-high weather');
+    await act(async () => {
+      idea.click();
+    });
+    expect(view.host.querySelector('.books-detail h2')?.textContent).toBe('Same-day city-high weather');
     view.unmount();
   });
 
@@ -487,6 +515,7 @@ describe('Books page: one section per steward', () => {
     expect(row.textContent).not.toContain('rdc-usfed');
     expect(row.querySelector('.books-lot-pnl')?.textContent).toBe('+$22.68 (+117.4%)');
     expect(row.querySelector('.books-lot-why')?.textContent).toBe('opened before theses were tracked');
+    expect(row.querySelector('.books-lot-rules')).toBeNull();
     view.unmount();
   });
 

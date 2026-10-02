@@ -50,9 +50,9 @@ function exposure(
 }
 
 describe('desk nav labels', () => {
-  test('five operator tabs: Board landing, Books, Events, Tests, Team', () => {
+  test('five operator tabs: Board landing, Book, Events, Tests, Team', () => {
     const labels = DESK_TABS.map((tab) => tab.label);
-    expect(labels).toEqual(['Board', 'Books', 'Events', 'Tests', 'Team']);
+    expect(labels).toEqual(['Board', 'Book', 'Events', 'Tests', 'Team']);
     expect(DESK_TABS.map((tab) => tab.id)).toEqual(['leaderboard', 'book', 'events', 'backtests', 'team']);
     expect(DESK_TABS.map((tab) => tab.key)).toEqual(['1', '2', '3', '4', '5']);
     expect(DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/events', '/backtests', '/team']);
@@ -65,15 +65,15 @@ describe('desk nav labels', () => {
     expect(labels).not.toContain('Runs');
     expect(labels).not.toContain('Lessons');
     expect(DESK_TABS.some((tab) => tab.go === 'r')).toBe(false);
-    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Books', 'Team']);
-    expect(PUBLIC_DESK_TABS.map((tab) => tab.label)).toEqual(['Board', 'Books', 'Team']);
+    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
+    expect(PUBLIC_DESK_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
     for (const label of labels) {
       expect(label.length).toBeGreaterThan(3);
       expect(/^[A-Z]{3,4}$/.test(label)).toBe(false);
     }
   });
 
-  test('/ is the Board surface; Books is /book; Theses and retired paths fold in', () => {
+  test('/ is the Board surface; Book is /book; Theses and retired paths fold in', () => {
     expect(surfaceFromPath('/')).toBe('leaderboard');
     expect(surfaceFromPath('/leaderboard')).toBe('leaderboard');
     expect(surfaceFromPath('/board')).toBe('leaderboard');

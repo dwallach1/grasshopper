@@ -4,7 +4,7 @@ Daily `research_lessons` stay open until an operator writes them into the playbo
 
 ## What the desk shows
 
-The operator desk's Books page has a collapsed **Operator review** fold with a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. On both desks, a tap on a position or thesis opens the Books detail, which lists that thesis's lessons (newest five, **Show all**) and its belief trail, playbook rules in force included. A closed position's detail shows the newest lesson for that thesis and the playbook belief it became (`research_lesson_id`, or the newest playbook rule when that link is missing). The public phone never renders the Operator review fold.
+The operator desk's Book page has a collapsed **Operator review** fold with a **Lessons** list: open rows first, then in-playbook, newest within each group, cap 40. Each card is the lesson once — thesis name, `lesson_type`, regime, summary. On both desks, a tap on a position or thesis opens the Book detail, which lists that thesis's lessons (newest five, **Show all**) and its belief trail, playbook rules in force included. A closed position's detail shows the newest lesson for that thesis and the playbook belief it became (`research_lesson_id`, or the newest playbook rule when that link is missing). The public phone never renders the Operator review fold.
 
 Incorporate renders only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 

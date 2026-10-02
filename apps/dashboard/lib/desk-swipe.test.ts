@@ -34,9 +34,9 @@ import {
 } from './desk-swipe';
 
 describe('desk swipe deck', () => {
-  test('Board / Books / Team stay one rail in that order', () => {
+  test('Board / Book / Team stay one rail in that order', () => {
     expect([...DESK_SWIPE_SURFACES]).toEqual(['leaderboard', 'book', 'team']);
-    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Books', 'Team']);
+    expect(DESK_SWIPE_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
     expect(DESK_SWIPE_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/team']);
     expect(swipeSurfaceIndex('leaderboard')).toBe(0);
     expect(swipeSurfaceIndex('book')).toBe(1);
@@ -45,7 +45,7 @@ describe('desk swipe deck', () => {
     expect(swipeSurfaceAt(-1)).toBeNull();
     expect(swipeSurfaceAt(3)).toBeNull();
     expect(swipeTabLabel('team')).toBe('Team');
-    expect(swipeTabLabel('book')).toBe('Books');
+    expect(swipeTabLabel('book')).toBe('Book');
   });
 
   test('operator Events / Tests stay off the phone deck', () => {
@@ -58,7 +58,7 @@ describe('desk swipe deck', () => {
     expect(DESK_TABS.map((tab) => tab.id)).toEqual([
       'leaderboard', 'book', 'events', 'backtests', 'team',
     ]);
-    expect(PUBLIC_DESK_TABS.map((tab) => tab.label)).toEqual(['Board', 'Books', 'Team']);
+    expect(PUBLIC_DESK_TABS.map((tab) => tab.label)).toEqual(['Board', 'Book', 'Team']);
     expect(PUBLIC_DESK_TABS.map((tab) => tab.href)).toEqual(['/', '/book', '/team']);
   });
 

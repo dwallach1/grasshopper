@@ -1,10 +1,10 @@
 # Playbook rules — load before size
 
-Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Books detail shows the slugs still in force on a position — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
+Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book page shows the slugs still in force on an open position (and again in the detail) — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
 ## Open with thesis_id
 
-New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot reads "opened before theses were tracked" (pre-ontology leftovers) or "no thesis linked" on Books, and has no rules in force. The ontology cannot learn from that money. `lib/learning-pulse.ts` still counts tagged lots vs legacy untagged vs missing-gate separately, so historical leftovers are not a write-habit miss.
+New `position_episodes`, `pm_positions`, and `meme_positions` rows **must** carry `thesis_id` or an explicit `meta.untagged` reason. Beliefs and rules bind by thesis — an untagged lot reads "opened before theses were tracked" (pre-ontology leftovers) or "no thesis linked" on Book, and has no rules in force. The ontology cannot learn from that money. `lib/learning-pulse.ts` still counts tagged lots vs legacy untagged vs missing-gate separately, so historical leftovers are not a write-habit miss.
 
 ```sql
 -- Gate (also a CHECK on the three position tables)
@@ -82,7 +82,7 @@ order by thesis_id, domain_id, observed_at desc, created_at desc, id desc;
 
 `/api/desk` includes a lean `beliefs[]` (id, thesis, domain, confidences, rationale, observed_at, kind, rules, steward). Newest-first, cap 80. Public snapshot keeps this field. Do not size from BIDNESS chat.
 
-The operator desk does not collapse that array to one belief per thesis. Each distinct rule slug stays, carried by the newest `playbook_rule` for that thesis and domain that lists it. Incorporating a `kill` or `negative_result` lesson adds that outcome; it does not hide older process slugs (`quality_drawdown_into_print`, `recycle_over_exact_tp`, and the rest) on the Books chip or the learning-pulse beliefs list. A repeated slug still resolves to the newer belief only. The steward view above remains newest-row-per-thesis; this paragraph is the desk binding.
+The operator desk does not collapse that array to one belief per thesis. Each distinct rule slug stays, carried by the newest `playbook_rule` for that thesis and domain that lists it. Incorporating a `kill` or `negative_result` lesson adds that outcome; it does not hide older process slugs (`quality_drawdown_into_print`, `recycle_over_exact_tp`, and the rest) on the Book row or the learning-pulse beliefs list. A repeated slug still resolves to the newer belief only. The steward view above remains newest-row-per-thesis; this paragraph is the desk binding.
 
 ## Close with belief / lesson
 
@@ -116,7 +116,7 @@ insert into public.belief_updates (
 
 ## Incorporate an open lesson
 
-The Books detail lists a thesis's `research_lessons` and its belief trail (playbook beliefs in force included) from the same `beliefs[]` the position rows use; the operator desk's **Operator review** fold lists open lessons first. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
+The Book detail lists a thesis's `research_lessons` and its belief trail (playbook beliefs in force included) from the same `beliefs[]` the position rows use; the operator desk's **Operator review** fold lists open lessons first. The local operator desk (`bun run web:app`) can mark one incorporated. That path is the same ledger-operator gate as ontology review: `POST /api/lessons/incorporate` → `public.incorporate_research_lesson` (INVOKER) → `private.incorporate_research_lesson` (DEFINER). The public phone is read-only.
 
 ```ts
 { "lesson_id": 37 }

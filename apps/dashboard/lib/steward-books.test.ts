@@ -10,6 +10,7 @@ import {
   leanText,
   lotAmount,
   lotPnl,
+  openRulesLine,
   plainThesisName,
   riskText,
   statusText,
@@ -94,6 +95,16 @@ describe('Books plain words', () => {
     });
     expect(scored.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
     expect(trackRecord({ priced_trades: 6, wins: 2, results_confidence: 56 }).backtest).toBeNull();
+  });
+
+  test('open rules stay plain words and stay off an empty list', () => {
+    expect(openRulesLine([])).toBeNull();
+    expect(openRulesLine(['no_chase_already_printed_leftovers'])).toBe(
+      'Rules in force no chase already printed leftovers',
+    );
+    expect(openRulesLine(['quality_drawdown_into_print', 'kill'])).toBe(
+      'Rules in force quality drawdown into print · kill',
+    );
   });
 
   test('exit line reads the lot’s own exit price in its unit', () => {
