@@ -19,6 +19,7 @@ import {
   plainThesisName,
   plainWords,
   riskText,
+  rowSentence,
   sizeNumber,
   sizeUnit,
   statusText,
@@ -42,11 +43,11 @@ const LESSONS_SHOWN = 5;
 
 /**
  * Book: one page per steward replacing the old Book and Theses tabs.
- * Header line, open positions with a one-line why and rules in force,
- * a short Watching line, and a Closed fold.
- * A tap opens the detail (thesis text, beliefs, outcomes). One watched idea
- * opens on that tap. The operator-only review queue renders only when
- * `canReview` (never on the public desk).
+ * Header line, then open positions as one or two sentences (why it is held,
+ * and the exit). Rule names, the score, and a prediction's full question
+ * stay in the detail. One watched idea is its own line; several fold until
+ * opened. The operator-only review queue renders only when `canReview`
+ * (never on the public desk).
  */
 export function BookPanel({
   desk,
@@ -164,7 +165,6 @@ function StewardSection({
   onOpenIdea: (id: string) => void;
 }) {
   const change = changeText(section.return_pct);
-  const ideas = section.watching.length + section.set_aside.length;
   const watched = section.watching.length === 1 ? section.watching[0] : undefined;
   return (
     <section className="books-steward" data-steward={section.slug} aria-label={section.name}>
@@ -210,27 +210,26 @@ function StewardSection({
           {section.checks.map((row) => <li key={row.id}>{row.text}</li>)}
         </ul>
       ) : null}
-      {watched && section.set_aside.length === 0 ? (
+      {watched ? (
         <ul className="books-ideas">
           <li><IdeaRow idea={watched} onOpen={onOpenIdea} watch /></li>
         </ul>
-      ) : ideas ? (
-        <Fold label={`Watching · ${section.watching.length} ${section.watching.length === 1 ? 'idea' : 'ideas'}${section.set_aside.length ? ` · ${section.set_aside.length} set aside` : ''}`}>
+      ) : section.watching.length > 1 ? (
+        <Fold label={`Watching · ${section.watching.length} ideas`}>
           <ul className="books-ideas">
             {section.watching.map((idea) => (
               <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} /></li>
             ))}
           </ul>
-          {section.set_aside.length ? (
-            <>
-              <p className="books-subhead">Set aside</p>
-              <ul className="books-ideas is-aside">
-                {section.set_aside.map((idea) => (
-                  <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} /></li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+        </Fold>
+      ) : null}
+      {section.set_aside.length ? (
+        <Fold label={`Not watching · ${section.set_aside.length} ${section.set_aside.length === 1 ? 'idea' : 'ideas'}`}>
+          <ul className="books-ideas is-aside">
+            {section.set_aside.map((idea) => (
+              <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} /></li>
+            ))}
+          </ul>
         </Fold>
       ) : null}
       {section.closed.length ? (
@@ -276,11 +275,6 @@ function LotRow({ lot, onOpen }: { lot: BooksLot; onOpen: (id: string) => void }
   const h = lot.holding;
   const amount = lotAmount(h);
   const pnl = lotPnl(h);
-  const why = [
-    lot.why,
-    lot.exit,
-    h.life === 'live' && (lot.thesis || h.thesis_id) ? lot.track.label : null,
-  ].filter(Boolean).join(' · ');
   return (
     <button
       type="button"
@@ -294,8 +288,7 @@ function LotRow({ lot, onOpen }: { lot: BooksLot; onOpen: (id: string) => void }
         {amount ? <span className="books-lot-amt">{amount}</span> : null}
         <span className={`books-lot-pnl ${pnlClass(pnl.sign)}`}>{pnl.text}</span>
       </span>
-      <span className="books-lot-why">{why}</span>
-      {lot.rules ? <span className="books-lot-rules">{lot.rules}</span> : null}
+      <span className="books-lot-why">{rowSentence(lot.why, lot.exit)}</span>
     </button>
   );
 }
@@ -318,7 +311,6 @@ function IdeaRow({
       onClick={() => onOpen(idea.thesis.id)}
     >
       <b>{watch ? `Watching · ${idea.name}` : idea.name}</b>
-      <span className="books-lot-why">{idea.lean} · {idea.track.label}</span>
     </button>
   );
 }
@@ -359,6 +351,7 @@ function BooksDetail({
       </button>
       <p className="thesis-page-kicker">{kicker}</p>
       <h2>{title}</h2>
+      {lot?.question ? <p className="books-question">{lot.question}</p> : null}
       {h ? (
         <>
           <dl className="books-facts">
