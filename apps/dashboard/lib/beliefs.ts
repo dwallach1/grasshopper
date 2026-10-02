@@ -4,7 +4,7 @@
  * domain. A later kill or negative_result lesson does not retire older process
  * slugs. Never invent a rule or a close lesson.
  */
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { asOptionalNumber, requireIso } from './numbers';
 import type { DeskPayload, DeskTeamPayload, LessonRow, ThesisRow } from './ledger-types';
