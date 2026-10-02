@@ -25,9 +25,27 @@ export type PublicDeskServe = {
 };
 
 let liveCache: { at: number; serve: PublicDeskServe } | null = null;
+const liveSlot: { pending: Promise<PublicDeskServe> | null } = { pending: null };
 
 export function resetPublicDeskLiveCache(): void {
   liveCache = null;
+  liveSlot.pending = null;
+}
+
+/**
+ * One in-flight ledger read per isolate. Concurrent /api/health and /api/desk
+ * calls share it so a cold isolate does not parse the bundle more than once.
+ */
+export function coalesceLiveRead<T>(
+  state: { pending: Promise<T> | null },
+  read: () => Promise<T>,
+): Promise<T> {
+  if (state.pending) return state.pending;
+  const pending = read().finally(() => {
+    if (state.pending === pending) state.pending = null;
+  });
+  state.pending = pending;
+  return pending;
 }
 
 function asObjectRows(value: unknown): Record<string, unknown>[] {
@@ -91,6 +109,10 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
   if (liveCache && now - liveCache.at < LIVE_CACHE_MS) {
     return liveCache.serve;
   }
+  return coalesceLiveRead(liveSlot, () => readPublicDeskServe(env));
+}
+
+async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
   const supabaseUrl = env.DESK_SUPABASE_URL?.trim() || '';
   const apiKey = env.DESK_READER_APIKEY?.trim() || '';
   const accessToken = env.DESK_READER_JWT?.trim() || '';

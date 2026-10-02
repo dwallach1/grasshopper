@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { asFiniteNumber, asOptionalNumber, asSmallint, requireIso } from './numbers';
 import { leanUntagged } from './position-thesis';

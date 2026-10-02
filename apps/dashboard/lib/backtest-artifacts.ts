@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { NOT_IN_LEDGER } from './book-performance';
 import { requireIso } from './numbers';

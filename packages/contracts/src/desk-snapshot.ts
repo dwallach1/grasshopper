@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 /** Envelope the public Worker and local `/api/desk` accept. Extra keys pass through. */
 export const DeskSourceSchema = z.enum(['postgres', 'postgrest', 'snapshot']);

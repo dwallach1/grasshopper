@@ -1,5 +1,5 @@
 import { mapBacktestArtifacts } from './backtest-artifacts';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import {
   mapAccount,

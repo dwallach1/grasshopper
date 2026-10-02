@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 export const RUN_OUTCOMES = ['passed', 'failed', 'skipped', 'running'] as const;
 export type RunOutcome = (typeof RUN_OUTCOMES)[number];
