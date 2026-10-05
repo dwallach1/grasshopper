@@ -536,6 +536,105 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
+  test('a closed row waiting on its lesson says so; an open row and a quiet header do not', async () => {
+    const base = desk();
+    const withGap: DeskPayload = {
+      ...base,
+      watchdog: {
+        ...(base.watchdog ?? emptyLedgerWatchdog()),
+        learning_gaps: { quantanamo: 0, oddsborne: 2, bandit: 0 },
+        learning_gap_lots: [
+          { steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'p-mia' },
+          { steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'p-ten' },
+        ],
+      },
+      theses: [
+        ...(base.theses ?? []),
+        {
+          id: 'sports_devig_maker_edge',
+          name: 'Sports maker bids vs sportsbook no-vig fair (ODDSBORNE)',
+          summary: 'Bid the maker side under the no-vig line.',
+          status: 'hardening',
+          confidence: 50,
+          time_horizon: 'days',
+          stance: 'neutral',
+          variant_perception: null,
+          falsifier: 'The no-vig line is wrong.',
+          created_at: AT,
+          updated_at: AT,
+          symbols: [],
+          lots: [],
+        },
+      ],
+      prediction_markets: {
+        ...base.prediction_markets,
+        markets: [{
+          id: 'm-mia',
+          venue: 'prediction',
+          slug: 'aec-nfl-mia-min-2026-10-04',
+          question: 'Who will win in the upcoming football event Miami Dolphins vs Minnesota Vikings scheduled for October 4, 2026 at 8:05 PM UTC?',
+          status: 'open',
+          close_time: null,
+          last_yes: 0.075,
+          last_no: 0.925,
+          last_marked_at: AT,
+          thesis_id: 'sports_devig_maker_edge',
+          rules_summary: null,
+        }],
+        positions: [{
+          id: 'p-mia',
+          market_id: 'm-mia',
+          account_key: 'polymarket-us-primary',
+          thesis_id: 'sports_devig_maker_edge',
+          outcome: 'yes',
+          status: 'closed',
+          quantity: 13,
+          average_cost: 0.158,
+          mark: 0.075,
+          mark_at: AT,
+          opened_at: AT,
+          closed_at: AT,
+          thesis_text: null,
+        }, {
+          id: 'p-open',
+          market_id: 'm-mia',
+          account_key: 'polymarket-us-primary',
+          thesis_id: 'sports_devig_maker_edge',
+          outcome: 'no',
+          status: 'open',
+          quantity: 10,
+          average_cost: 0.4,
+          mark: 0.42,
+          mark_at: AT,
+          thesis_text: null,
+        }],
+      },
+    };
+    const view = await mount(createElement(BookPanel, { desk: withGap, nowIso: AT }));
+    expect(view.host.querySelector('[data-steward="oddsborne"] .books-line')?.textContent)
+      .toContain('2 closes with no lesson yet');
+    expect(view.host.querySelector('[data-steward="quantanamo"] .books-line')?.textContent)
+      .not.toContain('no lesson');
+    const open = button(view.host, 'button.books-lot[data-lot="pm:p-open"]');
+    expect(open.textContent).not.toContain('No lesson written yet');
+    const toggle = [...view.host.querySelectorAll('[data-steward="oddsborne"] .books-fold-toggle')]
+      .find((node) => node.textContent?.includes('Closed'));
+    if (!(toggle instanceof view.host.ownerDocument.defaultView!.HTMLButtonElement) && !(toggle instanceof HTMLButtonElement)) {
+      throw new Error('missing closed fold');
+    }
+    await act(async () => {
+      (toggle as HTMLButtonElement).click();
+    });
+    const closed = button(view.host, 'button.books-lot[data-lot="pm:p-mia"]');
+    expect(closed.querySelector('b')?.textContent).toBe('Dolphins');
+    expect(closed.querySelector('.books-lot-why')?.textContent).toContain('No lesson written yet.');
+    await act(async () => {
+      closed.click();
+    });
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('No lesson written yet.');
+    view.unmount();
+  });
+
   test('one watched idea stays its own line when other ideas are not being watched', async () => {
     const payload = desk();
     payload.theses = [...payload.theses, {

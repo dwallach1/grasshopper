@@ -13,13 +13,14 @@ import {
   changeText,
   headerAmount,
   leanText,
+  lessonGapText,
+  lotLine,
   lotAmount,
   lotPnl,
   lotsForThesis,
   plainThesisName,
   plainWords,
   riskText,
-  rowSentence,
   sizeNumber,
   sizeUnit,
   statusText,
@@ -165,6 +166,7 @@ function StewardSection({
   onOpenIdea: (id: string) => void;
 }) {
   const change = changeText(section.return_pct);
+  const lessonGaps = lessonGapText(section.lesson_gaps);
   const watched = section.watching.length === 1 ? section.watching[0] : undefined;
   return (
     <section className="books-steward" data-steward={section.slug} aria-label={section.name}>
@@ -192,6 +194,12 @@ function StewardSection({
             </>
           ) : null}
           {section.over ? <em className="books-over"> · over budget</em> : null}
+          {lessonGaps ? (
+            <>
+              <span className="books-sep" aria-hidden="true"> · </span>
+              <span className="books-risk">{lessonGaps}</span>
+            </>
+          ) : null}
         </p>
       </header>
       {section.open.length ? (
@@ -288,7 +296,7 @@ function LotRow({ lot, onOpen }: { lot: BooksLot; onOpen: (id: string) => void }
         {amount ? <span className="books-lot-amt">{amount}</span> : null}
         <span className={`books-lot-pnl ${pnlClass(pnl.sign)}`}>{pnl.text}</span>
       </span>
-      <span className="books-lot-why">{rowSentence(lot.why, lot.exit)}</span>
+      <span className="books-lot-why">{lotLine(lot)}</span>
     </button>
   );
 }
@@ -391,19 +399,21 @@ function BooksDetail({
           {h.rules_in_force.length ? (
             <p className="books-note"><b>Rules in force</b> {h.rules_in_force.map(plainWords).join(' · ')}</p>
           ) : null}
-          {h.life === 'closed' ? (
-            h.clip_note ? (
-              <>
-                <p className="books-note">
-                  <b>{h.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}</b> {h.clip_note.summary}
-                </p>
-                {h.clip_note.belief ? (
-                  <p className="books-note"><b>Belief</b> {h.clip_note.belief.summary}</p>
-                ) : null}
-              </>
-            ) : (
-              <p className="books-note is-muted">No lesson written on close.</p>
-            )
+          {h.life === 'closed' && lot?.lesson_waiting ? (
+            <p className="books-note is-muted">No lesson written yet.</p>
+          ) : null}
+          {h.life === 'closed' && h.clip_note ? (
+            <>
+              <p className="books-note">
+                <b>{h.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}</b> {h.clip_note.summary}
+              </p>
+              {h.clip_note.belief ? (
+                <p className="books-note"><b>Belief</b> {h.clip_note.belief.summary}</p>
+              ) : null}
+            </>
+          ) : null}
+          {h.life === 'closed' && !h.clip_note && !lot?.lesson_waiting ? (
+            <p className="books-note is-muted">No lesson written on close.</p>
           ) : null}
           {!thesis ? (
             <p className="books-note is-muted">{lot?.why ? `${capitalize(lot.why)}.` : 'No thesis linked.'}</p>

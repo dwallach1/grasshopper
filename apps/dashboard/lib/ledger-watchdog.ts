@@ -58,6 +58,23 @@ export type ExposureUsage = {
 
 const EXPOSURE_ORDER = ['quantanamo', 'oddsborne', 'bandit'] as const;
 
+export type LearningGapSteward = (typeof EXPOSURE_ORDER)[number];
+
+/** Per-steward count of closed lots still waiting on a lesson. Not a trading breach. */
+export type LearningGapCounts = Record<LearningGapSteward, number>;
+
+export type LearningGapLot = {
+  steward: LearningGapSteward;
+  lot_table: string;
+  lot_id: string;
+};
+
+export const EMPTY_LEARNING_GAPS: LearningGapCounts = {
+  quantanamo: 0,
+  oddsborne: 0,
+  bandit: 0,
+};
+
 export type LedgerWatchdog = {
   available: boolean;
   checked_at: string | null;
@@ -71,6 +88,10 @@ export type LedgerWatchdog = {
   open_lots: number;
   exposure_over_budget: number;
   exposure: ExposureUsage[];
+  /** Closed lots past the grace window with no lesson or belief after the close. */
+  learning_gaps: LearningGapCounts;
+  /** Lot ids behind `learning_gaps`, capped in the view. Book rows match these. */
+  learning_gap_lots: LearningGapLot[];
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -90,10 +111,22 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     open_lots: 0,
     exposure_over_budget: 0,
     exposure: [],
+    learning_gaps: { ...EMPTY_LEARNING_GAPS },
+    learning_gap_lots: [],
     breaches: [],
     missing: [],
     issues: [],
   };
+}
+
+/** Book holding id for a learning-gap lot. Open equity rows use a different id, so they never match. */
+export function learningGapHoldingId(lotTable: string, lotId: string): string | null {
+  const id = lotId.trim();
+  if (!id) return null;
+  if (lotTable === 'pm_positions') return `pm:${id}`;
+  if (lotTable === 'meme_positions') return `meme:${id}`;
+  if (lotTable === 'position_episodes') return `eq-closed:${id}`;
+  return null;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -193,10 +226,31 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     open_lots: count(summary.open_lots),
     exposure_over_budget: count(summary.exposure_over_budget),
     exposure: exposureRows(summary.exposure),
+    ...learningGaps(summary.learning_gaps),
     breaches: rows(bag.breaches).map(lot),
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
   };
+}
+
+function learningGaps(value: unknown): Pick<LedgerWatchdog, 'learning_gaps' | 'learning_gap_lots'> {
+  const bag = record(value);
+  if (!bag) return { learning_gaps: { ...EMPTY_LEARNING_GAPS }, learning_gap_lots: [] };
+  const learning_gaps: LearningGapCounts = {
+    quantanamo: count(bag.quantanamo),
+    oddsborne: count(bag.oddsborne),
+    bandit: count(bag.bandit),
+  };
+  const learning_gap_lots: LearningGapLot[] = [];
+  for (const row of rows(bag.lots)) {
+    const steward = str(row.steward);
+    const lotId = str(row.lot_id);
+    const lotTable = str(row.lot_table);
+    if (!steward || !lotId || !lotTable) continue;
+    if (steward !== 'quantanamo' && steward !== 'oddsborne' && steward !== 'bandit') continue;
+    learning_gap_lots.push({ steward, lot_table: lotTable, lot_id: lotId });
+  }
+  return { learning_gaps, learning_gap_lots };
 }
 
 /** Counts for /api/health and the twice-daily ledger health routine. */
@@ -210,6 +264,8 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   integrity_errors: number;
   integrity: Record<string, number>;
   exposure_over_budget: number;
+  /** Learning-loop gap. Does not change `ok` on /api/health. */
+  learning_gaps: LearningGapCounts;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -222,6 +278,7 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     integrity_errors: w.integrity_errors,
     integrity: w.integrity,
     exposure_over_budget: w.exposure_over_budget,
+    learning_gaps: { ...w.learning_gaps },
   };
 }
 
