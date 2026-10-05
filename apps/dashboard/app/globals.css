@@ -6205,8 +6205,8 @@ a:focus-visible {
 }
 
 /* ——— Book: one page per steward (replaced Book + Theses) ———
-   Plain header line, open rows with one muted why line and rules in force,
-   a short Watching line, and a Closed fold.
+   Plain header line, open rows as one or two sentences (why, then the exit),
+   a short Watching line, and a Closed fold. Rule names stay in the detail.
    Ink only; P/L carries .up / .down by sign; over budget is a soft gold note. */
 
 .books-stage {
@@ -6359,8 +6359,15 @@ a:focus-visible {
 
 .books-lot-why,
 .books-lot-rules {
-  color: var(--ink-3, var(--text-3));
-  font-size: 12.5px;
+  color: var(--ink-2, var(--text-2));
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.books-question {
+  margin: 0 0 12px;
+  color: var(--ink-2, var(--text-2));
+  font-size: 15px;
   line-height: 1.4;
 }
 
