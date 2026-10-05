@@ -17,7 +17,7 @@ Nothing secret is in this directory. Credentials come from the process environme
    - The `entry_over_max_stake` watchdog check compares each entry with this snapshot, so an entry is judged against the cap that was in force when it was made.
 4. **Tag the thesis** on the order and the lot. Buy fills also propagate the lot's thesis to the order.
 
-The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation` and `v_ledger_integrity`.
+The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation`, `v_ledger_integrity`, and `v_learning_loop_gaps` (closes with no lesson yet; not a trading breach).
 
 ## BANDIT: `bandit/live_trade_clip.py`
 

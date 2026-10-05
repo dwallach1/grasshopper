@@ -91,7 +91,7 @@ When an equity episode, `pm_positions`, or `meme_positions` row goes closed / se
 1. `belief_updates` with `meta.kind = 'playbook_rule'` (preferred when the clip changes a rule), or
 2. `research_lessons` linked by `thesis_id`.
 
-The desk will show a linked lesson, else the newest belief, else a quiet “no lesson on close”. This PR does not invent those rows.
+The desk will show a linked lesson, else the newest belief, else a quiet “no lesson on close”. A close still waiting — past an 18-hour grace, inside the last 7 days, thesis tagged, and no `research_lessons` row or non-`outcome_rescore` belief written after `closed_at` — says “No lesson written yet” on the Book row. `v_learning_loop_gaps` counts those. An automatic `outcome_rescore` does not clear the gap. A `research_lesson`, a `playbook_rule`, a `trade_close_lesson`, or any other belief on that thesis after the close does.
 
 ```sql
 insert into public.belief_updates (

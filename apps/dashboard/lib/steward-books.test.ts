@@ -8,7 +8,9 @@ import {
   exitLine,
   headerAmount,
   leanText,
+  lessonGapText,
   lotAmount,
+  lotLine,
   lotPnl,
   openRulesLine,
   plainThesisName,
@@ -106,6 +108,17 @@ describe('Books plain words', () => {
       .toBe('Sports maker bids vs sportsbook no-vig fair. Exits below $0.10.');
     expect(rowSentence('opened before theses were tracked', null)).toBe('Opened before theses were tracked.');
     expect(rowSentence('no thesis linked', 'exit noted')).toBe('No thesis linked. Exit noted.');
+  });
+
+  test('only a closed row still waiting on its lesson says so', () => {
+    expect(lotLine({ why: 'Sports maker bids', exit: null, lesson_waiting: true }))
+      .toBe('Sports maker bids. No lesson written yet.');
+    expect(lotLine({ why: 'Sports maker bids', exit: 'exits below $0.10', lesson_waiting: false }))
+      .toBe('Sports maker bids. Exits below $0.10.');
+    expect(lotLine({ why: '', exit: null, lesson_waiting: true })).toBe('No lesson written yet.');
+    expect(lessonGapText(0)).toBeNull();
+    expect(lessonGapText(1)).toBe('1 close with no lesson yet');
+    expect(lessonGapText(2)).toBe('2 closes with no lesson yet');
   });
 
   test('a prediction row uses the side a person would say', () => {

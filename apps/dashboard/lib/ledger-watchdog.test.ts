@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { assembleDeskBookHealth, deskHealthSummary } from './desk-book-health';
-import { emptyLedgerWatchdog, exposureLine, mapLedgerWatchdog, watchdogHealthSummary } from './ledger-watchdog';
+import {
+  emptyLedgerWatchdog,
+  exposureLine,
+  learningGapHoldingId,
+  mapLedgerWatchdog,
+  watchdogHealthSummary,
+} from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
 
 describe('ledger watchdog', () => {
@@ -24,6 +32,8 @@ describe('ledger watchdog', () => {
       missing: [{ steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'y', instrument: 'nfl yes', unit: 'USD' }],
     });
     expect(watchdog.available).toBe(true);
+    expect(watchdog.learning_gaps).toEqual({ quantanamo: 0, oddsborne: 0, bandit: 0 });
+    expect(watchdog.learning_gap_lots).toEqual([]);
     expect(watchdog.invalidation_breaches).toBe(1);
     expect(watchdog.breaches[0]).toMatchObject({ unit: 'SOL', invalidation_price: 0.00002, mark: 0.000019 });
     expect(watchdogHealthSummary(watchdog)).toMatchObject({
@@ -53,5 +63,48 @@ describe('ledger watchdog', () => {
     expect(watchdog.exposure[1]?.over).toBe(false);
     expect(watchdogHealthSummary(watchdog).exposure_over_budget).toBe(1);
     expect(mapLedgerWatchdog({ summary: [{ open_lots: 0 }] }).exposure).toEqual([]);
+  });
+
+  test('learning gaps are a per-steward count, not a trading alert', () => {
+    const watchdog = mapLedgerWatchdog({
+      summary: [{
+        checked_at: '2026-10-05T17:00:00Z',
+        invalidation_breaches: 0,
+        integrity_issues: 0,
+        learning_gaps: {
+          quantanamo: 1,
+          oddsborne: 2,
+          bandit: 0,
+          lots: [
+            { steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'pm-1' },
+            { steward: 'quantanamo', lot_table: 'position_episodes', lot_id: 'eq-1' },
+            { steward: 'nope', lot_table: 'pm_positions', lot_id: 'skip' },
+          ],
+        },
+      }],
+    });
+    expect(watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 2, bandit: 0 });
+    expect(watchdog.learning_gap_lots.map((row) => learningGapHoldingId(row.lot_table, row.lot_id)))
+      .toEqual(['pm:pm-1', 'eq-closed:eq-1']);
+    expect(watchdog.integrity_issues).toBe(0);
+    expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
+    const health = assembleDeskBookHealth({ watchdog } as unknown as DeskPayload, Date.parse('2026-10-05T17:00:00Z'));
+    expect(health.alerts).toEqual([]);
+    expect(health.integrity_issues).toBe(0);
+  });
+
+  test('the learning-loop view is a grace window, not an integrity breach', () => {
+    const sql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/49_learning_loop_gaps.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261005173759_learning_loop_gaps.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain('create or replace view public.v_learning_loop_gaps\nwith (security_invoker = true)');
+    expect(sql).toContain("interval '18 hours'");
+    expect(sql).toContain("interval '7 days'");
+    expect(sql).toContain("coalesce(b.meta->>'kind', '') <> 'outcome_rescore'");
+    expect(sql).toContain('l.created_at > c.closed_at');
+    expect(sql).toContain('nullif(btrim(pe.thesis_id), \'\') is not null');
+    expect(sql).toContain('as learning_gaps');
+    expect(sql).toContain('from public.v_ledger_integrity');
+    expect(sql).not.toContain("'learning_loop_gap'");
+    expect(sql.match(/position_episodes|pm_positions|meme_positions/g)?.length).toBeGreaterThanOrEqual(6);
   });
 });

@@ -12,7 +12,7 @@ import { assembleBookHoldings, type BookHolding } from './book-holdings';
 import { assembleDeskBookHealth, type DeskBookAlert } from './desk-book-health';
 import { assembleLeaderboard } from './desk-leaderboard';
 import type { DeskPayload, LessonRow } from './ledger-types';
-import type { ExposureUsage } from './ledger-watchdog';
+import { learningGapHoldingId, type ExposureUsage } from './ledger-watchdog';
 import { formatAmount, signedAmount, type MoneyUnit } from './money-units';
 import { HISTORICAL_UNTAGGED } from './position-thesis';
 import { predictionDesk } from './prediction-book';
@@ -48,6 +48,8 @@ export type BooksLot = {
   why: string;
   /** `exits below $220.80` · `exit noted` · null */
   exit: string | null;
+  /** Closed lot past the learning-loop grace with no lesson or belief after the close. */
+  lesson_waiting: boolean;
   track: BooksTrack;
 };
 
@@ -74,6 +76,8 @@ export type BooksSection = {
   watching: BooksIdea[];
   set_aside: BooksIdea[];
   closed: BooksLot[];
+  /** Ledger count of closes still waiting on a lesson. Zero stays off the header. */
+  lesson_gaps: number;
   checks: BooksCheck[];
 };
 
@@ -155,6 +159,20 @@ export function rowSentence(why: string, exit: string | null): string {
   if (!exit) return held;
   const leave = asSentence(exit);
   return leave ? `${held} ${leave}` : held;
+}
+
+/** Collapsed row. A close still waiting on its lesson says so. Open rows never do. */
+export function lotLine(lot: Pick<BooksLot, 'why' | 'exit' | 'lesson_waiting'>): string {
+  const base = rowSentence(lot.why, lot.exit);
+  if (!lot.lesson_waiting) return base;
+  return base ? `${base} No lesson written yet.` : 'No lesson written yet.';
+}
+
+/** Header fragment when the steward has closes waiting on a lesson. */
+export function lessonGapText(count: number): string | null {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const n = Math.trunc(count);
+  return n === 1 ? '1 close with no lesson yet' : `${n} closes with no lesson yet`;
 }
 
 function asSentence(text: string): string {
@@ -354,6 +372,12 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
   const rosterById = new Map(roster.map((row) => [row.id, row]));
   const scores = new Map((desk.scorecard?.theses ?? []).map((row) => [row.thesis_id, row]));
   const exposure = new Map((desk.watchdog?.exposure ?? []).map((row) => [row.steward, row]));
+  const gapIds = new Set(
+    (desk.watchdog?.learning_gap_lots ?? [])
+      .map((row) => learningGapHoldingId(row.lot_table, row.lot_id))
+      .filter((id): id is string => Boolean(id)),
+  );
+  const gapCounts = desk.watchdog?.learning_gaps;
   const standings = new Map(assembleLeaderboard(desk).rows.map((row) => [row.id, row]));
   const alerts = assembleDeskBookHealth(desk, nowMs).alerts;
   const predictions = predictionDesk(desk);
@@ -378,6 +402,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       thesis,
       why,
       exit: holding.life === 'live' ? exitLine(holding) : null,
+      lesson_waiting: holding.life === 'closed' && gapIds.has(holding.id),
       track: holding.thesis_id ? trackRecord(scores.get(holding.thesis_id)) : trackRecord(null),
     };
   };
@@ -409,6 +434,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       watching: ideas.filter((row) => row.live).map(idea),
       set_aside: ideas.filter((row) => !row.live).map(idea),
       closed,
+      lesson_gaps: gapCounts?.[slug] ?? 0,
       checks: alerts
         .filter((row) => row.steward === slug)
         .map((row) => ({ id: row.id, text: `${row.label}: ${CHECK_TEXT[row.kind]}` })),

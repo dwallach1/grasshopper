@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 
+import { emptyLedgerWatchdog } from '../../../apps/dashboard/lib/ledger-watchdog';
+
 import { handleDeskApi, isWriteMethod, redirectFor } from './desk-api';
 import { jwtRole, liveReaderReady } from './desk-live';
 
@@ -119,6 +121,7 @@ describe('public desk Worker API', () => {
         integrity_errors: 0,
         integrity: {},
         exposure_over_budget: 0,
+        learning_gaps: { quantanamo: 0, oddsborne: 0, bandit: 0 },
       },
       learning: {
         to_review: 0,
@@ -138,6 +141,33 @@ describe('public desk Worker API', () => {
       env(),
     );
     expect(down.status).toBe(503);
+  });
+
+  test('learning-loop gaps do not make /api/health not-ok', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        watchdog: {
+          ...emptyLedgerWatchdog(),
+          available: true,
+          learning_gaps: { quantanamo: 1, oddsborne: 2, bandit: 0 },
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      ok: boolean;
+      integrity_issues: number;
+      invalidation_breaches: number;
+      watchdog: { learning_gaps: { quantanamo: number; oddsborne: number; bandit: number }; integrity_issues: number };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.integrity_issues).toBe(0);
+    expect(body.invalidation_breaches).toBe(0);
+    expect(body.watchdog.integrity_issues).toBe(0);
+    expect(body.watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 2, bandit: 0 });
   });
 
   test('publish ingest is gone', async () => {
