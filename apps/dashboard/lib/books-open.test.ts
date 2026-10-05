@@ -111,6 +111,11 @@ function desk(
         wins: 2,
         miscalibrated: false,
         thin: true,
+        backtest_tests: 2,
+        backtest_trades: 400,
+        backtest_weight: 2,
+        backtest_mean_ret: 0.004,
+        backtest_effect: 'for',
       }],
     },
     watchdog: {
@@ -272,7 +277,7 @@ function lesson(id: number, summary: string, created = AT) {
 }
 
 describe('Books page: one section per steward', () => {
-  test('header line, open row with a plain why / exit / track record, no public review queue', async () => {
+  test('header line, open row says why and the exit, no public review queue', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
     const sections = [...view.host.querySelectorAll('.books-steward')].map((node) => node.getAttribute('data-steward'));
     expect(sections).toEqual(['quantanamo', 'oddsborne', 'bandit']);
@@ -288,7 +293,12 @@ describe('Books page: one section per steward', () => {
     expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');
     expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
     expect(coda.querySelector('.books-lot-why')?.textContent)
-      .toBe('Earnings gap structure · exits below $10.35 · 6 trades, score 56');
+      .toBe('Earnings gap structure. Exits below $10.35.');
+    expect(coda.querySelector('.books-lot-rules')).toBeNull();
+    expect(coda.textContent).not.toContain('score');
+    expect(coda.textContent).not.toContain('backtest');
+    expect(coda.textContent).not.toContain('Rules in force');
+    expect(coda.textContent).not.toContain('no chase');
     expect(view.host.querySelector('[data-steward="oddsborne"] .books-none')?.textContent).toBe('Nothing open right now.');
     expect(view.host.textContent).not.toContain('Operator review');
     expect(view.host.textContent).not.toContain('To review');
@@ -298,9 +308,6 @@ describe('Books page: one section per steward', () => {
 
   test('visible surface has no ids, stated, or inval jargon', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
-    await act(async () => {
-      button(view.host, '[data-steward="quantanamo"] .books-fold-toggle').click();
-    });
     const text = view.host.textContent ?? '';
     expect(text).not.toContain(EARNINGS);
     expect(text).not.toContain(WEATHER);
@@ -332,7 +339,8 @@ describe('Books page: one section per steward', () => {
     expect(detail?.querySelector('h3')?.textContent).toBe('Earnings gap structure');
     expect(detail?.textContent).toContain(EARNINGS_SUMMARY);
     expect(detail?.querySelector('.thesis-page-falsifier')?.textContent).toBe(`Wrong if ${EARNINGS_FALSIFIER}`);
-    expect(detail?.textContent).toContain('Track record: 6 trades, score 56 · 2 wins');
+    expect(detail?.textContent).toContain('Track record: 6 trades + 2 backtests, score 56 · 2 wins');
+    expect(detail?.textContent).toContain('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
     expect(detail?.textContent).toContain('No chase leftovers.');
     expect(detail?.textContent).toContain('no chase already printed leftovers');
     expect(detail?.textContent).toContain('Rules in force');
@@ -392,19 +400,14 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
-  test('Watching folds theses with nothing open; a tap opens that thesis', async () => {
+  test('one watched idea is a short line; a tap opens that thesis', async () => {
     const view = await mount(createElement(BookPanel, { desk: desk(), nowIso: AT }));
-    const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');
-    expect(toggle.textContent).toContain('Watching · 1 idea');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(view.host.querySelector('button.books-idea')).toBeNull();
-    await act(async () => {
-      toggle.click();
-    });
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(view.host.querySelector('[data-steward="quantanamo"] .books-fold-toggle')).toBeNull();
     const idea = button(view.host, `button.books-idea[data-thesis="${WEATHER}"]`);
-    expect(idea.textContent).toContain('Same-day city-high weather');
-    expect(idea.textContent).toContain('expects up · no track record yet');
+    expect(idea.getAttribute('data-watch')).toBe('1');
+    expect(idea.textContent).toBe('Watching · Same-day city-high weather');
+    expect(idea.textContent).not.toContain('score');
+    expect(idea.textContent).not.toContain('not scored');
     await act(async () => {
       idea.click();
     });
@@ -417,6 +420,41 @@ describe('Books page: one section per steward', () => {
       button(view.host, '.thesis-page-back').click();
     });
     expect(view.host.querySelector('.books-detail')).toBeNull();
+    view.unmount();
+  });
+
+  test('several watched ideas stay behind one line until it opens', async () => {
+    const payload = desk();
+    payload.theses = [...payload.theses, {
+      id: 'second_watch',
+      name: 'Second watch idea',
+      summary: 'Another idea with nothing open.',
+      status: 'hardening',
+      confidence: 60,
+      time_horizon: 'days',
+      stance: 'neutral',
+      variant_perception: null,
+      falsifier: null,
+      created_at: AT,
+      updated_at: AT,
+      symbols: [],
+      lots: [],
+    }];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');
+    expect(toggle.textContent).toContain('Watching · 2 ideas');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(view.host.querySelector('button.books-idea')).toBeNull();
+    await act(async () => {
+      toggle.click();
+    });
+    const idea = button(view.host, `button.books-idea[data-thesis="${WEATHER}"]`);
+    expect(idea.getAttribute('data-watch')).toBeNull();
+    expect(idea.textContent).toContain('Same-day city-high weather');
+    await act(async () => {
+      idea.click();
+    });
+    expect(view.host.querySelector('.books-detail h2')?.textContent).toBe('Same-day city-high weather');
     view.unmount();
   });
 
@@ -441,7 +479,7 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
-  test('a closed prediction reads as its market question, % by sign, no zero P/L', async () => {
+  test('a closed prediction uses a short name; the question is in the detail', async () => {
     const base = desk();
     const withPm: DeskPayload = {
       ...base,
@@ -483,10 +521,162 @@ describe('Books page: one section per steward', () => {
       toggle.click();
     });
     const row = button(view.host, 'button.books-lot[data-lot="pm:p-fed"]');
-    expect(row.querySelector('b')?.textContent).toBe('YES · Fed Decision in September — 25 bps Increase');
+    expect(row.querySelector('b')?.textContent).toBe('Fed, up 25 bps');
+    expect(row.textContent).not.toContain('Fed Decision in September');
     expect(row.textContent).not.toContain('rdc-usfed');
     expect(row.querySelector('.books-lot-pnl')?.textContent).toBe('+$22.68 (+117.4%)');
-    expect(row.querySelector('.books-lot-why')?.textContent).toBe('opened before theses were tracked');
+    expect(row.querySelector('.books-lot-why')?.textContent).toBe('Opened before theses were tracked.');
+    expect(row.querySelector('.books-lot-rules')).toBeNull();
+    await act(async () => {
+      row.click();
+    });
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.querySelector('h2')?.textContent).toBe('Fed, up 25 bps');
+    expect(detail?.querySelector('.books-question')?.textContent).toBe('Fed Decision in September — 25 bps Increase');
+    view.unmount();
+  });
+
+  test('one watched idea stays its own line when other ideas are not being watched', async () => {
+    const payload = desk();
+    payload.theses = [...payload.theses, {
+      id: 'old_gap',
+      name: 'Old gap idea',
+      summary: 'Passed on after the print.',
+      status: 'rejected',
+      confidence: 20,
+      time_horizon: 'days',
+      stance: 'bullish',
+      variant_perception: null,
+      falsifier: null,
+      created_at: AT,
+      updated_at: AT,
+      symbols: [],
+      lots: [],
+      venues: ['equity'],
+    }];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    const section = view.host.querySelector('[data-steward="quantanamo"]');
+    const idea = button(view.host, `button.books-idea[data-thesis="${WEATHER}"]`);
+    expect(idea.getAttribute('data-watch')).toBe('1');
+    expect(idea.textContent).toBe('Watching · Same-day city-high weather');
+    const toggle = button(view.host, '[data-steward="quantanamo"] .books-fold-toggle');
+    expect(toggle.textContent).toContain('Not watching · 1 idea');
+    expect(section?.textContent).not.toContain('set aside');
+    expect(section?.textContent).not.toContain('score');
+    await act(async () => {
+      toggle.click();
+    });
+    await act(async () => {
+      button(view.host, 'button.books-idea[data-thesis="old_gap"]').click();
+    });
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('set aside');
+    view.unmount();
+  });
+
+  test('a football row names the side; the question stays in the detail', async () => {
+    const base = desk();
+    const sports = 'sports_devig_maker_edge';
+    const dolphins = 'Who will win in the upcoming football event Miami Dolphins vs Minnesota Vikings scheduled for October 4, 2026 at 8:05 PM UTC?';
+    const titans = 'Who will win in the upcoming football event Tennessee Titans vs Baltimore Ravens scheduled for October 4, 2026 at 5:00 PM UTC?';
+    const withPm: DeskPayload = {
+      ...base,
+      theses: [...base.theses, {
+        id: sports,
+        name: 'Sports maker bids vs sportsbook no-vig fair',
+        summary: 'Bid under the no-vig fair.',
+        status: 'forming',
+        confidence: 60,
+        time_horizon: 'days',
+        stance: 'neutral',
+        variant_perception: null,
+        falsifier: 'The bid is no longer cheap.',
+        created_at: AT,
+        updated_at: AT,
+        symbols: [],
+        lots: [],
+        venues: ['prediction'],
+      }],
+      prediction_markets: {
+        ...base.prediction_markets,
+        markets: [{
+          id: 'm-mia',
+          venue: 'prediction',
+          slug: 'aec-nfl-mia-min-2026-10-04',
+          question: dolphins,
+          status: 'open',
+          close_time: null,
+          last_yes: 0.1625,
+          last_no: null,
+          last_marked_at: AT,
+          thesis_id: sports,
+          rules_summary: null,
+        }, {
+          id: 'm-ten',
+          venue: 'prediction',
+          slug: 'aec-nfl-ten-bal-2026-10-04',
+          question: titans,
+          status: 'open',
+          close_time: null,
+          last_yes: 0.1475,
+          last_no: null,
+          last_marked_at: AT,
+          thesis_id: sports,
+          rules_summary: null,
+        }],
+        positions: [{
+          id: 'p-mia',
+          market_id: 'm-mia',
+          account_key: 'polymarket-us-primary',
+          thesis_id: sports,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 13,
+          average_cost: 0.158,
+          mark: 0.1625,
+          mark_at: AT,
+          thesis_text: null,
+          untagged: null,
+          invalidation_price: 0.1018,
+          invalidation_note: null,
+        }, {
+          id: 'p-ten',
+          market_id: 'm-ten',
+          account_key: 'polymarket-us-primary',
+          thesis_id: sports,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 14,
+          average_cost: 0.146,
+          mark: 0.1475,
+          mark_at: AT,
+          thesis_text: null,
+          untagged: null,
+          invalidation_price: 0.0858,
+          invalidation_note: null,
+        }],
+      },
+    };
+    const view = await mount(createElement(BookPanel, { desk: withPm, nowIso: AT }));
+    const mia = button(view.host, 'button.books-lot[data-lot="pm:p-mia"]');
+    const ten = button(view.host, 'button.books-lot[data-lot="pm:p-ten"]');
+    expect(mia.querySelector('b')?.textContent).toBe('Dolphins');
+    expect(ten.querySelector('b')?.textContent).toBe('Titans');
+    expect(mia.querySelector('.books-lot-why')?.textContent)
+      .toBe('Sports maker bids vs sportsbook no-vig fair. Exits below $0.10.');
+    expect(ten.querySelector('.books-lot-why')?.textContent)
+      .toBe('Sports maker bids vs sportsbook no-vig fair. Exits below $0.09.');
+    for (const row of [mia, ten]) {
+      expect(row.textContent).not.toContain('Who will win');
+      expect(row.textContent).not.toContain('score');
+      expect(row.textContent).not.toContain('Rules in force');
+      expect(row.textContent).not.toContain('not scored');
+    }
+    await act(async () => {
+      mia.click();
+    });
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.querySelector('h2')?.textContent).toBe('Dolphins');
+    expect(detail?.querySelector('.books-question')?.textContent).toBe(dolphins);
     view.unmount();
   });
 

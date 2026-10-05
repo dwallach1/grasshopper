@@ -10,8 +10,11 @@ import {
   leanText,
   lotAmount,
   lotPnl,
+  openRulesLine,
   plainThesisName,
+  predictionShortName,
   riskText,
+  rowSentence,
   statusText,
   trackRecord,
 } from './steward-books';
@@ -94,6 +97,44 @@ describe('Books plain words', () => {
     });
     expect(scored.backtest).toBe('Backtests: 2 logged (400 trades), +0.40% per trade after costs, counts for the score');
     expect(trackRecord({ priced_trades: 6, wins: 2, results_confidence: 56 }).backtest).toBeNull();
+  });
+
+  test('a collapsed row is why it is held, then the exit', () => {
+    expect(rowSentence('Earnings gap structure and missed-swing autopsy', 'exits below $10.35'))
+      .toBe('Earnings gap structure and missed-swing autopsy. Exits below $10.35.');
+    expect(rowSentence('Sports maker bids vs sportsbook no-vig fair', 'exits below $0.10'))
+      .toBe('Sports maker bids vs sportsbook no-vig fair. Exits below $0.10.');
+    expect(rowSentence('opened before theses were tracked', null)).toBe('Opened before theses were tracked.');
+    expect(rowSentence('no thesis linked', 'exit noted')).toBe('No thesis linked. Exit noted.');
+  });
+
+  test('a prediction row uses the side a person would say', () => {
+    const dolphins = 'Who will win in the upcoming football event Miami Dolphins vs Minnesota Vikings scheduled for October 4, 2026 at 8:05 PM UTC?';
+    const titans = 'Who will win in the upcoming football event Tennessee Titans vs Baltimore Ravens scheduled for October 4, 2026 at 5:00 PM UTC?';
+    expect(predictionShortName(dolphins, 'yes')).toBe('Dolphins');
+    expect(predictionShortName(dolphins, 'no')).toBe('Vikings');
+    expect(predictionShortName(titans, 'yes')).toBe('Titans');
+    expect(predictionShortName(titans, 'no')).toBe('Ravens');
+    expect(predictionShortName('Who will win MIA Dolphins vs SF 49ers Sep 20 2026 (Dolphins YES)', 'yes')).toBe('Dolphins');
+    expect(predictionShortName('Who will win: New England Patriots vs Seattle Seahawks (Sep 9, 2026)', 'no')).toBe('Seahawks');
+    expect(predictionShortName('Fed Decision in September — 25 bps Increase', 'yes')).toBe('Fed, up 25 bps');
+    expect(predictionShortName('Fed Decision in September — No Change', 'yes')).toBe('Fed, no change');
+    expect(predictionShortName('Fed Decision in September — 25 bps Increase', 'no')).toBe('No on Fed, up 25 bps');
+    expect(predictionShortName('Highest temperature in Chicago on September 9? — 79 or below', 'yes')).toBe('Chicago, 79 or below');
+    expect(predictionShortName('Highest temperature in Los Angeles on September 10? 87 to 88', 'yes')).toBe('Los Angeles, 87 to 88');
+    expect(predictionShortName('Mark Andrews 2+ touchdowns — NO Saints vs BAL Ravens Sep 20 2026', 'yes')).toBe('Mark Andrews 2+ touchdowns');
+    expect(predictionShortName('Fed hike 25', 'yes')).toBe('Fed hike 25');
+    expect(predictionShortName('Who will win in the upcoming football event Baltimore Ravens vs Dallas Cowboys scheduled for September 27, 2026 at 8:25 PM UTC?', 'yes')).toBe('Ravens');
+  });
+
+  test('open rules stay plain words and stay off an empty list', () => {
+    expect(openRulesLine([])).toBeNull();
+    expect(openRulesLine(['no_chase_already_printed_leftovers'])).toBe(
+      'Rules in force no chase already printed leftovers',
+    );
+    expect(openRulesLine(['quality_drawdown_into_print', 'kill'])).toBe(
+      'Rules in force quality drawdown into print · kill',
+    );
   });
 
   test('exit line reads the lot’s own exit price in its unit', () => {

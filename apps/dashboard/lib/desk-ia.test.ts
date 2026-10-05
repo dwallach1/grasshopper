@@ -42,7 +42,7 @@ describe('desk IA smoke', () => {
     expect(nav).toContain("go: 'p'");
     expect(nav).toContain('DESK_SWIPE_SURFACES');
     expect(nav).toContain("'leaderboard', 'book', 'team'");
-    expect(nav).toContain("label: 'Books'");
+    expect(nav).toContain("label: 'Book'");
     expect(nav).not.toContain("label: 'Theses'");
     expect(nav).toContain('PUBLIC_DESK_TABS');
     expect(nav).not.toMatch(/id: 'home'/);
@@ -230,7 +230,7 @@ describe('desk IA smoke', () => {
     const roster = await readDashboard('lib/thesis-roster.ts');
     expect(world).toContain('data-desk-nested-scroll');
     expect(world).toContain('thesis-page');
-    expect(world).toContain('Back to books');
+    expect(world).toContain('Back to book');
     expect(world).toContain('thesis.falsifier');
     expect(world).toContain('thesis.evidence');
     expect(world).toContain('thesis.beliefs');
@@ -511,7 +511,7 @@ describe('desk IA smoke', () => {
     expect(board).not.toContain('threeui');
     expect(board).not.toContain('ascii-magic');
     expect(book).toContain('visually-hidden');
-    expect(book).toContain('>Books<');
+    expect(book).toContain('>Book<');
     expect(css).toContain('.crt-book');
     expect(css).toContain('.book-open');
     expect(css).toContain('.book-holdings');

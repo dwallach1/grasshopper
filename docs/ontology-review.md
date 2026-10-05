@@ -4,7 +4,7 @@ Quantanamo collects `ontology_candidates`. Review decides. The phone is read-onl
 
 ## What the desk shows
 
-The operator desk's Books page has a **To review** queue inside the collapsed **Operator review** fold (never on the public phone): pending candidates, **membership** (and theme rows already bound to a theme id) before raw `term` noise, then ledger `score` then `source_count`, cap 40. Scores are not invented. Deny-list junk is omitted even if it is still `pending`. Fetch is pending (public) with membership-first SQL order and **no** `source_count >= 2` gate — most live memberships are `source_count=1` and would never enter a 200-row score window otherwise. Ranking + the junk deny-list still quality-filter. Public `/api/desk` ranks the same way. `ontology_management_actions` stay off the public envelope.
+The operator desk's Book page has a **To review** queue inside the collapsed **Operator review** fold (never on the public phone): pending candidates, **membership** (and theme rows already bound to a theme id) before raw `term` noise, then ledger `score` then `source_count`, cap 40. Scores are not invented. Deny-list junk is omitted even if it is still `pending`. Fetch is pending (public) with membership-first SQL order and **no** `source_count >= 2` gate — most live memberships are `source_count=1` and would never enter a 200-row score window otherwise. Ranking + the junk deny-list still quality-filter. Public `/api/desk` ranks the same way. `ontology_management_actions` stay off the public envelope.
 
 Promote / reject / merge buttons render only on the **local operator desk** (`bun run web:app`). The public Worker never accepts those writes.
 
