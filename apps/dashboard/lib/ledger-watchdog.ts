@@ -4,6 +4,12 @@
  * v_open_lots_missing_invalidation. Never invents a mark: a lot without a
  * ledger mark is never a breach. Missing views serve an unavailable, zeroed payload.
  */
+import {
+  isEquityMarkSession,
+  usEquityMarkSession,
+  type EquityMarkSession,
+} from '@quantanamo/contracts/market-calendar';
+
 import type { MoneyUnit } from './money-units';
 
 export const WATCHDOG_LIST_LIMIT = 50;
@@ -11,7 +17,7 @@ export const WATCHDOG_LIST_LIMIT = 50;
 /** PostgREST reads (operator /bundle, public bundle, desk-public-rest). */
 export const WATCHDOG_QUERIES = {
   summary: 'v_ledger_watchdog?select=*',
-  breaches: `v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint&order=mark_at.desc&limit=${WATCHDOG_LIST_LIMIT}`,
+  breaches: `v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint,mark_session&order=mark_at.desc&limit=${WATCHDOG_LIST_LIMIT}`,
   missing: `v_open_lots_missing_invalidation?select=steward,lot_table,lot_id,instrument,unit,thesis_id,mark,mark_at,opened_at&order=opened_at.asc&limit=${WATCHDOG_LIST_LIMIT}`,
   issues: `v_ledger_integrity?select=check_name,severity,steward,ref_table,ref_id,instrument,detail,at&order=at.desc.nullslast&limit=${WATCHDOG_LIST_LIMIT}`,
 } as const;
@@ -27,6 +33,11 @@ export type WatchdogLot = {
   mark: number | null;
   mark_at: string | null;
   action_hint: string | null;
+  /**
+   * Equity mark session (`pre` / `rth` / `post` / `closed`) from v_invalidation_breaches.mark_session,
+   * or derived from mark_at when the view predates it. Null for prediction markets and memes (24/7).
+   */
+  mark_session: EquityMarkSession | null;
 };
 
 export type WatchdogIssue = {
@@ -154,6 +165,13 @@ function str(value: unknown): string | null {
   return null;
 }
 
+/** The view's mark_session for an equity lot, else derived from mark_at. 24/7 books have none. */
+function markSession(lotTable: string | null, named: string | null, markAt: string | null): EquityMarkSession | null {
+  if (lotTable !== 'position_episodes') return null;
+  if (named && isEquityMarkSession(named)) return named;
+  return markAt ? usEquityMarkSession(Date.parse(markAt)) : null;
+}
+
 function lot(row: Record<string, unknown>): WatchdogLot {
   return {
     steward: str(row.steward) ?? 'unknown',
@@ -166,6 +184,7 @@ function lot(row: Record<string, unknown>): WatchdogLot {
     mark: num(row.mark),
     mark_at: str(row.mark_at),
     action_hint: str(row.action_hint),
+    mark_session: markSession(str(row.lot_table), str(row.mark_session), str(row.mark_at)),
   };
 }
 
@@ -290,4 +309,24 @@ function wholeAmount(value: number, unit: MoneyUnit): string {
 /** Quiet Book line: `risk $654 / $550 budget`. Never colored like P/L. */
 export function exposureLine(row: ExposureUsage): string {
   return `risk ${wholeAmount(row.open_risk, row.unit)} / ${wholeAmount(row.risk_budget, row.unit)} budget`;
+}
+
+/**
+ * An equity lot marked through its line outside the regular session: not an exit. The steward's rule
+ * counts regular-session trades only, so it decides at the next open. True when the view says
+ * review_at_open, or when the mark's own session is not rth (an equity never exits on a pre / post /
+ * closed print, even if an older view called it actionable). Prediction markets and memes trade 24/7.
+ */
+export function breachDecidesAtOpen(lot: Pick<WatchdogLot, 'lot_table' | 'action_hint' | 'mark_session'>): boolean {
+  if (lot.lot_table !== 'position_episodes') return false;
+  if (lot.action_hint === 'review_at_open') return true;
+  return lot.mark_session !== null && lot.mark_session !== 'rth';
+}
+
+/** Plain name for an out-of-session print: `premarket print`, `after-hours print`, `market-closed print`. */
+export function sessionPrintText(session: EquityMarkSession | null): string {
+  if (session === 'pre') return 'premarket print';
+  if (session === 'post') return 'after-hours print';
+  if (session === 'closed') return 'market-closed print';
+  return 'out-of-session print';
 }

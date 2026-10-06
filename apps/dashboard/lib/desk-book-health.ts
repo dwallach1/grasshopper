@@ -8,7 +8,7 @@ import { isMarkStale } from './desk-freshness';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk } from './meme-book';
 import { formatAmount } from './money-units';
-import { watchdogHealthSummary } from './ledger-watchdog';
+import { breachDecidesAtOpen, sessionPrintText, watchdogHealthSummary } from './ledger-watchdog';
 import { predictionDesk } from './prediction-book';
 
 export type DeskBookAlertKind =
@@ -16,6 +16,8 @@ export type DeskBookAlertKind =
   | 'resolved_still_open'
   | 'stale_catalog'
   | 'invalidation_breach'
+  /** Equity marked through its line outside the regular session: decides at the open, not an exit. */
+  | 'invalidation_review_at_open'
   | 'missing_invalidation';
 
 export type DeskBookAlert = {
@@ -25,6 +27,8 @@ export type DeskBookAlert = {
   label: string;
   at: string | null;
   detail: string;
+  /** Plain session name for `invalidation_review_at_open` (`premarket print`). */
+  print?: string;
 };
 
 export type DeskBookHealth = {
@@ -151,15 +155,29 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
   // Independent backstop: the ledger watchdog views (never invented marks).
   const watchdog = desk.watchdog;
   for (const lot of watchdog?.breaches ?? []) {
+    const mark = lot.mark === null ? '—' : formatAmount(lot.mark, lot.unit);
+    const line = lot.invalidation_price === null ? '—' : formatAmount(lot.invalidation_price, lot.unit);
+    if (breachDecidesAtOpen(lot)) {
+      // A pre / after-hours / closed equity print is not an exit: the rule counts regular-session trades.
+      const print = sessionPrintText(lot.mark_session);
+      alerts.push({
+        kind: 'invalidation_review_at_open',
+        steward: stewardSlug(lot.steward),
+        id: `breach-${lot.lot_table}-${lot.lot_id}`,
+        label: lot.instrument,
+        at: lot.mark_at,
+        detail: `${print} ${mark} under exit ${line} · decides at open`,
+        print,
+      });
+      continue;
+    }
     alerts.push({
       kind: 'invalidation_breach',
       steward: stewardSlug(lot.steward),
       id: `breach-${lot.lot_table}-${lot.lot_id}`,
       label: lot.instrument,
       at: lot.mark_at,
-      detail: `mark ${lot.mark === null ? '—' : formatAmount(lot.mark, lot.unit)} at/below inval ${
-        lot.invalidation_price === null ? '—' : formatAmount(lot.invalidation_price, lot.unit)}${
-        lot.action_hint === 'review_at_open' ? ' · review at open' : ''}`,
+      detail: `mark ${mark} at/below inval ${line}`,
     });
   }
   for (const lot of watchdog?.missing ?? []) {

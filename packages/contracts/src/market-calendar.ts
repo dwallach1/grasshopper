@@ -95,3 +95,32 @@ export function isUsRegularSession(ms: number): boolean {
   if (!Number.isFinite(ms)) return false;
   return usEquitySession(ms).status === 'open';
 }
+
+/**
+ * Which US equity session a mark's timestamp falls in. Mirrors private.us_equity_session
+ * (supabase/schemas/54_equity_mark_session.sql):
+ *   rth     the NYSE core session (same as isUsRegularSession)
+ *   pre     a trading day, 04:00 to 09:30 ET
+ *   post    a trading day, the close to 20:00 ET (17:00 on an early-close day)
+ *   closed  weekends, exchange holidays, 20:00 to 04:00 ET
+ * Only an rth mark at or below a lot's invalidation is an actionable exit; the rest decide at the open.
+ */
+export type EquityMarkSession = 'pre' | 'rth' | 'post' | 'closed';
+
+export function isEquityMarkSession(value: string): value is EquityMarkSession {
+  return value === 'pre' || value === 'rth' || value === 'post' || value === 'closed';
+}
+
+const PRE_OPEN_MINUTES = 4 * 60;
+const POST_CLOSE_MINUTES = 20 * 60;
+const EARLY_CLOSE_POST_MINUTES = 17 * 60;
+
+export function usEquityMarkSession(ms: number): EquityMarkSession | null {
+  if (!Number.isFinite(ms)) return null;
+  const session = usEquitySession(ms);
+  if (session.status === 'weekend' || session.status === 'holiday' || session.closeMinutes === null) return 'closed';
+  if (session.status === 'open') return 'rth';
+  if (session.status === 'pre_open') return session.minutes >= PRE_OPEN_MINUTES ? 'pre' : 'closed';
+  const postEnd = session.calendar?.kind === 'early_close' ? EARLY_CLOSE_POST_MINUTES : POST_CLOSE_MINUTES;
+  return session.minutes < postEnd ? 'post' : 'closed';
+}

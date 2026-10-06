@@ -60,7 +60,10 @@ export type BooksIdea = {
   lean: string;
 };
 
-export type BooksCheck = { id: string; text: string };
+/** `breach`: an actionable exit (red). `open`: an out-of-session print that decides at the open (quiet). */
+export type BooksCheckTone = 'breach' | 'open' | 'plain';
+
+export type BooksCheck = { id: string; text: string; tone: BooksCheckTone };
 
 export type BooksPnl = { text: string; sign: number | null };
 
@@ -363,8 +366,23 @@ const CHECK_TEXT = {
   resolved_still_open: 'market closed but the position is still open',
   stale_catalog: 'market list not refreshed',
   invalidation_breach: 'price is at or below its exit',
+  invalidation_review_at_open: 'out-of-session print under its exit, decides at open',
   missing_invalidation: 'no exit price written',
 } as const satisfies Record<DeskBookAlert['kind'], string>;
+
+/** Book line for a check: `CODA: premarket print under its exit, decides at open`. */
+export function checkText(alert: Pick<DeskBookAlert, 'kind' | 'label' | 'print'>): string {
+  if (alert.kind === 'invalidation_review_at_open' && alert.print) {
+    return `${alert.label}: ${alert.print} under its exit, decides at open`;
+  }
+  return `${alert.label}: ${CHECK_TEXT[alert.kind]}`;
+}
+
+function checkTone(kind: DeskBookAlert['kind']): BooksCheckTone {
+  if (kind === 'invalidation_breach') return 'breach';
+  if (kind === 'invalidation_review_at_open') return 'open';
+  return 'plain';
+}
 
 export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardBooks {
   const holdings = assembleBookHoldings(desk).rows;
@@ -437,7 +455,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       lesson_gaps: gapCounts?.[slug] ?? 0,
       checks: alerts
         .filter((row) => row.steward === slug)
-        .map((row) => ({ id: row.id, text: `${row.label}: ${CHECK_TEXT[row.kind]}` })),
+        .map((row) => ({ id: row.id, text: checkText(row), tone: checkTone(row.kind) })),
     };
   });
 

@@ -121,7 +121,10 @@ function resolvePresence(scan: boolean, book: BookSignals): StewardPresenceState
 
 function bookSignals(desk: DeskPayload, nowMs: number): Map<BookSlug, BookSignals> {
   const health = assembleDeskBookHealth(desk, nowMs);
-  const blockedByHealth = new Set(health.alerts.map((alert) => alert.steward));
+  // An out-of-session equity print that decides at the open does not block a steward.
+  const blockedByHealth = new Set(health.alerts
+    .filter((alert) => alert.kind !== 'invalidation_review_at_open')
+    .map((alert) => alert.steward));
   const missing = missingGateSlugs(desk);
   const equityOpen = equityOpenRisk(desk);
   const predictions = predictionDesk(desk);
