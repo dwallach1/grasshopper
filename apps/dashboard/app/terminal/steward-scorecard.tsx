@@ -5,7 +5,7 @@ import { formatUsd, signedAmount } from '../../lib/money-units';
 import {
   hitLabel,
   SCORECARD_THIN_N,
-  THESIS_GAP_FLAG,
+  thesisCalibrationText,
   type StewardScorecardCard,
   type ThesisScoreRow,
 } from '../../lib/steward-scorecard';
@@ -116,20 +116,21 @@ export function StewardScorecard({
       </dl>
 
       {card.theses.length > 0 && (
-        <ul className="score-theses" aria-label="Thesis confidence, stated vs outcome-implied">
-          {card.theses.map((row) => (
-            <li
-              key={row.thesis_id}
-              className={row.miscalibrated ? 'is-off' : undefined}
-              title={`${row.thesis_id}: stated ${row.stated_confidence ?? '—'} vs outcome-implied ${row.outcome_implied_confidence ?? '—'} over ${row.priced_trades} trades${row.miscalibrated ? ` (more than ${THESIS_GAP_FLAG} apart)` : ''}`}
-            >
-              {thesisLabel(row)}
-              <b>
-                {row.stated_confidence ?? '—'}→{row.outcome_implied_confidence === null ? '—' : Math.round(row.outcome_implied_confidence)}
-              </b>
-              <i>n{row.priced_trades}</i>
-            </li>
-          ))}
+        <ul className="score-theses" aria-label="Thesis calibration: stated (or expected from entry odds) vs realized">
+          {card.theses.map((row) => {
+            const calibration = thesisCalibrationText(row);
+            return (
+              <li
+                key={row.thesis_id}
+                className={row.miscalibrated ? 'is-off' : undefined}
+                title={calibration.title}
+              >
+                {thesisLabel(row)}
+                <b>{calibration.value}</b>
+                <i>n{row.priced_trades}</i>
+              </li>
+            );
+          })}
         </ul>
       )}
 

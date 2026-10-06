@@ -116,6 +116,11 @@ function desk(
         backtest_weight: 2,
         backtest_mean_ret: 0.004,
         backtest_effect: 'for',
+        calibration_basis: 'stated_vs_hit_rate',
+        expected_wins: null,
+        expected_win_rate: null,
+        calibration_trades: null,
+        calibration_p: null,
       }],
     },
     watchdog: {

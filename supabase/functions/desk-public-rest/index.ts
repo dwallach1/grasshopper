@@ -105,7 +105,7 @@ const SCORECARD: Array<[string, string]> = [
   ['stewards', 'v_steward_scorecard?select=*&order=sort_order.asc'],
   ['weekly', 'v_steward_scorecard_weekly?select=steward,unit,week_start,iso_week,is_current,trades,priced_trades,wins,hit_rate,realized_pnl&order=week_start.desc,steward.asc&limit=60'],
   ['trend', 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction'],
-  ['theses', 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,results_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin,backtest_tests,backtest_trades,backtest_weight,backtest_mean_ret,backtest_effect&order=priced_trades.desc'],
+  ['theses', 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,results_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin,backtest_tests,backtest_trades,backtest_weight,backtest_mean_ret,backtest_effect,calibration_basis,expected_wins,expected_win_rate,calibration_trades,calibration_p&order=priced_trades.desc'],
 ];
 
 /** Ledger watchdog views (same queries as apps/dashboard/lib/ledger-watchdog.ts). Optional. */

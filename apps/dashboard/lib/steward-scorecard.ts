@@ -7,6 +7,10 @@ import type { MoneyUnit } from './money-units';
 
 export const SCORECARD_THIN_N = 10;
 export const THESIS_GAP_FLAG = 15;
+/** Binary theses: flagged only with this many trades carrying an entry probability (= the thin threshold)... */
+export const BINARY_CALIBRATION_MIN_N = SCORECARD_THIN_N;
+/** ...and when the realized wins are this unlikely under those probabilities (two-sided). */
+export const BINARY_CALIBRATION_P = 0.05;
 export const SCORECARD_WEEKS = 4;
 
 export type StewardScoreRow = {
@@ -65,6 +69,16 @@ export type StewardTrendRow = {
   direction: 'thin' | 'improving' | 'worsening' | 'flat';
 };
 
+/**
+ * Which yardstick a thesis's calibration uses (migration 52, v_thesis_scorecard.calibration_basis).
+ * - `stated_vs_hit_rate` (equity, meme, mixed): gap = stated confidence - hit rate; flagged when |gap| > 15.
+ * - `entry_probability` (every priced trade a prediction-market binary): gap = expected win rate (each
+ *   trade's --p fair value, else its entry price) - hit rate; flagged only with >= 10 such trades and an
+ *   exact two-sided Poisson-binomial p-value < 0.05. Stated confidence (that the edge is real) is not a
+ *   per-trade win rate, so a 15c longshot is expected to lose ~85% of the time even with a real edge.
+ */
+export type CalibrationBasis = 'stated_vs_hit_rate' | 'entry_probability';
+
 export type ThesisScoreRow = {
   thesis_id: string;
   name: string | null;
@@ -72,12 +86,23 @@ export type ThesisScoreRow = {
   stated_confidence: number | null;
   /** Earned results score (migration 41); null = unscored. */
   results_confidence: number | null;
+  /** Realized hit rate x 100. */
   outcome_implied_confidence: number | null;
+  /** stated - hit rate, or for binaries expected win rate - hit rate (see CalibrationBasis). */
   confidence_gap: number | null;
   priced_trades: number;
   wins: number;
   miscalibrated: boolean;
   thin: boolean;
+  calibration_basis: CalibrationBasis;
+  /** Binaries: sum of each trade's fair probability (or entry price); null otherwise. */
+  expected_wins: number | null;
+  /** Binaries: 100 x expected_wins / calibration_trades; null otherwise. */
+  expected_win_rate: number | null;
+  /** Binaries: priced trades that carry an entry probability; null otherwise. */
+  calibration_trades: number | null;
+  /** Binaries: two-sided p-value of the wins given the entry probabilities; null otherwise. */
+  calibration_p: number | null;
   /** Logged out-of-sample backtests that count (pass or fail; migration 46). */
   backtest_tests: number;
   backtest_trades: number;
@@ -90,6 +115,31 @@ export type ThesisScoreRow = {
 };
 
 export type BacktestEffect = 'for' | 'against' | null;
+
+function calibrationBasis(value: string | null): CalibrationBasis {
+  return value === 'entry_probability' ? 'entry_probability' : 'stated_vs_hit_rate';
+}
+
+/**
+ * The ledger view is the source of truth for the flag (only it has the per-trade entry probabilities).
+ * Rows without a view flag (older payloads, fixtures) fall back: binaries need the minimum sample and a
+ * p-value below 0.05, everything else the |gap| > 15 rule. A binary flag is never shown on a thin sample.
+ */
+function thesisMiscalibrated(
+  flag: boolean | null,
+  basis: CalibrationBasis,
+  gap: number | null,
+  calibrationTrades: number | null,
+  calibrationP: number | null,
+): boolean {
+  if (basis === 'entry_probability') {
+    if (calibrationTrades === null || calibrationTrades < BINARY_CALIBRATION_MIN_N) return false;
+    if (flag !== null) return flag;
+    return calibrationP !== null && calibrationP < BINARY_CALIBRATION_P;
+  }
+  if (flag !== null) return flag;
+  return gap !== null && Math.abs(gap) > THESIS_GAP_FLAG;
+}
 
 function backtestEffect(value: string | null): BacktestEffect {
   if (value === 'for') return 'for';
@@ -124,6 +174,10 @@ function num(value: unknown): number | null {
 function int(value: unknown): number {
   const parsed = num(value);
   return parsed === null ? 0 : Math.trunc(parsed);
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 function str(value: unknown): string | null {
@@ -211,7 +265,16 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
       if (!thesisId || !steward) return [];
       const stated = num(row.stated_confidence);
       const implied = num(row.outcome_implied_confidence);
-      const gap = stated !== null && implied !== null ? stated - implied : num(row.confidence_gap);
+      const basis = calibrationBasis(str(row.calibration_basis));
+      const expectedRate = num(row.expected_win_rate);
+      const calibrationTrades = basis === 'entry_probability' ? num(row.calibration_trades) : null;
+      const calibrationP = num(row.calibration_p);
+      // The view's own flag; null when the payload doesn't carry one.
+      const flag = row.miscalibrated === true ? true : row.miscalibrated === false ? false : null;
+      // The view's gap first; recompute only when it is missing (stated - hit rate, or expected - hit rate).
+      const gap = num(row.confidence_gap) ?? (basis === 'entry_probability'
+        ? (expectedRate !== null && implied !== null ? round1(expectedRate - implied) : null)
+        : (stated !== null && implied !== null ? round1(stated - implied) : null));
       return [{
         thesis_id: thesisId,
         name: str(row.name),
@@ -222,8 +285,13 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         confidence_gap: gap,
         priced_trades: int(row.priced_trades),
         wins: int(row.wins),
-        miscalibrated: gap !== null && Math.abs(gap) > THESIS_GAP_FLAG,
+        miscalibrated: thesisMiscalibrated(flag, basis, gap, calibrationTrades, calibrationP),
         thin: int(row.priced_trades) < SCORECARD_THIN_N,
+        calibration_basis: basis,
+        expected_wins: basis === 'entry_probability' ? num(row.expected_wins) : null,
+        expected_win_rate: basis === 'entry_probability' ? expectedRate : null,
+        calibration_trades: calibrationTrades,
+        calibration_p: basis === 'entry_probability' ? calibrationP : null,
         backtest_tests: int(row.backtest_tests),
         backtest_trades: int(row.backtest_trades),
         backtest_weight: num(row.backtest_weight) ?? 0,
@@ -326,6 +394,40 @@ export function assembleStewardScorecard(
       : null,
     not_from_fills: row.not_from_fills,
     trend: payload.trend.find((item) => item.steward === slug) ?? null,
+  };
+}
+
+/**
+ * Scorecard chip for one thesis: `stated→hit` for the hit-rate yardstick, `exp X→hit` for binaries
+ * (expected win rate from entry odds vs realized), with a tooltip that says how the flag is decided.
+ */
+export type ThesisCalibrationText = {
+  /** Chip text, e.g. `54→33` or `exp 17→0`. */
+  value: string;
+  /** Tooltip: what was compared and how the flag is decided. */
+  title: string;
+};
+
+export function thesisCalibrationText(row: ThesisScoreRow): ThesisCalibrationText {
+  const pct = (value: number | null) => (value === null ? '—' : String(Math.round(value)));
+  const hit = pct(row.outcome_implied_confidence);
+  if (row.calibration_basis === 'entry_probability') {
+    const p = row.calibration_p === null ? '' : `, p=${row.calibration_p < 0.001 ? '<0.001' : row.calibration_p.toFixed(3)}`;
+    const verdict = row.miscalibrated
+      ? ' (wins this far from the entry odds are unlikely by chance)'
+      : (row.calibration_trades ?? 0) < BINARY_CALIBRATION_MIN_N
+        ? ` (not tested below ${BINARY_CALIBRATION_MIN_N} trades)`
+        : '';
+    return {
+      value: `exp ${pct(row.expected_win_rate)}→${hit}`,
+      title: `${row.thesis_id}: stated ${row.stated_confidence ?? '—'} (edge is real). Expected win rate ${pct(row.expected_win_rate)}% `
+        + `from each trade's fair value or entry price vs realized ${hit}% over ${row.calibration_trades ?? 0} trades${p}${verdict}`,
+    };
+  }
+  return {
+    value: `${row.stated_confidence ?? '—'}→${hit}`,
+    title: `${row.thesis_id}: stated ${row.stated_confidence ?? '—'} vs outcome-implied ${row.outcome_implied_confidence ?? '—'} `
+      + `over ${row.priced_trades} trades${row.miscalibrated ? ` (more than ${THESIS_GAP_FLAG} apart)` : ''}`,
   };
 }
 
