@@ -16,6 +16,8 @@ Rails, in the clones' order: past the 4h stop (opened_at + 4h) -> deadline_exit;
 mark <= invalidation_price -> kill_exit; pnl >= +50% -> tp50_full_exit (FULL bank); -25% / +40% -> warn;
 else hold. An exit action prints the exit_clip.py command; mark_clip never sells.
 Exit code: 0 hold/warn, 10 an exit action is due (any lot), 1 error.
+Then (not on --dry-run) pass_marks.sweep_quietly() prices any logged pass whose 4h horizon is up; its result is
+under "pass_marks" and it never changes the exit code.
 """
 from __future__ import annotations
 
@@ -132,6 +134,13 @@ def main(argv=None) -> int:
         elif r.get("exit_command"):
             rc = 10
     out = results[0] if not a.all_open else {"open_lots": len(lots), "results": results}
+    if not a.dry_run:
+        # Score any logged pass whose 4h horizon is up (never changes this script's exit code).
+        try:
+            import pass_marks
+            out = {**out, "pass_marks": pass_marks.sweep_quietly()}
+        except Exception as e:  # e.g. pass_marks.py not synced yet: the marks above already landed
+            out = {**out, "pass_marks": {"error": f"{type(e).__name__}: {str(e)[:200]}"}}
     print(cc.jdump(out))
     return rc
 

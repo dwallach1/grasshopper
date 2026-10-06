@@ -1,7 +1,8 @@
 /**
  * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip / mark_clip / exit_clip,
  * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, both stewards' close_lesson,
- * and steward_log_decision for a scoreable enter or skip — QUANTANAMO included).
+ * steward_log_decision for a scoreable enter or skip — QUANTANAMO included — and the decision marks that
+ * score them: steward_pending_decision_marks / steward_record_decision_mark, 58_decision_marks.sql).
  *
  * Why: the agent box only egresses HTTPS. Raw Postgres (pooler 5432/6543) times out there, so the
  * steward scripts call this function instead of opening a psycopg connection.
@@ -23,6 +24,9 @@ import postgres from 'npm:postgres@3.4.5';
 const ALLOWED: Record<string, ReadonlySet<string>> = {
   quantanamo_worker: new Set([
     'steward_log_decision',
+    // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql)
+    'steward_pending_decision_marks',
+    'steward_record_decision_mark',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',
@@ -41,6 +45,8 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'oddsborne_pnl_snapshot',
     'steward_close_lesson',
     'steward_log_decision',
+    // closing-line marks for logged decisions (supabase/schemas/58_decision_marks.sql)
+    'steward_record_decision_mark',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
@@ -59,6 +65,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'bandit_pnl_snapshot',
     'steward_close_lesson',
     'steward_log_decision',
+    // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql; pass_marks.py)
+    'steward_pending_decision_marks',
+    'steward_record_decision_mark',
   ]),
 };
 const FN_RE = /^[a-z][a-z0-9_]{2,62}$/;

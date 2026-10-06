@@ -8,6 +8,7 @@ Usage (from /workspace/bandit):
 cash_sol = Helius getBalance of the BANDIT wallet; unrealized = sum(quantity x coalesce(mark_sol, avg cost))
 over open lots (computed in public.bandit_pnl_snapshot, over HTTPS as bandit_worker); equity = cash + unrealized.
 Heartbeat (desk_agents status active) is attempted and reported as skipped when grants don't allow it.
+After the write, pass_marks.sweep_quietly() prices any logged pass whose 4h horizon is up (see pass_marks.py).
 """
 from __future__ import annotations
 
@@ -49,7 +50,13 @@ def main(argv=None) -> int:
                         "open_lots": len(opn)}))
         return 0
     res = cc.ledger("bandit_pnl_snapshot", args)
-    print(cc.jdump({"decision": "WRITTEN", **res}))
+    # Score any logged pass whose 4h horizon is up (never changes this script's exit code).
+    try:
+        import pass_marks
+        swept = pass_marks.sweep_quietly()
+    except Exception as e:  # e.g. pass_marks.py not synced yet: the snapshot above already landed
+        swept = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+    print(cc.jdump({"decision": "WRITTEN", **res, "pass_marks": swept}))
     return 0
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ENTRY_SQL = HERE.parent / "supabase" / "schemas" / "50_steward_entry_rpc.sql"
 EXIT_SQL = HERE.parent / "supabase" / "schemas" / "51_steward_exit_rpc.sql"
+MARKS_SQL = HERE.parent / "supabase" / "schemas" / "58_decision_marks.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
@@ -19,7 +20,7 @@ SCRIPTS = {
 }
 # Exit, mark and P&L scripts (ledger over steward-rpc; functions in 51_steward_exit_rpc.sql).
 EXIT_SCRIPTS = {
-    "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "close_lesson.py")],
+    "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "pass_marks.py", "close_lesson.py")],
     "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "close_lesson.py")],
 }
 RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
@@ -98,7 +99,7 @@ class StewardScripts(unittest.TestCase):
                          "keep steward_rpc.py identical in both steward dirs")
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
-        sql, edge = ENTRY_SQL.read_text() + EXIT_SQL.read_text(), EDGE_FN.read_text()
+        sql, edge = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text(), EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]
         called = set()
@@ -143,6 +144,31 @@ class StewardScripts(unittest.TestCase):
         self.assertIn("grant execute on function public.steward_log_decision(jsonb)", sql)
         self.assertIn("revoke all on function public.steward_log_decision(jsonb) from public, anon, authenticated;", sql)
         self.assertIn("def log_decision(", (HERE / "bandit" / "steward_rpc.py").read_text())
+
+    def test_pass_marks_contract(self) -> None:
+        # Passes are priced by the scheduled scripts, from real sources only, through the 58 RPCs.
+        sql, edge = MARKS_SQL.read_text(), EDGE_FN.read_text()
+        text = (HERE / "bandit" / "pass_marks.py").read_text()
+        for needle in ('"steward_pending_decision_marks"', '"steward_record_decision_mark"', "jupiter_price_v3",
+                       "geckoterminal_ohlcv_1m", "no_price_reason", "NO_PRICE_GRACE"):
+            self.assertIn(needle, text, needle)
+        self.assertNotIn("interpolat", text.split('"""', 2)[2].lower(), "pass_marks must not interpolate prices")
+        for script in ("mark_clip.py", "pnl_snapshot.py"):
+            self.assertIn("pass_marks.sweep_quietly()", (HERE / "bandit" / script).read_text(), script)
+        for role, fns in (("bandit_worker", ("steward_pending_decision_marks", "steward_record_decision_mark")),
+                          ("quantanamo_worker", ("steward_pending_decision_marks", "steward_record_decision_mark")),
+                          ("oddsborne_worker", ("steward_record_decision_mark",))):
+            allow = edge[edge.index(f"{role}: new Set(["):]
+            allow = allow[:allow.index("])")]
+            for fn in fns:
+                self.assertIn(f"'{fn}'", allow, f"{role}: {fn}")
+        self.assertIn("observed_at >= horizon_at", sql)
+        self.assertIn("observed_at < event_start_at", sql)
+        self.assertIn("constraint decision_marks_one_per_kind unique (decision_id, mark_kind)", sql)
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_decision_marks.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
+        self.assertIn("def record_decision_mark(", (HERE / "oddsborne" / "steward_rpc.py").read_text())
 
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).

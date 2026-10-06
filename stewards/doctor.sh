@@ -8,7 +8,7 @@ box="${STEWARD_BOX_ROOT:-/workspace}"
 fix="bash $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sync_box.sh"
 # steward | modules the scripts import (helpers resolve from the steward dir) | files the stewards invoke
 checks=(
-  "bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets steward_rpc|live_trade_clip.py paper_bank20.py clip_common.py mark_clip.py exit_clip.py pnl_snapshot.py close_lesson.py steward_rpc.py db_connect.py load_secrets.py requirements.txt"
+  "bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets steward_rpc|live_trade_clip.py paper_bank20.py clip_common.py mark_clip.py exit_clip.py pnl_snapshot.py pass_marks.py close_lesson.py steward_rpc.py db_connect.py load_secrets.py requirements.txt"
   "oddsborne|polymarket_us psycopg db_connect load_secrets steward_rpc|pm_enter.py pm_exit.py pm_watch.py pm_fills_sync.py pm_pnl_snapshot.py close_lesson.py steward_rpc.py db_connect.py load_secrets.py requirements.txt"
 )
 broken=0
