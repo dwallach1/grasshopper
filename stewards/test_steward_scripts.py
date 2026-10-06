@@ -128,6 +128,22 @@ class StewardScripts(unittest.TestCase):
         self.assertNotIn("security definer", EXIT_SQL.read_text().lower())
         self.assertIn("verify_jwt = false", (HERE.parent / "supabase" / "config.toml").read_text().split("[functions.steward-rpc]")[1][:40])
 
+    def test_log_decision_is_on_the_https_path(self) -> None:
+        sql = (HERE.parent / "supabase" / "schemas" / "56_decision_skip_scoring.sql").read_text()
+        edge = EDGE_FN.read_text()
+        for role in ("quantanamo_worker", "oddsborne_worker", "bandit_worker"):
+            allow = edge[edge.index(f"{role}: new Set(["):]
+            allow = allow[:allow.index("])")]
+            self.assertIn("'steward_log_decision'", allow, role)
+        block = sql[sql.index("create or replace function public.steward_log_decision(p jsonb"):]
+        block = block[:block.index("$$;")]
+        self.assertIn("security invoker", block)
+        self.assertIn("refusal:unscoreable:", block)
+        self.assertNotIn("security definer", block)
+        self.assertIn("grant execute on function public.steward_log_decision(jsonb)", sql)
+        self.assertIn("revoke all on function public.steward_log_decision(jsonb) from public, anon, authenticated;", sql)
+        self.assertIn("def log_decision(", (HERE / "bandit" / "steward_rpc.py").read_text())
+
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).
         text = (HERE / "bandit" / "paper_bank20.py").read_text()

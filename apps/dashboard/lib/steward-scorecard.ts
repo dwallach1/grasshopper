@@ -42,6 +42,8 @@ export type StewardScoreRow = {
   skips_scored: number;
   skips_would_have_won: number;
   skip_counterfactual_pnl: number | null;
+  /** Decisions with no market, side, or price. Not counted in the skip line. */
+  decisions_unscoreable: number;
   brier_mean: number | null;
   brier_n: number;
 };
@@ -224,6 +226,7 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         skips_scored: int(row.skips_scored),
         skips_would_have_won: int(row.skips_would_have_won),
         skip_counterfactual_pnl: num(row.skip_counterfactual_pnl),
+        decisions_unscoreable: int(row.decisions_unscoreable),
         brier_mean: num(row.brier_mean),
         brier_n: int(row.brier_n),
       }];
@@ -324,7 +327,15 @@ export type StewardScorecardCard = {
   /** BANDIT: fees line. Null for other stewards. */
   fees: { recorded: number | null; missing: number; of: number; noun: 'fills' | 'trades' } | null;
   theses: ThesisScoreRow[];
-  skips: { logged: number; resolved: number; scored: number; would_have_won: number } | null;
+  skips: {
+    logged: number;
+    resolved: number;
+    scored: number;
+    would_have_won: number;
+    /** Sum of one-unit counterfactual P/L. Null when nothing has been scored. */
+    pnl: number | null;
+    unscoreable: number;
+  } | null;
   /** Trades not priced from venue fills (cash delta, settlement, manual, unpriced). */
   not_from_fills: number;
   trend: StewardTrendRow | null;
@@ -384,12 +395,14 @@ export function assembleStewardScorecard(
     open_positions: row.open_positions,
     fees: slug === 'bandit' ? banditFees(row) : null,
     theses,
-    skips: row.skips_logged > 0
+    skips: row.skips_logged > 0 || row.decisions_unscoreable > 0
       ? {
         logged: row.skips_logged,
         resolved: row.skips_resolved,
         scored: row.skips_scored,
         would_have_won: row.skips_would_have_won,
+        pnl: row.skip_counterfactual_pnl,
+        unscoreable: row.decisions_unscoreable,
       }
       : null,
     not_from_fills: row.not_from_fills,
@@ -435,4 +448,40 @@ export function thesisCalibrationText(row: ThesisScoreRow): ThesisCalibrationTex
 export function hitLabel(value: number | null): string {
   if (value === null) return '—';
   return `${Math.round(value * 100)}%`;
+}
+
+export type PassedBetCopy = {
+  /** `5 passed bets scored`, or `No passed bets scored yet` while some are still open. */
+  lead: string | null;
+  /** `2 would have won` once at least one pass has a result. */
+  won: string | null;
+  /** One-unit counterfactual P/L. Null when nothing is scored, so the desk never invents a figure. */
+  pnl: number | null;
+  /** `per contract`, `per share`, or `per token`. */
+  unitNote: string | null;
+  /** Decisions the ledger cannot score. */
+  missing: string | null;
+};
+
+/** Plain scorecard line for passes. One unit of the instrument, in the steward's own currency. */
+export function passedBetCopy(
+  skips: StewardScorecardCard['skips'],
+  steward: string,
+): PassedBetCopy | null {
+  if (!skips) return null;
+  if (skips.scored <= 0 && skips.logged <= 0 && skips.unscoreable <= 0) return null;
+  const slug = steward.trim().toLowerCase();
+  const unitNote = slug === 'bandit' ? 'per token' : slug === 'quantanamo' ? 'per share' : 'per contract';
+  const scored = skips.scored > 0;
+  return {
+    lead: scored
+      ? `${skips.scored} passed ${skips.scored === 1 ? 'bet' : 'bets'} scored`
+      : skips.logged > 0 ? 'No passed bets scored yet' : null,
+    won: scored ? `${skips.would_have_won} would have won` : null,
+    pnl: scored ? skips.pnl : null,
+    unitNote: scored && skips.pnl !== null ? unitNote : null,
+    missing: skips.unscoreable > 0
+      ? `${skips.unscoreable} missing a market or a price`
+      : null,
+  };
 }

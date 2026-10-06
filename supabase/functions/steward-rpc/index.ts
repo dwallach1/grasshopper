@@ -1,6 +1,7 @@
 /**
  * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip / mark_clip / exit_clip,
- * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, both stewards' close_lesson).
+ * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, both stewards' close_lesson,
+ * and steward_log_decision for a scoreable enter or skip — QUANTANAMO included).
  *
  * Why: the agent box only egresses HTTPS. Raw Postgres (pooler 5432/6543) times out there, so the
  * steward scripts call this function instead of opening a psycopg connection.
@@ -20,6 +21,9 @@
 import postgres from 'npm:postgres@3.4.5';
 
 const ALLOWED: Record<string, ReadonlySet<string>> = {
+  quantanamo_worker: new Set([
+    'steward_log_decision',
+  ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',
     'oddsborne_entry_upsert_market',
@@ -36,6 +40,7 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'oddsborne_exit_record',
     'oddsborne_pnl_snapshot',
     'steward_close_lesson',
+    'steward_log_decision',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
@@ -53,6 +58,7 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'bandit_annotate_pnl',
     'bandit_pnl_snapshot',
     'steward_close_lesson',
+    'steward_log_decision',
   ]),
 };
 const FN_RE = /^[a-z][a-z0-9_]{2,62}$/;

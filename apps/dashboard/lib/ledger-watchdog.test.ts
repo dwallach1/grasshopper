@@ -35,6 +35,7 @@ describe('ledger watchdog', () => {
     });
     expect(watchdog.available).toBe(true);
     expect(watchdog.learning_gaps).toEqual({ quantanamo: 0, oddsborne: 0, bandit: 0 });
+    expect(watchdog.unscoreable_decisions).toEqual({ quantanamo: 0, oddsborne: 0, bandit: 0 });
     expect(watchdog.learning_gap_lots).toEqual([]);
     expect(watchdog.invalidation_breaches).toBe(1);
     expect(watchdog.breaches[0]).toMatchObject({ unit: 'SOL', invalidation_price: 0.00002, mark: 0.000019 });
@@ -90,6 +91,7 @@ describe('ledger watchdog', () => {
       .toEqual(['pm:pm-1', 'eq-closed:eq-1']);
     expect(watchdog.integrity_issues).toBe(0);
     expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
+    expect(watchdogHealthSummary(watchdog).unscoreable_decisions).toEqual(watchdog.unscoreable_decisions);
     const health = assembleDeskBookHealth({ watchdog } as unknown as DeskPayload, Date.parse('2026-10-05T17:00:00Z'));
     expect(health.alerts).toEqual([]);
     expect(health.integrity_issues).toBe(0);
@@ -105,6 +107,17 @@ describe('ledger watchdog', () => {
     expect(sql).toContain('l.created_at > c.closed_at');
     expect(sql).toContain('nullif(btrim(pe.thesis_id), \'\') is not null');
     expect(sql).toContain('as learning_gaps');
+    const skips = readFileSync(join(import.meta.dir, '../../../supabase/schemas/56_decision_skip_scoring.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261006173751_decision_skip_scoring.sql'), 'utf8')).toBe(skips);
+    expect(skips).toContain('as unscoreable_decisions');
+    expect(skips).toContain('public.decision_is_scoreable');
+    expect(skips).toContain('to authenticated, desk_public_reader, quantanamo_worker, oddsborne_worker, bandit_worker, service_role');
+    expect(skips).toContain("nth_equity_session_close(c.decided_at, 5)");
+    expect(skips).toContain("interval '4 hours'");
+    expect(skips).toContain('refusal:unscoreable:');
+    expect(skips).toContain('security invoker');
+    expect(skips).toContain("meta->>'superseded'");
+    expect(skips).not.toMatch(/delete from public\.decision_candidates/);
     expect(sql).toContain('from public.v_ledger_integrity');
     expect(sql).not.toContain("'learning_loop_gap'");
     expect(sql.match(/position_episodes|pm_positions|meme_positions/g)?.length).toBeGreaterThanOrEqual(6);

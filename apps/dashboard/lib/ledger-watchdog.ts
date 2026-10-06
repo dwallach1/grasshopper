@@ -86,6 +86,15 @@ export const EMPTY_LEARNING_GAPS: LearningGapCounts = {
   bandit: 0,
 };
 
+/** Decisions that cannot be scored (no market, side, or price). Not a trading breach. */
+export type UnscoreableDecisionCounts = LearningGapCounts;
+
+export const EMPTY_UNSCOREABLE_DECISIONS: UnscoreableDecisionCounts = {
+  quantanamo: 0,
+  oddsborne: 0,
+  bandit: 0,
+};
+
 export type LedgerWatchdog = {
   available: boolean;
   checked_at: string | null;
@@ -103,6 +112,8 @@ export type LedgerWatchdog = {
   learning_gaps: LearningGapCounts;
   /** Lot ids behind `learning_gaps`, capped in the view. Book rows match these. */
   learning_gap_lots: LearningGapLot[];
+  /** Enter/skip rows with no market, side, or price. Sibling of `learning_gaps`. */
+  unscoreable_decisions: UnscoreableDecisionCounts;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -124,6 +135,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     exposure: [],
     learning_gaps: { ...EMPTY_LEARNING_GAPS },
     learning_gap_lots: [],
+    unscoreable_decisions: { ...EMPTY_UNSCOREABLE_DECISIONS },
     breaches: [],
     missing: [],
     issues: [],
@@ -246,9 +258,20 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     exposure_over_budget: count(summary.exposure_over_budget),
     exposure: exposureRows(summary.exposure),
     ...learningGaps(summary.learning_gaps),
+    unscoreable_decisions: stewardCounts(summary.unscoreable_decisions),
     breaches: rows(bag.breaches).map(lot),
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
+  };
+}
+
+function stewardCounts(value: unknown): UnscoreableDecisionCounts {
+  const bag = record(value);
+  if (!bag) return { ...EMPTY_UNSCOREABLE_DECISIONS };
+  return {
+    quantanamo: count(bag.quantanamo),
+    oddsborne: count(bag.oddsborne),
+    bandit: count(bag.bandit),
   };
 }
 
@@ -285,6 +308,8 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   exposure_over_budget: number;
   /** Learning-loop gap. Does not change `ok` on /api/health. */
   learning_gaps: LearningGapCounts;
+  /** Decisions that cannot be scored. Does not change `ok` on /api/health. */
+  unscoreable_decisions: UnscoreableDecisionCounts;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -298,6 +323,7 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     integrity: w.integrity,
     exposure_over_budget: w.exposure_over_budget,
     learning_gaps: { ...w.learning_gaps },
+    unscoreable_decisions: { ...w.unscoreable_decisions },
   };
 }
 

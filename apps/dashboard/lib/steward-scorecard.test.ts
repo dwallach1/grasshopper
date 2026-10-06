@@ -7,6 +7,7 @@ import {
   emptyStewardScorecard,
   hitLabel,
   mapStewardScorecard,
+  passedBetCopy,
   thesisCalibrationText,
 } from './steward-scorecard';
 
@@ -227,7 +228,16 @@ describe('assembleStewardScorecard', () => {
     expect(bandit?.fees).toEqual({ recorded: null, missing: 34, of: 34, noun: 'trades' });
     expect(bandit?.thin).toBe(false);
     const odds = assembleStewardScorecard(payload, 'oddsborne');
-    expect(odds?.skips).toEqual({ logged: 7, resolved: 6, scored: 5, would_have_won: 2 });
+    expect(odds?.skips).toEqual({
+      logged: 7, resolved: 6, scored: 5, would_have_won: 2, pnl: -0.3586, unscoreable: 0,
+    });
+    expect(passedBetCopy(odds?.skips ?? null, 'oddsborne')).toEqual({
+      lead: '5 passed bets scored',
+      won: '2 would have won',
+      pnl: -0.3586,
+      unitNote: 'per contract',
+      missing: null,
+    });
     expect(odds?.theses[0]?.thesis_id).toBe('weather_same_day_high');
   });
 
@@ -239,6 +249,16 @@ describe('assembleStewardScorecard', () => {
   test('hit label', () => {
     expect(hitLabel(0.2857)).toBe('29%');
     expect(hitLabel(null)).toBe('—');
+  });
+
+  test('a pass with no result does not invent a P/L, and an unscoreable decision is named', () => {
+    expect(passedBetCopy({ logged: 2, resolved: 0, scored: 0, would_have_won: 0, pnl: null, unscoreable: 0 }, 'quantanamo'))
+      .toEqual({ lead: 'No passed bets scored yet', won: null, pnl: null, unitNote: null, missing: null });
+    expect(passedBetCopy({ logged: 0, resolved: 0, scored: 0, would_have_won: 0, pnl: null, unscoreable: 8 }, 'oddsborne'))
+      .toMatchObject({ lead: null, pnl: null, missing: '8 missing a market or a price' });
+    expect(passedBetCopy({ logged: 1, resolved: 1, scored: 1, would_have_won: 1, pnl: 0.02, unscoreable: 0 }, 'bandit')?.unitNote)
+      .toBe('per token');
+    expect(passedBetCopy(null, 'bandit')).toBeNull();
   });
 });
 

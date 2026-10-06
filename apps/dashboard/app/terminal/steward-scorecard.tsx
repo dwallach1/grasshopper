@@ -4,6 +4,7 @@ import type { MoneyUnit } from '../../lib/money-units';
 import { formatUsd, signedAmount } from '../../lib/money-units';
 import {
   hitLabel,
+  passedBetCopy,
   SCORECARD_THIN_N,
   thesisCalibrationText,
   type StewardScorecardCard,
@@ -44,6 +45,7 @@ export function StewardScorecard({
   name: string;
 }) {
   const { unit } = card;
+  const passed = passedBetCopy(card.skips, card.steward);
   return (
     <section className="score-card" data-steward={card.steward} aria-label={`${name} scorecard`}>
       <header className="score-head">
@@ -134,10 +136,18 @@ export function StewardScorecard({
         </ul>
       )}
 
-      {card.skips && (
-        <p className="score-skips">
-          Skips {card.skips.resolved} of {card.skips.logged} resolved
-          {card.skips.scored > 0 && <> · {card.skips.would_have_won} of {card.skips.scored} would have won</>}
+      {passed && (passed.lead || passed.missing) && (
+        <p className="score-skips" title="What one contract, one share, or one token would have made from the price at the decision. A plus means passing on it left money on the table.">
+          {passed.lead}
+          {passed.won && <> · {passed.won}</>}
+          {passed.pnl !== null && (
+            <>
+              {' · '}
+              <b className={pnlClass(passed.pnl)}>{signed(passed.pnl, unit)}</b>
+              {passed.unitNote && <span className="score-unit"> {passed.unitNote}</span>}
+            </>
+          )}
+          {passed.missing && <>{passed.lead ? ' · ' : ''}{passed.missing}</>}
         </p>
       )}
     </section>
