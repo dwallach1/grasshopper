@@ -17,7 +17,37 @@ Nothing secret is in this directory. Credentials come from the process environme
    - The `entry_over_max_stake` watchdog check compares each entry with this snapshot, so an entry is judged against the cap that was in force when it was made.
 4. **Tag the thesis** on the order and the lot. Buy fills also propagate the lot's thesis to the order.
 
-The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation`, `v_ledger_integrity`, and `v_learning_loop_gaps` (closes with no lesson yet; not a trading breach).
+The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation`, `v_ledger_integrity`, and `v_learning_loop_gaps` (closes with no lesson yet; not a trading breach). `v_ledger_watchdog.unscoreable_decisions` counts enter/skip rows that cannot be scored. That count is not a trading breach, and it does not make `/api/health` not-ok.
+
+## Logging a pass (all stewards)
+
+A skip is scored the same way a taken bet is: one row per market, with the price at the time and enough to judge it later. This does not change sizing, the 80 gate, or whether you trade. It only records the pass.
+
+Call `public.steward_log_decision` (HTTPS: `log_decision` in `steward_rpc.py`, function name `steward_log_decision`). A write that cannot be scored is refused with `refusal:unscoreable` and is not counted. Do not bury several markets in one note and expect the scorecard to sort them out.
+
+| Steward | Required | Horizon | P/L unit |
+|---|---|---|---|
+| ODDSBORNE | slug, side `yes` or `no`, price (0 to 1), your probability (0 to 1) | when the market resolves | one contract, USD |
+| QUANTANAMO | ticker, side `long` or `short`, price per share. `expected_move` (a fraction, `0.08` = +8%) when you had one. `blocked_by` may be `quantanamo_confidence_gate` when the 80 gate is what stopped you | close of the 5th regular NYSE session after the decision | one share, USD |
+| BANDIT | mint or symbol, side `long` or `short`, price in SOL per token | 4 hours (the clip's own time stop) | one token, SOL |
+
+The later price comes from the ledger (`pm_markets` resolution, `portfolio_exposure` / `broker_fills`, or a meme fill / token mark / position mark). If that price is not there yet, `counterfactual_pnl` stays null and `meta.resolve_status` is `awaiting_mark`, `awaiting_resolution`, `no_market`, or `no_mark_yet`. Nothing is filled in from a lesson or a guess.
+
+```python
+from steward_rpc import log_decision
+log_decision("oddsborne", decision="skip", instrument="aec-nfl-ari-sf-2026-09-27",
+             side="yes", price="0.225", probability="0.2413", reason="under the 8c bar")
+log_decision("bandit", decision="skip", instrument="<mint>", side="long",
+             price="0.000012", expected_move="0.2", thesis_id="meme_4h_momentum_clip")
+```
+
+QUANTANAMO, on the connection it already uses for the ledger:
+
+```sql
+select public.steward_log_decision('{"steward":"quantanamo","decision":"skip","instrument":"PTC","side":"long","price":180.25,"expected_move":0.08,"blocked_by":"quantanamo_confidence_gate","reason":"gate score under 80"}'::jsonb);
+```
+
+ODDSBORNE may still write a `pm_notes` row. If that note is one market with `market_id`, `book_probability`, and `my_probability`, or if `meta.comps` / `meta.comps_top` / `meta.candidates` names each skip with a slug, a bid, and a fair probability, the trigger splits it into one scoreable row per market. A session note that does not carry those is stored and flagged, and the scorecard does not count it. The RPC above is the path to use.
 
 **Equity marks (QUANTANAMO): write the real venue price at any hour.** Premarket and after-hours marks are fine and expected; never write the prior close as a stand-in (a stale mark). The watchdog reads the session from the mark time (`public.us_equity_session(observed_at)`: `pre`, `rth`, `post`, `closed`). A mark at or below the lot's `invalidation_price` is `exit_full_lot` only in `rth`; in any other session it is `review_at_open`, and the desk shows it as "premarket print under its exit, decides at open". Exits still decide on regular-session trades.
 

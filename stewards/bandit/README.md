@@ -6,6 +6,7 @@ BANDIT trades Solana meme coins in SOL. The entry contract shared by all steward
 
 - Guidance first: `steward_sizing_guidance('bandit', thesis, mint, requested_sol, invalidation_sol_per_token, pretrade_price_sol_per_token)`. Trade exactly `sized_notional`; stop if `entry_allowed = false` (including `exposure_cap`: open memes count at full cost basis against a 10%-of-book budget, so BANDIT runs about one clip at a time).
 - The thesis is `meme_4h_momentum_clip`. Caps are per thesis; see `docs/sizing.md` and `docs/rules/`.
+- A mint you pass on is still a decision. Log it with `log_decision("bandit", decision="skip", instrument=mint, side="long", price=price_sol, ...)`. It is scored four hours later, one token, in SOL. That does not change the clip.
 - The lot carries `invalidation_price` (SOL per token). The order carries `thesis_id`, `max_stake_at_entry` and `max_stake_reason_at_entry`.
 - Ledger calls go over HTTPS through `steward_rpc.py` (the box can't reach the pooler): `steward_entry_guidance`, `bandit_entry_open_order`, `bandit_entry_reject_order`, and `bandit_entry_record_fill`, which writes the filled order, the lot, `meme_fills`, `meme_pnl` and the thesis update in one transaction. Check with `.venv/bin/python steward_rpc.py bandit`.
 

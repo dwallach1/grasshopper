@@ -120,6 +120,32 @@ def _call_pg(steward: str, fn: str, args: dict) -> object:
     return loads(row[0]) if row and row[0] is not None else None
 
 
+def log_decision(steward: str, *, decision: str, instrument: str, side: str, price,
+                 probability=None, expected_move=None, thesis_id=None, reason=None,
+                 source_id=None, decided_at=None, blocked_by=None) -> object:
+    """Record one enter or skip that can be scored later.
+
+    A write missing the market, the side, or the price is refused (`refusal:unscoreable`).
+    Prediction markets also need `probability` (0 to 1). Equity and meme passes may include
+    `expected_move` as a fraction of price (0.08 = +8%). This does not place or size an order.
+    """
+    args = {
+        "steward": steward,
+        "decision": decision,
+        "instrument": instrument,
+        "side": side,
+        "price": price,
+        "probability": probability,
+        "expected_move": expected_move,
+        "thesis_id": thesis_id,
+        "reason": reason,
+        "source_id": source_id,
+        "decided_at": decided_at,
+        "blocked_by": blocked_by,
+    }
+    return call(steward, "steward_log_decision", {k: v for k, v in args.items() if v is not None})
+
+
 def call(steward: str, fn: str, args: dict | None = None, *, idempotent: bool = False, timeout: float = 60.0):
     """Run public.<fn>(args::jsonb) as <steward>_worker. Reads (idempotent=True) retry network blips;
     writes never retry (a lost reply may still have committed)."""

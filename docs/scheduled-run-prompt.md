@@ -29,7 +29,7 @@ Output:
 - Hardened theses
 - Softened/invalidation notes
 - Candidate swing trades with suggested percentage, computed notional from fresh equity, catalyst, invalidation, and existing portfolio overlap
-- No-trade list with reasons
+- No-trade list with reasons. For each named setup you pass on, and for each entry the 80 gate blocks, also call `public.steward_log_decision` (measurement only; the gate itself is unchanged) with the ticker, `long` or `short`, the price you saw, and `expected_move` as a fraction of price when you had one (`0.08` = +8%). It is scored after five regular sessions against a later ledger mark. If that mark is not in the ledger, the row stays unresolved. A write without a ticker, a side, and a price is refused.
 - Orders placed, rejected, or deferred, with the exact gate result for each
 - Tactical sleeve deployment status and the next-session re-screen plan for any transient cash
 - A plain-language run recap separating genuinely new ideas from confirmations, risk findings, and queued actions

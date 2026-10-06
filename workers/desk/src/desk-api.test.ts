@@ -122,6 +122,7 @@ describe('public desk Worker API', () => {
         integrity: {},
         exposure_over_budget: 0,
         learning_gaps: { quantanamo: 0, oddsborne: 0, bandit: 0 },
+        unscoreable_decisions: { quantanamo: 0, oddsborne: 0, bandit: 0 },
       },
       learning: {
         to_review: 0,

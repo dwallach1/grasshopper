@@ -4137,6 +4137,12 @@ a:focus-visible {
   font-size: 11px;
 }
 
+.score-skips b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
 .thesis-card-meta {
   display: flex;
   flex-wrap: wrap;
