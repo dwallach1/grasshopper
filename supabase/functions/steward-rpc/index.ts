@@ -47,6 +47,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'steward_log_decision',
     // closing-line marks for logged decisions (supabase/schemas/58_decision_marks.sql)
     'steward_record_decision_mark',
+    // venue ids + settlement for decision markets (supabase/schemas/59_decision_sides_markets.sql)
+    'oddsborne_decision_markets',
+    'oddsborne_sync_decision_market',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
