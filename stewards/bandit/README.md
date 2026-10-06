@@ -9,6 +9,14 @@ BANDIT trades Solana meme coins in SOL. The entry contract shared by all steward
 - The lot carries `invalidation_price` (SOL per token). The order carries `thesis_id`, `max_stake_at_entry` and `max_stake_reason_at_entry`.
 - Ledger calls go over HTTPS through `steward_rpc.py` (the box can't reach the pooler): `steward_entry_guidance`, `bandit_entry_open_order`, `bandit_entry_reject_order`, and `bandit_entry_record_fill`, which writes the filled order, the lot, `meme_fills`, `meme_pnl` and the thesis update in one transaction. Check with `.venv/bin/python steward_rpc.py bandit`.
 
+## Marks and exits: `mark_clip.py`, `exit_clip.py`
+
+These replace the per-symbol `_<sym>_mark_once.py` / `_<sym>_exit_once.py` clones, which used `db_connect` and time out on the box. Commands are in [`../README.md`](../README.md#exits-marks-and-pl-both-stewards).
+
+- The rails come from `clip_common.decide`, in the clones' order: past the 4h stop → `deadline_4h_stop`; ≤ −40% → `kill_-40pct`; mark ≤ invalidation → `invalidation`; ≥ +50% → `tp50_full_bank` (FULL exit, no half-scale). Warnings fire at −25% and +40%.
+- `exit_clip.py` sells min(ledger quantity, on-chain balance) and records the close in one `bandit_exit_record_fill` call. Realized P&L = (exit price − average cost) × tokens sold, plus any earlier `meta.tp50_realized_sol`. Because both fills are linked to the lot, `trade_outcomes` gets `pnl_source = 'fills'` net of fees.
+- After the close, run `close_lesson.py` and `paper_bank20.py`.
+
 ## After every close: `paper_bank20.py <position_id>`
 
 Records the shadow exit for rule `bank_at_+20pct` in `meme_positions.meta.paper_bank20`:

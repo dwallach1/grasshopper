@@ -1,6 +1,6 @@
-# Steward entry scripts
+# Steward entry and exit scripts
 
-The versioned entry points BANDIT (coins) and ODDSBORNE (Polymarket US) use for every **buy**. QUANTANAMO trades through Robinhood and follows the same contract through `docs/scheduled-run-prompt.md`.
+The versioned entry points BANDIT (coins) and ODDSBORNE (Polymarket US) use for every **buy**, and the exit, mark and P&L scripts that close those lots ([below](#exits-marks-and-pl-both-stewards)). QUANTANAMO trades through Robinhood and follows the same contract through `docs/scheduled-run-prompt.md`.
 
 Nothing secret is in this directory. Credentials come from the process environment first. If a credential isn't set there, the scripts fall back to a JSON file outside git: `STEWARD_SECRETS_FILE`, which defaults to `/home/box/sand-data/box-secrets.json` when that file exists.
 
@@ -70,6 +70,33 @@ cd /workspace/oddsborne && .venv/bin/python pm_enter.py \
 - Python dependencies: `polymarket_us` (`psycopg` only for the `STEWARD_DB_TRANSPORT=pg` fallback).
 - Ledger writes go over HTTPS; see [Ledger transport](#ledger-transport-https). Note that `--dry-run` still upserts the `pm_markets` reference row.
 
+## Exits, marks and P&L (both stewards)
+
+A lot opened by `live_trade_clip.py` or `pm_enter.py` is marked and closed from the box by these scripts. Every ledger write goes over HTTPS (see [Ledger transport](#ledger-transport-https)) through the `SECURITY INVOKER` functions in `supabase/schemas/51_steward_exit_rpc.sql`. Each script has `--dry-run`, which reads the venue and the ledger but places no order and writes nothing. A refusal prints `REFUSED`/`not_open`/`ABORT_…` and exits 2. Exit code 10 means "an exit is due".
+
+**Realized P&L on every close.** The close functions link the lot's buy and sell fills before the lot flips to `closed`, so `private.trade_outcome_capture` writes `realized_pnl` with `pnl_source = 'fills'`.
+- `oddsborne_exit_record` refuses a close whose linked buys don't cover linked sells + remaining quantity (`refusal:fills_incomplete`), so a close can't silently land as `manual` with a null `realized_pnl`. `--allow-unpriced "<reason>"` overrides this and records the reason on the lot.
+- This was the 10/4 TEN and MIA case: the late maker entry fills were never recorded in `pm_fills`. `pm_exit.py` now pulls the lot's entry fills from the venue and sells the venue-backed quantity.
+
+### BANDIT (`cd /workspace/bandit`)
+
+| Script | What it does |
+|---|---|
+| `mark_clip.py --all-open` (or `--position-id <id>`) | Takes a Jupiter full-size quote for each open lot, then writes `meme_positions.mark` and `meta.last_mark`, a `meme_pnl` mark row and the heartbeat (`bandit_mark_position`). It applies the rails in order: 4h time stop, −40%, invalidation price, then full bank at +50%. When one fires, it prints the `exit_clip.py` command and exits 10. |
+| `exit_clip.py --position-id <id> --trigger <kill_-40pct\|invalidation\|deadline_4h_stop\|tp50_full_bank\|thesis_invalid\|manual>` | Market-sells the whole lot through Jupiter (3% slippage, then 5%; Helius send as a fallback). It then calls `bandit_exit_record_fill`, which writes the sell order and fill, closes the lot (`exit_reason` = trigger), records realized P&L in `meme_pnl` and the trade outcome, and runs the heartbeat. Finally it closes the empty token account. If the ledger write fails after the swap, the fill is saved to `$BANDIT_STATE_DIR/exit_clip_orphan_<position_id>_<ts>.json` (exit 1); record it before anything else. |
+| `close_lesson.py --position-id <id> --rationale "<lesson>" --new-confidence <1-100>` | Writes the close lesson (a `belief_updates` row with `lot_id`), which clears `v_learning_loop_gaps`. Run it after every close, along with `paper_bank20.py <id>`. |
+| `pnl_snapshot.py [--notes "<standup>"]` | Writes a `meme_pnl` snapshot of wallet SOL plus open marks (`bandit_pnl_snapshot`). |
+
+### ODDSBORNE (`cd /workspace/oddsborne`)
+
+| Script | What it does |
+|---|---|
+| `pm_watch.py --all-open [--routine <name>]` | Reads the outcome bid (falling back to last, then mid) for each open lot and writes `pm_positions.mark` and `meta` (`oddsborne_mark_position`). At or below `invalidation_price` it prints the `pm_exit.py` command and exits 10. |
+| `pm_exit.py --position-id <id> --reason <invalidation\|take_profit\|thesis_exit\|pre_settle\|edge_gone\|manual> [--price <p>] [--order-type ioc\|fok\|gtc] [--dry-run]` | Sells the lot at the bid (or `--price`). It then calls `oddsborne_exit_record`, which writes the sell order and fills, the lot's entry fills, the close or reduce, the `pm_pnl` row and the heartbeat. For `invalidation` it aborts if the print is back above the line, unless `--force`. `--record-only --venue-order-id <sell id>` records a sell that was already placed. If the ledger write fails after the sell, the payload is saved to `$ODDSBORNE_OUT_DIR/pm_exit_orphan_<sell id>.json`. |
+| `pm_fills_sync.py --venue-order-id <buy id>` | Records maker fills that landed after `pm_enter.py` returned, and adds them to the open lot. It refuses when the venue no longer holds the shares (already sold); record those with the exit instead. |
+| `close_lesson.py --position-id <id> --rationale "<lesson>" --new-confidence <1-100>` | Same as BANDIT's (an identical file). |
+| `pm_pnl_snapshot.py [--notes "<standup>"]` | Writes a `pm_pnl` snapshot of venue cash plus asset notional (`oddsborne_pnl_snapshot`). |
+
 ## Ledger transport (HTTPS)
 
 The box only egresses HTTPS (443), through a proxy that resolves every host to a 198.18.0.0/15 address. Raw TCP to the Supavisor pooler (5432/6543) and to `db.<ref>.supabase.co` times out, so `db_connect` cannot reach Postgres from the box. The entry scripts therefore write the ledger over HTTPS:
@@ -81,7 +108,7 @@ The box only egresses HTTPS (443), through a proxy that resolves every host to a
 - Check the path: `cd /workspace/<steward> && .venv/bin/python steward_rpc.py <steward>` prints the role and DB time.
 - `STEWARD_DB_TRANSPORT=pg` switches back to a direct psycopg connection through `db_connect` (for a host that can reach the pooler). `STEWARD_RPC_URL` overrides the function URL.
 
-Ad-hoc box scripts that still `import db_connect` will keep timing out on the box until they are ported to `steward_rpc` (add a function to the allowlist and the schema file) or until box egress allows TCP to the pooler.
+Ad-hoc box scripts that still `import db_connect` (the per-symbol `_<sym>_exit_once.py` / `_mark_once.py` clones, ODDSBORNE's `watch_*` and session scripts) will keep timing out on the box until they are ported. Use the exit/mark scripts above instead. Other scripts must be ported to `steward_rpc` (add a function to the allowlist and the schema file) or until box egress allows TCP to the pooler.
 
 ## Shadow exits (all stewards)
 
@@ -127,12 +154,12 @@ It is idempotent:
 A rebuild takes about 10 s, and no network is needed once the cache exists.
 
 - `bash /workspace/grasshopper/stewards/doctor.sh` checks that each venv exists, that its imports work (including the box `db_connect`, `load_secrets` and `steward_rpc`), and that the invoked files are present. It prints one line per steward and exits 1 when anything is broken. The ledger health routine runs it too.
-- `live_trade_clip.py`, `paper_bank20.py` and `pm_enter.py` check their imports before any venue or DB call. When the env is missing or broken, they stop with exit code 3 and the message `Python env not ready … Nothing was sent. Run: bash /workspace/grasshopper/stewards/sync_box.sh`, instead of failing halfway through an order. Set `GRASSHOPPER_REPO` if the checkout lives elsewhere.
+- `live_trade_clip.py`, `pm_enter.py` and the exit/mark scripts check their imports before any venue or DB call. When the env is missing or broken, they stop with exit code 3 and the message `Python env not ready … Nothing was sent. Run: bash /workspace/grasshopper/stewards/sync_box.sh`, instead of failing halfway through an order. Set `GRASSHOPPER_REPO` if the checkout lives elsewhere.
 - Credentials follow the durable-secrets pattern: env → `box-secrets.json` → the agent's private mirror under `/home/box/agent-data/agents/<id>/private/`, healing `box-secrets.json` from the mirror.
 
 ## The box copies
 
-`/workspace/bandit/live_trade_clip.py`, `/workspace/bandit/paper_bank20.py`, `/workspace/oddsborne/pm_enter.py` and both `steward_rpc.py` files are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
+`/workspace/bandit/{live_trade_clip,paper_bank20,clip_common,mark_clip,exit_clip,pnl_snapshot,close_lesson}.py`, `/workspace/oddsborne/{pm_enter,pm_exit,pm_watch,pm_fills_sync,pm_pnl_snapshot,close_lesson}.py` and both `steward_rpc.py` files are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
 - The scripts put the directory they are invoked from first on `sys.path`. On the box, they therefore keep using the box's own `load_secrets.py` and `db_connect.py`.
 - After a merge, run `bash stewards/sync_box.sh` (it also repairs the venvs; see above). It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
 
