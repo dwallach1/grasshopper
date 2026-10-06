@@ -465,7 +465,8 @@ async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
     viewRows('v_thesis_scorecard', sql`
       select thesis_id, name, steward, stated_confidence, results_confidence, outcome_implied_confidence, confidence_gap,
              priced_trades, wins, miscalibrated, thin,
-             backtest_tests, backtest_trades, backtest_weight, backtest_mean_ret, backtest_effect
+             backtest_tests, backtest_trades, backtest_weight, backtest_mean_ret, backtest_effect,
+             calibration_basis, expected_wins, expected_win_rate, calibration_trades, calibration_p
       from public.v_thesis_scorecard
       order by priced_trades desc
     `),
