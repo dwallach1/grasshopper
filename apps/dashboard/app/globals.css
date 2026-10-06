@@ -6387,6 +6387,16 @@ a:focus-visible {
   line-height: 1.4;
 }
 
+/* An actionable exit breach (regular-session mark through the line). */
+.books-checks li.books-check-breach {
+  color: var(--down);
+}
+
+/* A premarket / after-hours print under the line: decides at the open, never red. */
+.books-checks li.books-check-open {
+  color: var(--ink-3, var(--text-3));
+}
+
 .books-fold {
   border-top: 1px solid var(--card-line, var(--line));
 }

@@ -215,7 +215,9 @@ function StewardSection({
       )}
       {section.checks.length ? (
         <ul className="books-checks" aria-label={`${section.name} things to check`}>
-          {section.checks.map((row) => <li key={row.id}>{row.text}</li>)}
+          {section.checks.map((row) => (
+            <li key={row.id} className={row.tone === 'plain' ? undefined : `books-check-${row.tone}`}>{row.text}</li>
+          ))}
         </ul>
       ) : null}
       {watched ? (

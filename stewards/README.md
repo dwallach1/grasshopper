@@ -19,6 +19,8 @@ Nothing secret is in this directory. Credentials come from the process environme
 
 The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation`, `v_ledger_integrity`, and `v_learning_loop_gaps` (closes with no lesson yet; not a trading breach).
 
+**Equity marks (QUANTANAMO): write the real venue price at any hour.** Premarket and after-hours marks are fine and expected; never write the prior close as a stand-in (a stale mark). The watchdog reads the session from the mark time (`public.us_equity_session(observed_at)`: `pre`, `rth`, `post`, `closed`). A mark at or below the lot's `invalidation_price` is `exit_full_lot` only in `rth`; in any other session it is `review_at_open`, and the desk shows it as "premarket print under its exit, decides at open". Exits still decide on regular-session trades.
+
 ## BANDIT: `bandit/live_trade_clip.py`
 
 ```bash
