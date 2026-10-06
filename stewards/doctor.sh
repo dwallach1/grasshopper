@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Steward runtime check: every steward venv exists and its imports work. Exit 0 = healthy, 1 = broken.
+# Ledger reachability (HTTPS, read-only): cd /workspace/<steward> && .venv/bin/python steward_rpc.py <steward>
 #   bash /workspace/grasshopper/stewards/doctor.sh [steward ...]   (fix anything it reports with sync_box.sh)
 # STEWARD_BOX_ROOT overrides /workspace (tests); DOCTOR_IMPORTS_ONLY=1 skips the file checks (sync_box.sh probe).
 set -uo pipefail
@@ -7,8 +8,8 @@ box="${STEWARD_BOX_ROOT:-/workspace}"
 fix="bash $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sync_box.sh"
 # steward | modules the scripts import (helpers resolve from the steward dir) | files the stewards invoke
 checks=(
-  "bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets|live_trade_clip.py paper_bank20.py db_connect.py load_secrets.py requirements.txt"
-  "oddsborne|polymarket_us psycopg db_connect load_secrets|pm_enter.py db_connect.py load_secrets.py requirements.txt"
+  "bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets steward_rpc|live_trade_clip.py paper_bank20.py steward_rpc.py db_connect.py load_secrets.py requirements.txt"
+  "oddsborne|polymarket_us psycopg db_connect load_secrets steward_rpc|pm_enter.py steward_rpc.py db_connect.py load_secrets.py requirements.txt"
 )
 broken=0
 for row in "${checks[@]}"; do
@@ -24,7 +25,7 @@ for row in "${checks[@]}"; do
     problems+=("no working venv at $dir/.venv")
   else
     # shellcheck disable=SC2086
-    [ -z "${DOCTOR_IMPORTS_ONLY:-}" ] || modules="${modules// db_connect load_secrets/}"
+    [ -z "${DOCTOR_IMPORTS_ONLY:-}" ] || modules="${modules// db_connect load_secrets steward_rpc/}"
     bad="$(cd "$dir" && "$py" - $modules <<'PY' 2>&1
 import importlib, sys
 bad = []

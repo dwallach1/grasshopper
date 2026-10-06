@@ -10,6 +10,10 @@ sized_notional = min(request, edge-scaled max_stake, cash, 10%-of-book exposure 
 0.6 x the Jupiter pre-trade price (--invalidation-price overrides) and is written on the meme_positions lot;
 guidance refuses (missing_invalidation) and the DB rejects a new open lot without one. meme_orders carries thesis_id.
 Aborts if entry_allowed is false. No max-open or daily-stop rail (removed per David). 3% price-impact abort stays.
+
+Ledger I/O goes over HTTPS: steward_rpc.call -> edge function steward-rpc -> the SQL functions in
+supabase/schemas/50_steward_entry_rpc.sql, run as bandit_worker (the box can't reach the Postgres pooler).
+STEWARD_DB_TRANSPORT=pg runs the same functions over psycopg where raw Postgres works.
 """
 from __future__ import annotations
 
@@ -45,7 +49,7 @@ def _require_runtime(steward: str, modules: tuple[str, ...]) -> None:
         raise SystemExit(3)
 
 
-_require_runtime("bandit", ("base58", "requests", "solders.keypair", "solders.transaction", "psycopg"))
+_require_runtime("bandit", ("base58", "requests", "solders.keypair", "solders.transaction"))
 
 import base58  # noqa: E402
 import requests  # noqa: E402
@@ -59,8 +63,8 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 STATE_DIR = os.environ.get("BANDIT_STATE_DIR") or _HERE
 
-from db_connect import connect  # noqa: E402
 from load_secrets import require  # noqa: E402
+from steward_rpc import call as _rpc_call  # noqa: E402
 
 getcontext().prec = 50
 
@@ -210,35 +214,15 @@ def helius_send_fallback(helius_key: str, signed_b64: str) -> str:
     raise RuntimeError(f"tx not confirmed in time: {sig}")
 
 
-def ensure_token(cur) -> str:
-    cur.execute(
-        "SELECT id FROM meme_tokens WHERE mint=%s",
-        (MINT,),
-    )
-    row = cur.fetchone()
-    if row:
-        token_id = str(row[0])
-        cur.execute(
-            """
-            UPDATE meme_tokens
-            SET symbol=COALESCE(symbol, %s),
-                name=COALESCE(name, %s),
-                kill_criteria=%s,
-                updated_at=now()
-            WHERE id=%s::uuid
-            """,
-            (SYMBOL, NAME, KILL, token_id),
-        )
-        return token_id
-    cur.execute(
-        """
-        INSERT INTO meme_tokens (venue, mint, symbol, name, status, kill_criteria, meta)
-        VALUES ('jupiter', %s, %s, %s, 'watch', %s, %s::jsonb)
-        RETURNING id
-        """,
-        (MINT, SYMBOL, NAME, KILL, json.dumps({"source": "live_trade_clip", "name": NAME})),
-    )
-    return str(cur.fetchone()[0])
+def ledger(fn: str, args: dict, idempotent: bool = False):
+    """Ledger call as bandit_worker over HTTPS (public.<fn>(args::jsonb), one transaction).
+    Not `rpc`: that name is the Helius JSON-RPC helper above."""
+    return _rpc_call("bandit", fn, args, idempotent=idempotent)
+
+
+def reject_order(order_id: str, payload: dict) -> None:
+    # public.bandit_entry_reject_order: meme_orders status -> 'rejected', payload merged.
+    ledger("bandit_entry_reject_order", {"order_id": order_id, "payload": payload})
 
 
 # --- fee capture: fee_sol = meta.fee (base+priority, if WALLET is fee payer) + Jito/MEV tips
@@ -326,18 +310,15 @@ def main() -> int:
     if PLANNED_INVALIDATION <= 0:
         raise RuntimeError("invalidation price must be > 0")
     print(f"pretrade_price_sol_per_token={pretrade_price} planned_invalidation_sol_per_token={PLANNED_INVALIDATION}")
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM steward_sizing_guidance('bandit', %s, %s, %s, %s, %s)",
-                (THESIS_ID, SYMBOL, str(REQUEST_SOL), str(PLANNED_INVALIDATION),
-                 None if pretrade_price is None else str(pretrade_price)),
-            )
-            cols = [d[0] for d in cur.description]
-            row = cur.fetchone()
+    # public.steward_entry_guidance = steward_sizing_guidance('bandit', thesis, symbol, request, invalidation, entry price)
+    row = ledger("steward_entry_guidance", {
+        "steward": "bandit", "thesis_id": THESIS_ID, "instrument": SYMBOL, "requested": str(REQUEST_SOL),
+        "invalidation_price": str(PLANNED_INVALIDATION),
+        "entry_price": None if pretrade_price is None else str(pretrade_price),
+    }, idempotent=True)
     if not row:
         raise RuntimeError("steward_sizing_guidance returned no row")
-    g = dict(zip(cols, row))
+    g = dict(row)
     GUIDANCE = {k: (str(v) if isinstance(v, (Decimal,)) or hasattr(v, "isoformat") else v) for k, v in g.items()}
     print("GUIDANCE=" + json.dumps({k: GUIDANCE.get(k) for k in (
         "requested", "max_stake", "max_stake_reason", "sized_notional",
@@ -369,45 +350,24 @@ def main() -> int:
     if bal0 < SIZE_LAMPORTS + 5_000_000:
         raise RuntimeError(f"insufficient SOL: have {bal0} need ~{SIZE_LAMPORTS}+fees")
 
-    # Ledger: ensure token + insert order (submitted)
-    with connect() as conn:
-        with conn.cursor() as cur:
-            token_id = ensure_token(cur)
-            cur.execute(
-                """
-                INSERT INTO meme_orders (
-                  token_id, account_key, thesis_id, side, order_type, size_sol,
-                  status, mode, kill_criteria, rationale, gate_results, payload, submitted_at,
-                  max_stake_at_entry, max_stake_reason_at_entry
-                ) VALUES (
-                  %s::uuid, %s, %s, 'buy', 'market', %s,
-                  'submitted', 'live', %s, %s, %s::jsonb, %s::jsonb, now(),
-                  %s, %s
-                ) RETURNING id
-                """,
-                (
-                    token_id,
-                    ACCOUNT_KEY,
-                    THESIS_ID,
-                    str(SIZE_SOL),
-                    KILL,
-                    f"BANDIT live — {SYMBOL} {SIZE_SOL} SOL ExactIn (steward size: req {REQUEST_SOL} capped at max_stake {GUIDANCE.get('max_stake')}); thesis meme_4h_momentum_clip; {RATIONALE}; kill -40%/thesis/4h; TP FULL bank at +50%",
-                    json.dumps({"pre_balance_lamports": bal0, "slot": slot0, "steward_sizing_guidance": GUIDANCE}),
-                    json.dumps(
-                        {
-                            "mint": MINT,
-                            "symbol": SYMBOL,
-                            "wallet": WALLET,
-                            "size_lamports": SIZE_LAMPORTS,
-                            "slippage_plan_bps": SLIPPAGE_TRIES,
-                        }
-                    ),
-                    GUIDANCE.get("max_stake"),
-                    GUIDANCE.get("max_stake_reason"),
-                ),
-            )
-            order_id = str(cur.fetchone()[0])
-        conn.commit()
+    # Ledger: ensure token + insert order (submitted), one transaction (public.bandit_entry_open_order).
+    # The meme_orders row carries thesis_id and max_stake_at_entry, max_stake_reason_at_entry (guidance's cap).
+    opened = ledger("bandit_entry_open_order", {
+        "mint": MINT, "symbol": SYMBOL, "name": NAME, "kill_criteria": KILL,
+        "account_key": ACCOUNT_KEY, "thesis_id": THESIS_ID, "size_sol": str(SIZE_SOL),
+        "rationale": f"BANDIT live — {SYMBOL} {SIZE_SOL} SOL ExactIn (steward size: req {REQUEST_SOL} capped at max_stake {GUIDANCE.get('max_stake')}); thesis meme_4h_momentum_clip; {RATIONALE}; kill -40%/thesis/4h; TP FULL bank at +50%",
+        "gate_results": {"pre_balance_lamports": bal0, "slot": slot0, "steward_sizing_guidance": GUIDANCE},
+        "payload": {
+            "mint": MINT,
+            "symbol": SYMBOL,
+            "wallet": WALLET,
+            "size_lamports": SIZE_LAMPORTS,
+            "slippage_plan_bps": SLIPPAGE_TRIES,
+        },
+        "max_stake_at_entry": GUIDANCE.get("max_stake"),
+        "max_stake_reason_at_entry": GUIDANCE.get("max_stake_reason"),
+    })
+    order_id, token_id = str(opened["order_id"]), str(opened["token_id"])
     print(f"ledger_order_id={order_id} token_id={token_id}")
 
     last_err = None
@@ -454,18 +414,7 @@ def main() -> int:
             if impact_abs > 0.03:  # priceImpactPct is a fraction; 0.03 = 3% rail
                 last_err = f"abort: price impact {impact_abs} > 3%"
                 print(last_err)
-                with connect() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            UPDATE meme_orders
-                            SET status='rejected', updated_at=now(),
-                                payload = payload || %s::jsonb
-                            WHERE id=%s::uuid
-                            """,
-                            (json.dumps({"error": last_err, "order_meta": order_meta}), order_id),
-                        )
-                    conn.commit()
+                reject_order(order_id, {"error": last_err, "order_meta": order_meta})
                 print(f"FAILED order_id={order_id} error={last_err}")
                 return 1
 
@@ -538,21 +487,7 @@ def main() -> int:
             continue
 
     if not result:
-        with connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE meme_orders
-                    SET status='rejected', updated_at=now(),
-                        payload = payload || %s::jsonb
-                    WHERE id=%s::uuid
-                    """,
-                    (
-                        json.dumps({"error": str(last_err), "order_meta": order_meta}),
-                        order_id,
-                    ),
-                )
-            conn.commit()
+        reject_order(order_id, {"error": str(last_err), "order_meta": order_meta})
         print(f"FAILED order_id={order_id} error={last_err}")
         return 1
 
@@ -586,213 +521,79 @@ def main() -> int:
 
     _fee_sol, _fee_bd = fetch_fee_breakdown(secrets["HELIUS_API_KEY"], sig)
     fill_id = pos_id = pnl_id = None
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE meme_orders
-                SET status='filled', signature=%s, price_sol=%s,
-                    size_tokens=%s, updated_at=now(),
-                    payload = payload || %s::jsonb
-                WHERE id=%s::uuid
-                """,
-                (
-                    sig,
-                    str(entry_price) if entry_price is not None else None,
-                    str(out_tokens),
-                    json.dumps(
-                        {
-                            "path": path,
-                            "slippage_bps": used_slippage,
-                            "execute": {
-                                k: result.get(k)
-                                for k in (
-                                    "status",
-                                    "code",
-                                    "signature",
-                                    "totalInputAmount",
-                                    "totalOutputAmount",
-                                    "inputAmountResult",
-                                    "outputAmountResult",
-                                    "fallback",
-                                    "note",
-                                )
-                            },
-                            "order_meta": {k: v for k, v in (order_meta or {}).items() if k != "transaction"},
-                        }
-                    ),
-                    order_id,
-                ),
-            )
-
-            # position upsert-ish: open new or add to existing open
-            cur.execute(
-                """
-                SELECT id, quantity, average_cost_sol FROM meme_positions
-                WHERE token_id=%s::uuid AND account_key=%s AND status='open'
-                ORDER BY created_at DESC LIMIT 1
-                """,
-                (token_id, ACCOUNT_KEY),
-            )
-            prow = cur.fetchone()
-            if prow:
-                pos_id = str(prow[0])
-                old_q = Decimal(prow[1] or 0)
-                old_avg = Decimal(prow[2] or 0)
-                new_q = old_q + out_tokens
-                new_avg = (
-                    ((old_avg * old_q) + (entry_price * out_tokens)) / new_q
-                    if new_q and entry_price is not None
-                    else entry_price
+    # Post-swap ledger block, one transaction (public.bandit_entry_record_fill): meme_orders -> filled; open the
+    # meme_positions lot (invalidation_price = entry x KILL_FRACTION) or add to the open one; meme_fills;
+    # a meme_pnl row from the Helius balance (equity = cash + open lots at mark); the desk heartbeat when
+    # grants allow; then thesis_id + opened_at for the 4h deadline.
+    as_of = datetime.now(timezone.utc)
+    fill_args = {
+        "order_id": order_id, "token_id": token_id, "account_key": ACCOUNT_KEY, "thesis_id": THESIS_ID,
+        "mint": MINT, "symbol": SYMBOL, "signature": sig,
+        "entry_price": str(entry_price) if entry_price is not None else None,
+        "out_tokens": str(out_tokens), "kill_criteria": KILL,
+        "invalidation_price": str(entry_price * KILL_FRACTION) if entry_price is not None else str(PLANNED_INVALIDATION),
+        "invalidation_note": "meme_4h_momentum_clip kill: -40% from entry (SOL/token); also 4h time stop and full bank at +50%",
+        "order_payload": {
+            "path": path,
+            "slippage_bps": used_slippage,
+            "execute": {
+                k: result.get(k)
+                for k in (
+                    "status",
+                    "code",
+                    "signature",
+                    "totalInputAmount",
+                    "totalOutputAmount",
+                    "inputAmountResult",
+                    "outputAmountResult",
+                    "fallback",
+                    "note",
                 )
-                cur.execute(
-                    """
-                    UPDATE meme_positions
-                    SET quantity=%s, average_cost_sol=%s, mark_sol=%s, mark_at=now(),
-                        kill_criteria=%s, updated_at=now(), thesis_id=COALESCE(thesis_id, 'meme_4h_momentum_clip'),
-                        meta = meta || %s::jsonb
-                    WHERE id=%s::uuid
-                    """,
-                    (
-                        str(new_q),
-                        str(new_avg) if new_avg is not None else None,
-                        str(entry_price) if entry_price is not None else None,
-                        KILL,
-                        json.dumps({"last_sig": sig, "mint": MINT}),
-                        pos_id,
-                    ),
-                )
-            else:
-                cur.execute(
-                    """
-                    INSERT INTO meme_positions (
-                      token_id, account_key, thesis_id, status, quantity, average_cost_sol,
-                      mark_sol, mark_at, opened_at, kill_criteria, meta,
-                      invalidation_price, invalidation_note
-                    ) VALUES (
-                      %s::uuid, %s, %s, 'open', %s, %s,
-                      %s, now(), now(), %s, %s::jsonb,
-                      %s, %s
-                    ) RETURNING id
-                    """,
-                    (
-                        token_id,
-                        ACCOUNT_KEY,
-                        THESIS_ID,
-                        str(out_tokens),
-                        str(entry_price) if entry_price is not None else None,
-                        str(entry_price) if entry_price is not None else None,
-                        KILL,
-                        json.dumps({"mint": MINT, "symbol": SYMBOL, "entry_sig": sig, "thesis": THESIS_ID}),
-                        str(entry_price * KILL_FRACTION) if entry_price is not None else str(PLANNED_INVALIDATION),
-                        "meme_4h_momentum_clip kill: -40% from entry (SOL/token); also 4h time stop and full bank at +50%",
-                    ),
-                )
-                pos_id = str(cur.fetchone()[0])
-
-            cur.execute(
-                """
-                INSERT INTO meme_fills (
-                  order_id, position_id, account_key, venue_fill_id, venue_order_id,
-                  side, quantity, price_sol, fee_sol, executed_at, payload
-                ) VALUES (
-                  %s::uuid, %s::uuid, %s, %s, %s,
-                  'buy', %s, %s, %s, now(), %s::jsonb
-                ) RETURNING id
-                """,
-                (
-                    order_id,
-                    pos_id,
-                    ACCOUNT_KEY,
-                    sig,  # venue_fill_id unique per account
-                    (order_meta or {}).get("requestId"),
-                    str(out_tokens),
-                    str(entry_price) if entry_price is not None else "0",
-                    str(_fee_sol),
-                    json.dumps(
-                        {
-                            "fee_breakdown": _fee_bd,
-                            "in_lamports": in_lamports,
-                            "out_atoms": out_atoms,
-                            "decimals": DECIMALS,
-                            "path": path,
-                            "slippage_bps": used_slippage,
-                        }
-                    ),
-                ),
-            )
-            fill_id = str(cur.fetchone()[0])
-
-            # fresh pnl from Helius balance
-            as_of = datetime.now(timezone.utc)
-            # equity approx: cash + position mark (mark = entry for now; no invented price)
-            pos_value = (out_tokens * entry_price) if entry_price is not None else Decimal(0)
-            # if adding to existing, recompute from DB
-            cur.execute(
-                """
-                SELECT COALESCE(SUM(quantity * COALESCE(mark_sol, average_cost_sol, 0)), 0)
-                FROM meme_positions WHERE account_key=%s AND status='open'
-                """,
-                (ACCOUNT_KEY,),
-            )
-            unreal = Decimal(cur.fetchone()[0] or 0)
-            equity = cash_sol + unreal
-            cur.execute(
-                """
-                INSERT INTO meme_pnl (
-                  account_key, as_of, realized, unrealized, fees, cash_sol, equity_sol, notes, payload
-                ) VALUES (
-                  %s, %s, 0, %s, 0, %s, %s, %s, %s::jsonb
-                ) RETURNING id
-                """,
-                (
-                    ACCOUNT_KEY,
-                    as_of,
-                    str(unreal),
-                    str(cash_sol),
-                    str(equity),
-                    f"post live trade {SYMBOL} sig={sig}",
-                    json.dumps(
-                        {
-                            "source": "helius_getBalance",
-                            "wallet": WALLET,
-                            "lamports": bal1,
-                            "context_slot": slot1,
-                            "trade_sig": sig,
-                            "in_sol": str(in_sol),
-                            "out_tokens": str(out_tokens),
-                            "entry_price_sol": str(entry_price),
-                        }
-                    ),
-                ),
-            )
-            pnl_id = str(cur.fetchone()[0])
-
-            # heartbeat if grants allow
-            cur.execute("SAVEPOINT hb")
-            try:
-                cur.execute(
-                    """
-                    UPDATE desk_agents SET heartbeat_at=now(), updated_at=now()
-                    WHERE slug='bandit'
-                    RETURNING id
-                    """
-                )
-                hb = cur.fetchone()
-                print(f"heartbeat_updated={bool(hb)}")
-                cur.execute("RELEASE SAVEPOINT hb")
-            except Exception as e:
-                cur.execute("ROLLBACK TO SAVEPOINT hb")
-                print(f"heartbeat_skipped={e}")
-        conn.commit()
-
-    # verify thesis_id + opened_at for deadline
-    with connect() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE meme_positions SET thesis_id=%s WHERE id=%s::uuid AND thesis_id IS DISTINCT FROM %s", (THESIS_ID, pos_id, THESIS_ID))
-            cur.execute("SELECT thesis_id, opened_at FROM meme_positions WHERE id=%s::uuid", (pos_id,))
-            thesis_db, opened_at = cur.fetchone()
-        conn.commit()
+            },
+            "order_meta": {k: v for k, v in (order_meta or {}).items() if k != "transaction"},
+        },
+        "venue_order_id": (order_meta or {}).get("requestId"),
+        "fee_sol": str(_fee_sol),
+        "fill_payload": {
+            "fee_breakdown": _fee_bd,
+            "in_lamports": in_lamports,
+            "out_atoms": out_atoms,
+            "decimals": DECIMALS,
+            "path": path,
+            "slippage_bps": used_slippage,
+        },
+        "cash_sol": str(cash_sol),
+        "as_of": as_of.isoformat(),
+        "pnl_notes": f"post live trade {SYMBOL} sig={sig}",
+        "pnl_payload": {
+            "source": "helius_getBalance",
+            "wallet": WALLET,
+            "lamports": bal1,
+            "context_slot": slot1,
+            "trade_sig": sig,
+            "in_sol": str(in_sol),
+            "out_tokens": str(out_tokens),
+            "entry_price_sol": str(entry_price),
+        },
+    }
+    try:
+        rec = ledger("bandit_entry_record_fill", fill_args)
+    except Exception as e:
+        # The swap landed on-chain; keep everything needed to write the ledger by hand (or replay this call
+        # once you've checked meme_fills has no row for this signature).
+        dump = os.path.join(STATE_DIR, f"_unrecorded_fill_{SYMBOL.lower()}.json")
+        with open(dump, "w") as f:
+            json.dump({"error": f"{type(e).__name__}: {e}", "fn": "bandit_entry_record_fill", "args": fill_args},
+                      f, indent=2, default=str)
+        print(f"LEDGER WRITE FAILED after a landed swap sig={sig}; args saved to {dump}", file=sys.stderr)
+        raise
+    pos_id, fill_id, pnl_id = str(rec["position_id"]), str(rec["fill_id"]), str(rec["pnl_id"])
+    if rec.get("heartbeat_updated"):
+        print("heartbeat_updated=True")
+    else:
+        print(f"heartbeat_skipped={rec.get('heartbeat_skipped')}")
+    thesis_db = rec.get("thesis_id")
+    opened_at = datetime.fromisoformat(str(rec["opened_at"]))
     from datetime import timedelta
     from zoneinfo import ZoneInfo
     deadline = opened_at + timedelta(hours=4)

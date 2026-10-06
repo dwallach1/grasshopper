@@ -37,8 +37,10 @@ else
   pairs=(
     "$here/bandit/live_trade_clip.py:$box/bandit/live_trade_clip.py"
     "$here/bandit/paper_bank20.py:$box/bandit/paper_bank20.py"
+    "$here/bandit/steward_rpc.py:$box/bandit/steward_rpc.py"
     "$here/bandit/requirements.txt:$box/bandit/requirements.txt"
     "$here/oddsborne/pm_enter.py:$box/oddsborne/pm_enter.py"
+    "$here/oddsborne/steward_rpc.py:$box/oddsborne/steward_rpc.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
   )
   for pair in "${pairs[@]}"; do

@@ -8,7 +8,8 @@ Pipeline (refuses at the first failing gate, never invents prices or ids):
      fee_per_contract = THETA * price * (1 - price)   (desk formula, THETA = 0.0695;
      "Fee = Θ × C × p × (1−p)" from afternoon_full_*/morning_full_* scripts, C = 1 contract).
      Refuse if edge_after_costs <= 0. That is the ONLY edge rule (no cent bar, no %-of-book cap).
-  3. public.steward_sizing_guidance('oddsborne', thesis_id, slug, requested, invalidation, price). --invalidation
+  3. public.steward_sizing_guidance('oddsborne', thesis_id, slug, requested, invalidation, price), called as
+     public.steward_entry_guidance over HTTPS (steward_rpc -> edge function steward-rpc). --invalidation
      (outcome price, 0 < inval < price) is required. Refuse if entry_allowed is false (unknown/rejected/killed
      thesis, missing_invalidation, stale_book). sized_notional = min(requested, edge-scaled
      max_stake, cash). quantity = floor(sized_notional/price),
@@ -20,6 +21,10 @@ Pipeline (refuses at the first failing gate, never invents prices or ids):
      rejects a new open lot without an invalidation) and link the fills, public.oddsborne_touch_heartbeat(). Dry-run: everything except create /
      pm_orders / pm_fills / heartbeat (pm_markets side ids ARE upserted: reference data only).
   5. Prints a JSON summary.
+
+Ledger I/O goes over HTTPS (steward_rpc.call -> edge function steward-rpc -> the SQL functions in
+supabase/schemas/50_steward_entry_rpc.sql, run as oddsborne_worker). The box can't reach the Postgres pooler;
+STEWARD_DB_TRANSPORT=pg runs the same functions over psycopg where it can.
 
 Price convention: --price is the price of the outcome you are buying (yes or no). The venue's
 price.value is always the LONG (yes) price, so a NO buy at p is sent as BUY_SHORT at 1-p.
@@ -219,11 +224,21 @@ def make_client():
     return PolymarketUS(key_id=s["POLYMARKET_US_KEY_ID"], secret_key=s["POLYMARKET_US_SECRET_KEY"])
 
 
-def make_conn():
-    from load_secrets import load_secrets
-    os.environ.update(load_secrets())
-    from db_connect import connect
-    return connect()
+def make_rpc():
+    """Ledger calls as oddsborne_worker over HTTPS: rpc(fn, args, idempotent=False) -> jsonb result."""
+    from steward_rpc import call
+
+    def rpc(fn: str, args: dict, idempotent: bool = False):
+        return call(STEWARD, fn, args, idempotent=idempotent)
+    return rpc
+
+
+def _refusal_or_raise(e: Exception, default_gate: str) -> None:
+    """Turn a SQL-side 'refusal:<gate>: <reason>' into a Refusal; re-raise anything else."""
+    ref = getattr(e, "refusal", None)
+    if ref:
+        raise Refusal(ref[0] or default_gate, ref[1]) from None
+    raise e
 
 
 def market_view(c, slug: str) -> dict:
@@ -261,21 +276,23 @@ def status_from_venue(state: str | None) -> str:
     return VENUE_STATE_TO_STATUS.get(state or "", "submitted")
 
 
-# ----------------------------------------------------------------- DB helpers
-def sizing_guidance(cur, thesis_id: str, instrument: str, requested: float, invalidation: float,
+# ----------------------------------------------------------------- DB helpers (HTTPS RPCs)
+def sizing_guidance(rpc, thesis_id: str, instrument: str, requested: float, invalidation: float,
                     entry_price: float | None = None) -> dict:
-    # 6th arg (migration 41): the entry price lets guidance fit the entry inside the 10%-of-book
-    # open-risk budget using only (entry - invalidation) / entry as risk; without it the whole notional counts.
-    cur.execute("select * from public.steward_sizing_guidance(%s, %s, %s, %s, %s, %s)",
-                (STEWARD, thesis_id, instrument, Decimal(str(requested)), Decimal(str(invalidation)),
-                 None if entry_price is None else Decimal(str(entry_price))))
-    row = cur.fetchone()
+    # public.steward_entry_guidance wraps public.steward_sizing_guidance(steward, thesis_id, instrument,
+    # requested, invalidation, entry_price). 6th arg (migration 41): the entry price lets guidance fit the
+    # entry inside the 10%-of-book open-risk budget using only (entry - invalidation) / entry as risk.
+    row = rpc("steward_entry_guidance",
+              {"steward": STEWARD, "thesis_id": thesis_id, "instrument": instrument,
+               "requested": Decimal(str(requested)), "invalidation_price": Decimal(str(invalidation)),
+               "entry_price": None if entry_price is None else Decimal(str(entry_price))},
+              idempotent=True)
     if row is None:
         return None
-    return jsonable(dict(zip([d.name for d in cur.description], row)))
+    return jsonable(row)
 
 
-def upsert_market(cur, mv: dict) -> str:
+def upsert_market(rpc, mv: dict) -> str:
     m, lg, sh = mv["market"], mv["long"], mv["short"]
     slug = m.get("slug")
     venue_ids = {
@@ -285,35 +302,25 @@ def upsert_market(cur, mv: dict) -> str:
         "venue_status": m.get("status"), "fee_coefficient": m.get("feeCoefficient"),
         "upserted_by": "pm_enter", "upserted_at": datetime.now(timezone.utc).isoformat(),
     }
-    cur.execute("select id, yes_token_id, no_token_id from public.pm_markets where slug=%s order by created_at limit 1",
-                (slug,))
-    row = cur.fetchone()
-    if row:
-        if (row[1] and row[1] != venue_ids["yes_side_id"]) or (row[2] and row[2] != venue_ids["no_side_id"]):
-            raise Refusal("market", f"pm_markets side ids {row[1]}/{row[2]} disagree with venue "
-                                    f"{venue_ids['yes_side_id']}/{venue_ids['no_side_id']} for {slug}")
-        cur.execute("""update public.pm_markets set yes_token_id=%s, no_token_id=%s,
-                         condition_id=coalesce(condition_id,%s), close_time=coalesce(close_time,%s::timestamptz),
-                         meta = coalesce(meta,'{}'::jsonb) || jsonb_build_object('venue_ids', %s::jsonb),
-                         updated_at=now() where id=%s""",
-                    (venue_ids["yes_side_id"], venue_ids["no_side_id"], venue_ids["market_id"], m.get("endDate"),
-                     json.dumps(venue_ids), row[0]))
-        return str(row[0])
-    cur.execute("""insert into public.pm_markets (venue, condition_id, slug, question, status, close_time,
-                     yes_token_id, no_token_id, meta)
-                   values ('polymarket', %s, %s, %s, 'open', %s::timestamptz, %s, %s, %s::jsonb) returning id""",
-                (venue_ids["market_id"], slug, m.get("question") or slug, m.get("endDate"),
-                 venue_ids["yes_side_id"], venue_ids["no_side_id"],
-                 json.dumps({"venue_ids": venue_ids})))
-    return str(cur.fetchone()[0])
+    # public.oddsborne_entry_upsert_market: find by slug (refuse if stored side ids disagree with the
+    # venue), else insert; condition_id/close_time only fill blanks; meta.venue_ids is replaced.
+    try:
+        res = rpc("oddsborne_entry_upsert_market",
+                  {"slug": slug, "question": m.get("question") or slug, "close_time": m.get("endDate"),
+                   "venue_market_id": venue_ids["market_id"], "yes_side_id": venue_ids["yes_side_id"],
+                   "no_side_id": venue_ids["no_side_id"], "venue_ids": venue_ids})
+    except Exception as e:
+        _refusal_or_raise(e, "market")
+    return str(res["pm_market_id"])
 
 
-def record_fills(c, cur, slug: str, venue_order_id: str, pm_order_id: str, market_id: str) -> list:
+def record_fills(c, rpc, slug: str, venue_order_id: str, pm_order_id: str, market_id: str) -> list:
     """Pull our executions for this order from portfolio.activities (same source/shape as
-    pm_fills_backfill_20260926.py) and insert idempotently on (account_key, venue_fill_id)."""
+    pm_fills_backfill_20260926.py) and insert idempotently on (account_key, venue_fill_id)
+    (public.oddsborne_entry_record_fills, one transaction; each fill links to the single open lot)."""
     r = vcall(c.portfolio.activities, {"limit": 100, "marketSlug": slug,
                                        "types": ["ACTIVITY_TYPE_TRADE"], "sortOrder": "SORT_ORDER_DESCENDING"})
-    out = []
+    rows, out = [], []
     for a in (r or {}).get("activities") or []:
         if a.get("type") != "ACTIVITY_TYPE_TRADE":
             continue
@@ -328,72 +335,51 @@ def record_fills(c, cur, slug: str, venue_order_id: str, pm_order_id: str, marke
             outcome, side = {"ORDER_INTENT_BUY_LONG": ("yes", "buy"), "ORDER_INTENT_SELL_LONG": ("yes", "sell"),
                              "ORDER_INTENT_BUY_SHORT": ("no", "buy"),
                              "ORDER_INTENT_SELL_SHORT": ("no", "sell")}[o.get("intent")]
-        cur.execute("select id from public.pm_positions where account_key=%s and market_id=%s and outcome=%s"
-                    " and status='open'", (ACCOUNT, market_id, outcome))
-        pos = cur.fetchall()
-        pos_id = pos[0][0] if len(pos) == 1 else None
         payload = {"source": "portfolio.activities", "writer": "pm_enter", "trade_id": tr.get("id"),
                    "execution_id": ex["id"], "is_aggressor": bool(tr.get("isAggressor")),
                    "fee_field": "execution.commissionNotionalCollected (negative = maker rebate)", "activity": a}
-        cur.execute(
-            """insert into public.pm_fills (order_id, position_id, account_key, venue_fill_id, venue_order_id, outcome,
-                   side, quantity, price, fee, executed_at, payload)
-               values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::timestamptz,%s::jsonb)
-               on conflict (account_key, venue_fill_id) do nothing returning id""",
-            (pm_order_id, pos_id, ACCOUNT, ex["id"], venue_order_id, outcome, side, Decimal(str(ex["lastShares"])),
-             Decimal(str(ex["lastPx"]["value"])),
-             Decimal(str((ex.get("commissionNotionalCollected") or {}).get("value") or 0)),
-             ex.get("transactTime") or tr.get("createTime"), json.dumps(payload, default=str)))
-        row = cur.fetchone()
-        out.append({"venue_fill_id": ex["id"], "qty": ex["lastShares"], "px": ex["lastPx"]["value"],
-                    "inserted": bool(row), "pm_fill_id": str(row[0]) if row else None})
+        rows.append({"venue_fill_id": ex["id"], "venue_order_id": venue_order_id, "outcome": outcome, "side": side,
+                     "quantity": Decimal(str(ex["lastShares"])), "price": Decimal(str(ex["lastPx"]["value"])),
+                     "fee": Decimal(str((ex.get("commissionNotionalCollected") or {}).get("value") or 0)),
+                     "executed_at": ex.get("transactTime") or tr.get("createTime"),
+                     "payload": jsonable(payload)})
+        out.append({"venue_fill_id": ex["id"], "qty": ex["lastShares"], "px": ex["lastPx"]["value"]})
+    if not rows:
+        return out
+    res = rpc("oddsborne_entry_record_fills",
+              {"pm_order_id": pm_order_id, "market_id": market_id, "account_key": ACCOUNT, "fills": rows})
+    by_id = {str(x.get("venue_fill_id")): x for x in res or []}
+    for o in out:
+        x = by_id.get(str(o["venue_fill_id"])) or {}
+        o["inserted"] = bool(x.get("inserted"))
+        o["pm_fill_id"] = str(x["pm_fill_id"]) if x.get("pm_fill_id") else None
     return out
 
 
-def upsert_position(cur, market_id: str, outcome: str, thesis_id: str, invalidation: float,
+def upsert_position(rpc, market_id: str, outcome: str, thesis_id: str, invalidation: float,
                     invalidation_note: str, kill_criteria: str, pm_order_id: str, fills: list) -> dict:
     """Open (or add to) the pm_positions lot for this order's newly inserted buy fills, carrying
-    thesis_id and the entry invalidation, and link the order's unlinked fills to it."""
+    thesis_id and the entry invalidation (invalidation_price), and link the order's unlinked fills to it
+    (public.oddsborne_entry_upsert_position: select ... for update, then update or insert, one transaction)."""
     new = [f for f in fills if f.get("inserted")]
     qty = sum(Decimal(str(f["qty"])) for f in new)
     if qty <= 0:
         return {"action": "none", "reason": "no newly inserted fills"}
     px = sum(Decimal(str(f["qty"])) * Decimal(str(f["px"])) for f in new) / qty
-    cur.execute("""select id, quantity, average_cost, invalidation_price from public.pm_positions
-                   where account_key=%s and market_id=%s and outcome=%s and status='open' for update""",
-                (ACCOUNT, market_id, outcome))
-    row = cur.fetchone()
-    if row:
-        pos_id, q0, a0, inv0 = row
-        q0 = Decimal(str(q0 or 0))
-        new_q = q0 + qty
-        new_avg = ((q0 * Decimal(str(a0)) if a0 is not None else Decimal(0)) + qty * px) / new_q if a0 is not None or q0 == 0 else None
-        cur.execute("""update public.pm_positions set quantity=%s, average_cost=coalesce(%s, average_cost),
-                         invalidation_price=coalesce(invalidation_price, %s),
-                         invalidation_note=coalesce(invalidation_note, %s),
-                         thesis_id=coalesce(thesis_id, %s), updated_at=now() where id=%s""",
-                    (new_q, new_avg, Decimal(str(invalidation)), invalidation_note or None, thesis_id, pos_id))
-        action = "added"
-    else:
-        cur.execute("""insert into public.pm_positions (market_id, account_key, thesis_id, outcome, status, quantity,
-                         average_cost, opened_at, kill_criteria, invalidation_price, invalidation_note, meta)
-                       values (%s::uuid,%s,%s,%s,'open',%s,%s,now(),%s,%s,%s,%s::jsonb) returning id""",
-                    (market_id, ACCOUNT, thesis_id, outcome, qty, px, kill_criteria or None,
-                     Decimal(str(invalidation)), invalidation_note or None,
-                     json.dumps({"writer": "pm_enter", "pm_order_id": pm_order_id})))
-        pos_id = cur.fetchone()[0]
-        action = "opened"
-    cur.execute("update public.pm_fills set position_id=%s where order_id=%s and position_id is null",
-                (pos_id, pm_order_id))
-    return {"action": action, "position_id": str(pos_id), "fill_qty": str(qty), "fill_avg_px": str(px),
-            "fills_linked": cur.rowcount}
+    res = rpc("oddsborne_entry_upsert_position",
+              {"market_id": market_id, "account_key": ACCOUNT, "outcome": outcome, "thesis_id": thesis_id,
+               "invalidation_price": Decimal(str(invalidation)), "invalidation_note": invalidation_note or "",
+               "kill_criteria": kill_criteria or "", "pm_order_id": pm_order_id,
+               "fill_qty": qty, "fill_avg_px": px})
+    return {"action": res.get("action"), "position_id": str(res.get("position_id")), "fill_qty": str(qty),
+            "fill_avg_px": str(px), "fills_linked": res.get("fills_linked")}
 
 
 # ----------------------------------------------------------------- main entry
 def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id: str | None,
           my_probability: float, fair_source: str = "", rationale: str = "", kill_criteria: str = "",
           order_type: str = "maker_gtc", dry_run: bool = True, theta: float = THETA,
-          client=None, conn=None, invalidation: float | None = None, invalidation_note: str = "") -> dict:
+          client=None, rpc=None, invalidation: float | None = None, invalidation_note: str = "") -> dict:
     """Run the full entry pipeline. Returns a JSON-able summary dict with decision in
     {DRY_RUN_OK, PLACED, REFUSED, ERROR}. dry_run defaults to True when called as a function."""
     started = datetime.now(timezone.utc)
@@ -403,7 +389,6 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
                           "rationale": rationale, "kill_criteria": kill_criteria, "order_type": order_type,
                           "theta": theta, "invalidation": invalidation,
                           "invalidation_note": invalidation_note}}
-    own_conn = False
     try:
         # ---- 1. input gates (no network)
         if not thesis_id or not str(thesis_id).strip():
@@ -435,9 +420,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         check_edge(edge)
 
         c = client or make_client()
-        if conn is None:
-            conn, own_conn = make_conn(), True
-        cur = conn.cursor()
+        rpc = rpc or make_rpc()
 
         mv = market_view(c, slug)
         m = mv["market"]
@@ -478,8 +461,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         edge["price_vs_book"] = {"outcome_bid": book["bid"], "outcome_ask": book["ask"]}
 
         # ---- 3. sizing
-        g = sizing_guidance(cur, thesis_id, slug, requested_usd, invalidation, price)
-        conn.rollback()
+        g = sizing_guidance(rpc, thesis_id, slug, requested_usd, invalidation, price)
         summary["guidance"] = g
         check_guidance(g)
         sz = compute_quantity(g["sized_notional"], g.get("spendable_cash"), price, theta)
@@ -530,8 +512,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         summary["preview"]["price"] = money(po.get("price"))
         summary["preview"]["outcome"] = (po.get("marketMetadata") or {}).get("outcome")
 
-        market_id = upsert_market(cur, mv)
-        conn.commit()
+        market_id = upsert_market(rpc, mv)
         summary["pm_market_id"] = market_id
 
         gate_results = {"guidance": g, "edge": edge, "sizing": sz, "preview_state": po.get("state"),
@@ -584,29 +565,25 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         full_rationale = (rationale or "") + (f" | fair source: {fair_source}" if fair_source else "")
         payload = {"params": params, "create": create, "retrieve": ret, "preview": preview,
                    "writer": "pm_enter", "fair_source": fair_source}
+        # pm_orders row (public.oddsborne_entry_record_order): side 'buy', mode 'live', with the cap in force at
+        # entry as max_stake_at_entry, max_stake_reason_at_entry (guidance's max_stake / max_stake_reason).
+        order_row = {"market_id": market_id, "account_key": ACCOUNT, "thesis_id": thesis_id, "outcome": outcome,
+                     "order_type": ledger_type, "size": qty, "price": Decimal(str(price)), "status": status,
+                     "venue_order_id": oid, "rationale": full_rationale, "kill_criteria": kill_criteria,
+                     "my_probability": Decimal(str(my_probability)),
+                     "book_probability": None if book["book_probability"] is None else Decimal(str(book["book_probability"])),
+                     "edge_after_costs": Decimal(str(edge["edge_after_costs"])),
+                     "gate_results": jsonable(gate_results), "payload": jsonable(payload),
+                     "submitted_at": (ret or {}).get("createTime"),
+                     "max_stake_at_entry": g.get("max_stake"), "max_stake_reason_at_entry": g.get("max_stake_reason")}
         try:
-            cur.execute(
-                """insert into public.pm_orders (market_id, account_key, thesis_id, outcome, side, order_type, size, price,
-                       status, mode, venue_order_id, rationale, kill_criteria, my_probability, book_probability,
-                       edge_after_costs, gate_results, payload, submitted_at,
-                       max_stake_at_entry, max_stake_reason_at_entry)
-                   values (%s::uuid,%s,%s,%s,'buy',%s,%s,%s,%s,'live',%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,
-                           coalesce(%s::timestamptz, now()), %s, %s) returning id""",
-                (market_id, ACCOUNT, thesis_id, outcome, ledger_type, qty, Decimal(str(price)), status, oid,
-                 full_rationale, kill_criteria, Decimal(str(my_probability)),
-                 None if book["book_probability"] is None else Decimal(str(book["book_probability"])),
-                 Decimal(str(edge["edge_after_costs"])), json.dumps(gate_results, default=str),
-                 json.dumps(payload, default=str), (ret or {}).get("createTime"),
-                 g.get("max_stake"), g.get("max_stake_reason")))
-            pm_order_id = str(cur.fetchone()[0])
-            conn.commit()
+            pm_order_id = str(rpc("oddsborne_entry_record_order", order_row)["pm_order_id"])
             summary["pm_order_id"] = pm_order_id
         except Exception as e:
-            conn.rollback()
             OUT_DIR.mkdir(parents=True, exist_ok=True)
             fb = OUT_DIR / f"pm_enter_orphan_{oid}.json"
-            fb.write_text(json.dumps({"summary": summary, "gate_results": gate_results, "payload": payload},
-                                     indent=1, default=str))
+            fb.write_text(json.dumps({"summary": summary, "gate_results": gate_results, "payload": payload,
+                                      "pm_orders_row": order_row}, indent=1, default=str))
             summary["decision"] = "ERROR"
             summary["error"] = (f"ORDER IS LIVE ({oid}) but pm_orders insert failed: {type(e).__name__}: "
                                 f"{str(e)[:200]}; details saved to {fb}")
@@ -615,26 +592,19 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         # ---- fills + heartbeat
         try:
             cum = float((ret or {}).get("cumQuantity") or 0)
-            summary["fills"] = record_fills(c, cur, slug, oid, pm_order_id, market_id) if (cum > 0 or (create or {}).get("executions")) else []
-            conn.commit()
+            summary["fills"] = record_fills(c, rpc, slug, oid, pm_order_id, market_id) if (cum > 0 or (create or {}).get("executions")) else []
         except Exception as e:
-            conn.rollback()
             warnings.append(f"fill recording failed (run pm_fills backfill): {type(e).__name__}: {str(e)[:160]}")
         try:
             if summary.get("fills"):
-                summary["position"] = upsert_position(cur, market_id, outcome, thesis_id, invalidation,
+                summary["position"] = upsert_position(rpc, market_id, outcome, thesis_id, invalidation,
                                                       invalidation_note, kill_criteria, pm_order_id, summary["fills"])
-                conn.commit()
         except Exception as e:
-            conn.rollback()
             warnings.append(f"pm_positions open/add failed (write the lot with invalidation_price by hand): "
                             f"{type(e).__name__}: {str(e)[:160]}")
         try:
-            cur.execute("select public.oddsborne_touch_heartbeat()")
-            summary["heartbeat_at"] = str(cur.fetchone()[0])
-            conn.commit()
+            summary["heartbeat_at"] = str(rpc("oddsborne_entry_heartbeat", {})["heartbeat_at"])
         except Exception as e:
-            conn.rollback()
             warnings.append(f"heartbeat failed: {type(e).__name__}: {str(e)[:120]}")
         summary["decision"] = "PLACED"
         return summary
@@ -646,16 +616,10 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         summary["decision"] = "ERROR"
         summary["error"] = f"{type(e).__name__}: {str(e)[:400]}"
         return summary
-    finally:
-        if own_conn and conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
 
 
 def main(argv=None) -> int:
-    _require_runtime(STEWARD, ("polymarket_us", "psycopg"))
+    _require_runtime(STEWARD, ("polymarket_us",))
     ap = argparse.ArgumentParser(
         prog="pm_enter.py",
         description="ODDSBORNE Polymarket US entry (the one path for every buy). LIVE unless --dry-run.")
