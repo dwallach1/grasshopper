@@ -11,11 +11,18 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ENTRY_SQL = HERE.parent / "supabase" / "schemas" / "50_steward_entry_rpc.sql"
+EXIT_SQL = HERE.parent / "supabase" / "schemas" / "51_steward_exit_rpc.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
     "oddsborne": HERE / "oddsborne" / "pm_enter.py",
 }
+# Exit, mark and P&L scripts (ledger over steward-rpc; functions in 51_steward_exit_rpc.sql).
+EXIT_SCRIPTS = {
+    "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "close_lesson.py")],
+    "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "close_lesson.py")],
+}
+RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
 SECRET_PATTERNS = [
     re.compile(r"""(?i)(api[_-]?key|secret|password|private[_-]?key)\s*=\s*["'][A-Za-z0-9+/=_-]{16,}["']"""),
     re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}"),  # JWT
@@ -79,21 +86,28 @@ class StewardScripts(unittest.TestCase):
 
     def test_ledger_goes_over_https_rpc(self) -> None:
         # The box can't reach the Postgres pooler: no entry script opens a psycopg connection itself.
-        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")]:
+        exits = [(p.name, p) for ps in EXIT_SCRIPTS.values() for p in ps]
+        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")] + exits:
             text = path.read_text()
             self.assertNotIn("connect()", text, name)
             self.assertNotIn("cur.execute", text, name)
-            self.assertIn("steward_rpc", text, name)
+            self.assertTrue("steward_rpc" in text or "clip_common" in text or "make_rpc" in text, name)
+        self.assertEqual((HERE / "bandit" / "close_lesson.py").read_text(), (HERE / "oddsborne" / "close_lesson.py").read_text(),
+                         "keep close_lesson.py identical in both steward dirs")
         self.assertEqual((HERE / "bandit" / "steward_rpc.py").read_text(), (HERE / "oddsborne" / "steward_rpc.py").read_text(),
                          "keep steward_rpc.py identical in both steward dirs")
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
-        sql, edge = ENTRY_SQL.read_text(), EDGE_FN.read_text()
-        for steward, path in (("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"),
-                              ("oddsborne", SCRIPTS["oddsborne"])):
+        sql, edge = ENTRY_SQL.read_text() + EXIT_SQL.read_text(), EDGE_FN.read_text()
+        targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
+        targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]
+        called = set()
+        for steward, path in targets:
             allow = edge[edge.index(f"{steward}_worker: new Set(["):]
             allow = allow[:allow.index("])")]
-            for fn in sorted(set(re.findall(r'(?:rpc|ledger)\("([a-z_]+)"', path.read_text()))):
+            fns = sorted(set(RPC_CALL.findall(path.read_text())))
+            called |= {(steward, fn) for fn in fns}
+            for fn in fns:
                 self.assertIn(f"'{fn}'", allow, f"{steward}: {fn} not in steward-rpc allowlist")
                 block = sql[sql.index(f"create or replace function public.{fn}(p jsonb"):]
                 block = block[:block.index("$$;")]
@@ -103,6 +117,15 @@ class StewardScripts(unittest.TestCase):
                 self.assertIn(f"{steward}_worker", grant.group(1), fn)
                 self.assertNotRegex(grant.group(1), r"\b(anon|authenticated|public)\b", fn)
                 self.assertIn(f"revoke all on function public.{fn}(jsonb) from public, anon, authenticated;", sql)
+        for steward, fn in (("bandit", "bandit_exit_record_fill"), ("bandit", "bandit_mark_position"), ("bandit", "steward_close_lesson"),
+                            ("oddsborne", "oddsborne_exit_record"), ("oddsborne", "oddsborne_mark_position"),
+                            ("oddsborne", "oddsborne_pnl_snapshot"), ("oddsborne", "steward_close_lesson")):
+            self.assertIn((steward, fn), called, "the call-site regex no longer sees the exit scripts' calls")
+        # The schema file and its migration are the same SQL (the migration is what went to the live DB).
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_steward_exit_rpc.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), EXIT_SQL.read_text())
+        self.assertNotIn("security definer", EXIT_SQL.read_text().lower())
         self.assertIn("verify_jwt = false", (HERE.parent / "supabase" / "config.toml").read_text().split("[functions.steward-rpc]")[1][:40])
 
     def test_shadow_exit_contract(self) -> None:
@@ -113,7 +136,8 @@ class StewardScripts(unittest.TestCase):
             self.assertIn(f'"{key}"', text, key)
 
     def test_no_hardcoded_box_paths(self) -> None:
-        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")]:
+        exits = [(p.name, p) for ps in EXIT_SCRIPTS.values() for p in ps]
+        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")] + exits:
             text = path.read_text()
             self.assertNotRegex(text, r"""["']/workspace/""", name)
 
@@ -150,7 +174,9 @@ class StewardScripts(unittest.TestCase):
     def test_guard_exits_3_with_the_fix_when_imports_are_missing(self) -> None:
         # The CI interpreter has none of the steward packages: every script must stop before touching anything.
         env = {**os.environ, "PYTHONNOUSERSITE": "1", "GRASSHOPPER_REPO": "/repo"}
-        for script in (SCRIPTS["bandit"], SCRIPTS["oddsborne"]):
+        guarded = [HERE / "bandit" / f for f in ("mark_clip.py", "exit_clip.py", "pnl_snapshot.py")]
+        guarded += [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py")]
+        for script in [SCRIPTS["bandit"], SCRIPTS["oddsborne"]] + guarded:
             probe = subprocess.run(["python3", "-S", "-c",
                                     "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('base58') or importlib.util.find_spec('polymarket_us') else 1)"])
             if probe.returncode == 0:
@@ -182,6 +208,11 @@ class StewardScripts(unittest.TestCase):
                        '--find-links "$wheelhouse"', 'fill_wheelhouse "$py" "$req" "$steward"', 'wheelhouse="$box/.steward-wheelhouse"', 'exec bash "$here/doctor.sh"',
                        '"$here/bandit/requirements.txt:$box/bandit/requirements.txt"', '"$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"'):
             self.assertIn(needle, sync)
+        for steward, paths in EXIT_SCRIPTS.items():
+            row = next(ln for ln in doctor.splitlines() if ln.strip().startswith(f'"{steward}|'))
+            for p in paths:
+                self.assertIn(f'"$here/{steward}/{p.name}:$box/{steward}/{p.name}"', sync)
+                self.assertIn(p.name, row.split("|")[2], f"doctor.sh doesn't check {steward}/{p.name}")
 
 
 if __name__ == "__main__":

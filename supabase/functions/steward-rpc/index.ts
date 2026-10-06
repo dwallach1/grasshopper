@@ -1,5 +1,6 @@
 /**
- * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip, ODDSBORNE pm_enter).
+ * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip / mark_clip / exit_clip,
+ * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, both stewards' close_lesson).
  *
  * Why: the agent box only egresses HTTPS. Raw Postgres (pooler 5432/6543) times out there, so the
  * steward scripts call this function instead of opening a psycopg connection.
@@ -11,7 +12,8 @@
  *
  * Body: {"fn": "<allowlisted function>", "args": {...}}. Each call runs
  *   select public.<fn>($1::text::jsonb)::text
- * in one transaction (the SQL functions are SECURITY INVOKER; supabase/schemas/50_steward_entry_rpc.sql).
+ * in one transaction (the SQL functions are SECURITY INVOKER; supabase/schemas/50_steward_entry_rpc.sql and
+ * 51_steward_exit_rpc.sql).
  * The jsonb result is returned verbatim as text so numerics keep their exact digits.
  * "ping" is built in: it returns the connected role and the database time (read-only).
  */
@@ -25,6 +27,15 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'oddsborne_entry_record_fills',
     'oddsborne_entry_upsert_position',
     'oddsborne_entry_heartbeat',
+    // exits / marks / P&L / lessons (supabase/schemas/51_steward_exit_rpc.sql)
+    'oddsborne_position_get',
+    'oddsborne_open_positions',
+    'oddsborne_order_get',
+    'oddsborne_order_set_status',
+    'oddsborne_mark_position',
+    'oddsborne_exit_record',
+    'oddsborne_pnl_snapshot',
+    'steward_close_lesson',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
@@ -33,6 +44,15 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'bandit_entry_record_fill',
     'bandit_shadow_exit_marks',
     'bandit_write_shadow_exit',
+    // exits / marks / P&L / lessons (supabase/schemas/51_steward_exit_rpc.sql)
+    'bandit_position_get',
+    'bandit_open_positions',
+    'bandit_mark_position',
+    'bandit_exit_open_order',
+    'bandit_exit_record_fill',
+    'bandit_annotate_pnl',
+    'bandit_pnl_snapshot',
+    'steward_close_lesson',
   ]),
 };
 const FN_RE = /^[a-z][a-z0-9_]{2,62}$/;
