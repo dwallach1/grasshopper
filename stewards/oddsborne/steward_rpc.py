@@ -146,6 +146,22 @@ def log_decision(steward: str, *, decision: str, instrument: str, side: str, pri
     return call(steward, "steward_log_decision", {k: v for k, v in args.items() if v is not None})
 
 
+def record_decision_mark(steward: str, *, decision_id: str, price=None, observed_at=None, source=None,
+                         kind=None, event_start_at=None, no_price_reason=None, meta=None) -> object:
+    """Record one real, sourced mark for a logged decision (public.steward_record_decision_mark).
+
+    kind "horizon" (BANDIT, QUANTANAMO): the first price observed at or after the decision's horizon, which the
+    database computes (meme: +4h; equity: 5th session close). Insert-once; the pass is then scored.
+    kind "close" (ODDSBORNE): the mid of the logged side's book, observed after the decision and before
+    `event_start_at` (and market close). A later observation replaces an earlier one (closing-line value).
+    `no_price_reason` instead of a price flags a past-horizon pass unscoreable. Never send a made-up price.
+    """
+    args = {"steward": steward, "decision_id": decision_id, "price": price, "observed_at": observed_at,
+            "source": source, "kind": kind, "event_start_at": event_start_at,
+            "no_price_reason": no_price_reason, "meta": meta}
+    return call(steward, "steward_record_decision_mark", {k: v for k, v in args.items() if v is not None})
+
+
 def call(steward: str, fn: str, args: dict | None = None, *, idempotent: bool = False, timeout: float = 60.0):
     """Run public.<fn>(args::jsonb) as <steward>_worker. Reads (idempotent=True) retry network blips;
     writes never retry (a lost reply may still have committed)."""

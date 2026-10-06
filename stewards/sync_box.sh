@@ -42,6 +42,7 @@ else
     "$here/bandit/mark_clip.py:$box/bandit/mark_clip.py"
     "$here/bandit/exit_clip.py:$box/bandit/exit_clip.py"
     "$here/bandit/pnl_snapshot.py:$box/bandit/pnl_snapshot.py"
+    "$here/bandit/pass_marks.py:$box/bandit/pass_marks.py"
     "$here/bandit/close_lesson.py:$box/bandit/close_lesson.py"
     "$here/bandit/requirements.txt:$box/bandit/requirements.txt"
     "$here/oddsborne/pm_enter.py:$box/oddsborne/pm_enter.py"

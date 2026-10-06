@@ -31,7 +31,31 @@ Call `public.steward_log_decision` (HTTPS: `log_decision` in `steward_rpc.py`, f
 | QUANTANAMO | ticker, side `long` or `short`, price per share. `expected_move` (a fraction, `0.08` = +8%) when you had one. `blocked_by` may be `quantanamo_confidence_gate` when the 80 gate is what stopped you | close of the 5th regular NYSE session after the decision | one share, USD |
 | BANDIT | mint or symbol, side `long` or `short`, price in SOL per token | 4 hours (the clip's own time stop) | one token, SOL |
 
-The later price comes from the ledger (`pm_markets` resolution, `portfolio_exposure` / `broker_fills`, or a meme fill / token mark / position mark). If that price is not there yet, `counterfactual_pnl` stays null and `meta.resolve_status` is `awaiting_mark`, `awaiting_resolution`, `no_market`, or `no_mark_yet`. Nothing is filled in from a lesson or a guess.
+The later price comes from the ledger (`pm_markets` resolution, `portfolio_exposure` / `broker_fills`, a meme fill / token mark / position mark) or from a **decision mark** (`public.decision_marks`, below). If that price is not there yet, `counterfactual_pnl` stays null and `meta.resolve_status` is `awaiting_mark`, `awaiting_resolution`, `no_market`, or `no_mark_yet`. Nothing is filled in from a lesson or a guess.
+
+### Decision marks (`supabase/schemas/58_decision_marks.sql`)
+
+A pass is an instrument the steward did not buy, so its own lot marks never price it. `public.decision_marks` holds one real, sourced price per decision per `mark_kind`, written with `public.steward_record_decision_mark` (`record_decision_mark` in `steward_rpc.py`):
+
+| `mark_kind` | Who | Price | Timing rule (checked in the database) |
+|---|---|---|---|
+| `horizon` | BANDIT, QUANTANAMO | first real price at or after the horizon (SOL per token / USD per share) | `observed_at >= horizon_at`; the database computes `horizon_at`. Insert-once; the resolver then scores the pass |
+| `close` | ODDSBORNE | mid of the logged side's book (Polymarket US), 0 to 1 | after the decision and before `event_start_at` (and market close). A later observation replaces an earlier one |
+
+When no source has any price past the horizon (a rugged or delisted coin), send `no_price_reason` instead of a price: the decision is flagged `unscoreable` with `resolve_status = no_price` and that reason. Never send an estimate.
+
+- **BANDIT** does this itself: `bandit/pass_marks.py` runs at the end of `mark_clip.py` and `pnl_snapshot.py` (or by hand, `--dry-run` to preview). For each pass from `steward_pending_decision_marks` it takes the earliest of: Jupiter Price v3 (BANDIT's own entry/pass price source; live, so only near the horizon when the run is on time) and the close of the first traded GeckoTerminal 1-minute candle at or after the horizon in the mint's deepest SOL pool. `BANDIT_PASS_MARKS=0` turns the automatic sweep off.
+- **QUANTANAMO** has the same gap for tickers it did not hold or trade (its marks come from `portfolio_exposure` / `broker_fills`). It can record a `horizon` mark for any pass from `steward_pending_decision_marks` with a real Robinhood print at or after the 5th session close; nothing does it automatically yet.
+- **ODDSBORNE closing-line value**: record the side's book mid shortly before the event starts. `public.v_decision_clv` gives `clv = close_mid - entry_price` (positive = the line moved toward the side after the decision) and `fair_minus_close`; `v_decision_clv_summary` aggregates by steward and enter/skip. It is separate from settlement (`resolved_outcome`, `counterfactual_pnl`, Brier).
+
+```python
+from pm_enter import make_client, market_view, outcome_book
+from steward_rpc import record_decision_mark
+book = outcome_book(market_view(make_client(), "aec-nfl-cin-mia-2026-10-11"), "no")
+record_decision_mark("oddsborne", kind="close", decision_id="<decision_candidates.id>", price=book["mid"],
+                     observed_at="<UTC time of the BBO read>", event_start_at="2026-10-11T17:00:00Z",
+                     source="polymarket_us_bbo_mid", meta={"bid": book["bid"], "ask": book["ask"]})
+```
 
 ```python
 from steward_rpc import log_decision
