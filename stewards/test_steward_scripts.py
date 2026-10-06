@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ENTRY_SQL = HERE.parent / "supabase" / "schemas" / "50_steward_entry_rpc.sql"
+EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
     "oddsborne": HERE / "oddsborne" / "pm_enter.py",
@@ -36,14 +38,19 @@ class StewardScripts(unittest.TestCase):
 
     def test_guidance_gets_invalidation_and_entry_price(self) -> None:
         # 5th arg: invalidation (required); 6th: entry price for the 10%-of-book exposure fit (migration 41).
+        # The scripts call public.steward_entry_guidance, a jsonb wrapper that passes all six through.
+        sql = ENTRY_SQL.read_text()
+        self.assertIn("from public.steward_sizing_guidance(\n    v_steward,\n    p->>'thesis_id',\n    p->>'instrument',\n"
+                      "    (p->>'requested')::numeric,\n    (p->>'invalidation_price')::numeric,\n    (p->>'entry_price')::numeric\n", sql)
         bandit = SCRIPTS["bandit"].read_text()
-        self.assertIn("steward_sizing_guidance('bandit', %s, %s, %s, %s, %s)", bandit)
-        self.assertIn("None if pretrade_price is None else str(pretrade_price)", bandit)
-        self.assertIn("PLANNED_INVALIDATION", bandit)
+        self.assertIn('row = ledger("steward_entry_guidance", {', bandit)
+        self.assertIn('"invalidation_price": str(PLANNED_INVALIDATION),', bandit)
+        self.assertIn('"entry_price": None if pretrade_price is None else str(pretrade_price),', bandit)
         self.assertIn('raise RuntimeError("invalidation price must be > 0")', bandit)
         odds = SCRIPTS["oddsborne"].read_text()
-        self.assertIn("public.steward_sizing_guidance(%s, %s, %s, %s, %s, %s)", odds)
-        self.assertIn("sizing_guidance(cur, thesis_id, slug, requested_usd, invalidation, price)", odds)
+        self.assertIn('row = rpc("steward_entry_guidance",', odds)
+        self.assertIn('"invalidation_price": Decimal(str(invalidation)),', odds)
+        self.assertIn("sizing_guidance(rpc, thesis_id, slug, requested_usd, invalidation, price)", odds)
         self.assertIn("missing_invalidation", odds)
 
     def test_refuses_when_entry_not_allowed(self) -> None:
@@ -53,12 +60,50 @@ class StewardScripts(unittest.TestCase):
     def test_orders_carry_thesis_and_cap_at_entry(self) -> None:
         for name, path in SCRIPTS.items():
             text = path.read_text()
-            self.assertIn("max_stake_at_entry, max_stake_reason_at_entry", text, name)
-            self.assertIn("thesis_id", text, name)
+            self.assertIn('"max_stake_at_entry": ', text, name)
+            self.assertIn('"max_stake_reason_at_entry": ', text, name)
+            self.assertIn('"thesis_id": ', text, name)
+        sql = ENTRY_SQL.read_text()
+        for table in ("pm_orders", "meme_orders"):
+            block = sql[sql.index(f"insert into public.{table} ("):]
+            self.assertIn("max_stake_at_entry, max_stake_reason_at_entry)", block[:600], table)
+            self.assertIn("thesis_id", block[:200], table)
 
     def test_lots_carry_invalidation(self) -> None:
-        self.assertIn("invalidation_price", SCRIPTS["bandit"].read_text())
-        self.assertIn("invalidation_price", SCRIPTS["oddsborne"].read_text())
+        self.assertIn('"invalidation_price": ', SCRIPTS["bandit"].read_text())
+        self.assertIn('"invalidation_price": ', SCRIPTS["oddsborne"].read_text())
+        sql = ENTRY_SQL.read_text()
+        for table in ("pm_positions", "meme_positions"):
+            block = sql[sql.index(f"insert into public.{table} ("):]
+            self.assertIn("invalidation_price", block[:400], table)
+
+    def test_ledger_goes_over_https_rpc(self) -> None:
+        # The box can't reach the Postgres pooler: no entry script opens a psycopg connection itself.
+        for name, path in list(SCRIPTS.items()) + [("paper_bank20", HERE / "bandit" / "paper_bank20.py")]:
+            text = path.read_text()
+            self.assertNotIn("connect()", text, name)
+            self.assertNotIn("cur.execute", text, name)
+            self.assertIn("steward_rpc", text, name)
+        self.assertEqual((HERE / "bandit" / "steward_rpc.py").read_text(), (HERE / "oddsborne" / "steward_rpc.py").read_text(),
+                         "keep steward_rpc.py identical in both steward dirs")
+        # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
+        # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
+        sql, edge = ENTRY_SQL.read_text(), EDGE_FN.read_text()
+        for steward, path in (("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"),
+                              ("oddsborne", SCRIPTS["oddsborne"])):
+            allow = edge[edge.index(f"{steward}_worker: new Set(["):]
+            allow = allow[:allow.index("])")]
+            for fn in sorted(set(re.findall(r'(?:rpc|ledger)\("([a-z_]+)"', path.read_text()))):
+                self.assertIn(f"'{fn}'", allow, f"{steward}: {fn} not in steward-rpc allowlist")
+                block = sql[sql.index(f"create or replace function public.{fn}(p jsonb"):]
+                block = block[:block.index("$$;")]
+                self.assertIn("security invoker", block, fn)
+                grant = re.search(rf"grant execute on function public\.{fn}\(jsonb\) to ([^;]+);", sql)
+                self.assertIsNotNone(grant, fn)
+                self.assertIn(f"{steward}_worker", grant.group(1), fn)
+                self.assertNotRegex(grant.group(1), r"\b(anon|authenticated|public)\b", fn)
+                self.assertIn(f"revoke all on function public.{fn}(jsonb) from public, anon, authenticated;", sql)
+        self.assertIn("verify_jwt = false", (HERE.parent / "supabase" / "config.toml").read_text().split("[functions.steward-rpc]")[1][:40])
 
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).
@@ -91,23 +136,23 @@ class StewardScripts(unittest.TestCase):
 
     def test_scripts_fail_fast_before_third_party_imports(self) -> None:
         clip = SCRIPTS["bandit"].read_text()
-        self.assertLess(clip.index('_require_runtime("bandit", ("base58", "requests", "solders.keypair", "solders.transaction", "psycopg"))'),
+        self.assertLess(clip.index('_require_runtime("bandit", ("base58", "requests", "solders.keypair", "solders.transaction"))'),
                         clip.index("import base58  # noqa: E402"))
-        self.assertLess(clip.index("_require_runtime("), clip.index("from db_connect import connect"))
-        bank = (HERE / "bandit" / "paper_bank20.py").read_text()
-        self.assertLess(bank.index('_require_runtime("bandit", ("psycopg",))'), bank.index("from db_connect import connect"))
+        self.assertLess(clip.index("_require_runtime("), clip.index("from steward_rpc import call as _rpc_call"))
         odds = SCRIPTS["oddsborne"].read_text()
-        self.assertIn('def main(argv=None) -> int:\n    _require_runtime(STEWARD, ("polymarket_us", "psycopg"))', odds)
-        for text in (clip, bank, odds):
+        self.assertIn('def main(argv=None) -> int:\n    _require_runtime(STEWARD, ("polymarket_us",))', odds)
+        for text in (clip, odds):
             self.assertIn("raise SystemExit(3)", text)
             self.assertIn("'stewards', 'sync_box.sh'", text)
+        # paper_bank20 is stdlib-only now (HTTPS ledger), so it has no third-party guard.
+        self.assertNotIn("psycopg", (HERE / "bandit" / "paper_bank20.py").read_text())
 
     def test_guard_exits_3_with_the_fix_when_imports_are_missing(self) -> None:
         # The CI interpreter has none of the steward packages: every script must stop before touching anything.
         env = {**os.environ, "PYTHONNOUSERSITE": "1", "GRASSHOPPER_REPO": "/repo"}
-        for script in (SCRIPTS["bandit"], HERE / "bandit" / "paper_bank20.py", SCRIPTS["oddsborne"]):
+        for script in (SCRIPTS["bandit"], SCRIPTS["oddsborne"]):
             probe = subprocess.run(["python3", "-S", "-c",
-                                    "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('psycopg') else 1)"])
+                                    "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('base58') or importlib.util.find_spec('polymarket_us') else 1)"])
             if probe.returncode == 0:
                 self.skipTest("psycopg importable here; guard path not reachable")
             run = subprocess.run(["python3", "-S", str(script), "--help"], capture_output=True, text=True, env=env, timeout=60)
@@ -130,10 +175,11 @@ class StewardScripts(unittest.TestCase):
 
     def test_doctor_checks_what_the_scripts_import(self) -> None:
         doctor = (HERE / "doctor.sh").read_text()
-        self.assertIn('"bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets|', doctor)
-        self.assertIn('"oddsborne|polymarket_us psycopg db_connect load_secrets|', doctor)
+        self.assertIn('"bandit|base58 requests solders.keypair solders.transaction psycopg db_connect load_secrets steward_rpc|', doctor)
+        self.assertIn('"oddsborne|polymarket_us psycopg db_connect load_secrets steward_rpc|', doctor)
         sync = (HERE / "sync_box.sh").read_text()
-        for needle in ('--find-links "$wheelhouse"', 'fill_wheelhouse "$py" "$req" "$steward"', 'wheelhouse="$box/.steward-wheelhouse"', 'exec bash "$here/doctor.sh"',
+        for needle in ('"$here/bandit/steward_rpc.py:$box/bandit/steward_rpc.py"', '"$here/oddsborne/steward_rpc.py:$box/oddsborne/steward_rpc.py"',
+                       '--find-links "$wheelhouse"', 'fill_wheelhouse "$py" "$req" "$steward"', 'wheelhouse="$box/.steward-wheelhouse"', 'exec bash "$here/doctor.sh"',
                        '"$here/bandit/requirements.txt:$box/bandit/requirements.txt"', '"$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"'):
             self.assertIn(needle, sync)
 

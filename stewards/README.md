@@ -39,7 +39,8 @@ cd /workspace/bandit && .venv/bin/python live_trade_clip.py \
 - Environment:
   - `BANDIT_SOLANA_PRIVATE_KEY`, `HELIUS_API_KEY`, `JUPITER_API_KEY`, `BANDIT_WORKER_DB_PASSWORD`.
   - Optional: `BANDIT_STATE_DIR` (where `_last_fill_*.json` goes; default is the script's directory).
-- Python dependencies: `requests`, `base58`, `solders`, `psycopg`.
+- Python dependencies: `requests`, `base58`, `solders` (`psycopg` only for the `STEWARD_DB_TRANSPORT=pg` fallback).
+- Ledger writes go over HTTPS; see [Ledger transport](#ledger-transport-https). If the swap lands but the ledger write fails, the fill is saved to `$BANDIT_STATE_DIR/_unrecorded_fill_<symbol>.json` and the script exits non-zero.
 - After every close, run `bandit/paper_bank20.py <position_id>` to record the shadow exit (see [Shadow exits](#shadow-exits-all-stewards) and `bandit/README.md`).
 
 ## ODDSBORNE: `oddsborne/pm_enter.py`
@@ -64,7 +65,21 @@ cd /workspace/oddsborne && .venv/bin/python pm_enter.py \
 - Environment:
   - `POLYMARKET_US_KEY_ID`, `POLYMARKET_US_SECRET_KEY`, `ODDSBORNE_WORKER_DB_PASSWORD`.
   - Optional: `ODDSBORNE_HOME` (helper modules), `ODDSBORNE_OUT_DIR` (orphan-order dumps).
-- Python dependencies: `polymarket_us`, `psycopg`.
+- Python dependencies: `polymarket_us` (`psycopg` only for the `STEWARD_DB_TRANSPORT=pg` fallback).
+- Ledger writes go over HTTPS; see [Ledger transport](#ledger-transport-https). Note that `--dry-run` still upserts the `pm_markets` reference row.
+
+## Ledger transport (HTTPS)
+
+The box only egresses HTTPS (443), through a proxy that resolves every host to a 198.18.0.0/15 address. Raw TCP to the Supavisor pooler (5432/6543) and to `db.<ref>.supabase.co` times out, so `db_connect` cannot reach Postgres from the box. The entry scripts therefore write the ledger over HTTPS:
+
+- `steward_rpc.py` (identical copy in `bandit/` and `oddsborne/`) POSTs to the `steward-rpc` edge function (`supabase/functions/steward-rpc`) with HTTP Basic auth `<steward>_worker:<STEWARD>_WORKER_DB_PASSWORD`, the same secret `db_connect` uses. There is no new secret and no service_role.
+- The edge function connects to Postgres **as that worker role** (via `SUPABASE_DB_URL`'s host) and runs `select public.<fn>($1::jsonb)`. Only functions on its per-role allowlist can be called. Grants, RLS and triggers (`require_lot_invalidation`, `snapshot_entry_max_stake`, ...) apply exactly as before.
+- The functions live in `supabase/schemas/50_steward_entry_rpc.sql`. Each one is `SECURITY INVOKER`, takes and returns one `jsonb`, runs in one transaction, and is executable only by its steward's worker role (and service_role). `steward_entry_guidance` wraps `steward_sizing_guidance` unchanged, so every gate (QUANTANAMO 80 gate, killed/rejected thesis, cash/no-margin, fresh book) is enforced the same way.
+- A gate refusal raised in SQL as `refusal:<gate>: <reason>` comes back as `RpcError.refusal`. Only idempotent calls (guidance, reads) are retried. A failed write is never retried blindly; `RpcError.maybe_committed` says whether it may have landed.
+- Check the path: `cd /workspace/<steward> && .venv/bin/python steward_rpc.py <steward>` prints the role and DB time.
+- `STEWARD_DB_TRANSPORT=pg` switches back to a direct psycopg connection through `db_connect` (for a host that can reach the pooler). `STEWARD_RPC_URL` overrides the function URL.
+
+Ad-hoc box scripts that still `import db_connect` will keep timing out on the box until they are ported to `steward_rpc` (add a function to the allowlist and the schema file) or until box egress allows TCP to the pooler.
 
 ## Shadow exits (all stewards)
 
@@ -109,13 +124,13 @@ It is idempotent:
 
 A rebuild takes about 10 s, and no network is needed once the cache exists.
 
-- `bash /workspace/grasshopper/stewards/doctor.sh` checks that each venv exists, that its imports work (including the box `db_connect` and `load_secrets`), and that the invoked files are present. It prints one line per steward and exits 1 when anything is broken. The ledger health routine runs it too.
+- `bash /workspace/grasshopper/stewards/doctor.sh` checks that each venv exists, that its imports work (including the box `db_connect`, `load_secrets` and `steward_rpc`), and that the invoked files are present. It prints one line per steward and exits 1 when anything is broken. The ledger health routine runs it too.
 - `live_trade_clip.py`, `paper_bank20.py` and `pm_enter.py` check their imports before any venue or DB call. When the env is missing or broken, they stop with exit code 3 and the message `Python env not ready … Nothing was sent. Run: bash /workspace/grasshopper/stewards/sync_box.sh`, instead of failing halfway through an order. Set `GRASSHOPPER_REPO` if the checkout lives elsewhere.
 - Credentials follow the durable-secrets pattern: env → `box-secrets.json` → the agent's private mirror under `/home/box/agent-data/agents/<id>/private/`, healing `box-secrets.json` from the mirror.
 
 ## The box copies
 
-`/workspace/bandit/live_trade_clip.py`, `/workspace/bandit/paper_bank20.py` and `/workspace/oddsborne/pm_enter.py` are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
+`/workspace/bandit/live_trade_clip.py`, `/workspace/bandit/paper_bank20.py`, `/workspace/oddsborne/pm_enter.py` and both `steward_rpc.py` files are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
 - The scripts put the directory they are invoked from first on `sys.path`. On the box, they therefore keep using the box's own `load_secrets.py` and `db_connect.py`.
 - After a merge, run `bash stewards/sync_box.sh` (it also repairs the venvs; see above). It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
 
