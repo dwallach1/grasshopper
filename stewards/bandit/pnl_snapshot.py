@@ -51,8 +51,12 @@ def main(argv=None) -> int:
         return 0
     res = cc.ledger("bandit_pnl_snapshot", args)
     # Score any logged pass whose 4h horizon is up (never changes this script's exit code).
-    import pass_marks
-    print(cc.jdump({"decision": "WRITTEN", **res, "pass_marks": pass_marks.sweep_quietly()}))
+    try:
+        import pass_marks
+        swept = pass_marks.sweep_quietly()
+    except Exception as e:  # e.g. pass_marks.py not synced yet: the snapshot above already landed
+        swept = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+    print(cc.jdump({"decision": "WRITTEN", **res, "pass_marks": swept}))
     return 0
 
 

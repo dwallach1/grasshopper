@@ -136,8 +136,11 @@ def main(argv=None) -> int:
     out = results[0] if not a.all_open else {"open_lots": len(lots), "results": results}
     if not a.dry_run:
         # Score any logged pass whose 4h horizon is up (never changes this script's exit code).
-        import pass_marks
-        out = {**out, "pass_marks": pass_marks.sweep_quietly()}
+        try:
+            import pass_marks
+            out = {**out, "pass_marks": pass_marks.sweep_quietly()}
+        except Exception as e:  # e.g. pass_marks.py not synced yet: the marks above already landed
+            out = {**out, "pass_marks": {"error": f"{type(e).__name__}: {str(e)[:200]}"}}
     print(cc.jdump(out))
     return rc
 
