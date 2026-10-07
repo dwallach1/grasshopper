@@ -27,6 +27,7 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (os.environ.get("ODDSBORNE_HOME"), _HERE):
@@ -94,8 +95,13 @@ def venue_args(c, slug: str) -> dict:
     if m.get("status") == RESOLVED:
         s = vcall(c.markets.settlement, slug) or {}
         if s.get("settlement") is not None:
+            # Cross-check: the long side's final price on the market itself must say the same thing.
+            lp = long_side.get("price")
+            if lp is not None and Decimal(str(lp)) != Decimal(str(s["settlement"])):
+                raise RuntimeError(f"{slug}: settlement {s['settlement']} != long side price {lp}; not recorded")
             args["settlement"] = str(s["settlement"])
             args["source"] = "polymarket_us markets.settlement"
+            args["venue_ids"]["long_side_final_price"] = lp
     return args
 
 
