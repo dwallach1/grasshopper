@@ -14,6 +14,7 @@ ENTRY_SQL = HERE.parent / "supabase" / "schemas" / "50_steward_entry_rpc.sql"
 EXIT_SQL = HERE.parent / "supabase" / "schemas" / "51_steward_exit_rpc.sql"
 MARKS_SQL = HERE.parent / "supabase" / "schemas" / "58_decision_marks.sql"
 SIDES_SQL = HERE.parent / "supabase" / "schemas" / "59_decision_sides_markets.sql"
+FIXES_SQL = HERE.parent / "supabase" / "schemas" / "60_steward_fixes_lessons.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
@@ -100,7 +101,7 @@ class StewardScripts(unittest.TestCase):
                          "keep steward_rpc.py identical in both steward dirs")
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
-        sql = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text()
+        sql = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text() + FIXES_SQL.read_text()
         edge = EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]
@@ -188,6 +189,15 @@ class StewardScripts(unittest.TestCase):
         self.assertNotIn("place_order", text)
         self.assertIn("pm_decision_markets.sweep_quietly()", (HERE / "oddsborne" / "pm_pnl_snapshot.py").read_text())
         mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_decision_sides_markets.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
+
+    def test_lesson_moves_from_the_ledger(self) -> None:
+        sql = FIXES_SQL.read_text()
+        self.assertIn("v_prior := private.thesis_ledger_confidence(v_thesis);", sql)
+        self.assertIn("v_pnl < 0 and v_new > v_prior", sql)
+        self.assertNotIn('"prior_confidence"', (HERE / "bandit" / "close_lesson.py").read_text())
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_steward_fixes_lessons.sql"))
         self.assertEqual(len(mig), 1)
         self.assertEqual(mig[0].read_text(), sql)
 
