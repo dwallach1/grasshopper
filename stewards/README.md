@@ -45,7 +45,22 @@ A pass is an instrument the steward did not buy, so its own lot marks never pric
 When no source has any price past the horizon (a rugged or delisted coin), send `no_price_reason` instead of a price: the decision is flagged `unscoreable` with `resolve_status = no_price` and that reason. Never send an estimate.
 
 - **BANDIT** does this itself: `bandit/pass_marks.py` runs at the end of `mark_clip.py` and `pnl_snapshot.py` (or by hand, `--dry-run` to preview). For each pass from `steward_pending_decision_marks` it takes the earliest of: Jupiter Price v3 (BANDIT's own entry/pass price source; live, so only near the horizon when the run is on time) and the close of the first traded GeckoTerminal 1-minute candle at or after the horizon in the mint's deepest SOL pool. `BANDIT_PASS_MARKS=0` turns the automatic sweep off.
-- **QUANTANAMO** has the same gap for tickers it did not hold or trade (its marks come from `portfolio_exposure` / `broker_fills`). It can record a `horizon` mark for any pass from `steward_pending_decision_marks` with a real Robinhood print at or after the 5th session close; nothing does it automatically yet.
+- **QUANTANAMO** has the same gap for tickers it did not hold or trade (its marks come from `portfolio_exposure` / `broker_fills`). It records the mark itself, over the Supabase connection it already uses (runs as `postgres`; `quantanamo_worker` over steward-rpc has the same two functions). `horizon_at` is the close of the 5th regular NYSE session whose close is after `decided_at` (a pass logged during Tuesday's session counts Tuesday's close as the first), so `observed_at` = that `horizon_at` (16:00 ET, 13:00 ET on an early close) and the price is that day's Robinhood daily-bar close:
+
+```sql
+-- due now: scoreable passes past their horizon with no price yet
+select jsonb_array_elements(public.steward_pending_decision_marks('{"steward":"quantanamo"}'::jsonb));
+-- a real 5th-session close (observed_at = horizon_at from the list)
+select public.steward_record_decision_mark(jsonb_build_object(
+  'steward', 'quantanamo', 'kind', 'horizon', 'decision_id', '<decision_id>',
+  'price', 12.34, 'observed_at', '2026-10-12T20:00:00Z', 'source', 'robinhood_5th_session_close',
+  'meta', jsonb_build_object('bar', 'day', 'bar_date', '2026-10-12')));
+-- no daily bar at all (halted, delisted): flagged unscoreable with the reason, never a guess
+select public.steward_record_decision_mark(jsonb_build_object(
+  'steward', 'quantanamo', 'kind', 'horizon', 'decision_id', '<decision_id>',
+  'no_price_reason', 'Robinhood returned no 2026-10-12 daily bar for <TICKER>'));
+```
+- **ODDSBORNE prices are the logged side's own** (`supabase/schemas/59_decision_sides_markets.sql`): a `steward_log_decision` row with side `no` carries the NO price and P(no) (`meta.price_terms = 'side'`); rows split from `pm_notes` are YES terms (`'yes'`). The resolver converts to YES terms before scoring, so cost and Brier are right either way. A slug with no `pm_markets` row gets a `watch` stub when the pass is logged; `oddsborne/pm_decision_markets.py` (also at the end of `pm_pnl_snapshot.py`) fills venue ids from Polymarket US and records the venue's settlement (long side settled at exactly 1 or 0, `MARKET_STATUS_RESOLVED`) for markets nobody holds. `ODDSBORNE_DECISION_MARKETS=0` turns that sweep off.
 - **ODDSBORNE closing-line value**: record the side's book mid shortly before the event starts. `public.v_decision_clv` gives `clv = close_mid - entry_price` (positive = the line moved toward the side after the decision) and `fair_minus_close`; `v_decision_clv_summary` aggregates by steward and enter/skip. It is separate from settlement (`resolved_outcome`, `counterfactual_pnl`, Brier).
 
 ```python

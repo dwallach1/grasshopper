@@ -8,6 +8,8 @@ Usage (from /workspace/oddsborne):
 cash = account.balances currentBalance; equity = cash + assetNotional when the venue reports it (as the
 standups did), else cash + open lots at mark (public.oddsborne_pnl_snapshot, over HTTPS as oddsborne_worker).
 The pm_pnl trigger touches the ODDSBORNE heartbeat.
+After the write it runs pm_decision_markets.sweep_quietly(): venue ids and settlement for the markets its
+logged decisions name, so passes on markets nobody holds resolve (ODDSBORNE_DECISION_MARKETS=0 skips it).
 """
 from __future__ import annotations
 
@@ -53,7 +55,14 @@ def main(argv=None) -> int:
         print(json.dumps(jsonable({"decision": "DRY_RUN_OK", "open_lots": n,
                                    "would_write": {"fn": "oddsborne_pnl_snapshot", "args": args}}), indent=1))
         return 0
-    print(json.dumps(jsonable({"decision": "WRITTEN", **rpc("oddsborne_pnl_snapshot", args)}), indent=1))
+    res = rpc("oddsborne_pnl_snapshot", args)
+    # Venue ids + settlement for the markets ODDSBORNE's logged decisions name (never changes this exit code).
+    try:
+        import pm_decision_markets
+        swept = pm_decision_markets.sweep_quietly()
+    except Exception as e:  # e.g. pm_decision_markets.py not synced yet: the snapshot above already landed
+        swept = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+    print(json.dumps(jsonable({"decision": "WRITTEN", **res, "decision_markets": swept}), indent=1))
     return 0
 
 

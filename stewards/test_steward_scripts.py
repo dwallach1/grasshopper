@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 ENTRY_SQL = HERE.parent / "supabase" / "schemas" / "50_steward_entry_rpc.sql"
 EXIT_SQL = HERE.parent / "supabase" / "schemas" / "51_steward_exit_rpc.sql"
 MARKS_SQL = HERE.parent / "supabase" / "schemas" / "58_decision_marks.sql"
+SIDES_SQL = HERE.parent / "supabase" / "schemas" / "59_decision_sides_markets.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
@@ -21,7 +22,7 @@ SCRIPTS = {
 # Exit, mark and P&L scripts (ledger over steward-rpc; functions in 51_steward_exit_rpc.sql).
 EXIT_SCRIPTS = {
     "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "pass_marks.py", "close_lesson.py")],
-    "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "close_lesson.py")],
+    "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "pm_decision_markets.py", "close_lesson.py")],
 }
 RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
 SECRET_PATTERNS = [
@@ -99,7 +100,8 @@ class StewardScripts(unittest.TestCase):
                          "keep steward_rpc.py identical in both steward dirs")
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
-        sql, edge = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text(), EDGE_FN.read_text()
+        sql = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text()
+        edge = EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]
         called = set()
@@ -169,6 +171,25 @@ class StewardScripts(unittest.TestCase):
         self.assertEqual(len(mig), 1)
         self.assertEqual(mig[0].read_text(), sql)
         self.assertIn("def record_decision_mark(", (HERE / "oddsborne" / "steward_rpc.py").read_text())
+
+    def test_decision_sides_and_markets_contract(self) -> None:
+        # 59: prediction rows carry price_terms and are scored in YES terms; a logged pass gets a market row,
+        # and pm_decision_markets.py records only a venue settlement of exactly 1 or 0.
+        sql = SIDES_SQL.read_text()
+        self.assertIn("public.decision_in_yes_terms(c.side, c.book_price, c.meta)", sql)
+        self.assertIn("public.decision_in_yes_terms(c.side, c.my_probability, c.meta)", sql)
+        self.assertIn("private.ensure_pm_market(v_instrument, p->>'question', v_close, 'steward_log_decision')", sql)
+        self.assertIn("when v_settlement = 1 then 'yes' when v_settlement = 0 then 'no'", sql)
+        self.assertIn("v_venue_status = 'MARKET_STATUS_RESOLVED'", sql)
+        text = (HERE / "oddsborne" / "pm_decision_markets.py").read_text()
+        for needle in ('"oddsborne_decision_markets"', '"oddsborne_sync_decision_market"', "c.markets.settlement",
+                       "c.markets.retrieve_by_slug", '"found": False'):
+            self.assertIn(needle, text, needle)
+        self.assertNotIn("place_order", text)
+        self.assertIn("pm_decision_markets.sweep_quietly()", (HERE / "oddsborne" / "pm_pnl_snapshot.py").read_text())
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_decision_sides_markets.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
 
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).

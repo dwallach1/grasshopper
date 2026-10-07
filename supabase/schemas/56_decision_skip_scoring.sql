@@ -69,7 +69,7 @@ grant execute on function public.decision_is_scoreable(text, text, numeric, text
   to authenticated, desk_public_reader, quantanamo_worker, oddsborne_worker, bandit_worker, service_role;
 
 comment on function public.decision_is_scoreable(text, text, numeric, text, jsonb) is
-  'True when a decision names an instrument, a side, and a positive price (prediction prices also <= 1) and is not flagged unscoreable or superseded. Probability is required for new prediction writes by the check constraint and steward_log_decision, not here, so older scored rows that never stated one stay on the scorecard. Lives in public: the scorecard, the watchdog, and the check run as the desk reader and the steward workers. Steward workers have USAGE on schema private for scoreable decision writes (steward_log_decision); private helpers stay revoked from anon and authenticated.';
+  'True when a decision names an instrument, a side, and a positive price (prediction prices also <= 1) and is not flagged unscoreable or superseded. Probability is required for new prediction writes by the check constraint and steward_log_decision, not here, so older scored rows that never stated one stay on the scorecard. Lives in public: the scorecard, the watchdog, and the check run as the desk reader and the steward workers, and only quantanamo_worker may use schema private.';
 
 -- ——— equity horizon: close of the Nth regular session after the decision ———
 
@@ -588,7 +588,7 @@ returns jsonb
 language plpgsql
 volatile
 security invoker
-set search_path = public, private, pg_temp
+set search_path = public, pg_temp
 as $$
 declare
   v_steward text := lower(btrim(coalesce(p->>'steward', '')));

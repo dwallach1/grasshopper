@@ -51,6 +51,7 @@ else
     "$here/oddsborne/pm_watch.py:$box/oddsborne/pm_watch.py"
     "$here/oddsborne/pm_fills_sync.py:$box/oddsborne/pm_fills_sync.py"
     "$here/oddsborne/pm_pnl_snapshot.py:$box/oddsborne/pm_pnl_snapshot.py"
+    "$here/oddsborne/pm_decision_markets.py:$box/oddsborne/pm_decision_markets.py"
     "$here/oddsborne/close_lesson.py:$box/oddsborne/close_lesson.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
   )
