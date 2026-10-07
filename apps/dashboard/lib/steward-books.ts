@@ -16,7 +16,7 @@ import { learningGapHoldingId, type ExposureUsage } from './ledger-watchdog';
 import { formatAmount, signedAmount, type MoneyUnit } from './money-units';
 import { HISTORICAL_UNTAGGED } from './position-thesis';
 import { predictionDesk } from './prediction-book';
-import type { ThesisScoreRow } from './steward-scorecard';
+import { forecastVsMarketLine, type ThesisScoreRow } from './steward-scorecard';
 import { assembleThesisRoster, type ThesisRosterRow } from './thesis-roster';
 
 export type BooksStewardSlug = 'quantanamo' | 'oddsborne' | 'bandit';
@@ -82,6 +82,8 @@ export type BooksSection = {
   /** Ledger count of closes still waiting on a lesson. Zero stays off the header. */
   lesson_gaps: number;
   checks: BooksCheck[];
+  /** Settled probabilities vs the price they were looking at. Null when nothing has both. */
+  forecast: string | null;
 };
 
 export type StewardBooks = {
@@ -453,6 +455,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       set_aside: ideas.filter((row) => !row.live).map(idea),
       closed,
       lesson_gaps: gapCounts?.[slug] ?? 0,
+      forecast: forecastVsMarketLine(desk.scorecard?.forecast ?? [], slug, name),
       checks: alerts
         .filter((row) => row.steward === slug)
         .map((row) => ({ id: row.id, text: checkText(row), tone: checkTone(row.kind) })),

@@ -450,7 +450,7 @@ async function viewRows(label: string, query: Promise<unknown>): Promise<Record<
 
 /** Same columns as ledger-live SCORECARD_QUERIES (operator direct-Postgres path). */
 async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
-  const [stewards, weekly, trend, theses] = await Promise.all([
+  const [stewards, weekly, trend, theses, forecast] = await Promise.all([
     viewRows('v_steward_scorecard', sql`select * from public.v_steward_scorecard order by sort_order`),
     viewRows('v_steward_scorecard_weekly', sql`
       select steward, unit, week_start, iso_week, is_current, trades, priced_trades, wins, hit_rate, realized_pnl
@@ -470,8 +470,13 @@ async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
       from public.v_thesis_scorecard
       order by priced_trades desc
     `),
+    viewRows('v_decision_brier_vs_market', sql`
+      select steward, decision, thesis_id, all_theses, n, brier, market_brier, brier_gap, skill, thin, excluded_no_book
+      from public.v_decision_brier_vs_market
+      order by steward, decision, all_theses desc, thesis_id nulls last
+    `),
   ]);
-  return mapStewardScorecard({ stewards, weekly, trend, theses });
+  return mapStewardScorecard({ stewards, weekly, trend, theses, forecast });
 }
 
 async function loadWatchdog(sql: Sql): Promise<LedgerWatchdog> {

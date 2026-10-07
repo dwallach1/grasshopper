@@ -205,13 +205,14 @@ async function loadWatchdogRest(auth: DeskRestAuth): Promise<LedgerWatchdog> {
 }
 
 async function loadScorecardRest(auth: DeskRestAuth): Promise<StewardScorecardPayload> {
-  const [stewards, weekly, trend, theses] = await Promise.all([
+  const [stewards, weekly, trend, theses, forecast] = await Promise.all([
     restOptional(SCORECARD_QUERIES.stewards, auth),
     restOptional(SCORECARD_QUERIES.weekly, auth),
     restOptional(SCORECARD_QUERIES.trend, auth),
     restOptional(SCORECARD_QUERIES.theses, auth),
+    restOptional(SCORECARD_QUERIES.forecast, auth),
   ]);
-  return mapStewardScorecard({ stewards, weekly, trend, theses });
+  return mapStewardScorecard({ stewards, weekly, trend, theses, forecast });
 }
 
 export type RestDeskBag = {
@@ -261,6 +262,7 @@ export const SCORECARD_QUERIES = {
   weekly: 'v_steward_scorecard_weekly?select=steward,unit,week_start,iso_week,is_current,trades,priced_trades,wins,hit_rate,realized_pnl&order=week_start.desc,steward.asc&limit=60',
   trend: 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction',
   theses: 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,results_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin,backtest_tests,backtest_trades,backtest_weight,backtest_mean_ret,backtest_effect,calibration_basis,expected_wins,expected_win_rate,calibration_trades,calibration_p&order=priced_trades.desc',
+  forecast: 'v_decision_brier_vs_market?select=steward,decision,thesis_id,all_theses,n,brier,market_brier,brier_gap,skill,thin,excluded_no_book&order=steward.asc,decision.asc,all_theses.desc,thesis_id.asc.nullslast',
 } as const;
 
 /** Phone Worker path — skip operator tables the public snapshot already drops. */

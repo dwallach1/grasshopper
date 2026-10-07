@@ -5,10 +5,13 @@ import { describe, expect, test } from 'bun:test';
 import {
   assembleStewardScorecard,
   emptyStewardScorecard,
+  forecastVsMarketLine,
+  forecastVsMarketLines,
   hitLabel,
   mapStewardScorecard,
   passedBetCopy,
   thesisCalibrationText,
+  type ForecastSkillRow,
 } from './steward-scorecard';
 
 // Shape of the live views (PostgREST returns numerics as numbers or strings).
@@ -262,6 +265,81 @@ describe('assembleStewardScorecard', () => {
   });
 });
 
+function forecastRow(partial: Partial<ForecastSkillRow> & Pick<ForecastSkillRow, 'decision' | 'n' | 'skill'>): ForecastSkillRow {
+  return {
+    steward: 'oddsborne',
+    thesis_id: null,
+    all_theses: true,
+    brier: 0.2,
+    market_brier: 0.2,
+    brier_gap: 0,
+    thin: partial.n < 10,
+    excluded_no_book: 0,
+    ...partial,
+  };
+}
+
+describe('forecast vs the market', () => {
+  test('maps view rows, drops a bad decision, and keeps the thin threshold', () => {
+    const mapped = mapStewardScorecard({
+      forecast: [
+        {
+          steward: 'ODDSBORNE', decision: 'all', thesis_id: 'ignored', all_theses: true,
+          n: '75', brier: '0.209029', market_brier: '0.215499', brier_gap: '-0.006470',
+          skill: '0.030023', thin: false, excluded_no_book: '1',
+        },
+        {
+          steward: 'oddsborne', decision: 'enter', thesis_id: null, all_theses: 'true',
+          n: 6, brier: 0.1245, market_brier: 0.2185, skill: 0.43, thin: false, excluded_no_book: 0,
+        },
+        { steward: 'oddsborne', decision: 'hold', n: 3, all_theses: true },
+        { decision: 'all', n: 1, all_theses: true },
+      ],
+    });
+    expect(mapped.forecast.map((row) => row.decision)).toEqual(['all', 'enter']);
+    expect(mapped.forecast[0]).toMatchObject({
+      steward: 'oddsborne', thesis_id: null, all_theses: true, n: 75, excluded_no_book: 1, thin: false,
+    });
+    expect(mapped.forecast[0]?.brier).toBeCloseTo(0.209029, 6);
+    expect(mapped.forecast[0]?.skill).toBeCloseTo(0.030023, 6);
+    expect(mapped.forecast[1]?.thin).toBe(true);
+    expect(emptyStewardScorecard().forecast).toEqual([]);
+  });
+
+  test('says a small negative on passes plainly, and a thin better entry is too few to trust', () => {
+    const line = forecastVsMarketLine([
+      forecastRow({ decision: 'all', n: 75, skill: 0.030023, thin: false, excluded_no_book: 1 }),
+      forecastRow({ decision: 'skip', n: 69, skill: -0.0053, thin: false }),
+      forecastRow({ decision: 'enter', n: 6, skill: 0.43, thin: true }),
+      forecastRow({ decision: 'all', n: 45, skill: 0, all_theses: false, thesis_id: 'sports_devig_maker_edge' }),
+    ], 'oddsborne');
+    expect(line).toBe(
+      "ODDSBORNE's odds vs the market's: better than the market (75 settled). "
+      + 'Worse than the market on bets it passed up (69). '
+      + 'Better than the market on bets taken (6, too few to trust). '
+      + '1 settled bet had no market price, left out.',
+    );
+    expect(forecastVsMarketLines([
+      forecastRow({ decision: 'all', n: 20, skill: 0.01, thin: false }),
+      forecastRow({ decision: 'skip', n: 20, skill: -0.01, thin: false }),
+    ])).toBe(
+      "ODDSBORNE's odds vs the market's: about even (20 settled). "
+      + 'Worse than the market on bets it passed up (20).',
+    );
+  });
+
+  test('NO side stored in YES terms is scored after both prices flip', () => {
+    const side = (value: number) => 1 - value;
+    const y = 1;
+    const mine = (side(0.8) - y) ** 2;
+    const market = (side(0.7) - y) ** 2;
+    expect(mine).toBeCloseTo(0.64, 10);
+    expect(market).toBeCloseTo(0.49, 10);
+    expect((0.8 - y) ** 2).toBeCloseTo(0.04, 10);
+    expect(mine).not.toBeCloseTo((0.8 - y) ** 2, 5);
+  });
+});
+
 describe('outcome ledger SQL', () => {
   const schema = join(import.meta.dir, '../../../supabase/schemas/10_trade_outcomes.sql');
 
@@ -284,6 +362,31 @@ describe('outcome ledger SQL', () => {
     }
     // Capture triggers swallow their own errors so a steward write is never blocked.
     expect(sql.match(/exception when others then\s+raise warning/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('market baseline view matches its migration and scores both prices in side terms', async () => {
+    const schema = join(import.meta.dir, '../../../supabase/schemas/63_decision_brier_vs_market.sql');
+    const migration = join(import.meta.dir, '../../../supabase/migrations/20261007174340_decision_brier_vs_market.sql');
+    const sql = await readFile(schema, 'utf8');
+    expect(await readFile(migration, 'utf8')).toBe(sql);
+    expect(sql).toContain('public.decision_in_side_terms(p_side, p_my_probability, p_meta)');
+    expect(sql).toContain('public.decision_in_side_terms(p_side, p_book_price, p_meta)');
+    expect(sql).toContain('(p_outcome = p_side)::integer');
+    expect(sql).toContain('excluded_no_book');
+    expect(sql).toContain('(count(brier) < 10) as thin');
+    expect(sql).toContain('with (security_invoker = true)');
+    expect(sql).toContain('revoke all on public.v_decision_brier_vs_market from public, anon');
+    expect(sql).toContain('desk_public_reader');
+    expect(sql).not.toMatch(/security definer/i);
+    expect(sql).not.toContain('c.brier');
+    const live = await readFile(join(import.meta.dir, 'ledger-live.ts'), 'utf8');
+    const ledger = await readFile(join(import.meta.dir, 'ledger.ts'), 'utf8');
+    const bundle = await readFile(join(import.meta.dir, '../../../supabase/functions/desk-public-rest/index.ts'), 'utf8');
+    const select = 'steward,decision,thesis_id,all_theses,n,brier,market_brier,brier_gap,skill,thin,excluded_no_book';
+    expect(live).toContain(select);
+    expect(bundle).toContain(select);
+    expect(bundle).toContain("'v_decision_brier_vs_market'");
+    expect(ledger).toContain('from public.v_decision_brier_vs_market');
   });
 
   test('backfill migration is keyed and idempotent', async () => {

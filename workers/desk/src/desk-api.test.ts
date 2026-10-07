@@ -171,6 +171,45 @@ describe('public desk Worker API', () => {
     expect(body.watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 2, bandit: 0 });
   });
 
+  test('market skill is on the health learning block and does not change ok', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        scorecard: {
+          stewards: [],
+          weekly: [],
+          trend: [],
+          theses: [],
+          forecast: [
+            {
+              steward: 'oddsborne', decision: 'all', thesis_id: null, all_theses: true,
+              n: 75, brier: 0.209, market_brier: 0.215, brier_gap: -0.006, skill: 0.03,
+              thin: false, excluded_no_book: 0,
+            },
+            {
+              steward: 'oddsborne', decision: 'skip', thesis_id: null, all_theses: true,
+              n: 69, brier: 0.216, market_brier: 0.215, brier_gap: 0.001, skill: -0.005,
+              thin: false, excluded_no_book: 0,
+            },
+            {
+              steward: 'oddsborne', decision: 'enter', thesis_id: null, all_theses: true,
+              n: 6, brier: 0.12, market_brier: 0.22, brier_gap: -0.1, skill: 0.43,
+              thin: true, excluded_no_book: 0,
+            },
+          ],
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok: boolean; learning: { forecast?: string } };
+    expect(body.ok).toBe(true);
+    expect(body.learning.forecast).toContain("ODDSBORNE's odds vs the market's: better than the market (75 settled)");
+    expect(body.learning.forecast).toContain('Worse than the market on bets it passed up (69)');
+    expect(body.learning.forecast).toContain('too few to trust');
+  });
+
   test('publish ingest is gone', async () => {
     const put = await handleDeskApi(
       new Request('https://desk.test/internal/snapshot', {
@@ -259,6 +298,8 @@ describe('public desk reader credentials', () => {
     expect(fn).not.toContain('order=as_of.desc&limit=${PUBLIC_PNL_LIMIT}');
     expect(fn).toContain('closed_at,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200');
     expect(fn).toContain("['summary', 'v_ledger_watchdog?select=*']");
+    expect(fn).toContain("'v_decision_brier_vs_market'");
+    expect(fn).toContain("['forecast', 'v_decision_brier_vs_market?");
     expect(fn).toContain('      watchdog,\n');
     expect(fn).not.toContain('source_count=gte.2');
     expect(fn).toContain('id.desc&limit=200');

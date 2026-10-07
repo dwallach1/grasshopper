@@ -149,15 +149,38 @@ function backtestEffect(value: string | null): BacktestEffect {
   return null;
 }
 
+/** One rollup from `v_decision_brier_vs_market`. Measurement only. */
+export type ForecastSkillRow = {
+  steward: string;
+  decision: 'enter' | 'skip' | 'all';
+  /** Null on the all-theses rollup and on decisions that never named a thesis. */
+  thesis_id: string | null;
+  /** True when this row rolls every thesis up. A null thesis_id with this false is the untagged bucket. */
+  all_theses: boolean;
+  n: number;
+  /** Steward Brier, side terms. Lower is closer. */
+  brier: number | null;
+  /** Market Brier on the same rows. */
+  market_brier: number | null;
+  /** brier − market_brier. Negative means the steward was closer than the price. */
+  brier_gap: number | null;
+  /** 1 − brier/market_brier. Positive means the steward was closer than the price. */
+  skill: number | null;
+  thin: boolean;
+  /** Resolved rows with no book price. Not included in n. */
+  excluded_no_book: number;
+};
+
 export type StewardScorecardPayload = {
   stewards: StewardScoreRow[];
   weekly: StewardWeekRow[];
   trend: StewardTrendRow[];
   theses: ThesisScoreRow[];
+  forecast: ForecastSkillRow[];
 };
 
 export function emptyStewardScorecard(): StewardScorecardPayload {
-  return { stewards: [], weekly: [], trend: [], theses: [] };
+  return { stewards: [], weekly: [], trend: [], theses: [], forecast: [] };
 }
 
 type Bag = Record<string, unknown>;
@@ -191,6 +214,14 @@ function unit(value: unknown): MoneyUnit {
 }
 
 const DIRECTIONS = new Set(['thin', 'improving', 'worsening', 'flat']);
+const FORECAST_DECISIONS = new Set(['enter', 'skip', 'all']);
+/** |skill| inside this band reads as even with the market. A negative skip is still said plainly. */
+const FORECAST_EVEN = 0.02;
+const FORECAST_NAMES: Record<string, string> = {
+  oddsborne: 'ODDSBORNE',
+  quantanamo: 'QUANTANAMO',
+  bandit: 'BANDIT',
+};
 
 export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
   const bag: Bag = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Bag) : {};
@@ -300,6 +331,26 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         backtest_weight: num(row.backtest_weight) ?? 0,
         backtest_mean_ret: num(row.backtest_mean_ret),
         backtest_effect: backtestEffect(str(row.backtest_effect)),
+      }];
+    }),
+    forecast: rows(bag.forecast).flatMap((row) => {
+      const steward = str(row.steward)?.toLowerCase() ?? '';
+      const decision = str(row.decision);
+      if (!steward || !decision || !FORECAST_DECISIONS.has(decision)) return [];
+      const n = int(row.n);
+      const allTheses = row.all_theses === true || row.all_theses === 'true';
+      return [{
+        steward,
+        decision: decision as ForecastSkillRow['decision'],
+        thesis_id: allTheses ? null : str(row.thesis_id),
+        all_theses: allTheses,
+        n,
+        brier: num(row.brier),
+        market_brier: num(row.market_brier),
+        brier_gap: num(row.brier_gap),
+        skill: num(row.skill),
+        thin: row.thin === true || row.thin === 'true' || n < SCORECARD_THIN_N,
+        excluded_no_book: int(row.excluded_no_book),
       }];
     }),
   };
@@ -484,4 +535,72 @@ export function passedBetCopy(
       ? `${skips.unscoreable} missing a market or a price`
       : null,
   };
+}
+
+function forecastCount(row: ForecastSkillRow, withSettled: boolean): string {
+  const thin = row.thin ? ', too few to trust' : '';
+  return withSettled ? `(${row.n} settled${thin})` : `(${row.n}${thin})`;
+}
+
+function headlineVerdict(row: ForecastSkillRow): string {
+  const skill = row.skill;
+  const count = forecastCount(row, true);
+  if (skill === null || Math.abs(skill) < FORECAST_EVEN) return `about even ${count}`;
+  return skill > 0 ? `better than the market ${count}` : `worse than the market ${count}`;
+}
+
+/** Sign of the slice, including a small negative. The even band is only for the whole-book line. */
+function sliceVerdict(row: ForecastSkillRow | undefined, phrase: string): string | null {
+  if (!row || row.n <= 0 || row.skill === null || row.skill === 0) return null;
+  const word = row.skill < 0 ? 'Worse' : 'Better';
+  return `${word} than the market on ${phrase} ${forecastCount(row, false)}`;
+}
+
+function excludedPhrase(n: number): string | null {
+  if (n <= 0) return null;
+  const bet = n === 1 ? 'bet' : 'bets';
+  return `${n} settled ${bet} had no market price, left out`;
+}
+
+/**
+ * One parchment sentence: how this steward's probabilities compared with the price
+ * they were looking at. Null when nothing has settled with both a probability and a price.
+ */
+export function forecastVsMarketLine(
+  rows: readonly ForecastSkillRow[],
+  steward: string,
+  name?: string,
+): string | null {
+  const slug = steward.trim().toLowerCase();
+  const label = name?.trim() || FORECAST_NAMES[slug] || slug.toUpperCase();
+  const mine = rows.filter((row) => row.steward === slug && row.all_theses);
+  const all = mine.find((row) => row.decision === 'all');
+  if (!all || (all.n <= 0 && all.excluded_no_book <= 0)) return null;
+  if (all.n <= 0) {
+    const left = excludedPhrase(all.excluded_no_book);
+    return left ? `${label}'s odds vs the market's: ${left}.` : null;
+  }
+  const sentences = [
+    `${label}'s odds vs the market's: ${headlineVerdict(all)}`,
+    sliceVerdict(mine.find((row) => row.decision === 'skip'), 'bets it passed up'),
+    sliceVerdict(mine.find((row) => row.decision === 'enter'), 'bets taken'),
+    excludedPhrase(all.excluded_no_book),
+  ].filter((part): part is string => Boolean(part));
+  return `${sentences.join('. ')}.`;
+}
+
+const FORECAST_ORDER = ['oddsborne', 'quantanamo', 'bandit'];
+
+/** Steward rollups, ODDSBORNE first. Thesis rows stay on the scorecard and out of this sentence. */
+export function forecastVsMarketLines(rows: readonly ForecastSkillRow[]): string | null {
+  const present = [...new Set(rows.map((row) => row.steward))];
+  const ordered = [
+    ...FORECAST_ORDER.filter((slug) => present.includes(slug)),
+    ...present.filter((slug) => !FORECAST_ORDER.includes(slug)).sort(),
+  ];
+  const lines = ordered.flatMap((slug) => {
+    const line = forecastVsMarketLine(rows, slug);
+    return line ? [line] : [];
+  });
+  return lines.length ? lines.join(' · ') : null;
 }

@@ -13,6 +13,7 @@ import { assemblePlaybookRules } from './beliefs';
 import { assembleBookHoldings, type BookHolding } from './book-holdings';
 import { leanPendingCandidates } from './candidate-review';
 import type { DeskPayload } from './ledger-types';
+import { forecastVsMarketLines } from './steward-scorecard';
 
 export type LearningPulse = {
   to_review: number;
@@ -24,6 +25,11 @@ export type LearningPulse = {
   open_books_gate_ok: number;
   open_books_legacy_untagged: number;
   open_books_missing_gate: number;
+  /**
+   * How settled probabilities compared with the market price. Absent when nothing
+   * has both a probability and a price. Does not change `/api/health` ok.
+   */
+  forecast?: string;
 };
 
 function liveBookGate(row: Pick<BookHolding, 'thesis_id' | 'untagged'>) {
@@ -41,6 +47,7 @@ export function assembleLearningPulse(desk: DeskPayload): LearningPulse {
   const lessons = desk.lessons ?? [];
   const live = assembleBookHoldings(desk).rows.filter((row) => row.life === 'live');
   const gates = live.map(liveBookGate);
+  const forecast = forecastVsMarketLines(desk.scorecard?.forecast ?? []);
   return {
     to_review: leanPendingCandidates(desk.ontology_candidates ?? []).length,
     lessons_open: lessons.filter((row) => !row.incorporated).length,
@@ -51,6 +58,7 @@ export function assembleLearningPulse(desk: DeskPayload): LearningPulse {
     open_books_gate_ok: gates.filter((row) => row.gate_ok).length,
     open_books_legacy_untagged: gates.filter((row) => row.legacy_untagged).length,
     open_books_missing_gate: gates.filter((row) => row.missing_gate).length,
+    ...(forecast ? { forecast } : {}),
   };
 }
 
@@ -65,6 +73,7 @@ export function learningPulseSummary(pulse: LearningPulse): LearningPulse {
     open_books_gate_ok: pulse.open_books_gate_ok,
     open_books_legacy_untagged: pulse.open_books_legacy_untagged,
     open_books_missing_gate: pulse.open_books_missing_gate,
+    ...(pulse.forecast ? { forecast: pulse.forecast } : {}),
   };
 }
 
@@ -99,7 +108,7 @@ export type LearningPulseControl =
   | 'focus_lots';
 
 export type LearningPulsePart = {
-  key: 'to_review' | 'lessons' | 'beliefs' | 'open_books' | 'tagged' | 'legacy' | 'missing';
+  key: 'to_review' | 'lessons' | 'beliefs' | 'open_books' | 'tagged' | 'legacy' | 'missing' | 'forecast';
   text: string;
   control: LearningPulseControl;
   thesisId: string | null;
@@ -152,7 +161,7 @@ export function learningPulseParts(
   ];
   if (pulse.open_books <= 0) {
     parts.push({ key: 'open_books', text: 'no open books', control: 'count', thesisId: null });
-    return parts;
+    return withForecast(parts, pulse);
   }
   const tagged = taggedControl(pulse, options);
   parts.push(
@@ -160,7 +169,12 @@ export function learningPulseParts(
     { key: 'legacy', text: legacyLabel(pulse.open_books_legacy_untagged), control: 'count', thesisId: null },
     { key: 'missing', text: missingLabel(pulse.open_books_missing_gate), control: 'count', thesisId: null },
   );
-  return parts;
+  return withForecast(parts, pulse);
+}
+
+function withForecast(parts: LearningPulsePart[], pulse: LearningPulse): LearningPulsePart[] {
+  if (!pulse.forecast) return parts;
+  return [...parts, { key: 'forecast', text: pulse.forecast, control: 'count', thesisId: null }];
 }
 
 /** One parchment sentence. Queue headers do not repeat these counts. */
