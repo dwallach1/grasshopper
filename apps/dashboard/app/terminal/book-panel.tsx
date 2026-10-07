@@ -201,6 +201,9 @@ function StewardSection({
             </>
           ) : null}
         </p>
+        {section.forecast ? (
+          <p className="books-line" data-forecast="">{section.forecast}</p>
+        ) : null}
       </header>
       {section.open.length ? (
         <ul className="books-lots" aria-label={`${section.name} open positions`}>

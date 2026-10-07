@@ -305,9 +305,46 @@ describe('Books page: one section per steward', () => {
     expect(coda.textContent).not.toContain('Rules in force');
     expect(coda.textContent).not.toContain('no chase');
     expect(view.host.querySelector('[data-steward="oddsborne"] .books-none')?.textContent).toBe('Nothing open right now.');
+    expect(view.host.querySelector('[data-forecast]')).toBeNull();
     expect(view.host.textContent).not.toContain('Operator review');
     expect(view.host.textContent).not.toContain('To review');
     expect(view.host.querySelector('.thesis-page')).toBeNull();
+    view.unmount();
+  });
+
+  test('oddsborne section says whether the odds beat the market', async () => {
+    const payload = desk();
+    payload.scorecard = {
+      ...payload.scorecard!,
+      forecast: [
+        {
+          steward: 'oddsborne', decision: 'all', thesis_id: null, all_theses: true,
+          n: 75, brier: 0.209029, market_brier: 0.215499, brier_gap: -0.00647, skill: 0.030023,
+          thin: false, excluded_no_book: 1,
+        },
+        {
+          steward: 'oddsborne', decision: 'skip', thesis_id: null, all_theses: true,
+          n: 69, brier: 0.216379, market_brier: 0.215233, brier_gap: 0.001146, skill: -0.005324,
+          thin: false, excluded_no_book: 0,
+        },
+        {
+          steward: 'oddsborne', decision: 'enter', thesis_id: null, all_theses: true,
+          n: 6, brier: 0.124511, market_brier: 0.218547, brier_gap: -0.094036, skill: 0.43028,
+          thin: true, excluded_no_book: 0,
+        },
+      ],
+    };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    const line = view.host.querySelector('[data-steward="oddsborne"] [data-forecast]');
+    expect(line?.textContent).toBe(
+      "ODDSBORNE's odds vs the market's: better than the market (75 settled). "
+      + 'Worse than the market on bets it passed up (69). '
+      + 'Better than the market on bets taken (6, too few to trust). '
+      + '1 settled bet had no market price, left out.',
+    );
+    expect(line?.textContent).not.toMatch(/brier|skill|calibration/i);
+    expect(view.host.querySelector('[data-steward="quantanamo"] [data-forecast]')).toBeNull();
+    expect(view.host.querySelector('[data-steward="bandit"] [data-forecast]')).toBeNull();
     view.unmount();
   });
 
