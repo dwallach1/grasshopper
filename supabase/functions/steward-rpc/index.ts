@@ -27,6 +27,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql)
     'steward_pending_decision_marks',
     'steward_record_decision_mark',
+    // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
+    'quantanamo_touch_heartbeat',
+    'steward_desk_rules',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',
@@ -50,6 +53,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // venue ids + settlement for decision markets (supabase/schemas/59_decision_sides_markets.sql)
     'oddsborne_decision_markets',
     'oddsborne_sync_decision_market',
+    // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
+    'oddsborne_touch_heartbeat',
+    'steward_desk_rules',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
@@ -71,6 +77,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql; pass_marks.py)
     'steward_pending_decision_marks',
     'steward_record_decision_mark',
+    // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
+    'bandit_touch_heartbeat',
+    'steward_desk_rules',
   ]),
 };
 const FN_RE = /^[a-z][a-z0-9_]{2,62}$/;

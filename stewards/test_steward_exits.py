@@ -168,13 +168,16 @@ class CloseLesson(unittest.TestCase):
         self.assertEqual(lesson.steward_from_path("/x/oddsborne"), "oddsborne")
         self.assertEqual(lesson.steward_from_path("/x/bandit/"), "bandit")
         self.assertIsNone(lesson.steward_from_path("/x/other"))
-        a = SimpleNamespace(position_id="L1", rationale="r", kind="trade_close_lesson", new_confidence=37.0, prior=None,
+        a = SimpleNamespace(position_id="L1", rationale="r", kind="trade_close_lesson", new_confidence=37.0, confidence_delta=None,
                             thesis=None, meta_json='{"k": 1}')
         self.assertEqual(lesson.lesson_args("oddsborne", a), {"steward": "oddsborne", "position_id": "L1", "rationale": "r",
                                                                "kind": "trade_close_lesson", "new_confidence": 37.0,
                                                                "meta": {"k": 1}})
         with self.assertRaises(SystemExit):
             lesson.lesson_args("bandit", SimpleNamespace(**{**a.__dict__, "meta_json": "[1]"}))
+        d = SimpleNamespace(**{**a.__dict__, "new_confidence": None, "confidence_delta": -5.0})
+        self.assertEqual(lesson.lesson_args("bandit", d)["confidence_delta"], -5.0)
+        self.assertNotIn("prior_confidence", lesson.lesson_args("bandit", d))
 
 
 if __name__ == "__main__":
