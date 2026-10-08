@@ -16,6 +16,7 @@ MARKS_SQL = HERE.parent / "supabase" / "schemas" / "58_decision_marks.sql"
 SIDES_SQL = HERE.parent / "supabase" / "schemas" / "59_decision_sides_markets.sql"
 FIXES_SQL = HERE.parent / "supabase" / "schemas" / "60_steward_fixes_lessons.sql"
 QLESSON_SQL = HERE.parent / "supabase" / "schemas" / "65_quantanamo_close_lesson.sql"
+CLV_SQL = HERE.parent / "supabase" / "schemas" / "66_clv_provisional_close_marks.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
@@ -241,6 +242,33 @@ class StewardScripts(unittest.TestCase):
         self.assertEqual(len(mig), 1)
         self.assertEqual(mig[0].read_text(), sql)
         self.assertIn('"quantanamo"', (HERE / "bandit" / "close_lesson.py").read_text())
+
+    def test_clv_leaves_out_provisional_close_marks(self) -> None:
+        # 66: v_decision_clv and its summary read only closing marks; provisional ones are counted, not dropped.
+        sql = CLV_SQL.read_text()
+        self.assertIn("when lower(coalesce(p_meta->>'provisional', '')) = 'true' then 'flagged'", sql)
+        self.assertIn("p_event_start_at - p_observed_at > interval '60 minutes' then 'early'", sql)
+        self.assertIn("join public.decision_marks m on m.decision_id = c.id and m.mark_kind = 'close'", sql)
+        self.assertNotIn("'horizon'", sql.split("create or replace function", 1)[1])
+        clv = sql[sql.index("create or replace view public.v_decision_clv\n"):]
+        self.assertIn("from public.v_decision_clv_all a\nwhere not a.provisional;", clv[:clv.index(";") + 1])
+        summary = sql[sql.index("create or replace view public.v_decision_clv_summary"):]
+        summary = summary[:summary.index(";")]
+        self.assertIn("count(*) filter (where a.provisional)::int as provisional_excluded", summary)
+        for agg in ("as n,", "as mean_clv,", "as beat_entry,", "as worse_than_entry,", "as mean_fair_minus_close,",
+                    "as fair_closer_than_entry,", "as last_close_observed_at,"):
+            line = next(ln for ln in summary.splitlines() if ln.rstrip().endswith(agg))
+            self.assertIn("not a.provisional", line, agg)
+        # The close-mark upsert replaces meta, so a pre-game mark clears provisional = true (58, unchanged here).
+        marks = MARKS_SQL.read_text()
+        upsert = marks[marks.index("on conflict (decision_id, mark_kind) do update set"):]
+        upsert = upsert[:upsert.index("returning id into v_id;")]
+        self.assertIn("meta = excluded.meta,", upsert)
+        self.assertNotIn("||", upsert)
+        self.assertNotIn("steward_record_decision_mark", sql.replace("-- (steward_record_decision_mark:", ""))
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_clv_provisional_close_marks.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
 
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).
