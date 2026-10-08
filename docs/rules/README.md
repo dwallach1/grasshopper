@@ -32,7 +32,7 @@ Assumptions are in [SIMULATION.md](SIMULATION.md).
 3. Any migration numbered ≥ 35 that defines one of the rule functions (`tools/court/rule_functions.txt`) must carry a `-- court-ruling: docs/rules/<rule_id>.md` line naming an existing ruling. `bun run test` fails otherwise (`apps/dashboard/lib/rules-court.test.ts`).
 4. Fill in the court section of the PR template.
 
-Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27), 47 (backtest credit live-gated and small, 2026-09-27), 48 (QUANTANAMO 80 gate shrunk for small samples, 2026-09-30).
+Registry migrations so far: 35 (table), 36 (seed as argued), 37 (rulings enacted: statuses), 38 (null-thesis fix), 39 (path sync), 42 and 45 (later rulings), 46 (backtest evidence counts both ways, 2026-09-27), 47 (backtest credit live-gated and small, 2026-09-27), 48 (QUANTANAMO 80 gate shrunk for small samples, 2026-09-30), 64 (BANDIT 1h entry cap at +30%, provisional trial, 2026-10-07).
 
 Enforcement today is the test suite plus the PR checklist. For a hard merge block, move `docs/rules/court-ci.yml` to `.github/workflows/` (this needs a token with `workflow` scope) and make it a required status check.
 
@@ -58,3 +58,4 @@ Enforcement today is the test suite plus the PR checklist. For a hard merge bloc
 | [backtest-evidence-credit](backtest-evidence-credit.md) | amend (2026-09-27, 46 + 47) | in force | pass or fail counts; no credit below 3 live trades, weight ≤ min(5, live/2) × survivor factor, mean = deflated Sharpe × spread; earnings_gap_structure 56 → 54 |
 | [portfolio-exposure](portfolio-exposure.md) | enact (10% of book at risk); gap-prone at full notional | in force | binaries and memes at full notional (BANDIT ≈ one clip); QUANTANAMO 6.4% after raising its lines |
 | [shadow-exits](shadow-exits.md) | uphold | in force | — |
+| [bandit-1h-entry-cap](bandit-1h-entry-cap.md) | amend (2026-10-07, 64; provisional trial) | in force | 1h ceiling +200% → +30%: the 3 clips above +30% all lost (−0.116 SOL), history +0.070 → +0.186 SOL; weak (P = 0.185); sunset after 10 blocked passes (`1h_cap_30`) or 10 clips |
