@@ -15,6 +15,7 @@ EXIT_SQL = HERE.parent / "supabase" / "schemas" / "51_steward_exit_rpc.sql"
 MARKS_SQL = HERE.parent / "supabase" / "schemas" / "58_decision_marks.sql"
 SIDES_SQL = HERE.parent / "supabase" / "schemas" / "59_decision_sides_markets.sql"
 FIXES_SQL = HERE.parent / "supabase" / "schemas" / "60_steward_fixes_lessons.sql"
+QLESSON_SQL = HERE.parent / "supabase" / "schemas" / "65_quantanamo_close_lesson.sql"
 EDGE_FN = HERE.parent / "supabase" / "functions" / "steward-rpc" / "index.ts"
 SCRIPTS = {
     "bandit": HERE / "bandit" / "live_trade_clip.py",
@@ -200,6 +201,46 @@ class StewardScripts(unittest.TestCase):
         mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_steward_fixes_lessons.sql"))
         self.assertEqual(len(mig), 1)
         self.assertEqual(mig[0].read_text(), sql)
+
+    def test_quantanamo_close_lesson_path(self) -> None:
+        # 65: QUANTANAMO's equity lots go through the same function, delta and loss clamp as BANDIT/ODDSBORNE,
+        # callable as quantanamo_worker in SQL and over steward-rpc.
+        sql = QLESSON_SQL.read_text()
+        fn = sql[sql.index("create or replace function public.steward_close_lesson(p jsonb)"):]
+        fn = fn[:fn.index("$$;")]
+        prev = FIXES_SQL.read_text()
+        prev = prev[prev.index("create or replace function public.steward_close_lesson(p jsonb)"):]
+        prev = prev[:prev.index("$$;")]
+        for line in ("v_prior := private.thesis_ledger_confidence(v_thesis);", "v_new := case when v_prior is null then null else v_prior + v_delta end;",
+                     "v_pnl < 0 and v_new > v_prior", "v_pnl := private.lot_realized_pnl(v_table, v_lot);", "security invoker"):
+            self.assertIn(line, fn)
+            self.assertIn(line, prev)
+        self.assertIn("elsif v_steward = 'quantanamo' then\n    -- 65", fn)
+        self.assertIn("v_table := 'position_episodes';", fn)
+        self.assertIn("from public.position_episodes where id = v_lot;", fn)
+        # trade_outcomes keys QUANTANAMO's realized P&L by the same table name the lesson looks up.
+        self.assertIn("'position_episodes', p_episode_id::text,", (HERE.parent / "supabase" / "schemas" / "10_trade_outcomes.sql").read_text())
+        # dry_run returns before the only write; nothing else in the function writes.
+        self.assertLess(fn.index("if v_dry then"), fn.index("insert into public.belief_updates"))
+        self.assertEqual(fn.count("insert into"), 1)
+        self.assertNotRegex(fn.lower(), r"\b(update|delete)\s+(from\s+)?public\.")
+        # Every steward's branch is still there, unchanged.
+        for branch in ("if v_steward = 'bandit' then", "v_table := 'meme_positions';", "elsif v_steward = 'oddsborne' then", "v_table := 'pm_positions';"):
+            self.assertIn(branch, fn)
+        grant = re.search(r"grant execute on function public\.steward_close_lesson\(jsonb\) to ([^;]+);", sql)
+        self.assertIsNotNone(grant)
+        for role in ("quantanamo_worker", "oddsborne_worker", "bandit_worker", "service_role"):
+            self.assertIn(role, grant.group(1))
+        self.assertNotRegex(grant.group(1), r"\b(anon|authenticated|public)\b")
+        self.assertIn("revoke all on function public.steward_close_lesson(jsonb) from public, anon, authenticated;", sql)
+        edge = EDGE_FN.read_text()
+        for role in ("quantanamo_worker", "oddsborne_worker", "bandit_worker"):
+            allow = edge[edge.index(f"{role}: new Set(["):]
+            self.assertIn("'steward_close_lesson'", allow[:allow.index("])")], role)
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_quantanamo_close_lesson.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
+        self.assertIn('"quantanamo"', (HERE / "bandit" / "close_lesson.py").read_text())
 
     def test_shadow_exit_contract(self) -> None:
         # public.v_shadow_exits reads meta.paper_<name> objects with these keys (supabase/schemas/32, 33).

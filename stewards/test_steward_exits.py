@@ -179,6 +179,47 @@ class CloseLesson(unittest.TestCase):
         self.assertEqual(lesson.lesson_args("bandit", d)["confidence_delta"], -5.0)
         self.assertNotIn("prior_confidence", lesson.lesson_args("bandit", d))
 
+    def test_quantanamo_equity_lots(self) -> None:
+        self.assertIn("quantanamo", lesson.STEWARDS)
+        a = SimpleNamespace(position_id="E1", rationale="r", kind="trade_close_lesson", new_confidence=None, confidence_delta=-3.0,
+                            thesis=None, meta_json=None)
+        self.assertEqual(lesson.lesson_args("quantanamo", a), {"steward": "quantanamo", "position_id": "E1", "rationale": "r",
+                                                                "kind": "trade_close_lesson", "confidence_delta": -3.0})
+
+    def _run(self, argv, result):
+        import contextlib
+        import io
+        rpc = sys.modules["steward_rpc"] if "steward_rpc" in sys.modules else __import__("steward_rpc")
+        calls = []
+        orig = rpc.call
+        rpc.call = lambda steward, fn, args=None, **kw: calls.append((steward, fn, dict(args or {}), kw)) or result
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                code = lesson.main(argv)
+        finally:
+            rpc.call = orig
+        return code, calls, out.getvalue()
+
+    def test_dry_run_is_checked_in_the_database(self) -> None:
+        base = ["--steward", "quantanamo", "--position-id", "E1", "--rationale", "line stop in a rates shock", "--confidence-delta", "-3"]
+        code, calls, out = self._run(base + ["--dry-run"], {"dry_run": True, "prior_confidence": 46, "new_confidence": 43})
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 1)
+        steward, fn, args, kw = calls[0]
+        self.assertEqual((steward, fn, args["dry_run"], args["confidence_delta"], kw.get("idempotent")),
+                         ("quantanamo", "steward_close_lesson", True, -3.0, True))
+        self.assertIn('"DRY_RUN_OK"', out)
+        # A database that ignored dry_run (wrote a row) is reported, not passed off as a preview.
+        code, _, out = self._run(base + ["--dry-run"], {"belief_update_id": "x", "new_confidence": 43})
+        self.assertEqual(code, 3)
+        self.assertIn("DRY_RUN_NOT_HONORED", out)
+        code, calls, out = self._run(base, {"belief_update_id": "x", "new_confidence": 43})
+        self.assertEqual(code, 0)
+        self.assertNotIn("dry_run", calls[0][2])
+        self.assertFalse(calls[0][3].get("idempotent"))
+        self.assertIn('"WRITTEN"', out)
+
 
 if __name__ == "__main__":
     unittest.main()
