@@ -46,7 +46,15 @@ describe('rules court', () => {
     const seed = await readFile(join(root, 'supabase/schemas/36_desk_rules_seed.sql'), 'utf8');
     const ids = await ruleIds();
     const rows = [...seed.matchAll(/^  \('([a-z0-9-]+)', /gm)].map((m) => m[1]);
-    expect(rows.sort()).toEqual([...ids].sort());
+    expect(new Set(rows).size).toBe(rows.length);
+    // Rules ruled after the 36 seed arrive in their own registry migration (an upsert into desk_rules).
+    const later = new Set<string>();
+    for (const f of await schemaFiles(37)) {
+      const sql = await readFile(join(root, 'supabase/schemas', f), 'utf8');
+      if (!sql.includes('insert into public.desk_rules (')) continue;
+      for (const m of sql.matchAll(/^  \('([a-z0-9-]+)', /gm)) if (!rows.includes(m[1])) later.add(m[1]);
+    }
+    expect([...rows, ...later].sort()).toEqual([...ids].sort());
   });
 
   test('a migration >= 35 that defines a rule function carries a court-ruling marker naming an existing ruling', async () => {
@@ -81,6 +89,7 @@ describe('rules court', () => {
       ['46_backtest_evidence_symmetric.sql', '20260927232545_backtest_evidence_symmetric.sql'],
       ['47_backtest_credit_live_gated.sql', '20260927233853_backtest_credit_live_gated.sql'],
       ['48_quantanamo_gate_small_sample.sql', '20260930192137_quantanamo_gate_small_sample.sql'],
+      ['64_bandit_1h_entry_cap.sql', '20261008044007_bandit_1h_entry_cap.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -222,5 +231,18 @@ describe('rules court', () => {
     expect(sql).not.toMatch(/results_confidence = \d/);
     expect(sql).toContain('select private.rescore_all_thesis_confidence();');
     expect(sql).toContain("('quantanamo-80-gate', ");
+  });
+
+  test('64: BANDIT 1h entry cap is registered as a provisional trial, registry only', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/64_bandit_1h_entry_cap.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/bandit-1h-entry-cap.md');
+    expect(sql).toContain("('bandit-1h-entry-cap', ");
+    expect(sql).toContain("meta ->> 'blocked_by' = '1h_cap_30'");
+    // Registry only: no function, table or view is (re)defined, and no trade or price row is touched.
+    expect(sql).not.toMatch(/^\s*(create|alter|drop|update|delete)\b/im);
+    expect(sql).not.toMatch(/, true, 'docs\/rules\//);
+    const md = await readFile(join(rulesDir, 'bandit-1h-entry-cap.md'), 'utf8');
+    expect(md).toContain('+200% to +30%');
+    expect(md).toContain('C(9,3)/C(15,3) = 84/455 = 0.185');
   });
 });
