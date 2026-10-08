@@ -1,6 +1,7 @@
 /**
  * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip / mark_clip / exit_clip,
- * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, both stewards' close_lesson,
+ * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, steward_close_lesson (BANDIT, ODDSBORNE and,
+ * since 65, QUANTANAMO's equity lots),
  * steward_log_decision for a scoreable enter or skip — QUANTANAMO included — and the decision marks that
  * score them: steward_pending_decision_marks / steward_record_decision_mark, 58_decision_marks.sql).
  *
@@ -30,6 +31,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'quantanamo_touch_heartbeat',
     'steward_desk_rules',
+    // close lessons on equity lots (position_episodes), ledger delta + loss clamp
+    // (supabase/schemas/65_quantanamo_close_lesson.sql)
+    'steward_close_lesson',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',

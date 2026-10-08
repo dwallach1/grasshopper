@@ -69,8 +69,10 @@ def url() -> str:
 
 
 def _password(steward: str) -> str:
-    from load_secrets import require
     name = f"{steward.upper()}_WORKER_DB_PASSWORD"
+    if os.environ.get(name):  # QUANTANAMO's isn't in either load_secrets NAMES list
+        return os.environ[name]
+    from load_secrets import require
     return require(name)[name]
 
 

@@ -153,7 +153,7 @@ A lot opened by `live_trade_clip.py` or `pm_enter.py` is marked and closed from 
 |---|---|
 | `mark_clip.py --all-open` (or `--position-id <id>`) | Takes a Jupiter full-size quote for each open lot, then writes `meme_positions.mark` and `meta.last_mark`, a `meme_pnl` mark row and the heartbeat (`bandit_mark_position`). It applies the rails in order: 4h time stop, −40%, invalidation price, then full bank at +50%. When one fires, it prints the `exit_clip.py` command and exits 10. |
 | `exit_clip.py --position-id <id> --trigger <kill_-40pct\|invalidation\|deadline_4h_stop\|tp50_full_bank\|thesis_invalid\|manual>` | Market-sells the whole lot through Jupiter (3% slippage, then 5%; Helius send as a fallback). It then calls `bandit_exit_record_fill`, which writes the sell order and fill, closes the lot (`exit_reason` = trigger), records realized P&L in `meme_pnl` and the trade outcome, and runs the heartbeat. Finally it closes the empty token account. If the ledger write fails after the swap, the fill is saved to `$BANDIT_STATE_DIR/exit_clip_orphan_<position_id>_<ts>.json` (exit 1); record it before anything else. |
-| `close_lesson.py --position-id <id> --rationale "<lesson>" --new-confidence <1-100>` | Writes the close lesson (a `belief_updates` row with `lot_id`), which clears `v_learning_loop_gaps`. Run it after every close, along with `paper_bank20.py <id>`. |
+| `close_lesson.py --position-id <id> --rationale "<lesson>" --confidence-delta <-n> [--dry-run]` | Writes the close lesson (a `belief_updates` row with `lot_id`), which clears `v_learning_loop_gaps`. Confidence moves from the ledger value (`results_confidence`, else stated) by the delta; a losing close can't raise it. `--new-confidence <1-100>` sets it outright instead. `--dry-run` runs the same checks in the database and writes nothing. Run it after every close, along with `paper_bank20.py <id>`. |
 | `pnl_snapshot.py [--notes "<standup>"]` | Writes a `meme_pnl` snapshot of wallet SOL plus open marks (`bandit_pnl_snapshot`). |
 
 ### ODDSBORNE (`cd /workspace/oddsborne`)
@@ -163,8 +163,20 @@ A lot opened by `live_trade_clip.py` or `pm_enter.py` is marked and closed from 
 | `pm_watch.py --all-open [--routine <name>]` | Reads the outcome bid (falling back to last, then mid) for each open lot and writes `pm_positions.mark` and `meta` (`oddsborne_mark_position`). At or below `invalidation_price` it prints the `pm_exit.py` command and exits 10. |
 | `pm_exit.py --position-id <id> --reason <invalidation\|take_profit\|thesis_exit\|pre_settle\|edge_gone\|manual> [--price <p>] [--order-type ioc\|fok\|gtc] [--dry-run]` | Sells the lot at the bid (or `--price`). It then calls `oddsborne_exit_record`, which writes the sell order and fills, the lot's entry fills, the close or reduce, the `pm_pnl` row and the heartbeat. For `invalidation` it aborts if the print is back above the line, unless `--force`. `--record-only --venue-order-id <sell id>` records a sell that was already placed. If the ledger write fails after the sell, the payload is saved to `$ODDSBORNE_OUT_DIR/pm_exit_orphan_<sell id>.json`. |
 | `pm_fills_sync.py --venue-order-id <buy id>` | Records maker fills that landed after `pm_enter.py` returned, and adds them to the open lot. It refuses when the venue no longer holds the shares (already sold); record those with the exit instead. |
-| `close_lesson.py --position-id <id> --rationale "<lesson>" --new-confidence <1-100>` | Same as BANDIT's (an identical file). |
+| `close_lesson.py --position-id <id> --rationale "<lesson>" --confidence-delta <-n> [--dry-run]` | Same as BANDIT's (an identical file). |
 | `pm_pnl_snapshot.py [--notes "<standup>"]` | Writes a `pm_pnl` snapshot of venue cash plus asset notional (`oddsborne_pnl_snapshot`). |
+
+### QUANTANAMO close lessons (equity lots)
+
+QUANTANAMO's lots are `public.position_episodes`. Since schema 65, `public.steward_close_lesson` takes them with the same rules as BANDIT and ODDSBORNE: the lot must be closed, the thesis must be the lot's, confidence moves from the ledger value by `confidence_delta`, and a losing close (the lot's `trade_outcomes.realized_pnl` < 0) can't raise it. `dry_run: true` writes nothing. In SQL (as `quantanamo_worker`, or as `postgres` with `'steward', 'quantanamo'`):
+
+```sql
+select public.steward_close_lesson(jsonb_build_object('steward', 'quantanamo',
+  'position_id', '<position_episodes.id>', 'confidence_delta', -3,
+  'rationale', '<what this close taught, >= 20 chars>', 'meta', jsonb_build_object('research_lesson_ids', jsonb_build_array(111))));
+```
+
+Over HTTPS, steward-rpc allowlists `steward_close_lesson` for `quantanamo_worker` (`{"fn": "steward_close_lesson", "args": {...}}`), and `close_lesson.py --steward quantanamo ...` works from either steward dir with `QUANTANAMO_WORKER_DB_PASSWORD` in the environment (stdlib only, any `python3`).
 
 ## Ledger transport (HTTPS)
 

@@ -3,13 +3,17 @@
 public.v_learning_loop_gaps and the thesis confidence moves (belief_update_sync_thesis).
 
 Usage (from /workspace/bandit or /workspace/oddsborne; the steward is the directory name):
-  .venv/bin/python close_lesson.py --position-id <uuid> --rationale "<what this close taught>" --new-confidence 42
-      [--kind trade_close_lesson|playbook_rule|autopsy] [--thesis <id>] [--prior 45] [--meta-json '{...}'] [--dry-run]
+  .venv/bin/python close_lesson.py --position-id <uuid> --rationale "<what this close taught>" --confidence-delta -3
+      [--new-confidence 42] [--kind trade_close_lesson|playbook_rule|autopsy] [--thesis <id>] [--meta-json '{...}'] [--dry-run]
+QUANTANAMO (equity lots, public.position_episodes) passes --steward quantanamo and needs
+QUANTANAMO_WORKER_DB_PASSWORD in its environment (stdlib only, any python3):
+  python3 close_lesson.py --steward quantanamo --position-id <position_episodes.id> --rationale "..." --confidence-delta -3
 
 public.steward_close_lesson (over HTTPS as <steward>_worker) refuses unless the lot is this steward's, closed,
 and the thesis is the lot's; confidence is on the 1-100 scale; the rationale must say something (>= 20 chars).
 The prior is always the ledger's current value (results_confidence, else stated; set in the database,
-not here); --confidence-delta moves from it, and a losing close can never raise it (clamped, meta.clamped). --dry-run shows the lot and the call; no write.
+not here); --confidence-delta moves from it, and a losing close can never raise it (clamped, meta.clamped).
+--dry-run runs the same checks and arithmetic in the database (dry_run: true) and prints the result; no write.
 Keep this file identical in stewards/bandit and stewards/oddsborne (test_steward_scripts checks).
 """
 from __future__ import annotations
@@ -23,7 +27,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-STEWARDS = ("bandit", "oddsborne")
+STEWARDS = ("bandit", "oddsborne", "quantanamo")
 
 
 def steward_from_path(path: str = _HERE) -> str | None:
@@ -61,7 +65,7 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     if not a.steward:
-        ap.error("--steward is required outside /workspace/{bandit,oddsborne}")
+        ap.error("--steward is required outside /workspace/{bandit,oddsborne} (QUANTANAMO: --steward quantanamo)")
     if a.new_confidence is not None and a.confidence_delta is not None:
         ap.error("pass --new-confidence or --confidence-delta, not both")
     if a.new_confidence is not None and not (1 <= a.new_confidence <= 100):
@@ -69,19 +73,20 @@ def main(argv=None) -> int:
     from steward_rpc import RpcError, call, dumps
     args = lesson_args(a.steward, a)
     if a.dry_run:
-        lot = call(a.steward, f"{a.steward}_position_get", {"position_id": a.position_id}, idempotent=True)
-        keep = ("id", "status", "thesis_id", "closed_at", "quantity", "invalidation_price")
-        print(dumps({"decision": "DRY_RUN_OK", "lot": {k: (lot or {}).get(k) for k in keep} if lot else None,
-                     "would_write": {"fn": "steward_close_lesson", "args": args},
-                     "would_refuse": None if lot and lot.get("status") == "closed" else "lot missing or not closed"}))
-        return 0
+        args["dry_run"] = True
     try:
-        res = call(a.steward, "steward_close_lesson", args)
+        res = call(a.steward, "steward_close_lesson", args, idempotent=a.dry_run)
     except RpcError as e:
         if e.refusal:
             print(dumps({"decision": "REFUSED", "gate": e.refusal[0], "reason": e.refusal[1]}))
             return 2
         raise
+    if a.dry_run:
+        if not (isinstance(res, dict) and res.get("dry_run") is True):  # a database without 65 would have written
+            print(dumps({"decision": "DRY_RUN_NOT_HONORED", "result": res}))
+            return 3
+        print(dumps({"decision": "DRY_RUN_OK", "would_write": {"fn": "steward_close_lesson", "args": args}, **res}))
+        return 0
     print(dumps({"decision": "WRITTEN", **res}))
     return 0
 
