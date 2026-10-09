@@ -44,6 +44,7 @@ else
     "$here/bandit/pnl_snapshot.py:$box/bandit/pnl_snapshot.py"
     "$here/bandit/pass_marks.py:$box/bandit/pass_marks.py"
     "$here/bandit/close_lesson.py:$box/bandit/close_lesson.py"
+    "$here/bandit/scan_https_once.py:$box/bandit/_scan_https_once.py"
     "$here/bandit/requirements.txt:$box/bandit/requirements.txt"
     "$here/oddsborne/pm_enter.py:$box/oddsborne/pm_enter.py"
     "$here/oddsborne/steward_rpc.py:$box/oddsborne/steward_rpc.py"
@@ -53,6 +54,7 @@ else
     "$here/oddsborne/pm_pnl_snapshot.py:$box/oddsborne/pm_pnl_snapshot.py"
     "$here/oddsborne/pm_decision_markets.py:$box/oddsborne/pm_decision_markets.py"
     "$here/oddsborne/close_lesson.py:$box/oddsborne/close_lesson.py"
+    "$here/oddsborne/close_mark.py:$box/oddsborne/close_mark.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
   )
   for pair in "${pairs[@]}"; do
