@@ -370,10 +370,12 @@ const CHECK_TEXT = {
   invalidation_breach: 'price is at or below its exit',
   invalidation_review_at_open: 'out-of-session print under its exit, decides at open',
   missing_invalidation: 'no exit price written',
+  line_at_or_below_cost: 'exit line is at or below the price paid',
 } as const satisfies Record<DeskBookAlert['kind'], string>;
 
 /** Book line for a check: `CODA: premarket print under its exit, decides at open`. */
-export function checkText(alert: Pick<DeskBookAlert, 'kind' | 'label' | 'print'>): string {
+export function checkText(alert: Pick<DeskBookAlert, 'kind' | 'label' | 'print' | 'detail' | 'escalated'>): string {
+  if (alert.kind === 'invalidation_breach' && alert.escalated) return alert.detail;
   if (alert.kind === 'invalidation_review_at_open' && alert.print) {
     return `${alert.label}: ${alert.print} under its exit, decides at open`;
   }

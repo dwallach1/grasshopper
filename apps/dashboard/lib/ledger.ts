@@ -484,7 +484,8 @@ async function loadWatchdog(sql: Sql): Promise<LedgerWatchdog> {
     viewRows('v_ledger_watchdog', sql`select * from public.v_ledger_watchdog`),
     viewRows('v_invalidation_breaches', sql`
       select steward, lot_table, lot_id, instrument, unit, thesis_id, invalidation_price, mark, mark_at,
-             mark_age_minutes, action_hint, mark_session
+             mark_age_minutes, action_hint, mark_session, first_seen_at, breach_age_minutes,
+             check_count, escalated, escalation, sentence
       from public.v_invalidation_breaches
       order by mark_at desc
       limit ${WATCHDOG_LIST_LIMIT}

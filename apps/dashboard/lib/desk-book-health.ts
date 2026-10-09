@@ -8,7 +8,7 @@ import { isMarkStale } from './desk-freshness';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk } from './meme-book';
 import { formatAmount } from './money-units';
-import { breachDecidesAtOpen, sessionPrintText, watchdogHealthSummary } from './ledger-watchdog';
+import { breachDecidesAtOpen, escalatedBreachSentence, sessionPrintText, watchdogHealthSummary } from './ledger-watchdog';
 import { predictionDesk } from './prediction-book';
 
 export type DeskBookAlertKind =
@@ -18,7 +18,9 @@ export type DeskBookAlertKind =
   | 'invalidation_breach'
   /** Equity marked through its line outside the regular session: decides at the open, not an exit. */
   | 'invalidation_review_at_open'
-  | 'missing_invalidation';
+  | 'missing_invalidation'
+  /** An add left the exit line at or below blended cost, and the trade did not record a scratch. */
+  | 'line_at_or_below_cost';
 
 export type DeskBookAlert = {
   kind: DeskBookAlertKind;
@@ -29,6 +31,8 @@ export type DeskBookAlert = {
   detail: string;
   /** Plain session name for `invalidation_review_at_open` (`premarket print`). */
   print?: string;
+  /** Actionable breach past the next check or the 15-minute window. `detail` is the sell-now sentence. */
+  escalated?: boolean;
 };
 
 export type DeskBookHealth = {
@@ -171,6 +175,21 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
       });
       continue;
     }
+    const sentence = lot.escalated && lot.breach_age_minutes !== null
+      ? (lot.sentence ?? escalatedBreachSentence(lot.instrument, lot.breach_age_minutes))
+      : null;
+    if (sentence) {
+      alerts.push({
+        kind: 'invalidation_breach',
+        steward: stewardSlug(lot.steward),
+        id: `breach-${lot.lot_table}-${lot.lot_id}`,
+        label: lot.instrument,
+        at: lot.first_seen_at ?? lot.mark_at,
+        detail: sentence,
+        escalated: true,
+      });
+      continue;
+    }
     alerts.push({
       kind: 'invalidation_breach',
       steward: stewardSlug(lot.steward),
@@ -178,6 +197,17 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
       label: lot.instrument,
       at: lot.mark_at,
       detail: `mark ${mark} at/below inval ${line}`,
+    });
+  }
+  for (const issue of watchdog?.issues ?? []) {
+    if (issue.check_name !== 'line_at_or_below_cost') continue;
+    alerts.push({
+      kind: 'line_at_or_below_cost',
+      steward: stewardSlug(issue.steward),
+      id: `line-cost-${issue.ref_table}-${issue.ref_id}`,
+      label: issue.instrument ?? issue.ref_id,
+      at: issue.at,
+      detail: 'exit line is at or below the price paid',
     });
   }
   for (const lot of watchdog?.missing ?? []) {

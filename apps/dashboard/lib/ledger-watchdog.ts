@@ -14,10 +14,17 @@ import type { MoneyUnit } from './money-units';
 
 export const WATCHDOG_LIST_LIMIT = 50;
 
+/**
+ * An actionable breach escalates on the second check, or when the first real print
+ * is this old. Long enough that the run which wrote the print does not escalate
+ * itself. Short of the ~2h the 10/8 NBIS and CODA exits waited.
+ */
+export const BREACH_ESCALATION_WINDOW_MS = 15 * 60 * 1000;
+
 /** PostgREST reads (operator /bundle, public bundle, desk-public-rest). */
 export const WATCHDOG_QUERIES = {
   summary: 'v_ledger_watchdog?select=*',
-  breaches: `v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint,mark_session&order=mark_at.desc&limit=${WATCHDOG_LIST_LIMIT}`,
+  breaches: `v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint,mark_session,first_seen_at,breach_age_minutes,check_count,escalated,escalation,sentence&order=mark_at.desc&limit=${WATCHDOG_LIST_LIMIT}`,
   missing: `v_open_lots_missing_invalidation?select=steward,lot_table,lot_id,instrument,unit,thesis_id,mark,mark_at,opened_at&order=opened_at.asc&limit=${WATCHDOG_LIST_LIMIT}`,
   issues: `v_ledger_integrity?select=check_name,severity,steward,ref_table,ref_id,instrument,detail,at&order=at.desc.nullslast&limit=${WATCHDOG_LIST_LIMIT}`,
 } as const;
@@ -38,6 +45,39 @@ export type WatchdogLot = {
    * or derived from mark_at when the view predates it. Null for prediction markets and memes (24/7).
    */
   mark_session: EquityMarkSession | null;
+  /** First real print under the line. Null until a mark is persisted. */
+  first_seen_at: string | null;
+  /** Minutes since `first_seen_at`. Null when that print was never stored. */
+  breach_age_minutes: number | null;
+  check_count: number;
+  escalated: boolean;
+  escalation: 'next_check' | 'window' | null;
+  /** Plain sell-now line from the view, when escalated. */
+  sentence: string | null;
+};
+
+export type EscalatedBreach = {
+  steward: string;
+  lot_table: string;
+  lot_id: string;
+  instrument: string;
+  first_seen_at: string;
+  breach_age_minutes: number;
+  escalation: 'next_check' | 'window';
+  sentence: string;
+};
+
+export type BreachPrint = { at: string; price: number | null };
+
+export type BreachReplay = {
+  checks: number;
+  first_seen_at: string | null;
+  second_seen_at: string | null;
+  as_of: string | null;
+  breach_age_minutes: number | null;
+  escalated: boolean;
+  escalation: 'next_check' | 'window' | null;
+  sentence: string | null;
 };
 
 export type WatchdogIssue = {
@@ -114,6 +154,9 @@ export type LedgerWatchdog = {
   learning_gap_lots: LearningGapLot[];
   /** Enter/skip rows with no market, side, or price. Sibling of `learning_gaps`. */
   unscoreable_decisions: UnscoreableDecisionCounts;
+  /** Actionable breaches past the next check or the 15-minute window. */
+  breaches_escalated: number;
+  escalated: EscalatedBreach[];
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -136,6 +179,8 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     learning_gaps: { ...EMPTY_LEARNING_GAPS },
     learning_gap_lots: [],
     unscoreable_decisions: { ...EMPTY_UNSCOREABLE_DECISIONS },
+    breaches_escalated: 0,
+    escalated: [],
     breaches: [],
     missing: [],
     issues: [],
@@ -184,12 +229,123 @@ function markSession(lotTable: string | null, named: string | null, markAt: stri
   return markAt ? usEquityMarkSession(Date.parse(markAt)) : null;
 }
 
+function flag(value: unknown): boolean {
+  return value === true || value === 'true' || value === 't' || value === 'yes';
+}
+
+function minutes(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = num(value);
+  return parsed !== null && parsed >= 0 ? Math.trunc(parsed) : null;
+}
+
+function escalationOf(value: unknown): 'next_check' | 'window' | null {
+  const named = str(value);
+  return named === 'next_check' || named === 'window' ? named : null;
+}
+
+/** Age in plain words: 14 → `14m`, 120 → `2h`, 171 → `2h 51m`. */
+export function breachAgeLabel(minutesValue: number): string | null {
+  if (!Number.isFinite(minutesValue) || minutesValue < 0) return null;
+  const whole = Math.trunc(minutesValue);
+  if (whole < 60) return `${whole}m`;
+  const hours = Math.floor(whole / 60);
+  const rest = whole % 60;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+/** Desk line. No price and no P/L. */
+export function escalatedBreachSentence(instrument: string, ageMinutes: number): string | null {
+  const label = breachAgeLabel(ageMinutes);
+  const name = instrument.trim();
+  if (!name || !label) return null;
+  return `${name} has been under its exit line for ${label} — sell now`;
+}
+
+export function breachAgeMinutes(firstSeenAt: string, asOf: string): number | null {
+  const age = Date.parse(asOf) - Date.parse(firstSeenAt);
+  if (!Number.isFinite(age) || age < 0) return null;
+  return Math.floor(age / 60_000);
+}
+
+/** Same rule as public.breach_escalation_state. A missing first print is not escalated. */
+export function breachEscalationState(
+  checks: number,
+  firstSeenAt: string | null,
+  asOf: string | null,
+): { escalated: boolean; escalation: 'next_check' | 'window' | null } {
+  if (!firstSeenAt || !asOf) return { escalated: false, escalation: null };
+  const age = Date.parse(asOf) - Date.parse(firstSeenAt);
+  if (!Number.isFinite(age)) return { escalated: false, escalation: null };
+  if (checks >= 2) return { escalated: true, escalation: 'next_check' };
+  if (age >= BREACH_ESCALATION_WINDOW_MS) return { escalated: true, escalation: 'window' };
+  return { escalated: false, escalation: null };
+}
+
+/** True when the exit line is at or below the new blended cost. */
+export function lineAtOrBelowBlended(line: number | null, cost: number | null): boolean {
+  return line !== null && cost !== null && Number.isFinite(line) && Number.isFinite(cost) && cost > 0 && line <= cost;
+}
+
+/** An add flags when the line is at or below cost, unless the trade recorded a scratch. A first buy does not. */
+export function addFlagsLineVsCost(input: {
+  line: number | null;
+  blended: number | null;
+  isAdd: boolean;
+  acceptedScratch: boolean;
+}): boolean {
+  return input.isAdd && !input.acceptedScratch && lineAtOrBelowBlended(input.line, input.blended);
+}
+
+/**
+ * Walk real prints in time order. A null price is skipped. Equities count only in the regular
+ * session. Check 1 is the first print under the line. Check 2, still under, escalates.
+ */
+export function replayActionableBreachChecks(input: {
+  line: number;
+  marks: BreachPrint[];
+  equity?: boolean;
+  asOf?: string | null;
+  instrument?: string | null;
+}): BreachReplay {
+  const equity = input.equity !== false;
+  const ordered = [...input.marks].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const hits: BreachPrint[] = [];
+  for (const mark of ordered) {
+    if (mark.price === null || !Number.isFinite(mark.price) || !Number.isFinite(Date.parse(mark.at))) continue;
+    if (mark.price > input.line) continue;
+    if (equity && usEquityMarkSession(Date.parse(mark.at)) !== 'rth') continue;
+    hits.push(mark);
+  }
+  const first = hits[0]?.at ?? null;
+  const second = hits[1]?.at ?? null;
+  const asOf = input.asOf ?? second ?? first;
+  const state = breachEscalationState(hits.length, first, asOf);
+  const age = first && asOf ? breachAgeMinutes(first, asOf) : null;
+  const sentence = state.escalated && age !== null && input.instrument
+    ? escalatedBreachSentence(input.instrument, age)
+    : null;
+  return {
+    checks: hits.length,
+    first_seen_at: first,
+    second_seen_at: second,
+    as_of: asOf,
+    breach_age_minutes: age,
+    escalated: state.escalated,
+    escalation: state.escalation,
+    sentence,
+  };
+}
+
 function lot(row: Record<string, unknown>): WatchdogLot {
+  const age = minutes(row.breach_age_minutes);
+  const instrument = str(row.instrument) ?? '';
+  const escalated = flag(row.escalated);
   return {
     steward: str(row.steward) ?? 'unknown',
     lot_table: str(row.lot_table) ?? '',
     lot_id: str(row.lot_id) ?? '',
-    instrument: str(row.instrument) ?? '',
+    instrument,
     unit: str(row.unit) === 'SOL' ? 'SOL' : 'USD',
     thesis_id: str(row.thesis_id),
     invalidation_price: num(row.invalidation_price),
@@ -197,6 +353,12 @@ function lot(row: Record<string, unknown>): WatchdogLot {
     mark_at: str(row.mark_at),
     action_hint: str(row.action_hint),
     mark_session: markSession(str(row.lot_table), str(row.mark_session), str(row.mark_at)),
+    first_seen_at: str(row.first_seen_at),
+    breach_age_minutes: age,
+    check_count: count(row.check_count),
+    escalated,
+    escalation: escalationOf(row.escalation),
+    sentence: str(row.sentence) ?? (escalated && age !== null ? escalatedBreachSentence(instrument, age) : null),
   };
 }
 
@@ -244,6 +406,7 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
   const integrity: Record<string, number> = {};
   const rawIntegrity = record(summary.integrity);
   for (const [key, value] of Object.entries(rawIntegrity ?? {})) integrity[key] = count(value);
+  const breachLots = rows(bag.breaches).map(lot);
   return {
     available: true,
     checked_at: str(summary.checked_at),
@@ -259,9 +422,60 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     exposure: exposureRows(summary.exposure),
     ...learningGaps(summary.learning_gaps),
     unscoreable_decisions: stewardCounts(summary.unscoreable_decisions),
-    breaches: rows(bag.breaches).map(lot),
+    ...escalatedBreaches(summary.breaches_escalated, summary.escalated, breachLots),
+    breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
+  };
+}
+
+function escalatedBreaches(
+  countValue: unknown,
+  listed: unknown,
+  breachLots: WatchdogLot[],
+): Pick<LedgerWatchdog, 'breaches_escalated' | 'escalated'> {
+  const fromSummary: EscalatedBreach[] = [];
+  for (const row of rows(listed)) {
+    const instrument = str(row.instrument);
+    const first = str(row.first_seen_at);
+    const age = minutes(row.breach_age_minutes);
+    const escalation = escalationOf(row.escalation);
+    const lotTable = str(row.lot_table);
+    const lotId = str(row.lot_id);
+    if (!instrument || !first || age === null || !escalation || !lotTable || !lotId) continue;
+    const sentence = str(row.sentence) ?? escalatedBreachSentence(instrument, age);
+    if (!sentence) continue;
+    fromSummary.push({
+      steward: str(row.steward) ?? 'unknown',
+      lot_table: lotTable,
+      lot_id: lotId,
+      instrument,
+      first_seen_at: first,
+      breach_age_minutes: age,
+      escalation,
+      sentence,
+    });
+  }
+  const fromLots: EscalatedBreach[] = breachLots.flatMap((row) => {
+    if (!row.escalated || !row.first_seen_at || row.breach_age_minutes === null || !row.escalation) return [];
+    const sentence = row.sentence ?? escalatedBreachSentence(row.instrument, row.breach_age_minutes);
+    if (!sentence) return [];
+    return [{
+      steward: row.steward,
+      lot_table: row.lot_table,
+      lot_id: row.lot_id,
+      instrument: row.instrument,
+      first_seen_at: row.first_seen_at,
+      breach_age_minutes: row.breach_age_minutes,
+      escalation: row.escalation,
+      sentence,
+    }];
+  });
+  const escalated = fromSummary.length > 0 ? fromSummary : fromLots;
+  const named = num(countValue);
+  return {
+    breaches_escalated: named !== null ? count(countValue) : escalated.length,
+    escalated,
   };
 }
 
@@ -310,6 +524,10 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   learning_gaps: LearningGapCounts;
   /** Decisions that cannot be scored. Does not change `ok` on /api/health. */
   unscoreable_decisions: UnscoreableDecisionCounts;
+  /** Sell-now count. Does not change `ok` on /api/health. */
+  breaches_escalated: number;
+  /** Plain sentences, one per escalated lot. */
+  escalated: string[];
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -324,6 +542,8 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     exposure_over_budget: w.exposure_over_budget,
     learning_gaps: { ...w.learning_gaps },
     unscoreable_decisions: { ...w.unscoreable_decisions },
+    breaches_escalated: w.breaches_escalated,
+    escalated: w.escalated.map((row) => row.sentence),
   };
 }
 

@@ -31,6 +31,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'quantanamo_touch_heartbeat',
     'steward_desk_rules',
+    // sell-now list and the check that records first-seen (67_breach_escalation_line_after_add.sql)
+    'escalated_breaches',
+    'note_actionable_breaches',
     // close lessons on equity lots (position_episodes), ledger delta + loss clamp
     // (supabase/schemas/65_quantanamo_close_lesson.sql)
     'steward_close_lesson',
@@ -60,6 +63,8 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'oddsborne_touch_heartbeat',
     'steward_desk_rules',
+    'escalated_breaches',
+    'note_actionable_breaches',
   ]),
   bandit_worker: new Set([
     'steward_entry_guidance',
@@ -84,6 +89,8 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'bandit_touch_heartbeat',
     'steward_desk_rules',
+    'escalated_breaches',
+    'note_actionable_breaches',
   ]),
 };
 const FN_RE = /^[a-z][a-z0-9_]{2,62}$/;
