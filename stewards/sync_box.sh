@@ -57,6 +57,8 @@ else
     "$here/oddsborne/close_mark.py:$box/oddsborne/close_mark.py"
     "$here/oddsborne/close_sweep.py:$box/oddsborne/close_sweep.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
+    "$here/quantanamo/classify.py:$box/bookmark-ingest/classify.py"
+    "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"
   )
   for pair in "${pairs[@]}"; do
     src="${pair%%:*}"; dst="${pair#*:}"
