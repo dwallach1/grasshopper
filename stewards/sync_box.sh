@@ -55,6 +55,7 @@ else
     "$here/oddsborne/pm_decision_markets.py:$box/oddsborne/pm_decision_markets.py"
     "$here/oddsborne/close_lesson.py:$box/oddsborne/close_lesson.py"
     "$here/oddsborne/close_mark.py:$box/oddsborne/close_mark.py"
+    "$here/oddsborne/close_sweep.py:$box/oddsborne/close_sweep.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
   )
   for pair in "${pairs[@]}"; do

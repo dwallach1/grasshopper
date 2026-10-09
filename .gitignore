@@ -70,3 +70,5 @@ Thumbs.db
 
 # Framework local caches
 .next/
+stewards/oddsborne/close_targets.json
+stewards/oddsborne/.close_targets.*.tmp
