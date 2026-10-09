@@ -4,11 +4,14 @@ import { join } from 'node:path';
 
 import { assembleDeskBookHealth, deskHealthSummary } from './desk-book-health';
 import {
+  addFlagsLineVsCost,
   breachDecidesAtOpen,
   emptyLedgerWatchdog,
+  escalatedBreachSentence,
   exposureLine,
   learningGapHoldingId,
   mapLedgerWatchdog,
+  replayActionableBreachChecks,
   watchdogHealthSummary,
 } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
@@ -220,7 +223,159 @@ describe('session-aware equity breaches (CODA, 2026-10-06)', () => {
   test('every breach reader asks for mark_session', () => {
     const root = join(import.meta.dir, '../../..');
     const fn = readFileSync(join(root, 'supabase/functions/desk-public-rest/index.ts'), 'utf8');
-    expect(fn).toContain('mark_age_minutes,action_hint,mark_session&order=mark_at.desc');
+    expect(fn).toContain('mark_age_minutes,action_hint,mark_session,first_seen_at,breach_age_minutes,check_count,escalated,escalation,sentence&order=mark_at.desc');
     expect(readFileSync(join(import.meta.dir, 'ledger.ts'), 'utf8')).toContain('mark_age_minutes, action_hint, mark_session');
+  });
+});
+
+describe('10/8 NBIS and CODA breach replay', () => {
+  // portfolio_exposure on 2026-10-08, account 7638. 13:49 was still above both lines.
+  const nbis = [
+    { at: '2026-10-08T13:49:09.625052Z', price: 229.145 },
+    { at: '2026-10-08T13:53:02.278126Z', price: 227.72 },
+    { at: '2026-10-08T16:44:06.973851Z', price: 226.59 },
+  ];
+  const coda = [
+    { at: '2026-10-08T13:49:09.625052Z', price: 10.52 },
+    { at: '2026-10-08T13:53:02.278126Z', price: 10.32 },
+    { at: '2026-10-08T16:44:06.973851Z', price: 10.29 },
+  ];
+
+  test('the first regular-session print under the line is not an escalation', () => {
+    const nbisFirst = replayActionableBreachChecks({
+      line: 227.90, marks: nbis.slice(0, 2), instrument: 'NBIS',
+    });
+    const codaFirst = replayActionableBreachChecks({
+      line: 10.35, marks: coda.slice(0, 2), instrument: 'CODA',
+    });
+    expect(nbisFirst).toMatchObject({
+      checks: 1, escalated: false, escalation: null,
+      first_seen_at: '2026-10-08T13:53:02.278126Z', sentence: null,
+    });
+    expect(codaFirst).toMatchObject({
+      checks: 1, escalated: false, first_seen_at: '2026-10-08T13:53:02.278126Z',
+    });
+  });
+
+  test('the second print still under the line escalates, for both lots', () => {
+    const nbisSecond = replayActionableBreachChecks({ line: 227.90, marks: nbis, instrument: 'NBIS' });
+    const codaSecond = replayActionableBreachChecks({ line: 10.35, marks: coda, instrument: 'CODA' });
+    expect(nbisSecond).toMatchObject({
+      checks: 2,
+      escalated: true,
+      escalation: 'next_check',
+      first_seen_at: '2026-10-08T13:53:02.278126Z',
+      second_seen_at: '2026-10-08T16:44:06.973851Z',
+      breach_age_minutes: 171,
+      sentence: 'NBIS has been under its exit line for 2h 51m — sell now',
+    });
+    expect(codaSecond).toMatchObject({
+      checks: 2,
+      escalated: true,
+      escalation: 'next_check',
+      breach_age_minutes: 171,
+      sentence: 'CODA has been under its exit line for 2h 51m — sell now',
+    });
+    expect(escalatedBreachSentence('NBIS', 120)).toBe('NBIS has been under its exit line for 2h — sell now');
+  });
+
+  test('one print escalates only once it is 15 minutes old, and a premarket print is not a check', () => {
+    const inside = replayActionableBreachChecks({
+      line: 227.90,
+      marks: nbis.slice(0, 2),
+      instrument: 'NBIS',
+      asOf: '2026-10-08T14:08:01.000Z',
+    });
+    expect(inside.escalated).toBe(false);
+    const window = replayActionableBreachChecks({
+      line: 227.90,
+      marks: nbis.slice(0, 2),
+      instrument: 'NBIS',
+      asOf: '2026-10-08T14:08:02.278126Z',
+    });
+    expect(window).toMatchObject({ checks: 1, escalated: true, escalation: 'window' });
+    const premarket = replayActionableBreachChecks({
+      line: 10.35,
+      marks: [{ at: '2026-10-06T13:05:32.751992Z', price: 10.31 }],
+      instrument: 'CODA',
+    });
+    expect(premarket).toMatchObject({ checks: 0, escalated: false, first_seen_at: null, sentence: null });
+  });
+
+  test('the 10/6 NBIS add stays quiet; a line at or under the new cost flags unless it is a scratch', () => {
+    expect(addFlagsLineVsCost({
+      line: 227.90, blended: 227.6137, isAdd: true, acceptedScratch: false,
+    })).toBe(false);
+    expect(addFlagsLineVsCost({
+      line: 227.6137, blended: 227.6137, isAdd: true, acceptedScratch: false,
+    })).toBe(true);
+    expect(addFlagsLineVsCost({
+      line: 220.80, blended: 227.6137, isAdd: true, acceptedScratch: false,
+    })).toBe(true);
+    expect(addFlagsLineVsCost({
+      line: 220.80, blended: 227.6137, isAdd: true, acceptedScratch: true,
+    })).toBe(false);
+    expect(addFlagsLineVsCost({
+      line: 220.80, blended: 227.6137, isAdd: false, acceptedScratch: false,
+    })).toBe(false);
+  });
+
+  test('an escalated breach is a sell-now line on the book, and the old counts stay', () => {
+    const watchdog = mapLedgerWatchdog({
+      summary: [{
+        checked_at: '2026-10-08T16:44:06.973851Z',
+        invalidation_breaches: 2,
+        breaches_actionable: 2,
+        breaches_review_at_open: 0,
+        breaches_escalated: 2,
+        escalated: [
+          {
+            steward: 'quantanamo', lot_table: 'position_episodes', lot_id: 'nbis',
+            instrument: 'NBIS', first_seen_at: '2026-10-08T13:53:02.278126Z',
+            breach_age_minutes: 171, escalation: 'next_check',
+            sentence: 'NBIS has been under its exit line for 2h 51m — sell now',
+          },
+        ],
+      }],
+      breaches: [{
+        steward: 'quantanamo', lot_table: 'position_episodes', lot_id: 'nbis', instrument: 'NBIS',
+        unit: 'USD', invalidation_price: 227.90, mark: 226.59,
+        mark_at: '2026-10-08T16:44:06.973851Z', action_hint: 'exit_full_lot', mark_session: 'rth',
+        first_seen_at: '2026-10-08T13:53:02.278126Z', breach_age_minutes: 171,
+        check_count: 2, escalated: true, escalation: 'next_check',
+        sentence: 'NBIS has been under its exit line for 2h 51m — sell now',
+      }],
+    });
+    expect(watchdogHealthSummary(watchdog)).toMatchObject({
+      invalidation_breaches: 2,
+      breaches_actionable: 2,
+      breaches_escalated: 2,
+      escalated: ['NBIS has been under its exit line for 2h 51m — sell now'],
+    });
+    const nowMs = Date.parse('2026-10-08T16:44:06.973851Z');
+    const desk = { watchdog, book: { names: [], observed_at: null }, positions: [], exposures: [], fills: [], intents: [] } as unknown as DeskPayload;
+    const books = assembleStewardBooks(desk, nowMs);
+    expect(books.sections.find((section) => section.slug === 'quantanamo')?.checks[0]).toEqual({
+      id: 'breach-position_episodes-nbis',
+      text: 'NBIS has been under its exit line for 2h 51m — sell now',
+      tone: 'breach',
+    });
+    expect(assembleDeskBookHealth(desk, nowMs).alerts[0]?.kind).toBe('invalidation_breach');
+  });
+
+  test('the migration is the schema file and replays the 10/8 prints', () => {
+    const root = join(import.meta.dir, '../../..');
+    const sql = readFileSync(join(root, 'supabase/schemas/67_breach_escalation_line_after_add.sql'), 'utf8');
+    expect(readFileSync(join(root, 'supabase/migrations/20261009174645_breach_escalation_line_after_add.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain("interval '15 minutes'");
+    expect(sql).toContain('2026-10-08 13:53:02.278126+00');
+    expect(sql).toContain('227.72');
+    expect(sql).toContain('10.32');
+    expect(sql).toContain("has been under its exit line for ");
+    expect(sql).toContain('line_at_or_below_cost');
+    expect(sql).toContain('accepted_scratch');
+    expect(sql).toContain('public.escalated_breaches');
+    expect(sql).toContain('public.note_actionable_breaches');
+    expect(sql).not.toContain('SECURITY DEFINER');
   });
 });

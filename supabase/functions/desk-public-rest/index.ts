@@ -113,7 +113,7 @@ const SCORECARD: Array<[string, string]> = [
 /** Ledger watchdog views (same queries as apps/dashboard/lib/ledger-watchdog.ts). Optional. */
 const WATCHDOG: Array<[string, string]> = [
   ['summary', 'v_ledger_watchdog?select=*'],
-  ['breaches', 'v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint,mark_session&order=mark_at.desc&limit=50'],
+  ['breaches', 'v_invalidation_breaches?select=steward,lot_table,lot_id,instrument,unit,thesis_id,invalidation_price,mark,mark_at,mark_age_minutes,action_hint,mark_session,first_seen_at,breach_age_minutes,check_count,escalated,escalation,sentence&order=mark_at.desc&limit=50'],
   ['missing', 'v_open_lots_missing_invalidation?select=steward,lot_table,lot_id,instrument,unit,thesis_id,mark,mark_at,opened_at&order=opened_at.asc&limit=50'],
   ['issues', 'v_ledger_integrity?select=check_name,severity,steward,ref_table,ref_id,instrument,detail,at&order=at.desc.nullslast&limit=50'],
 ];

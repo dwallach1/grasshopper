@@ -19,6 +19,8 @@ Nothing secret is in this directory. Credentials come from the process environme
 
 The watchdog reads `public.v_ledger_watchdog`, `v_invalidation_breaches`, `v_open_lots_missing_invalidation`, `v_ledger_integrity`, and `v_learning_loop_gaps` (closes with no lesson yet; not a trading breach). `v_ledger_watchdog.unscoreable_decisions` counts enter/skip rows that cannot be scored. That count is not a trading breach, and it does not make `/api/health` not-ok.
 
+On every open-bell and heartbeat, read `public.escalated_breaches('{}')` (steward-rpc name `escalated_breaches`). Each row's `sentence` is the exit: sell that lot now. Do not wait for the invalidation watch. Heartbeats already record the check and return `escalated`. Pass `check_key` `open_bell:<day>` to `note_actionable_breaches` when the open-bell run is the check. An add that leaves the exit line at or below the new blended cost is `line_at_or_below_cost` on the lot and in `v_ledger_integrity`, unless the fill, the intent, or the lot meta records `accepted_scratch` true. That flag does not block the fill.
+
 ## Logging a pass (all stewards)
 
 A skip is scored the same way a taken bet is: one row per market, with the price at the time and enough to judge it later. This does not change sizing, the 80 gate, or whether you trade. It only records the pass.
