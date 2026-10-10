@@ -89,7 +89,9 @@ export function assembleBookPerformance(input: {
   marks?: ReadonlyMap<string, number>;
 }): BookPerformance {
   const snapshots = agenticSnapshots(input.snapshotsNewestFirst);
-  const lots = latestBookExposures(input.exposures);
+  // Zero-quantity rows are exit tombstones, not holdings. A batch of only those means the book is flat,
+  // so NAV, cash and day P/L come from the newest account snapshot instead of the stale exit-time one.
+  const lots = latestBookExposures(input.exposures).filter((lot) => lot.quantity !== 0);
   const asOf = lots[0]?.observed_at ?? null;
   const latest = asOf ? snapshotForBook(snapshots, asOf) : snapshots[0] ?? null;
   const starting = input.starting && isAgenticAccount(input.starting.account_label)
