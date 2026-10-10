@@ -124,12 +124,13 @@ def _call_pg(steward: str, fn: str, args: dict) -> object:
 
 def log_decision(steward: str, *, decision: str, instrument: str, side: str, price,
                  probability=None, expected_move=None, thesis_id=None, reason=None,
-                 source_id=None, decided_at=None, blocked_by=None) -> object:
+                 source_id=None, decided_at=None, blocked_by=None, meta=None) -> object:
     """Record one enter or skip that can be scored later.
 
     A write missing the market, the side, or the price is refused (`refusal:unscoreable`).
     Prediction markets also need `probability` (0 to 1). Equity and meme passes may include
-    `expected_move` as a fraction of price (0.08 = +8%). This does not place or size an order.
+    `expected_move` as a fraction of price (0.08 = +8%). `meta` (a dict) is stored with the decision.
+    This does not place or size an order.
     """
     args = {
         "steward": steward,
@@ -144,6 +145,7 @@ def log_decision(steward: str, *, decision: str, instrument: str, side: str, pri
         "source_id": source_id,
         "decided_at": decided_at,
         "blocked_by": blocked_by,
+        "meta": meta,
     }
     return call(steward, "steward_log_decision", {k: v for k, v in args.items() if v is not None})
 
