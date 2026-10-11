@@ -118,7 +118,27 @@ def fee_per_contract(price: float, theta: float = THETA) -> float:
     return theta * p * (1.0 - p)
 
 
-def compute_edge(my_probability: float, price: float, theta: float = THETA) -> dict:
+def compute_edge(my_probability: float, price: float, theta: float = THETA, maker: bool = False) -> dict:
+    """Post-cost edge per contract. Taker pays THETA*p*(1-p). A resting maker order (participateDontInitiate)
+    receives the venue rebate instead, minus the adverse-selection haircut from maker_fee (desk review
+    2026-10-11), so this gate and the session scripts agree."""
+    if maker:
+        import maker_fee as MF
+        rebate = MF.maker_rebate(price)
+        haircut = MF.HAIRCUT
+        edge = float(my_probability) - float(price) + rebate - haircut
+        return {
+            "formula": "edge_after_costs = my_probability - price + MAKER_REBATE*price*(1-price) - haircut",
+            "theta": theta,
+            "my_probability": float(my_probability),
+            "price": float(price),
+            "fee_per_contract": round(-rebate, 6) + 0.0,
+            "maker_rebate": round(rebate, 6),
+            "haircut": haircut,
+            "haircut_rule": MF.HAIRCUT_INFO.get("rule"),
+            "edge_after_costs": round(edge, 6) + 0.0,
+            "passes": edge > 0,
+        }
     fee = fee_per_contract(price, theta)
     edge = float(my_probability) - float(price) - fee
     return {
@@ -415,7 +435,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
             raise Refusal("input", f"invalidation {invalidation} must be > 0 and below the entry price {price}")
 
         # ---- 2. edge (pure; fail fast before touching venue)
-        edge = compute_edge(my_probability, price, theta)
+        edge = compute_edge(my_probability, price, theta, maker=bool(ORDER_TYPES[order_type][1]))
         summary["edge"] = edge
         check_edge(edge)
 
