@@ -58,6 +58,7 @@ else
     "$here/oddsborne/close_sweep.py:$box/oddsborne/close_sweep.py"
     "$here/oddsborne/weather_pass_log.py:$box/oddsborne/weather_pass_log.py"
     "$here/oddsborne/maker_score.py:$box/oddsborne/maker_score.py"
+    "$here/oddsborne/maker_fee.py:$box/oddsborne/maker_fee.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
     "$here/quantanamo/classify.py:$box/bookmark-ingest/classify.py"
     "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"
