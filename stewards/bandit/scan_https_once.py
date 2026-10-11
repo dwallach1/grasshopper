@@ -302,6 +302,29 @@ if os.environ.get("BANDIT_SCAN_NO_LOG") != "1":
                 cap_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
     except Exception as e:
         cap_logged.append(("*", None, f"import err {type(e).__name__}"))
+# thesis paused (desk 2026-10-09): paper-log every coin that clears all gates as a pass, scored at 4h.
+# Set BANDIT_THESIS_PAUSED=0 to turn off once the thesis is live again.
+PAUSE_TAG = "thesis_paused"
+paper_logged = []
+if os.environ.get("BANDIT_SCAN_NO_LOG") != "1" and os.environ.get("BANDIT_THESIS_PAUSED", "1") == "1":
+    try:
+        import steward_rpc
+        for r in clear:
+            px = (r.get("quote") or {}).get("price_sol")
+            if not px:
+                paper_logged.append((r["symbol"], None, "no_price")); continue
+            try:
+                res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
+                    thesis_id="meme_4h_momentum_clip",
+                    reason=f"{r['symbol']}: cleared every gate but thesis paused (paper forward log); 1h +{r['pc1h']:.1f}%, 6h {r['pc6h']:.1f}%, liq ${r['liq']:,.0f}, impact {r.get('impact_frac')}",
+                    blocked_by=PAUSE_TAG, decided_at=now.astimezone(PT).isoformat(),
+                    source_id=f"scan_https_{now.astimezone(PT).strftime('%Y%m%dT%H%M')}_{r['mint'][:8]}_paused")
+                paper_logged.append((r["symbol"], (res or {}).get("id"), "ok" if (res or {}).get("ok") else res))
+            except Exception as e:
+                paper_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
+    except Exception as e:
+        paper_logged.append(("*", None, f"import err {type(e).__name__}"))
+out["paper_logged"] = paper_logged
 out["cap_blocked"] = [{"symbol": r["symbol"], "mint": r["mint"], "pc1h": r["pc1h"], "price_sol": (r.get("quote") or {}).get("price_sol")} for r in cap_blocked]
 out["cap_logged"] = cap_logged
 with open("/workspace/bandit/_scan_https_out.json", "w") as fh:
@@ -311,3 +334,4 @@ print("CLEAR", len(clear), [r["symbol"] for r in clear])
 print("NEAR", [(r["symbol"], r["all_fails"]) for r in near[:8]])
 print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r in out["standing"]])
 print("CAP_BLOCKED_LOGGED", cap_logged)
+print("PAPER_LOGGED", paper_logged)
