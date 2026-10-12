@@ -7,7 +7,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = public, private, pg_temp
+set search_path to ''
 as $$
 declare
   v_thesis text := nullif(btrim(coalesce(p->>'thesis_id', '')), '');
