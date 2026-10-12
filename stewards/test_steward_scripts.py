@@ -26,6 +26,7 @@ SCRIPTS = {
 EXIT_SCRIPTS = {
     "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "pass_marks.py", "close_lesson.py")],
     "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "pm_decision_markets.py", "close_lesson.py")],
+    "quantanamo": [HERE / "quantanamo" / "pass_marks.py"],
 }
 RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
 SECRET_PATTERNS = [
@@ -99,8 +100,11 @@ class StewardScripts(unittest.TestCase):
             self.assertTrue("steward_rpc" in text or "clip_common" in text or "make_rpc" in text, name)
         self.assertEqual((HERE / "bandit" / "close_lesson.py").read_text(), (HERE / "oddsborne" / "close_lesson.py").read_text(),
                          "keep close_lesson.py identical in both steward dirs")
-        self.assertEqual((HERE / "bandit" / "steward_rpc.py").read_text(), (HERE / "oddsborne" / "steward_rpc.py").read_text(),
+        rpc = (HERE / "bandit" / "steward_rpc.py").read_text()
+        self.assertEqual(rpc, (HERE / "oddsborne" / "steward_rpc.py").read_text(),
                          "keep steward_rpc.py identical in both steward dirs")
+        self.assertEqual(rpc, (HERE / "quantanamo" / "steward_rpc.py").read_text(),
+                         "keep steward_rpc.py identical in the quantanamo dir")
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
         sql = ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text() + FIXES_SQL.read_text()
@@ -174,6 +178,106 @@ class StewardScripts(unittest.TestCase):
         self.assertEqual(len(mig), 1)
         self.assertEqual(mig[0].read_text(), sql)
         self.assertIn("def record_decision_mark(", (HERE / "oddsborne" / "steward_rpc.py").read_text())
+        qnt = (HERE / "quantanamo" / "pass_marks.py").read_text()
+        for needle in ('"steward_pending_decision_marks"', '"steward_record_decision_mark"',
+                       "financialdatasets_prices_day", "financialdatasets_prices_snapshot",
+                       "no_price_reason", "NO_PRICE_GRACE", "QUANTANAMO_PASS_MARKS", "def sweep_quietly"):
+            self.assertIn(needle, qnt, needle)
+        self.assertNotIn("interpolat", qnt.split('"""', 2)[2].lower(), "pass_marks must not interpolate prices")
+        self.assertIn('call(STEWARD, "steward_pending_decision_marks", {"steward": STEWARD', qnt)
+        sync = (HERE / "sync_box.sh").read_text()
+        doctor = (HERE / "doctor.sh").read_text()
+        for needle in ('"$here/quantanamo/pass_marks.py:$box/quantanamo/pass_marks.py"',
+                       '"$here/quantanamo/steward_rpc.py:$box/quantanamo/steward_rpc.py"',
+                       '"$here/quantanamo/requirements.txt:$box/quantanamo/requirements.txt"',
+                       "stewards=(bandit oddsborne quantanamo)",
+                       '"$box/quantanamo/"*) mkdir -p "$(dirname "$dst")"'):
+            self.assertIn(needle, sync, needle)
+        row = next(ln for ln in doctor.splitlines() if ln.strip().startswith('"quantanamo|'))
+        for name in ("pass_marks.py", "steward_rpc.py", "requirements.txt", "requests"):
+            self.assertIn(name, row, name)
+        allow = edge[edge.index("quantanamo_worker: new Set(["):]
+        allow = allow[:allow.index("])")]
+        self.assertIn("'steward_pending_decision_marks'", allow)
+        self.assertIn("'steward_record_decision_mark'", allow)
+
+    def test_quantanamo_pass_marks_uses_real_closes_only(self) -> None:
+        # The daily close is the session close, never the open, a zero-volume bar, or a pre-horizon print.
+        import importlib.util
+        from datetime import datetime, timedelta, timezone
+        from decimal import Decimal
+        from unittest import mock
+        path = HERE / "quantanamo" / "pass_marks.py"
+        spec = importlib.util.spec_from_file_location("qnt_pass_marks", path)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+        sql_days = re.findall(r"\('(\d{4}-\d{2}-\d{2})', '(holiday|early_close)'",
+                              (HERE.parent / "supabase" / "schemas" / "29_us_market_calendar.sql").read_text())
+        self.assertEqual(dict(sql_days), mod.NYSE_CALENDAR)
+        horizon = datetime(2026, 10, 12, 20, 0, tzinfo=timezone.utc)
+        later = horizon + timedelta(hours=2)
+        mark = mod.select_daily_mark([
+            {"ticker": "AAA", "time": "2026-10-09", "open": 1, "close": 9, "volume": 100},
+            {"ticker": "AAA", "time": "2026-10-12", "open": 10, "close": 12.5, "volume": 100},
+            {"ticker": "OTHER", "time": "2026-10-12", "open": 1, "close": 99, "volume": 100},
+        ], horizon, later, "AAA")
+        self.assertEqual(mark["price"], Decimal("12.5"))
+        self.assertEqual(mark["source"], "financialdatasets_prices_day")
+        self.assertEqual(mod.iso_z(mark["observed_at"]), "2026-10-12T20:00:00Z")
+        self.assertEqual(mark["meta"]["field"], "close")
+        early = mod.session_close_at(__import__("datetime").date(2026, 11, 27))
+        self.assertEqual(mod.iso_z(early), "2026-11-27T18:00:00Z")
+        self.assertIsNone(mod.session_close_at(__import__("datetime").date(2026, 11, 26)))
+        self.assertIsNone(mod.session_close_at(__import__("datetime").date(2026, 10, 10)))
+        skipped = mod.select_daily_mark([
+            {"ticker": "AAA", "time": "2026-10-12", "open": 10, "close": 12.5, "volume": 0},
+            {"ticker": "AAA", "time": "2026-10-13", "open": 12, "close": 13, "volume": 5},
+        ], horizon, horizon + timedelta(days=2), "AAA")
+        self.assertEqual(skipped["price"], Decimal("13"))
+        self.assertEqual(mod.iso_z(skipped["observed_at"]), "2026-10-13T20:00:00Z")
+        self.assertNotIn("price", mod.select_daily_mark([
+            {"ticker": "AAA", "time": "2026-10-09", "close": 9, "volume": 100},
+        ], horizon, later, "AAA"))
+        def stamp(iso: str) -> dict:
+            at = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            return {"time": iso, "time_milliseconds": int(at.timestamp() * 1000)}
+        stale = {"price": 4, **stamp("2026-10-12T19:00:00Z")}
+        self.assertTrue(mod.snapshot_mark(stale, horizon, later).get("retry"))
+        live = {"price": 12.25, **stamp("2026-10-13T15:00:00Z")}
+        snap = mod.snapshot_mark(live, horizon, horizon + timedelta(days=1))
+        self.assertEqual(snap["source"], "financialdatasets_prices_snapshot")
+        self.assertGreaterEqual(snap["observed_at"], horizon)
+        row = {"decision_id": "d1", "instrument": "AAA", "horizon_at": "2026-10-12T20:00:00Z"}
+        with mock.patch.object(mod, "load_daily", return_value={"none": "no bar yet"}), \
+             mock.patch.object(mod, "load_snapshot", side_effect=AssertionError("snapshot during grace")):
+            early_pass = mod.price_pass(row, "k", horizon + timedelta(hours=1))
+        self.assertEqual(early_pass["action"], "retry")
+        with mock.patch.object(mod, "load_daily", side_effect=mod.SourceError("timeout")), \
+             mock.patch.object(mod, "load_snapshot", side_effect=AssertionError("snapshot after a transport error")):
+            erred = mod.price_pass(row, "k", horizon + timedelta(days=2))
+        self.assertEqual(erred["action"], "retry")
+        with mock.patch.object(mod, "load_daily", return_value={"none": "no bar"}), \
+             mock.patch.object(mod, "load_snapshot", return_value={"none": "no quote"}):
+            empty = mod.price_pass(row, "k", horizon + mod.NO_PRICE_GRACE + timedelta(minutes=1))
+        self.assertEqual(empty["action"], "no_price")
+        args = mod.record_args("d1", empty)
+        self.assertNotIn("price", args)
+        self.assertIn("no_price_reason", args)
+        with mock.patch.object(mod, "load_daily", return_value={"none": "no bar"}), \
+             mock.patch.object(mod, "load_snapshot", return_value=snap):
+            late = mod.price_pass(row, "k", horizon + mod.NO_PRICE_GRACE + timedelta(minutes=1))
+        self.assertEqual(late["action"], "mark")
+        self.assertEqual(late["source"], "financialdatasets_prices_snapshot")
+        marked = mod.record_args("d1", late)
+        self.assertEqual(marked["kind"], "horizon")
+        self.assertEqual(marked["steward"], "quantanamo")
+        self.assertNotIn("no_price_reason", marked)
+        with mock.patch.dict(os.environ, {"QUANTANAMO_PASS_MARKS": "0"}):
+            self.assertEqual(mod.sweep_quietly(), {"skipped": "QUANTANAMO_PASS_MARKS=0"})
+        with mock.patch.dict(os.environ, {"QUANTANAMO_PASS_MARKS": "1"}), \
+             mock.patch.object(mod, "sweep", side_effect=RuntimeError("boom")):
+            self.assertIn("boom", mod.sweep_quietly()["error"])
 
     def test_decision_sides_and_markets_contract(self) -> None:
         # 59: prediction rows carry price_terms and are scored in YES terms; a logged pass gets a market row,
@@ -286,7 +390,8 @@ class StewardScripts(unittest.TestCase):
 
     def test_requirements_are_pinned(self) -> None:
         direct = {"bandit": ("requests", "base58", "solders", "psycopg", "psycopg-binary"),
-                  "oddsborne": ("polymarket-us", "psycopg", "psycopg-binary")}
+                  "oddsborne": ("polymarket-us", "psycopg", "psycopg-binary"),
+                  "quantanamo": ("requests",)}
         for steward, needs in direct.items():
             lines = [ln.strip() for ln in (HERE / steward / "requirements.txt").read_text().splitlines()]
             pins = [ln for ln in lines if ln and not ln.startswith("#")]

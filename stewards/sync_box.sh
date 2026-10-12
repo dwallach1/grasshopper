@@ -25,7 +25,7 @@ for arg in "$@"; do
     *) echo "usage: sync_box.sh [--env] [--force]" >&2; exit 2 ;;
   esac
 done
-stewards=(bandit oddsborne)
+stewards=(bandit oddsborne quantanamo)
 
 # 1. scripts
 branch="$(git -C "$here" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
@@ -63,9 +63,16 @@ else
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
     "$here/quantanamo/classify.py:$box/bookmark-ingest/classify.py"
     "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"
+    "$here/quantanamo/pass_marks.py:$box/quantanamo/pass_marks.py"
+    "$here/quantanamo/steward_rpc.py:$box/quantanamo/steward_rpc.py"
+    "$here/quantanamo/requirements.txt:$box/quantanamo/requirements.txt"
   )
   for pair in "${pairs[@]}"; do
     src="${pair%%:*}"; dst="${pair#*:}"
+    # QUANTANAMO has no pre-existing box dir. Create the minimal runtime path on sync.
+    case "$dst" in
+      "$box/quantanamo/"*) mkdir -p "$(dirname "$dst")" ;;
+    esac
     [ -d "$(dirname "$dst")" ] || { echo "skip $dst (no box dir)"; continue; }
     if [ -f "$dst" ] && cmp -s "$src" "$dst"; then
       cp "$src" "$dst.synced"

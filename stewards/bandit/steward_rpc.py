@@ -10,7 +10,7 @@ same ones the direct connection had.
 
 STEWARD_DB_TRANSPORT=pg runs the same functions through db_connect (psycopg) where raw Postgres works.
 STEWARD_RPC_URL overrides the endpoint. The password is never printed or logged.
-Keep this file identical in stewards/bandit and stewards/oddsborne (test_steward_scripts checks).
+Keep this file identical in stewards/bandit, stewards/oddsborne and stewards/quantanamo (test_steward_scripts checks).
 """
 from __future__ import annotations
 
