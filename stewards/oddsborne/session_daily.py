@@ -286,6 +286,10 @@ def sell_whole_position(c, slug, outcome, qty, print_px, inval, pos_id):
     }
     out = {"slug": slug, "outcome": outcome, "qty": qty_i, "price": px, "inval": inval,
            "pos_id": pos_id, "params": params}
+    if DRY_RUN:  # --dry-run: no orders.create, no ledger close
+        out["decision"] = "DRY_RUN_SKIPPED"
+        (OUT / f"session_raw_{SESSION}_sell_would_write.json").write_text(json.dumps(out, indent=2, default=str))
+        return out
     try:
         preview = c.orders.preview({"request": params})
         time.sleep(0.35)
@@ -326,7 +330,7 @@ def sell_whole_position(c, slug, outcome, qty, print_px, inval, pos_id):
         out["decision"] = "SELL_FAILED"
         return out
     # Close ledger only if fill confirmed
-    if out.get("decision") == "SELL_FILLED":
+    if out.get("decision") == "SELL_FILLED" and not DRY_RUN:
         try:
             conn = connect()
             cur = conn.cursor()
@@ -438,7 +442,18 @@ def check_exits(c, open_lots, pos_by_slug):
     return exits, covered
 
 
+class _DryRunNoWrite(Exception):
+    """Raised inside ledger-write blocks under --dry-run to take the no-write path."""
+
+
 def write_pnl_safe(cash, equity, notes, payload):
+    if DRY_RUN:  # --dry-run writes nothing: no pm_pnl, heartbeat or desk_agents
+        as_of = datetime.now(timezone.utc)
+        path = OUT / f"session_raw_{SESSION}_pnl_would_write.json"
+        path.write_text(json.dumps({"cash": cash, "equity": equity, "notes": notes, "payload": payload,
+                                    "as_of": as_of.isoformat()}, indent=2, default=str))
+        print("DRY_RUN: would write pm_pnl + heartbeat + desk_agents ->", path, flush=True)
+        return "DRY_RUN", "DRY_RUN", None, as_of
     try:
         conn = connect()
     except Exception as e:
@@ -1016,12 +1031,24 @@ def main():
     # 7) Enter sports candidates with post-fee edge > 0 (skip COVERED)
     sports_enters = []
     sports_enter = None
-    enterable = [x for x in cands if x.get("market") not in covered_slugs]
+    not_entered = []  # gate-clearing picks not entered, with reason (read by session_passlog.py)
+    # one ticket per game (keyed by game/event, not market slug): skip a game already held/resting and never
+    # take two picks (or both sides) of one game in this run; skipped picks are logged as same_game passes
+    _cov_events = MF.held_game_keys(comps, covered_slugs)
+    enterable = list(cands)
+    if enterable and (cash or 0) < 5:
+        not_entered += [{"market": x["market"], "outcome": x.get("outcome") or "yes",
+                         "reason": f"blocked_cash (spendable {cash} < 5)"} for x in enterable]
     if enterable and (cash or 0) >= 5:
-        # sort by edge desc; enter top ones while cash allows (cap 3 this session)
+        # sort by edge desc; no entry-count cap: edge >= MIN_EDGE + steward_sizing_guidance (pm_enter) are the limits
         enterable = sorted(enterable, key=lambda x: x.get("post_fee_maker") or -9, reverse=True)
-        for pick in enterable[:3]:
+        for pick in enterable:
+            if MF.same_game_skip(pick, _cov_events, covered_slugs):
+                print("SKIP_SAME_GAME", pick["market"], pick.get("outcome"), flush=True)
+                not_entered.append({"market": pick["market"], "outcome": pick.get("outcome") or "yes", "reason": "same_game"})
+                continue
             print("ENTER_ATTEMPT", pick["market"], pick["post_fee_maker"], flush=True)
+            _cov_events.add(MF.game_key(pick))  # one pick per game per run, placed or not
             se = try_enter(pick, cash)
             sports_enters.append(se)
             sports_enter = se  # last/primary for backward compat
@@ -1071,6 +1098,8 @@ def main():
                  "weather": [{k: w.get(k) for k in ("city","day","decision","reason","mode","mode_mid","nws","hmax","obsmax","belief_weighed")} for w in weather]}
     note_scan = note_skip = hb2 = None
     try:
+        if DRY_RUN:  # --dry-run writes nothing: route to the would-write file below, no blocker
+            raise _DryRunNoWrite()
         conn = connect()
         cur = conn.cursor()
         cur.execute(
@@ -1092,7 +1121,10 @@ def main():
         conn.commit()
         conn.close()
     except Exception as e:
-        print("pm_notes_offline", type(e).__name__, str(e)[:160], flush=True)
+        if not isinstance(e, _DryRunNoWrite):
+            print("pm_notes_offline", type(e).__name__, str(e)[:160], flush=True)
+        else:
+            print("DRY_RUN: would write pm_notes scan+skip + heartbeat", flush=True)
         pending = {
             "scan": {"thesis_id": THESIS_WX, "note_type": "scan", "title": f"Morning full-book + weather scan {TODAY}",
                      "body": scan_body, "decision": None, "meta": scan_meta},
@@ -1100,12 +1132,17 @@ def main():
                      "body": "\n".join(skip_bits)[:8000], "decision": None, "meta": skip_meta},
             "error": f"{type(e).__name__}: {e}",
         }
-        path = OUT / f"session_raw_{SESSION}_notes_pending.json"
-        path.write_text(json.dumps(pending, indent=2, default=str))
-        note_scan = f"PENDING_MCP:scan:{path.name}"
-        note_skip = f"PENDING_MCP:skip:{path.name}"
-        hb2 = hb if isinstance(hb, str) else "PENDING_HB"
-        blockers.append(f"pm_notes via MCP pending file: {type(e).__name__}")
+        if isinstance(e, _DryRunNoWrite):
+            path = OUT / f"session_raw_{SESSION}_notes_would_write.json"
+            path.write_text(json.dumps(pending, indent=2, default=str))
+            note_scan = note_skip = hb2 = "DRY_RUN"
+        else:
+            path = OUT / f"session_raw_{SESSION}_notes_pending.json"
+            path.write_text(json.dumps(pending, indent=2, default=str))
+            note_scan = f"PENDING_MCP:scan:{path.name}"
+            note_skip = f"PENDING_MCP:skip:{path.name}"
+            hb2 = hb if isinstance(hb, str) else "PENDING_HB"
+            blockers.append(f"pm_notes via MCP pending file: {type(e).__name__}")
 
     entered = any(
         isinstance(se.get("live"), dict) and se["live"].get("decision") == "PLACED"
@@ -1131,7 +1168,7 @@ def main():
         "desk": [str(x) for x in desk] if desk else None,
         "n_seen": p2.get("n_seen"), "n_near": p2.get("n_near"),
         "sports_quoted": quoted, "candidates": cands, "best": best,
-        "sports_enter": sports_enter, "sports_enters": sports_enters,
+        "sports_enter": sports_enter, "sports_enters": sports_enters, "not_entered": not_entered,
         "covered_slugs": sorted(covered_slugs),
         "pos_detail": [
             {**{k: d.get(k) for k in ("lot_id","slug","outcome","qty","avg","inv","print","action","why")},

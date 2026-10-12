@@ -182,3 +182,22 @@ def conservative_fair(side: str, power_yes: float, shin_yes: float, prop_yes: fl
 
 if __name__ == "__main__":
     print(json.dumps(HAIRCUT_INFO, indent=1))
+
+
+# --- same-game de-dup (one ticket per game; keyed by game/event, never by market slug alone) ---
+def game_key(cand: dict):
+    """Game identity for de-dup: the venue event slug; falls back to the market slug when no event is known."""
+    return cand.get("event") or ("market:" + str(cand.get("market")))
+
+
+def held_game_keys(comps, covered_slugs) -> set:
+    """Games already held or resting: every comp whose market is covered maps to its game."""
+    covered = set(covered_slugs)
+    keys = {game_key(x) for x in comps if x.get("market") in covered}
+    keys |= {"market:" + str(m) for m in covered}  # a covered market with no comp is still one game
+    return keys
+
+
+def same_game_skip(pick: dict, taken_games: set, covered_slugs) -> bool:
+    """True when this pick is on a game already held/resting or already picked in this run."""
+    return game_key(pick) in taken_games or pick.get("market") in set(covered_slugs)
