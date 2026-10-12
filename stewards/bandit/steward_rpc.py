@@ -10,7 +10,7 @@ same ones the direct connection had.
 
 STEWARD_DB_TRANSPORT=pg runs the same functions through db_connect (psycopg) where raw Postgres works.
 STEWARD_RPC_URL overrides the endpoint. The password is never printed or logged.
-Keep this file identical in stewards/bandit and stewards/oddsborne (test_steward_scripts checks).
+Keep this file identical in stewards/bandit, stewards/oddsborne and stewards/quantanamo (test_steward_scripts checks).
 """
 from __future__ import annotations
 
@@ -70,9 +70,23 @@ def url() -> str:
 
 def _password(steward: str) -> str:
     name = f"{steward.upper()}_WORKER_DB_PASSWORD"
-    if os.environ.get(name):  # QUANTANAMO's isn't in either load_secrets NAMES list
+    if os.environ.get(name):
         return os.environ[name]
-    from load_secrets import require
+    # Same file load_secrets reads (env STEWARD_SECRETS_FILE, else box-secrets). Read it directly so a
+    # steward without load_secrets.py (QUANTANAMO) or whose name isn't in its NAMES still resolves.
+    path = os.environ.get("STEWARD_SECRETS_FILE") or "/home/box/sand-data/box-secrets.json"
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+        inner = data.get("secrets", data) if isinstance(data, dict) else {}
+        if isinstance(inner, dict) and inner.get(name):
+            return str(inner[name])
+    except (OSError, ValueError):
+        pass
+    try:
+        from load_secrets import require
+    except ImportError:
+        raise RuntimeError(f"missing secrets: {name} (set it in env or {path})") from None
     return require(name)[name]
 
 

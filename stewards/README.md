@@ -47,20 +47,17 @@ A pass is an instrument the steward did not buy, so its own lot marks never pric
 When no source has any price past the horizon (a rugged or delisted coin), send `no_price_reason` instead of a price: the decision is flagged `unscoreable` with `resolve_status = no_price` and that reason. Never send an estimate.
 
 - **BANDIT** does this itself: `bandit/pass_marks.py` runs at the end of `mark_clip.py` and `pnl_snapshot.py` (or by hand, `--dry-run` to preview). For each pass from `steward_pending_decision_marks` it takes the earliest of: Jupiter Price v3 (BANDIT's own entry/pass price source; live, so only near the horizon when the run is on time) and the close of the first traded GeckoTerminal 1-minute candle at or after the horizon in the mint's deepest SOL pool. `BANDIT_PASS_MARKS=0` turns the automatic sweep off.
-- **QUANTANAMO** has the same gap for tickers it did not hold or trade (its marks come from `portfolio_exposure` / `broker_fills`). It records the mark itself, over the Supabase connection it already uses (runs as `postgres`; `quantanamo_worker` over steward-rpc has the same two functions). `horizon_at` is the close of the 5th regular NYSE session whose close is after `decided_at` (a pass logged during Tuesday's session counts Tuesday's close as the first), so `observed_at` = that `horizon_at` (16:00 ET, 13:00 ET on an early close) and the price is that day's Robinhood daily-bar close:
+- **QUANTANAMO** has the same gap for tickers it did not hold or trade (its marks come from `portfolio_exposure` / `broker_fills`). `quantanamo/pass_marks.py` fills it. There is no QUANTANAMO scheduled Python entry in this repo: the bookmark scripts and the Cloudflare research cron do not price passes. After the Agentic heartbeat / end of scan, once `horizon_at` has passed, run it on the box (or call `pass_marks.sweep_quietly()` from that path). `QUANTANAMO_PASS_MARKS=0` turns the sweep off.
+
+```bash
+/workspace/quantanamo/.venv/bin/python /workspace/quantanamo/pass_marks.py --dry-run
+/workspace/quantanamo/.venv/bin/python /workspace/quantanamo/pass_marks.py
+```
+
+`sync_box.sh` creates `/workspace/quantanamo` (venv + `steward_rpc.py`, the same file BANDIT and ODDSBORNE use). For each row from `steward_pending_decision_marks` with `steward=quantanamo` it reads Financial Datasets (`https://api.financialdatasets.ai`, the provider `workers/knowledge` already uses; key `FINANCIAL_DATASETS_API_KEY`). The mark is the **close** of the first daily bar (`GET /prices`, `interval=day`) whose NYSE session close is at or after `horizon_at`. The bar's `time` is only the session date; `observed_at` is that close (16:00 America/New_York, 13:00 on an early close). A live `GET /prices/snapshot` quote is written only when its own timestamp is at or after the horizon and the daily source has affirmatively returned no traded close for 18 hours. A horizon mark is insert-once, so the script waits out that grace and lets the session close be the mark. A zero-volume bar is skipped. When both sources affirmatively have no price past that grace, the script sends `no_price_reason`. A network error is retried on the next run.
 
 ```sql
--- due now: scoreable passes past their horizon with no price yet
 select jsonb_array_elements(public.steward_pending_decision_marks('{"steward":"quantanamo"}'::jsonb));
--- a real 5th-session close (observed_at = horizon_at from the list)
-select public.steward_record_decision_mark(jsonb_build_object(
-  'steward', 'quantanamo', 'kind', 'horizon', 'decision_id', '<decision_id>',
-  'price', 12.34, 'observed_at', '2026-10-12T20:00:00Z', 'source', 'robinhood_5th_session_close',
-  'meta', jsonb_build_object('bar', 'day', 'bar_date', '2026-10-12')));
--- no daily bar at all (halted, delisted): flagged unscoreable with the reason, never a guess
-select public.steward_record_decision_mark(jsonb_build_object(
-  'steward', 'quantanamo', 'kind', 'horizon', 'decision_id', '<decision_id>',
-  'no_price_reason', 'Robinhood returned no 2026-10-12 daily bar for <TICKER>'));
 ```
 - **ODDSBORNE prices are the logged side's own** (`supabase/schemas/59_decision_sides_markets.sql`): a `steward_log_decision` row with side `no` carries the NO price and P(no) (`meta.price_terms = 'side'`); rows split from `pm_notes` are YES terms (`'yes'`). The resolver converts to YES terms before scoring, so cost and Brier are right either way. A slug with no `pm_markets` row gets a `watch` stub when the pass is logged; `oddsborne/pm_decision_markets.py` (also at the end of `pm_pnl_snapshot.py`) fills venue ids from Polymarket US and records the venue's settlement (long side settled at exactly 1 or 0, `MARKET_STATUS_RESOLVED`) for markets nobody holds. `ODDSBORNE_DECISION_MARKETS=0` turns that sweep off.
 - **ODDSBORNE closing-line value**: record the side's book mid shortly before the event starts. `public.v_decision_clv` gives `clv = close_mid - entry_price` (positive = the line moved toward the side after the decision) and `fair_minus_close`; `v_decision_clv_summary` aggregates by steward and enter/skip. It is separate from settlement (`resolved_outcome`, `counterfactual_pnl`, Brier). A close mark is **provisional** when `meta.provisional = true` or it was observed more than 60 minutes before `event_start_at` (`supabase/schemas/66_clv_provisional_close_marks.sql`): provisional marks are left out of `v_decision_clv` and the summary's `n` / means, counted in `v_decision_clv_summary.provisional_excluded`, and listed with `provisional_reason` (`flagged` / `early`) in `v_decision_clv_all`. The pre-game mark replaces the row's whole `meta`, so send `provisional: false` (or no flag) with it.
@@ -242,7 +239,7 @@ A rebuild takes about 10 s, and no network is needed once the cache exists.
 
 ## The box copies
 
-`/workspace/bandit/{live_trade_clip,paper_bank20,clip_common,mark_clip,exit_clip,pnl_snapshot,close_lesson}.py`, `/workspace/oddsborne/{pm_enter,pm_exit,pm_watch,pm_fills_sync,pm_pnl_snapshot,close_lesson}.py` and both `steward_rpc.py` files are **identical copies** of these files, so existing invocations keep working. They are copies rather than symlinks because the box's git checkout changes branch.
+`/workspace/bandit/{live_trade_clip,paper_bank20,clip_common,mark_clip,exit_clip,pnl_snapshot,close_lesson}.py`, `/workspace/oddsborne/{pm_enter,pm_exit,pm_watch,pm_fills_sync,pm_pnl_snapshot,close_lesson}.py` and `/workspace/quantanamo/{pass_marks,steward_rpc}.py` are **identical copies** of these files. `steward_rpc.py` is one file, copied into all three steward dirs. They are copies rather than symlinks because the box's git checkout changes branch. `sync_box.sh` creates `/workspace/quantanamo` when it copies; BANDIT and ODDSBORNE already have box dirs.
 - The scripts put the directory they are invoked from first on `sys.path`. On the box, they therefore keep using the box's own `load_secrets.py` and `db_connect.py`.
 - After a merge, run `bash stewards/sync_box.sh` (it also repairs the venvs; see above). It refuses to overwrite a box copy that has local edits which aren't in the repo, so edit here, then sync.
 

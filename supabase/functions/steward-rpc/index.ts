@@ -25,7 +25,7 @@ import postgres from 'npm:postgres@3.4.5';
 const ALLOWED: Record<string, ReadonlySet<string>> = {
   quantanamo_worker: new Set([
     'steward_log_decision',
-    // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql)
+    // horizon marks for logged equity passes (supabase/schemas/58_decision_marks.sql; quantanamo/pass_marks.py)
     'steward_pending_decision_marks',
     'steward_record_decision_mark',
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
