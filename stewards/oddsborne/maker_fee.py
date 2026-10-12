@@ -84,5 +84,101 @@ def post_fee_maker_gate(fair, price, haircut: float | None = None):
     return round(raw - (HAIRCUT if haircut is None else haircut), 6)
 
 
+# ---------------------------------------------------------------------------
+# Two-way de-vig (2026-10-12): proportional no-vig overstates underdogs (favourite-longshot bias).
+# The GATE uses conservative_fair(): the fair giving the LOWER edge for the side being bought,
+# i.e. min(proportional, power, Shin) of that side's fair.
+# ---------------------------------------------------------------------------
+def am_to_implied(american) -> float | None:
+    try:
+        a = float(str(american).replace("+", "").replace("\u2212", "-"))
+    except Exception:
+        return None
+    if a == 0:
+        return None
+    return 100.0 / (a + 100.0) if a > 0 else (-a) / (-a + 100.0)
+
+
+def _bisect(f, lo, hi, n=200):
+    flo = f(lo)
+    for _ in range(n):
+        mid = 0.5 * (lo + hi)
+        fm = f(mid)
+        if (fm > 0) == (flo > 0):
+            lo, flo = mid, fm
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def devig_proportional(pa: float, pb: float):
+    s = pa + pb
+    return pa / s, pb / s
+
+
+def devig_power(pa: float, pb: float):
+    """Find k with pa**k + pb**k = 1 (k>=1 when overround>0)."""
+    if pa + pb <= 1.0:
+        return devig_proportional(pa, pb)
+    k = _bisect(lambda k: pa ** k + pb ** k - 1.0, 1.0, 50.0)
+    a, b = pa ** k, pb ** k
+    return a / (a + b), b / (a + b)
+
+
+def devig_shin(pa: float, pb: float):
+    """Shin (1993) insider-share model, solved for z so the two fairs sum to 1."""
+    s = pa + pb
+    if s <= 1.0:
+        return devig_proportional(pa, pb)
+
+    def fair(pi, z):
+        return (((z * z + 4.0 * (1.0 - z) * pi * pi / s) ** 0.5) - z) / (2.0 * (1.0 - z))
+
+    z = _bisect(lambda z: fair(pa, z) + fair(pb, z) - 1.0, 0.0, 0.999)
+    a, b = fair(pa, z), fair(pb, z)
+    return a / (a + b), b / (a + b)
+
+
+def devig_methods(ml: dict) -> dict:
+    """ml: {team: {'american': .., 'p': implied?}} (two-way). Returns {team: {'prop','power','shin'}} or {}."""
+    items = []
+    for k, v in (ml or {}).items():
+        p = v.get("p") if isinstance(v, dict) else None
+        if p is None and isinstance(v, dict):
+            p = am_to_implied(v.get("american"))
+        if p is None and not isinstance(v, dict):
+            p = am_to_implied(v)
+        if p is not None and 0 < float(p) < 1:
+            items.append((k, float(p)))
+    if len(items) != 2:
+        return {}
+    (ka, pa), (kb, pb) = items
+    out = {ka: {}, kb: {}}
+    for name, fn in (("prop", devig_proportional), ("power", devig_power), ("shin", devig_shin)):
+        a, b = fn(pa, pb)
+        out[ka][name], out[kb][name] = round(a, 6), round(b, 6)
+    return out
+
+
+def conservative_fair(side: str, power_yes: float, shin_yes: float, prop_yes: float | None = None) -> dict:
+    """Fair for buying `side` ('yes'|'no') given the YES team's power/Shin fairs.
+    YES buy -> min(prop, power, shin) of YES; NO buy -> min(1-prop, 1-power, 1-shin) = 1 - max(...).
+    prop_yes should always be passed; if omitted only power/Shin are compared.
+    Returns {'prop','power','shin','used','method'} all expressed for the side bought."""
+    side = (side or "").lower()
+    if side == "yes":
+        pw, sh = power_yes, shin_yes
+        pr = prop_yes
+    elif side == "no":
+        pw, sh = 1.0 - power_yes, 1.0 - shin_yes
+        pr = None if prop_yes is None else 1.0 - prop_yes
+    else:
+        raise ValueError(f"side must be yes/no, got {side!r}")
+    cands = [(pw, "power"), (sh, "shin")] + ([] if pr is None else [(pr, "prop")])
+    used, method = min(cands, key=lambda t: t[0])  # never more generous than any of prop/power/Shin
+    return {"prop": None if pr is None else round(pr, 6), "power": round(pw, 6), "shin": round(sh, 6),
+            "used": round(used, 6), "method": method}
+
+
 if __name__ == "__main__":
     print(json.dumps(HAIRCUT_INFO, indent=1))
