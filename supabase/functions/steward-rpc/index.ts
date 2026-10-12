@@ -86,6 +86,8 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // horizon marks for logged passes (supabase/schemas/58_decision_marks.sql; pass_marks.py)
     'steward_pending_decision_marks',
     'steward_record_decision_mark',
+    // read-only thesis pass list for edge2_path_score.py (supabase/schemas/69_bandit_decision_passes.sql)
+    'bandit_decision_passes',
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'bandit_touch_heartbeat',
     'steward_desk_rules',
