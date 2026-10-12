@@ -372,9 +372,12 @@ for r in elig:
         edge2_logged.append((r["symbol"], None, "dedupe_4h")); continue
     q = r.get("quote")
     if not q:
-        o = jup_order(r["mint"]); dec = int(r["decimals"] or 6); out_raw = o.get("outAmount")
-        q = {"price_sol": float((Decimal(o.get("inAmount") or QUOTE_LAMPORTS) / Decimal(10**9)) / (Decimal(out_raw) / Decimal(10) ** dec)) if out_raw else None,
-             "priceImpactPct": o.get("priceImpactPct")}
+        try:
+            o = jup_order(r["mint"]); dec = int(r["decimals"] or 6); out_raw = o.get("outAmount")
+            q = {"price_sol": float((Decimal(o.get("inAmount") or QUOTE_LAMPORTS) / Decimal(10**9)) / (Decimal(out_raw) / Decimal(10) ** dec)) if out_raw and Decimal(out_raw) > 0 else None,
+                 "priceImpactPct": o.get("priceImpactPct")}
+        except Exception as e:
+            edge2_logged.append((r["symbol"], None, f"quote_err {type(e).__name__}")); continue
     px = q.get("price_sol")
     if not px:
         edge2_logged.append((r["symbol"], None, "no_price")); continue
