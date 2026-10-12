@@ -38,3 +38,8 @@ No parameter changes after results. If it fails, it fails.
 Status: paper only.
 Promotion test: after 20 paper passes (closed paper trades of this rule), compute the mean net return per trade after costs with the 2 largest winners removed (n = 18). If that mean is > 0, the rule goes live at full guidance size. Otherwise it is not promoted.
 No changes to this bar after paper results start.
+
+## Addendum 2026-10-12 PT: exits and paper scoring (added after the backtest runs)
+- Exits are corrected to **sell all at +50%**, as in the full-exit rerun (`edge2_fullexit_results.md`) and the live clip rule. Kill stays at -40% (if both are hit in the same bar, the kill counts) and the 4h time stop is unchanged. The "sell half at +50%" text in the Exits section above described the first run (`edge2_results.md`) only.
+- The paper promotion bar (above and in `edge2_promotion_bar.md`) is scored by `stewards/bandit/edge2_path_score.py`, which simulates this path on 5m bars with 2.0 pp costs. It is not scored by the ledger's plain 4h-mark counterfactual.
+- This addendum was written after both backtest runs. It changes no backtest result.
