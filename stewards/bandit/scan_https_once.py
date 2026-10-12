@@ -325,6 +325,81 @@ if os.environ.get("BANDIT_SCAN_NO_LOG") != "1" and os.environ.get("BANDIT_THESIS
     except Exception as e:
         paper_logged.append(("*", None, f"import err {type(e).__name__}"))
 out["paper_logged"] = paper_logged
+# edge2 meme_pullback_reclaim (GRASSHOPPER 2026-10-12, PAPER ONLY): check every eligible coin's last closed 5m bars
+# against the pre-registered rule in /workspace/bandit/research/edge2_prereg.md and log triggers as skips (4h horizon,
+# computed by the ledger). Never trades. Dedupe: a coin logs at most once per 4h (state file below).
+E2_TAG = "paper_only"; E2_STATE = "/workspace/bandit/_edge2_dedupe.json"; GT = "https://api.geckoterminal.com/api/v2"
+def gt_get(path, params=None):
+    for i in range(4):
+        try:
+            r = requests.get(f"{GT}/{path}", params=params or {}, headers={"accept": "application/json"}, timeout=30)
+        except Exception:
+            time.sleep(2); continue
+        if r.status_code == 429: time.sleep(6 * (i + 1)); continue
+        return r.json() if r.ok else None
+    return None
+def edge2_check(mint):
+    """Return (triggered, info). Rule exactly per edge2_prereg.md, on the top-reserve pool's closed 5m USD bars."""
+    pools = gt_get(f"networks/solana/tokens/{mint}/pools", {"page": 1})
+    pl = (pools or {}).get("data") or []
+    if not pl: return False, "no_pool"
+    pool = max(pl, key=lambda x: float((x.get("attributes") or {}).get("reserve_in_usd") or 0))["attributes"]["address"]
+    time.sleep(2.1)
+    d = gt_get(f"networks/solana/pools/{pool}/ohlcv/minute", {"aggregate": 5, "limit": 100, "currency": "usd", "token": mint})
+    time.sleep(2.1)
+    b = sorted(((d or {}).get("data") or {}).get("attributes", {}).get("ohlcv_list") or [], key=lambda r: r[0])
+    b = [r for r in b if r[0] + 300 <= now.timestamp()]  # closed bars only
+    if len(b) < 73: return False, f"bars {len(b)} < 73"
+    t = len(b) - 1; w = b[t - 71:t + 1]; cl = [r[4] for r in w]; P = max(cl); pi = cl.index(P)
+    if pi == 0 or len(w) - 1 - pi < 6: return False, "peak too recent/at window start"
+    L = min(cl[:pi]); c = b[t][4]; vol = sum(r[5] for r in w); run = P / L - 1; dd = 1 - c / P
+    info = dict(pool=pool, bar_ts=b[t][0], run_pct=round(run * 100, 1), pullback_pct=round(dd * 100, 1),
+                peak_age_bars=len(w) - 1 - pi, vol6h_usd=round(vol), reclaim=c > b[t - 1][2])
+    ok = run >= 0.40 and 0.6 * P <= c <= 0.8 * P and c > b[t - 1][2] and vol >= 50000
+    return ok, info
+edge2_logged = []; edge2_checked = 0
+try: e2_state = json.load(open(E2_STATE))
+except Exception: e2_state = {}
+_no_log = os.environ.get("BANDIT_SCAN_NO_LOG") == "1"
+for r in elig:
+    if r["liq"] < MIN_LIQ or r["age_h"] is None or r["age_h"] >= MAX_AGE_H: continue  # live liquidity/age floors
+    edge2_checked += 1
+    try: ok, info = edge2_check(r["mint"])
+    except Exception as e: ok, info = False, f"err {type(e).__name__}"
+    if not ok: continue
+    last = e2_state.get(r["mint"])
+    if last and now.timestamp() - last < 4 * 3600:
+        edge2_logged.append((r["symbol"], None, "dedupe_4h")); continue
+    q = r.get("quote")
+    if not q:
+        try:
+            o = jup_order(r["mint"]); dec = int(r["decimals"] or 6); out_raw = o.get("outAmount")
+            q = {"price_sol": float((Decimal(o.get("inAmount") or QUOTE_LAMPORTS) / Decimal(10**9)) / (Decimal(out_raw) / Decimal(10) ** dec)) if out_raw and Decimal(out_raw) > 0 else None,
+                 "priceImpactPct": o.get("priceImpactPct")}
+        except Exception as e:
+            edge2_logged.append((r["symbol"], None, f"quote_err {type(e).__name__}")); continue
+    px = q.get("price_sol")
+    if not px:
+        edge2_logged.append((r["symbol"], None, "no_price")); continue
+    stamp = now.astimezone(PT).strftime('%Y%m%dT%H%M')
+    if _no_log:
+        edge2_logged.append((r["symbol"], None, f"dry_run would_log px={px} {info}")); continue
+    try:
+        import steward_rpc
+        res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
+            thesis_id="meme_pullback_reclaim",
+            reason=f"{r['symbol']}: edge2 pullback-reclaim trigger (paper only): run +{info['run_pct']}% in 6h, pullback {info['pullback_pct']}%, peak {info['peak_age_bars']} bars ago, reclaim bar, 6h vol ${info['vol6h_usd']:,}; impact {q.get('priceImpactPct')}",
+            blocked_by=E2_TAG, decided_at=now.astimezone(PT).isoformat(),
+            source_id=f"scan_https_{stamp}_{r['mint'][:8]}_edge2", meta={"edge2": info, "horizon": "4h"})
+        okr = (res or {}).get("ok")
+        if okr: e2_state[r["mint"]] = now.timestamp()
+        edge2_logged.append((r["symbol"], (res or {}).get("id"), "ok" if okr else res))
+    except Exception as e:
+        edge2_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
+if not _no_log:
+    with open(E2_STATE, "w") as fh: json.dump(e2_state, fh)
+out["edge2_checked"] = edge2_checked
+out["edge2_logged"] = edge2_logged
 out["cap_blocked"] = [{"symbol": r["symbol"], "mint": r["mint"], "pc1h": r["pc1h"], "price_sol": (r.get("quote") or {}).get("price_sol")} for r in cap_blocked]
 out["cap_logged"] = cap_logged
 with open("/workspace/bandit/_scan_https_out.json", "w") as fh:
@@ -335,3 +410,4 @@ print("NEAR", [(r["symbol"], r["all_fails"]) for r in near[:8]])
 print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r in out["standing"]])
 print("CAP_BLOCKED_LOGGED", cap_logged)
 print("PAPER_LOGGED", paper_logged)
+print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
