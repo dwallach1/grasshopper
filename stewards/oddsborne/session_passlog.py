@@ -2,8 +2,8 @@
 via steward_rpc.log_decision.
 Usage: session_passlog.py [--session am|pm] [--date YYYY-MM-DD] [--extra-market SLUG ...] [--existing SLUG:SIDE ...] [--log]
   --date defaults to ODDS_DATE or today in America/New_York; --session defaults to am.
-  --extra-market: markets the sweep missed, probed directly. --existing: held/resting sides that count toward the
-  3-entry cap and are not passes (verify them live first). Never invents prices: a side with no live BBO or no Bovada fair is not logged."""
+  --extra-market: markets the sweep missed, probed directly. --existing: held/resting sides that are not passes
+  (verify them live first). Gate-clearing sides that were not entered are logged as passes with an explicit reason. Never invents prices: a side with no live BBO or no Bovada fair is not logged."""
 import argparse, json, os, sys, time, importlib.util
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -97,19 +97,46 @@ for r in rows:
 cands = [r for r in rows if r.get("cand")]
 print("CANDIDATES", len(cands), flush=True)
 logged = []
-# Entries were placed by the session run (cap 3). Do not log the entered sides as skips;
-# any other gate-clearing side is a deliberate pass because the 3-entry session cap is reached.
+# Entries were placed by the session run (no entry-count cap). Entered/held sides are not passes.
+# Every other side is logged as a pass; a gate-clearing one gets an explicit not-entered reason.
 _res = json.loads((OUT / f"session_raw_{SESSION}_result.json").read_text())
-ENTERED = {(se["pick"]["market"], se.get("outcome") or se["pick"].get("outcome") or "yes")
-           for se in (_res.get("sports_enters") or []) if (se.get("live") or {}).get("decision") == "PLACED"}
+_enters = [se for se in (_res.get("sports_enters") or []) if isinstance(se, dict) and se.get("pick")]
+def _side(se): return se.get("outcome") or se["pick"].get("outcome") or "yes"
+ENTERED = {(se["pick"]["market"], _side(se)) for se in _enters if (se.get("live") or {}).get("decision") == "PLACED"}
 EXISTING = {tuple(x.rsplit(":", 1)) for x in ARGS.existing}
-CAP_REACHED = len(ENTERED | EXISTING) >= 3
 ENTERED = ENTERED | EXISTING  # held/resting sides are not passes
-print("ENTERED", sorted(ENTERED), "CAP_REACHED", CAP_REACHED, flush=True)
+NOT_ENTERED = {(x["market"], x.get("outcome") or "yes"): x.get("reason") for x in (_res.get("not_entered") or [])}
+MKT_GAME = {cp["market"]: S.MF.game_key(cp) for cp in prev["comps"]}  # de-dup is per game, not per market slug
+def _game(m): return MKT_GAME.get(m) or S.MF.game_key({"market": m})
+ENTERED_GAMES = {_game(m) for m, _ in ENTERED}
+ATTEMPTS = {(se["pick"]["market"], _side(se)): se for se in _enters}
+print("ENTERED", sorted(ENTERED), flush=True)
+
+
+def pass_reason(r):
+    """Why a gate-clearing side was not entered."""
+    k = (r["market"], r["side"])
+    if k in NOT_ENTERED:
+        return NOT_ENTERED[k]
+    if _game(r["market"]) in ENTERED_GAMES:
+        return "same_game"
+    se = ATTEMPTS.get(k)
+    if se is not None:
+        j = se.get("live") or se.get("dry") or {}
+        ref = j.get("refused") or {}
+        if j.get("decision") == "REFUSED" and ref.get("gate") == "sizing":
+            return f"guidance_cap ({str(ref.get('reason'))[:120]})"
+        if j.get("decision") == "REFUSED":
+            return f"refused_{ref.get('gate')} ({str(ref.get('reason'))[:120]})"
+        if se.get("blocker"):
+            return f"blocked_{se['blocker']}"
+        if se.get("live") is None:
+            return "not_live (dry-run only / ODDS_LIVE unset)"
+        return f"not_placed ({j.get('decision')})"
+    return "not_in_session_candidates (cleared only on re-quote)"
+
+
 if LOG:
-    uncovered = [r for r in cands if (r["market"], r["side"]) not in ENTERED]
-    if uncovered and not CAP_REACHED:
-        print("REFUSE_LOG: candidates present; handle entries first", flush=True); sys.exit(2)
     for r in rows:
         if r.get("error"): continue
         if (r["market"], r["side"]) in ENTERED:
@@ -119,7 +146,7 @@ if LOG:
                   f"post-fee maker raw {r['pf_maker_raw']} (rebate {S.MAKER_REBATE}) gate {r['pf_maker']} "
                   f"(haircut {r['maker_haircut']}) taker {r['pf_taker']} (bar 0.01 on gate); Bovada {r['bovada']} "
                   f"start {r['bovada_start']} = gameStartTime {r['gameStartTime']}"
-                  + ("; CLEARED gate but passed: session 3-entry cap reached (no greed)" if r.get("cand") else ""))
+                  + (f"; CLEARED gate but not entered: {pass_reason(r)}" if r.get("cand") else ""))
         try:
             res = steward_rpc.log_decision("oddsborne", decision="skip", instrument=r["market"], side=r["side"],
                                            price=r["maker"], probability=r["fair"], thesis_id="sports_devig_maker_edge",
