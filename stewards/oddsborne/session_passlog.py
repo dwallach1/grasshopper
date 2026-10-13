@@ -148,6 +148,25 @@ def pass_reason(r):
     return "not_in_session_candidates (cleared only on re-quote)"
 
 
+def blocked_by_for(r):
+    """Stable gate key. The ledger stores this as meta.blocked_by."""
+    if not r.get("cand"):
+        return "edge_below_gate"
+    why = pass_reason(r) or ""
+    if why == "same_game":
+        return "same_game"
+    if why.startswith("guidance_cap"):
+        return "guidance_cap"
+    if why.startswith("not_live"):
+        return "not_live"
+    if why.startswith("not_placed"):
+        return "not_placed"
+    if why.startswith("refused_") or why.startswith("blocked_"):
+        gate = why.split(" ", 1)[0].split("_", 1)[-1]
+        return gate or "cleared_not_entered"
+    return "cleared_not_entered"
+
+
 if LOG:
     for r in rows:
         if r.get("error"): continue
@@ -162,7 +181,7 @@ if LOG:
         try:
             res = steward_rpc.log_decision("oddsborne", decision="skip", instrument=r["market"], side=r["side"],
                                            price=r["maker"], probability=r["fair"], thesis_id="sports_devig_maker_edge",
-                                           reason=reason, source_id=sid)
+                                           reason=reason, source_id=sid, blocked_by=blocked_by_for(r))
         except Exception as e:
             res = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
         logged.append({"m": r["market"], "side": r["side"], "price": r["maker"], "p": r["fair"],

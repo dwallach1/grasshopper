@@ -4143,6 +4143,42 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.score-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.score-gates li {
+  margin: 0;
+  color: var(--ink-2, var(--text-2));
+  font-size: 11px;
+}
+
+.score-gates b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-gates-more {
+  margin: 0;
+}
+
+.score-gates-more summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-3, var(--text-3));
+  font-size: 11px;
+}
+
+.score-gates-more summary::-webkit-details-marker {
+  display: none;
+}
+
 .thesis-card-meta {
   display: flex;
   flex-wrap: wrap;

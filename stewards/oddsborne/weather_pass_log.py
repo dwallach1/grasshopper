@@ -305,7 +305,8 @@ def log_rows(rows):
     for r in rows:
         args = {"steward": STEWARD, "decision": "skip", "instrument": r["instrument"], "side": r["side"],
                 "price": r["price"], "probability": r["probability"], "thesis_id": THESIS, "reason": r["reason"],
-                "source_id": r["source_id"], "decided_at": r["decided_at"], "meta": r["meta"]}
+                "source_id": r["source_id"], "decided_at": r["decided_at"], "meta": r["meta"],
+                "blocked_by": "weather_forecast_gate"}
         try:
             res = steward_rpc.call(STEWARD, "steward_log_decision", args)
         except Exception as e:

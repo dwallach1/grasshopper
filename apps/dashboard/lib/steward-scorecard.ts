@@ -3,6 +3,7 @@
  * through the v_steward_* and v_thesis_scorecard views. Measurement only: nothing
  * here feeds sizing, gates, or orders. Missing rows stay missing (no invented marks).
  */
+import { gateVerdict, type GateReportRow } from './gate-report';
 import type { MoneyUnit } from './money-units';
 
 export const SCORECARD_THIN_N = 10;
@@ -177,10 +178,12 @@ export type StewardScorecardPayload = {
   trend: StewardTrendRow[];
   theses: ThesisScoreRow[];
   forecast: ForecastSkillRow[];
+  /** Per-gate skip outcomes from v_gate_report. Empty when the view is missing. */
+  gates: GateReportRow[];
 };
 
 export function emptyStewardScorecard(): StewardScorecardPayload {
-  return { stewards: [], weekly: [], trend: [], theses: [], forecast: [] };
+  return { stewards: [], weekly: [], trend: [], theses: [], forecast: [], gates: [] };
 }
 
 type Bag = Record<string, unknown>;
@@ -353,6 +356,24 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         excluded_no_book: int(row.excluded_no_book),
       }];
     }),
+    gates: rows(bag.gates).flatMap((row) => {
+      const steward = str(row.steward)?.toLowerCase() ?? '';
+      const gate = str(row.gate);
+      if (!steward || !gate) return [];
+      return [{
+        steward,
+        gate,
+        skips: int(row.skips),
+        scored: int(row.scored),
+        would_have_won: int(row.would_have_won),
+        would_have_won_rate: num(row.would_have_won_rate),
+        mean_outcome_pct: num(row.mean_outcome_pct),
+        verdict: gateVerdict(str(row.verdict)),
+        thesis_id: str(row.thesis_id),
+        at_stake_pnl: num(row.at_stake_pnl),
+        unit: unit(row.unit),
+      }];
+    }),
   };
 }
 
@@ -390,6 +411,8 @@ export type StewardScorecardCard = {
   /** Trades not priced from venue fills (cash delta, settlement, manual, unpriced). */
   not_from_fills: number;
   trend: StewardTrendRow | null;
+  /** This steward's gates, fullest samples first. */
+  gates: GateReportRow[];
 };
 
 function weekLabel(weekStart: string): string {
@@ -458,6 +481,9 @@ export function assembleStewardScorecard(
       : null,
     not_from_fills: row.not_from_fills,
     trend: payload.trend.find((item) => item.steward === slug) ?? null,
+    gates: payload.gates
+      .filter((item) => item.steward === slug)
+      .sort((a, b) => b.scored - a.scored || b.skips - a.skips || a.gate.localeCompare(b.gate)),
   };
 }
 

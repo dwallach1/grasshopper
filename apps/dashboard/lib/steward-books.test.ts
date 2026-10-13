@@ -191,5 +191,6 @@ describe('Books plain words', () => {
     expect(beliefKindText('playbook_rule')).toBe('rule');
     expect(beliefKindText('outcome_rescore')).toBe('re-scored on results');
     expect(beliefKindText('trade_close_lesson')).toBe('lesson from a close');
+    expect(beliefKindText('gate_outcome')).toBe('what the skips did');
   });
 });
