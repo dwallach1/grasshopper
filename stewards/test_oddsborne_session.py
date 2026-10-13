@@ -96,5 +96,101 @@ class DryRunGuardTests(unittest.TestCase):
             self.assertLess(body.index("if DRY_RUN"), body.index("connect()"))
 
 
+_dspec = importlib.util.spec_from_file_location("discover", HERE / "oddsborne" / "discover.py")
+DISC = importlib.util.module_from_spec(_dspec)
+_dspec.loader.exec_module(DISC)
+
+
+class _NS:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+class FakeClient:
+    """Read-only Polymarket US surface used by discover.py; records calls."""
+    def __init__(self, events):
+        self.calls = []
+
+        def query(params):
+            self.calls.append(("search", params))
+            return {"events": events}
+
+        def lst(params):
+            self.calls.append(("list", params))
+            return {"events": events if not params.get("offset") else []}
+
+        def by_slug(slug):
+            self.calls.append(("get", slug))
+            return None
+        self.search = _NS(query=query)
+        self.events = _NS(list=lst, retrieve_by_slug=by_slug)
+
+
+GAME = {"slug": "mlb-nyy-bos-2026-10-14", "title": "NYY @ BOS", "endDate": "2026-10-15T03:00:00Z",
+        "markets": [{"slug": "aec-mlb-nyy-bos-2026-10-14"}]}
+FED = {"slug": "usfed-fomc-2026-10-28", "title": "Fed", "endDate": "2026-10-28T18:00:00Z", "markets": []}
+
+
+class DiscoverTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from datetime import datetime, timezone
+        self.tmp = Path(tempfile.mkdtemp())
+        self.now = datetime(2026, 10, 14, 13, 0, tzinfo=timezone.utc)
+        self.kw = dict(raw_dir=self.tmp, now=self.now, sleep=lambda s: None, log=lambda *a, **k: None)
+
+    def test_missing_output_runs_discovery_and_writes_dated_file(self):
+        fc = FakeClient([GAME, FED])
+        out = DISC.ensure("2026-10-14", "am", client=fc, **self.kw)
+        self.assertEqual(out["n_seen"], 2)
+        self.assertEqual(out["n_sports"], 1)
+        self.assertTrue((self.tmp / "sweep_20261014_p2.json").exists())
+        self.assertTrue(all(k in ("search", "list", "get") for k, _ in fc.calls))  # read-only endpoints only
+        self.assertIn(("get", "temp-laxhigh-2026-10-15"), fc.calls)
+
+    def test_pm_session_uses_pm_file(self):
+        DISC.ensure("2026-10-14", "pm", client=FakeClient([GAME]), **self.kw)
+        self.assertTrue((self.tmp / "sweep_20261014_pm_p2.json").exists())
+
+    def test_fresh_output_reused_stale_or_empty_regenerated(self):
+        from datetime import timedelta
+        DISC.ensure("2026-10-14", "am", client=FakeClient([GAME]), **self.kw)
+        fc = FakeClient([GAME, FED])
+        self.assertEqual(DISC.ensure("2026-10-14", "am", client=fc, **self.kw)["n_seen"], 1)
+        self.assertEqual(fc.calls, [])
+        later = dict(self.kw, now=self.now + timedelta(hours=7))
+        self.assertEqual(DISC.ensure("2026-10-14", "am", client=fc, **later)["n_seen"], 2)
+        (self.tmp / "sweep_20261014_p2.json").write_text('{"n_seen": 0, "events": {}, "as_of": "2026-10-14T13:00:00Z"}')
+        self.assertIn("empty", DISC.staleness(self.tmp / "sweep_20261014_p2.json", self.now))
+
+    def test_zero_sports_with_games_is_error(self):
+        out = DISC.ensure("2026-10-14", "am", client=FakeClient([FED]), **self.kw)
+        self.assertEqual(out["n_sports"], 0)
+        err = DISC.discovery_error(out, 0, 5)
+        self.assertTrue(err and err.startswith("ERROR"))
+        self.assertIsNone(DISC.discovery_error(out, 0, 0))
+        self.assertIsNone(DISC.discovery_error(out, 3, 5))
+
+    def test_zero_overall_is_error(self):
+        out = DISC.ensure("2026-10-14", "am", client=FakeClient([]), **self.kw)
+        self.assertTrue(DISC.discovery_error(out, 0, 0).startswith("ERROR"))
+        self.assertTrue(DISC.discovery_error({}, 0, 0).startswith("ERROR"))
+
+    def test_sessions_wire_discovery_and_error(self):
+        for path in SESSIONS:
+            text = path.read_text()
+            self.assertIn("DISC.ensure(TODAY", text)
+            self.assertIn("DISC.discovery_error(", text)
+            self.assertIn('"ERROR" if discovery_error', text)
+            self.assertIn("sys.exit(main())", text)
+        self.assertIn("ERROR passlog", (HERE / "oddsborne" / "session_passlog.py").read_text())
+        self.assertIn("deepdive_raw/discover.py", (HERE / "sync_box.sh").read_text())
+
+    def test_sports_filter(self):
+        self.assertTrue(DISC.is_sports_event("nfl-dal-phi-2026-10-18", {}))
+        self.assertFalse(DISC.is_sports_event("nfl-most-passing-yards", {}))
+        self.assertFalse(DISC.is_sports_event("usfed-2026", {}))
+
+
 if __name__ == "__main__":
     unittest.main()

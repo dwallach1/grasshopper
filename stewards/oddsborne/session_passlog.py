@@ -32,6 +32,18 @@ LOG = ARGS.log
 SESSION = f"{DSTAMP}_{ARGS.session}"
 
 prev = json.loads((OUT / f"session_raw_{SESSION}_sports_dated.json").read_text())
+DISCOVERY_ERROR = prev.get("discovery_error")
+_res_path = OUT / f"session_raw_{SESSION}_result.json"
+if not DISCOVERY_ERROR and _res_path.exists():
+    DISCOVERY_ERROR = json.loads(_res_path.read_text()).get("discovery_error")
+if DISCOVERY_ERROR or not prev.get("comps"):
+    _msg = DISCOVERY_ERROR or f"ERROR: session {SESSION} has zero date-matched sports comps; nothing to pass-log (check discovery)"
+    print("!" * 80, file=sys.stderr, flush=True)
+    print(f"ERROR passlog {SESSION}: {_msg}", file=sys.stderr, flush=True)
+    print("!" * 80, file=sys.stderr, flush=True)
+    print(f"ERROR passlog {SESSION}: {_msg}", flush=True)
+    if DISCOVERY_ERROR:
+        sys.exit(2)
 markets = []
 for cp in prev["comps"]:
     if cp["market"] not in markets:

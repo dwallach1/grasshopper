@@ -51,6 +51,7 @@ TOMORROW = (datetime.fromisoformat(TODAY) + timedelta(days=1)).date().isoformat(
 DSTAMP = TODAY.replace("-", "")
 H.TODAY = TODAY
 H.TOMORROW = TOMORROW
+import discover as DISC  # deepdive_raw/discover.py: read-only market discovery (synced)
 import maker_fee as MF  # /workspace/oddsborne/maker_fee.py: taker fee, maker rebate, adverse-selection haircut
 THETA = MF.THETA  # TAKER fee coefficient (0.0695): fee = THETA*p*(1-p)
 MAKER_REBATE = MF.MAKER_REBATE  # maker rebate (0.0125), received not paid: rebate = MAKER_REBATE*p*(1-p)
@@ -732,7 +733,13 @@ def main():
     nfl = parse_bovada_ts(OUT / f"session_raw_{SESSION}_bovada_nfl.json")
     print("bovada mlb", len(mlb), "nfl", len(nfl), flush=True)
 
-    p2 = json.loads(P2.read_text()) if P2.exists() else {}
+    # Discovery: reuse the dated sweep output if fresh, else run discovery in-process (read-only API; local file only).
+    try:
+        p2 = DISC.ensure(TODAY, "am", client=c) or {}
+    except Exception as e:
+        blockers.append(f"discovery: {type(e).__name__}: {str(e)[:160]}")
+        print("ERROR discovery failed", type(e).__name__, str(e)[:200], file=sys.stderr, flush=True)
+        p2 = json.loads(P2.read_text()) if P2.exists() else {}
     events = p2.get("events") or {}
 
     # Build sports event index for matching
@@ -757,6 +764,13 @@ def main():
             continue
         sports_ev.append(ev)
     print("sports events window", len(sports_ev), flush=True)
+    discovery_error = DISC.discovery_error(p2, len(sports_ev), len(mlb) + len(nfl), P2.name)
+    if discovery_error:
+        blockers.insert(0, discovery_error)
+        print("!" * 80, file=sys.stderr, flush=True)
+        print(discovery_error, file=sys.stderr, flush=True)
+        print("!" * 80, file=sys.stderr, flush=True)
+        print(discovery_error, flush=True)
 
     # 4) Sports comps — DATE-CHECKED matcher (10-05 lesson): Bovada startTime must match the
     #    market's gameStartTime (±3h) and fair is matched to venue marketSides long team; score YES and NO.
@@ -916,7 +930,7 @@ def main():
             if not matched_any:
                 print(f"  NO-DATE-MATCH {g.get('desc')} start={bov_start}", flush=True)
     print("date_mismatch_discarded", len(date_mismatch), flush=True)
-    (OUT / f"session_raw_{SESSION}_sports_dated.json").write_text(json.dumps({"comps": comps, "date_mismatch": date_mismatch}, indent=2, default=str))
+    (OUT / f"session_raw_{SESSION}_sports_dated.json").write_text(json.dumps({"comps": comps, "date_mismatch": date_mismatch, "discovery_error": discovery_error, "n_sports_events": len(sports_ev)}, indent=2, default=str))
     if os.environ.get("SPORTS_ONLY"):
         print("SPORTS_ONLY_DONE", flush=True)
         return
@@ -1181,7 +1195,8 @@ def main():
         "pm_notes": {"scan": note_scan, "skip": note_skip},
         "fee_probe": fee_info, "theta": THETA, "maker_rebate": MAKER_REBATE, "maker_haircut": MAKER_HAIRCUT_INFO,
         "blockers": blockers, "due_postmortems": due_postmortems,
-        "outcome": ("TRADE" if entered else ("EXIT" if sold_any else "NO TRADE")),
+        "outcome": ("ERROR" if discovery_error and not (entered or sold_any) else ("TRADE" if entered else ("EXIT" if sold_any else "NO TRADE"))),
+        "discovery_error": discovery_error, "n_sports_events": len(sports_ev),
         "notify_user": True,  # morning mandate + full-book
         "sold_any": sold_any,
     }
@@ -1199,6 +1214,9 @@ def main():
     lines = []
     lines.append(f"# ODDSBORNE Daily Session — {TODAY}")
     lines.append("")
+    if discovery_error:
+        lines.append(f"> **{discovery_error}** — not a clean NO TRADE; fix discovery and rerun.")
+        lines.append("")
     lines.append(f"**As of:** ~{datetime.now(PT).strftime('%-I:%M %p PT')} (API/ledger {as_of.isoformat()})")
     lines.append("**Mandate:** Full-book liquid US sweep; hunt concentrated post-fee edge. Midway/LAX-SFO cool-side = beliefs not bans. No 8¢ bar.")
     lines.append(f"**Heartbeat:** `{hb2}`")
@@ -1357,9 +1375,13 @@ def main():
         "entered": entered, "sold_any": sold_any,
         "exits": [{k: d.get(k) for k in ("slug","action","print","inv")} for d in exits],
         "covered": sorted(covered_slugs),
-        "blockers": blockers,
+        "blockers": blockers, "discovery_error": discovery_error,
     }, default=str), flush=True)
+    if discovery_error:
+        print(discovery_error, file=sys.stderr, flush=True)
+        return 2
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
