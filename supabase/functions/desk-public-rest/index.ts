@@ -19,6 +19,7 @@ const ALLOWED_TABLES = new Set([
   // Outcome ledger scorecard (security_invoker views; read-only).
   'v_steward_scorecard', 'v_steward_scorecard_weekly', 'v_steward_trend', 'v_thesis_scorecard',
   'v_decision_brier_vs_market',
+  'v_gate_report',
   // Ledger watchdog backstop (security_invoker views; read-only).
   'v_ledger_watchdog', 'v_invalidation_breaches', 'v_open_lots_missing_invalidation', 'v_ledger_integrity',
 ]);
@@ -108,6 +109,7 @@ const SCORECARD: Array<[string, string]> = [
   ['trend', 'v_steward_trend?select=steward,recent_n,prior_n,recent_expectancy,prior_expectancy,thin,direction'],
   ['theses', 'v_thesis_scorecard?select=thesis_id,name,steward,stated_confidence,results_confidence,outcome_implied_confidence,confidence_gap,priced_trades,wins,miscalibrated,thin,backtest_tests,backtest_trades,backtest_weight,backtest_mean_ret,backtest_effect,calibration_basis,expected_wins,expected_win_rate,calibration_trades,calibration_p&order=priced_trades.desc'],
   ['forecast', 'v_decision_brier_vs_market?select=steward,decision,thesis_id,all_theses,n,brier,market_brier,brier_gap,skill,thin,excluded_no_book&order=steward.asc,decision.asc,all_theses.desc,thesis_id.asc.nullslast'],
+  ['gates', 'v_gate_report?select=steward,gate,skips,scored,would_have_won,would_have_won_rate,mean_outcome_pct,verdict,thesis_id,at_stake_pnl,unit&order=steward.asc,scored.desc,skips.desc,gate.asc'],
 ];
 
 /** Ledger watchdog views (same queries as apps/dashboard/lib/ledger-watchdog.ts). Optional. */

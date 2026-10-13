@@ -301,6 +301,7 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain('closed_at,invalidation_price,invalidation_note,untagged:meta->>untagged&order=updated_at.desc&limit=200');
     expect(fn).toContain("['summary', 'v_ledger_watchdog?select=*']");
     expect(fn).toContain("'v_decision_brier_vs_market'");
+    expect(fn).toContain("'v_gate_report'");
     expect(fn).toContain("['forecast', 'v_decision_brier_vs_market?");
     expect(fn).toContain('      watchdog,\n');
     expect(fn).not.toContain('source_count=gte.2');

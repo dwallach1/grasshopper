@@ -1,5 +1,6 @@
 'use client';
 
+import { GATE_REPORT_OPEN, gateReportParts, type GateReportRow } from '../../lib/gate-report';
 import type { MoneyUnit } from '../../lib/money-units';
 import { formatUsd, signedAmount } from '../../lib/money-units';
 import {
@@ -29,6 +30,17 @@ export function compactSigned(value: number, unit: MoneyUnit): string {
 function signed(value: number | null, unit: MoneyUnit): string {
   if (value === null) return 'not in ledger';
   return signedAmount(value, unit);
+}
+
+function GateLine({ row }: { row: GateReportRow }) {
+  const parts = gateReportParts(row);
+  return (
+    <li>
+      {parts.before}
+      {parts.pctText && <b className={pnlClass(parts.pct)}>{parts.pctText}</b>}
+      {parts.after}
+    </li>
+  );
 }
 
 function thesisLabel(row: ThesisScoreRow): string {
@@ -149,6 +161,26 @@ export function StewardScorecard({
           )}
           {passed.missing && <>{passed.lead ? ' · ' : ''}{passed.missing}</>}
         </p>
+      )}
+
+      {card.gates.length > 0 && (
+        <>
+          <ul className="score-gates" data-gates aria-label="Skipped trades">
+            {card.gates.slice(0, GATE_REPORT_OPEN).map((row) => (
+              <GateLine key={row.gate} row={row} />
+            ))}
+          </ul>
+          {card.gates.length > GATE_REPORT_OPEN && (
+            <details className="score-gates-more">
+              <summary>{card.gates.length - GATE_REPORT_OPEN} more</summary>
+              <ul className="score-gates">
+                {card.gates.slice(GATE_REPORT_OPEN).map((row) => (
+                  <GateLine key={row.gate} row={row} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
     </section>
   );

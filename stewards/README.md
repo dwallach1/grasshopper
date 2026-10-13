@@ -74,10 +74,13 @@ record_decision_mark("oddsborne", kind="close", decision_id="<decision_candidate
 ```python
 from steward_rpc import log_decision
 log_decision("oddsborne", decision="skip", instrument="aec-nfl-ari-sf-2026-09-27",
-             side="yes", price="0.225", probability="0.2413", reason="under the 8c bar")
+             side="yes", price="0.225", probability="0.2413", reason="under the 8c bar",
+             blocked_by="edge_below_gate")
 log_decision("bandit", decision="skip", instrument="<mint>", side="long",
              price="0.000012", expected_move="0.2", thesis_id="meme_4h_momentum_clip")
 ```
+
+ODDSBORNE passes `blocked_by` (`edge_below_gate`, `devig_gate`, `same_game`, `weather_forecast_gate`, `morning_rollup`, and the entry locks). If a skip is written without one, the ledger derives it from the reason and stores `unlabeled` when it cannot.
 
 QUANTANAMO, on the connection it already uses for the ledger:
 

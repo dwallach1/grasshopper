@@ -360,6 +360,7 @@ export function beliefKindText(kind: string): string {
   if (value === 'playbook_rule') return 'rule';
   if (value === 'outcome_rescore') return 're-scored on results';
   if (value === 'trade_close_lesson') return 'lesson from a close';
+  if (value === 'gate_outcome') return 'what the skips did';
   return plainWords(value);
 }
 
