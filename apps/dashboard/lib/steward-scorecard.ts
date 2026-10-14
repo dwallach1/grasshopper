@@ -372,6 +372,8 @@ export function mapStewardScorecard(raw: unknown): StewardScorecardPayload {
         thesis_id: str(row.thesis_id),
         at_stake_pnl: num(row.at_stake_pnl),
         unit: unit(row.unit),
+        sd_outcome_pct: num(row.sd_outcome_pct),
+        more_needed: num(row.more_needed),
       }];
     }),
   };
