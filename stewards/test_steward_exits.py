@@ -158,7 +158,8 @@ class OddsborneExit(unittest.TestCase):
         now = datetime(2026, 10, 6, 14, tzinfo=timezone.utc)
         a = pm_pnl.snapshot_args({"balances": [{"currentBalance": 274.7, "assetNotional": 2.3}]}, "n", "0", now)
         self.assertEqual((a["cash"], a["equity"], a["as_of"]), ("274.7", "277.0", now.isoformat()))
-        self.assertNotIn("equity", pm_pnl.snapshot_args({"balances": [{"currentBalance": 1}]}, "n", "0", now))
+        # no assetNotional, no positions: equity = cash + 0 open lots (always written, venue valuation)
+        self.assertEqual(pm_pnl.snapshot_args({"balances": [{"currentBalance": 1}]}, "n", "0", now)["equity"], "1")
         with self.assertRaises(SystemExit):
             pm_pnl.snapshot_args({"balances": []}, "n", "0", now)
 
