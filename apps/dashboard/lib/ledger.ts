@@ -476,7 +476,7 @@ async function loadScorecard(sql: Sql): Promise<StewardScorecardPayload> {
       order by steward, decision, all_theses desc, thesis_id nulls last
     `),
     viewRows('v_gate_report', sql`
-      select steward,gate,skips,scored,would_have_won,would_have_won_rate,mean_outcome_pct,verdict,thesis_id,at_stake_pnl,unit
+      select steward,gate,skips,scored,would_have_won,would_have_won_rate,mean_outcome_pct,verdict,thesis_id,at_stake_pnl,unit,sd_outcome_pct,more_needed
       from public.v_gate_report
       order by steward, scored desc, skips desc, gate
     `),

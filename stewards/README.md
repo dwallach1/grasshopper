@@ -80,7 +80,7 @@ log_decision("bandit", decision="skip", instrument="<mint>", side="long",
              price="0.000012", expected_move="0.2", thesis_id="meme_4h_momentum_clip")
 ```
 
-ODDSBORNE passes `blocked_by` (`edge_below_gate`, `devig_gate`, `same_game`, `weather_forecast_gate`, `morning_rollup`, and the entry locks). If a skip is written without one, the ledger derives it from the reason and stores `unlabeled` when it cannot.
+ODDSBORNE passes `blocked_by` (`edge_below_gate`, `devig_gate`, `same_game`, `weather_forecast_gate`, `not_placed`, and the entry locks). `morning_rollup` is not a gate. If a skip is written without a blocking rule, the ledger derives one from the reason or the note and stores `unlabeled` when it cannot.
 
 QUANTANAMO, on the connection it already uses for the ledger:
 

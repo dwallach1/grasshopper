@@ -11,10 +11,48 @@
 import type { MoneyUnit } from './money-units';
 import { signedAmount } from './money-units';
 
-/** Below this many scored skips a gate never gets a protecting / costing-growth verdict. */
-export const GATE_MIN_SCORED = 8;
+/**
+ * Two-sided 95% Student-t critical value. df 1..30 are the table; above that,
+ * Cornish-Fisher coefficients shared with public.student_t_crit_95.
+ */
+const T_CRIT_95 = [
+  0,
+  12.7062, 4.3027, 3.1824, 2.7764, 2.5706, 2.4469, 2.3646, 2.3060, 2.2622, 2.2281,
+  2.2010, 2.1788, 2.1604, 2.1448, 2.1314, 2.1199, 2.1098, 2.1009, 2.0930, 2.0860,
+  2.0796, 2.0739, 2.0687, 2.0639, 2.0595, 2.0555, 2.0518, 2.0484, 2.0452, 2.0423,
+];
+const T_Z = 1.959963984540054;
+const T_A1 = 2.372271230298562;
+const T_A2 = 2.822498615739611;
+const T_A3 = 2.555849679507722;
+const T_A4 = 1.589534053393822;
+/** Stop naming a count past this many further scored trades. The average is too close to a scratch. */
+export const GATE_MORE_CAP = 500;
 /** Lines shown before the rest sit behind a tap. */
 export const GATE_REPORT_OPEN = 3;
+
+/** Labels that say where a row was copied from, not which rule blocked it. */
+const PROVENANCE_GATES = new Set(['morning_rollup', 'afternoon_rollup']);
+
+const EDGE_NOT_ENOUGH = /not a real positive edge|no real post-fee edge|no clear post-fee edge|under the [0-9]+\s*c bar|edge under|thin after-spread edge|after spread edge thin|edge after .{0,80} not enough|thin edge/i;
+const ENTER_DID_NOT_GO = /pm_enter.{0,40}timeout|db timeout|not_placed|not placed|skip forced/i;
+
+const GATE_PHRASE: Record<string, string> = {
+  edge_below_gate: 'the edge minimum',
+  weather_forecast_gate: 'the weather forecast',
+  thesis_paused: 'a paused thesis',
+  quality_drawdown_fail: 'quality and drawdown',
+  '1h_cap_30': 'the one-hour rise cap',
+  not_placed: 'an order that never went out',
+  unlabeled: 'no named rule',
+  cancelled_resting: 'a cancelled resting order',
+  devig_gate: 'the de-vig check',
+  same_game: 'a second bet on the same game',
+  screen_fail: 'the screen',
+  paper_only: 'paper only',
+  guidance_cap: 'the size cap',
+  not_live: 'a dry run',
+};
 
 export type GateVerdict = 'protecting' | 'costing growth' | 'too few to tell';
 
@@ -32,6 +70,10 @@ export type GateReportRow = {
   /** Percent times a size the rows stored. Null when no size was logged. */
   at_stake_pnl: number | null;
   unit: MoneyUnit;
+  /** Sample spread of the scored percents. Null with fewer than two. */
+  sd_outcome_pct: number | null;
+  /** Further scored trades that would settle the interval if the average held. Null when it would not, within 500. */
+  more_needed: number | null;
 };
 
 const VERDICTS = new Set<GateVerdict>(['protecting', 'costing growth', 'too few to tell']);
@@ -92,37 +134,156 @@ export function decisionOutcomePct(input: {
   return null;
 }
 
-/** Gate key. A written blocked_by wins. ODDSBORNE otherwise derives one. Unknown is unlabeled. */
+/** Two-sided 95% Student-t critical value. Null when df < 1. */
+export function studentTCrit95(df: number): number | null {
+  if (!Number.isInteger(df) || df < 1) return null;
+  if (df <= 30) return T_CRIT_95[df];
+  return T_Z + T_A1 / df + T_A2 / df ** 2 + T_A3 / df ** 3 + T_A4 / df ** 4;
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && /^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Blocking gate for one market in an ODDSBORNE note. The edge is the note's own
+ * post-fee number. A phrase on that market's line wins over a tiny positive number.
+ * A multi-market note does not lend another market's sentence.
+ */
+export function oddsborneNoteBlockingGate(
+  body: string | null,
+  meta: { comps?: unknown; comps_top?: unknown; candidates?: unknown } | null,
+  instrument: string | null,
+): { gate: string; edge: number | null; why: string | null } {
+  const comps = meta?.comps;
+  const compsTop = meta?.comps_top;
+  const candidates = meta?.candidates;
+  const multi = Array.isArray(comps) || Array.isArray(compsTop) || Array.isArray(candidates);
+  let edge: number | null = null;
+  if (Array.isArray(compsTop) && instrument) {
+    for (const item of compsTop) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as { market?: unknown; post_fee_maker?: unknown };
+      if (row.market === instrument) {
+        const parsed = finiteNumber(row.post_fee_maker);
+        if (parsed !== null) {
+          edge = parsed;
+          break;
+        }
+      }
+    }
+  }
+  if (edge === null && Array.isArray(candidates) && instrument) {
+    for (const item of candidates) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as { slug?: unknown; maker?: unknown };
+      if (row.slug === instrument) {
+        const parsed = finiteNumber(row.maker);
+        if (parsed !== null) {
+          edge = parsed;
+          break;
+        }
+      }
+    }
+  }
+  // A multi-market note may only use the line that names this market. A
+  // single-market note is all about this skip, including a reason on the next line.
+  let line: string | null = null;
+  if (multi) {
+    if (body && instrument && body.includes(instrument)) {
+      line = body.split('\n').find((part) => part.includes(instrument)) ?? null;
+    }
+  } else {
+    line = body;
+  }
+  const text = line ?? '';
+  if (EDGE_NOT_ENOUGH.test(text) || (edge !== null && edge < 0)) {
+    return {
+      gate: 'edge_below_gate',
+      edge,
+      why: line ?? `post-fee edge ${edge} is under the minimum`,
+    };
+  }
+  if (ENTER_DID_NOT_GO.test(text) && (edge === null || edge > 0)) {
+    return { gate: 'not_placed', edge, why: line };
+  }
+  return { gate: 'unlabeled', edge, why: null };
+}
+
+/** Gate key. A written blocked_by wins, except a provenance label. Unknown is unlabeled. */
 export function decisionGateKey(
   steward: string,
   reason: string | null,
   meta: { blocked_by?: string | null; pattern?: string | null } | null,
 ): string {
   const given = (meta?.blocked_by ?? '').trim();
-  if (given) return given;
+  if (given && !PROVENANCE_GATES.has(given)) return given;
   if (steward.trim().toLowerCase() !== 'oddsborne') return 'unlabeled';
   const text = reason ?? '';
-  if (/^morning skips/i.test(text)) return 'morning_rollup';
-  if (/^afternoon (skips|sports)/i.test(text)) return 'afternoon_rollup';
   if (/^wx pass/i.test(text) || (meta?.pattern ?? '') === 'fav_vs_forecast') return 'weather_forecast_gate';
   if (/same_game|same game/i.test(text)) return 'same_game';
   if (/guidance_cap/i.test(text)) return 'guidance_cap';
   if (/not_live/i.test(text)) return 'not_live';
-  if (/not_placed/i.test(text)) return 'not_placed';
+  if (/not_placed|not placed|skip forced|pm_enter.{0,40}timeout|db timeout/i.test(text)) return 'not_placed';
   if (/cancelled resting/i.test(text)) return 'cancelled_resting';
   if (/no two-way|devig fail|methods disagree/i.test(text)) return 'devig_gate';
-  if (/post-fee|makerΔ|bovada fair|^fair | pass:|^pm |fair=/i.test(text)) return 'edge_below_gate';
+  if (EDGE_NOT_ENOUGH.test(text) || /post-fee|makerΔ|bovada fair|^fair | pass:|^pm |fair=/i.test(text)) {
+    return 'edge_below_gate';
+  }
   return 'unlabeled';
 }
 
-export function gateOutcomeVerdict(scored: number, mean: number | null): GateVerdict {
-  if (scored < GATE_MIN_SCORED || mean === null || mean === 0) return 'too few to tell';
-  return mean > 0 ? 'costing growth' : 'protecting';
+/** Protecting or costing growth only when a 95% interval on the mean excludes zero. */
+export function gateOutcomeVerdict(scored: number, mean: number | null, sd: number | null): GateVerdict {
+  if (scored < 2 || mean === null || mean === 0 || sd === null || sd < 0) return 'too few to tell';
+  if (sd === 0) return mean > 0 ? 'costing growth' : 'protecting';
+  const crit = studentTCrit95(scored - 1);
+  if (crit === null) return 'too few to tell';
+  if (Math.abs(mean) > crit * sd / Math.sqrt(scored)) return mean > 0 ? 'costing growth' : 'protecting';
+  return 'too few to tell';
 }
 
-/** True only when the sample bar is met and the verdict is not already the latest belief. */
+/**
+ * Further scored trades that would clear the interval if this mean and spread held.
+ * Null when that would take more than GATE_MORE_CAP. Zero when it already clears.
+ * scored is part of the signature so a caller can pass the view's count; the interval uses it.
+ */
+export function gateMoreNeeded(scored: number, mean: number | null, sd: number | null): number | null {
+  if (scored < 2 || mean === null || mean === 0 || sd === null || sd < 0) return null;
+  if (sd === 0) return 0;
+  const clears = (n: number) => {
+    const crit = studentTCrit95(n - 1);
+    return crit !== null && Math.abs(mean) > crit * sd / Math.sqrt(n);
+  };
+  if (clears(scored)) return 0;
+  const cap = scored + GATE_MORE_CAP;
+  if (cap * mean * mean < (1.96 * sd) * (1.96 * sd)) return null;
+  for (let n = scored + 1; n <= cap; n += 1) {
+    if (clears(n)) return n - scored;
+  }
+  return null;
+}
+
+/**
+ * True when a protecting or costing-growth verdict is new, or when that lesson has to
+ * be taken back. scored is unused: the verdict already applied the interval. A re-run
+ * with the same verdict is false. A superseded belief is left as history.
+ */
 export function gateBeliefDue(latest: string | null, scored: number, verdict: GateVerdict): boolean {
-  return scored >= GATE_MIN_SCORED && verdict !== 'too few to tell' && latest !== verdict;
+  void scored;
+  if (latest === 'superseded') return false;
+  if ((verdict === 'protecting' || verdict === 'costing growth') && latest !== verdict) return true;
+  return verdict === 'too few to tell' && (latest === 'protecting' || latest === 'costing growth');
+}
+
+function gateLead(gate: string): string {
+  const phrase = GATE_PHRASE[gate] ?? gate.replace(/_/g, ' ');
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
 
 export function formatOutcomePct(fraction: number | null): string {
@@ -135,9 +296,16 @@ export function formatOutcomePct(fraction: number | null): string {
   return '0%';
 }
 
-function verdictSentence(verdict: GateVerdict): string {
-  if (verdict === 'protecting') return 'Protecting the book.';
-  if (verdict === 'costing growth') return 'Costing growth.';
+function evidenceSentence(row: { verdict: GateVerdict; scored: number; more_needed: number | null }): string {
+  if (row.verdict === 'protecting') return 'Protecting the book.';
+  if (row.verdict === 'costing growth') return 'Costing growth.';
+  if (row.more_needed !== null && row.more_needed > 0) {
+    const n = row.more_needed;
+    return `Too few to tell yet. About ${n} more scored ${n === 1 ? 'trade' : 'trades'} would settle this if the average holds.`;
+  }
+  if (row.scored >= 2 && row.more_needed === null) {
+    return 'Too few to tell yet. The average is close to a scratch, so more of the same would not settle it soon.';
+  }
   return 'Too few to tell yet.';
 }
 
@@ -151,12 +319,13 @@ export type GateReportParts = {
 /** One parchment line. The percent is split out so the desk can color it by sign. */
 export function gateReportParts(row: Pick<
   GateReportRow,
-  'gate' | 'skips' | 'scored' | 'would_have_won' | 'mean_outcome_pct' | 'verdict' | 'at_stake_pnl' | 'unit'
+  'gate' | 'skips' | 'scored' | 'would_have_won' | 'mean_outcome_pct' | 'verdict' | 'at_stake_pnl' | 'unit' | 'more_needed'
 >): GateReportParts {
+  const lead = gateLead(row.gate);
   if (row.scored <= 0 || row.mean_outcome_pct === null) {
     const n = row.skips;
     return {
-      before: `Kept us out of ${n} ${n === 1 ? 'trade' : 'trades'} on ${row.gate}. None scored yet.`,
+      before: `${lead} kept us out of ${n} ${n === 1 ? 'trade' : 'trades'}. None scored yet.`,
       pct: null,
       pctText: null,
       after: '',
@@ -167,10 +336,10 @@ export function gateReportParts(row: Pick<
     ? ''
     : ` At the logged size, ${signedAmount(row.at_stake_pnl, row.unit)}.`;
   return {
-    before: `Kept us out of ${n} ${n === 1 ? 'trade' : 'trades'} on ${row.gate}: ${row.would_have_won} would have won, avg `,
+    before: `${lead} kept us out of ${n} ${n === 1 ? 'trade' : 'trades'}: ${row.would_have_won} would have won, avg `,
     pct: row.mean_outcome_pct,
     pctText: formatOutcomePct(row.mean_outcome_pct),
-    after: `. ${verdictSentence(row.verdict)}${stake}`,
+    after: `. ${evidenceSentence(row)}${stake}`,
   };
 }
 
