@@ -447,66 +447,26 @@ class _DryRunNoWrite(Exception):
     """Raised inside ledger-write blocks under --dry-run to take the no-write path."""
 
 
-def write_pnl_safe(cash, equity, notes, payload):
+def write_pnl_safe(snap, notes, rpc=None):
+    """Refresh the pm_pnl book row over HTTPS (oddsborne_pnl_snapshot via steward-rpc) from this run's venue snap.
+    Valuation = pm_pnl_snapshot.venue_valuation: cash + open lots at the venue's mark. The pm_pnl trigger touches
+    the heartbeat. --dry-run writes nothing (would-write file only). Raises on failure: the caller logs ERROR and
+    blocks entries, it never silently proceeds against a stale snapshot."""
+    import pm_pnl_snapshot as PS
     if DRY_RUN:  # --dry-run writes nothing: no pm_pnl, heartbeat or desk_agents
+        res = PS.refresh_snapshot(None, snap.get("bal"), snap.get("pos"), notes, dry_run=True, writer=f"session_{SESSION}")
         as_of = datetime.now(timezone.utc)
         path = OUT / f"session_raw_{SESSION}_pnl_would_write.json"
-        path.write_text(json.dumps({"cash": cash, "equity": equity, "notes": notes, "payload": payload,
-                                    "as_of": as_of.isoformat()}, indent=2, default=str))
-        print("DRY_RUN: would write pm_pnl + heartbeat + desk_agents ->", path, flush=True)
+        path.write_text(json.dumps(res, indent=2, default=str))
+        print("DRY_RUN: would write pm_pnl (HTTPS oddsborne_pnl_snapshot) ->", path,
+              "equity", res["would_write"]["args"]["equity"], flush=True)
         return "DRY_RUN", "DRY_RUN", None, as_of
-    try:
-        conn = connect()
-    except Exception as e:
-        as_of = datetime.now(timezone.utc)
-        pending = {"cash": cash, "equity": equity, "notes": notes, "payload": payload,
-                   "as_of": as_of.isoformat(), "error": f"{type(e).__name__}: {e}"}
-        path = OUT / f"session_raw_{SESSION}_pnl_pending.json"
-        path.write_text(json.dumps(pending, indent=2, default=str))
-        print("write_pnl_offline", path, flush=True)
-        return f"PENDING_MCP:{path.name}", "PENDING_HB", None, as_of
-    cur = conn.cursor()
-    cur.execute("select public.oddsborne_touch_heartbeat()")
-    cur.fetchone()
-    as_of = datetime.now(timezone.utc)
-    cur.execute(
-        """
-        INSERT INTO public.pm_pnl (account_key, as_of, realized, unrealized, fees, cash, equity, notes, payload)
-        VALUES (%s, %s, 0, 0, 0, %s, %s, %s, %s::jsonb)
-        RETURNING id
-        """,
-        ("polymarket-us-primary", as_of, cash, equity if equity is not None else cash, notes, json.dumps(payload, default=str)),
-    )
-    pnl_id = str(cur.fetchone()[0])
-    cur.execute("select public.oddsborne_touch_heartbeat()")
-    hb = str(cur.fetchone()[0])
-    desk = None
-    try:
-        cur.execute(
-            """UPDATE public.desk_agents SET status='active', heartbeat_at=now()
-               WHERE slug='oddsborne' RETURNING slug, heartbeat_at"""
-        )
-        desk = cur.fetchone()
-    except Exception as e:
-        print("desk_agents_warn", type(e).__name__, str(e)[:120], flush=True)
-        conn.rollback()
-        # re-insert after rollback
-        cur.execute("select public.oddsborne_touch_heartbeat()")
-        hb = str(cur.fetchone()[0])
-        cur.execute(
-            """
-            INSERT INTO public.pm_pnl (account_key, as_of, realized, unrealized, fees, cash, equity, notes, payload)
-            VALUES (%s, %s, 0, 0, 0, %s, %s, %s, %s::jsonb)
-            RETURNING id
-            """,
-            ("polymarket-us-primary", as_of, cash, equity if equity is not None else cash, notes, json.dumps(payload, default=str)),
-        )
-        pnl_id = str(cur.fetchone()[0])
-        cur.execute("select public.oddsborne_touch_heartbeat()")
-        hb = str(cur.fetchone()[0])
-    conn.commit()
-    conn.close()
-    return pnl_id, hb, desk, as_of
+    if rpc is None:
+        from pm_enter import make_rpc
+        rpc = make_rpc()
+    res = PS.refresh_snapshot(rpc, snap.get("bal"), snap.get("pos"), notes, dry_run=False, writer=f"session_{SESSION}")
+    print("pm_pnl_refreshed", res.get("pm_pnl_id"), "equity", res.get("equity"), flush=True)
+    return str(res["pm_pnl_id"]), "pm_pnl_trigger", None, datetime.now(timezone.utc)
 
 
 def check_fee_coeff(c):
@@ -651,10 +611,17 @@ def main():
         f"Venue cash={cash} equity={equity} positions={snap['n_pos']} orders={snap['n_orders']}. "
         f"Fresh afternoon snap. Cash snapshot not period P/L. Ledger over HTTPS (steward-rpc) + Supabase MCP for notes."
     )
-    pnl_id = os.environ.get("PNL_ID", "see pm_pnl_snapshot.py")
-    hb = os.environ.get("HB_AT", "PENDING_HB")
-    desk = None
-    as_of = datetime.now(timezone.utc)
+    # 1b) Refresh pm_pnl over HTTPS BEFORE the entry gate (guidance refuses entries on a stale book), so a
+    # missed earlier session can't silently block this one. Failure is a loud ERROR and blocks entries.
+    pnl_refresh_error = None
+    try:
+        pnl_id, hb, desk, as_of = write_pnl_safe(snap, notes0)
+    except Exception as e:
+        pnl_refresh_error = f"ERROR pm_pnl refresh failed (entries blocked): {type(e).__name__}: {str(e)[:300]}"
+        print(pnl_refresh_error, file=sys.stderr, flush=True)
+        print(pnl_refresh_error, flush=True)
+        blockers.insert(0, pnl_refresh_error)
+        pnl_id, hb, desk, as_of = "REFRESH_FAILED", "PENDING_HB", None, datetime.now(timezone.utc)
     print("pm_pnl", pnl_id, "hb", hb, flush=True)
 
     # 2) Open positions / exits
@@ -1070,8 +1037,11 @@ def main():
     # take two picks (or both sides) of one game in this run; skipped picks are logged as same_game passes
     _cov_events = MF.held_game_keys(comps, covered_slugs)
     enterable = list(cands)
-    _no_enter = DRY_RUN or os.environ.get("ODDS_NO_ENTER") == "1"
-    if _no_enter:
+    _no_enter = DRY_RUN or os.environ.get("ODDS_NO_ENTER") == "1" or bool(pnl_refresh_error)
+    if pnl_refresh_error:
+        not_entered += [{"market": x["market"], "outcome": x.get("outcome") or "yes",
+                         "reason": "blocked_pnl_refresh_error"} for x in enterable]
+    elif _no_enter:
         not_entered += [{"market": x["market"], "outcome": x.get("outcome") or "yes",
                          "reason": "not_live (dry-run / ODDS_NO_ENTER)"} for x in enterable]
     if enterable and (cash or 0) < 5 and not _no_enter:
@@ -1219,7 +1189,7 @@ def main():
         "pm_notes": {"scan": note_scan, "skip": note_skip},
         "fee_probe": fee_info, "theta": THETA, "maker_rebate": MAKER_REBATE, "maker_haircut": MAKER_HAIRCUT_INFO,
         "blockers": blockers, "due_postmortems": due_postmortems,
-        "outcome": ("ERROR" if discovery_error and not (entered or sold_any) else ("TRADE" if entered else ("EXIT" if sold_any else "NO TRADE"))),
+        "outcome": ("ERROR" if (discovery_error or pnl_refresh_error) and not (entered or sold_any) else ("TRADE" if entered else ("EXIT" if sold_any else "NO TRADE"))),
         "discovery_error": discovery_error, "n_sports_events": len(sports_ev),
         "notify_user": True,  # afternoon mandate + full-book
         "sold_any": sold_any,
@@ -1399,10 +1369,10 @@ def main():
         "entered": entered, "sold_any": sold_any,
         "exits": [{k: d.get(k) for k in ("slug","action","print","inv")} for d in exits],
         "covered": sorted(covered_slugs),
-        "blockers": blockers, "discovery_error": discovery_error,
+        "blockers": blockers, "discovery_error": discovery_error, "pnl_refresh_error": pnl_refresh_error,
     }, default=str), flush=True)
-    if discovery_error:
-        print(discovery_error, file=sys.stderr, flush=True)
+    if discovery_error or pnl_refresh_error:
+        print(discovery_error or pnl_refresh_error, file=sys.stderr, flush=True)
         return 2
     return 0
 

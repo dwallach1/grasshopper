@@ -92,8 +92,9 @@ class DryRunGuardTests(unittest.TestCase):
     def test_write_pnl_safe_returns_before_connect(self):
         for path in SESSIONS:
             text = path.read_text()
-            body = text.split("def write_pnl_safe", 1)[1]
-            self.assertLess(body.index("if DRY_RUN"), body.index("connect()"))
+            body = text.split("def write_pnl_safe", 1)[1].split("\ndef ", 1)[0]
+            self.assertNotIn("connect()", body)  # HTTPS (steward-rpc) only; the pooler is unreachable from the box
+            self.assertLess(body.index("if DRY_RUN"), body.index("make_rpc()"))
 
 
 _dspec = importlib.util.spec_from_file_location("discover", HERE / "oddsborne" / "discover.py")
@@ -181,7 +182,7 @@ class DiscoverTests(unittest.TestCase):
             text = path.read_text()
             self.assertIn("DISC.ensure(TODAY", text)
             self.assertIn("DISC.discovery_error(", text)
-            self.assertIn('"ERROR" if discovery_error', text)
+            self.assertIn('"ERROR" if (discovery_error or pnl_refresh_error)', text)
             self.assertIn("sys.exit(main())", text)
         self.assertIn("ERROR passlog", (HERE / "oddsborne" / "session_passlog.py").read_text())
         self.assertIn("deepdive_raw/discover.py", (HERE / "sync_box.sh").read_text())
