@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 
 import { cachedDesk, fetchDeskPayload, rememberDesk } from '../../lib/desk-client';
+import { blurFocusLeavingSurface } from '../../lib/desk-focus';
 import {
   canonicalDeskPath,
   DESK_TABS,
@@ -64,6 +65,7 @@ export function TerminalApp({
   const [goArmed, setGoArmed] = useState(false);
   const [surface, setSurface] = useState<DeskSurface>(() => surfaceFromPath(pathname));
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [teamScroll, setTeamScroll] = useState<{ slug: string; seq: number } | null>(null);
 
   useEffect(() => {
     rememberDesk(initial);
@@ -127,6 +129,7 @@ export function TerminalApp({
   const go = useCallback((href: string) => {
     const canonical = canonicalDeskPath(href);
     const next = surfaceFromPath(canonical);
+    blurFocusLeavingSurface(next);
     setSurface(next);
     if (window.location.pathname !== canonical) {
       window.history.pushState({ desk: next }, '', canonical);
@@ -228,7 +231,16 @@ export function TerminalApp({
             onRefresh={reloadLedger}
           >
             {{
-              leaderboard: <LeaderboardPanel desk={desk} now={now} onOpenTeam={() => go('/team')} />,
+              leaderboard: (
+                <LeaderboardPanel
+                  desk={desk}
+                  now={now}
+                  onOpenTeam={(slug) => {
+                    setTeamScroll((current) => ({ slug, seq: (current?.seq ?? 0) + 1 }));
+                    go('/team');
+                  }}
+                />
+              ),
               book: (
                 <BookPanel
                   desk={desk}
@@ -240,7 +252,7 @@ export function TerminalApp({
                   }}
                 />
               ),
-              team: <TeamPanel desk={desk} reduceMotion={reduceMotion} now={now} />,
+              team: <TeamPanel desk={desk} reduceMotion={reduceMotion} now={now} scrollTo={teamScroll} />,
             }}
           </DeskPager>
         )}

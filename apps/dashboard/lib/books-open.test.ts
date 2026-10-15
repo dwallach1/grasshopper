@@ -450,9 +450,14 @@ describe('Books page: one section per steward', () => {
     expect(idea.textContent).toBe('Watching · Same-day city-high weather');
     expect(idea.textContent).not.toContain('score');
     expect(idea.textContent).not.toContain('not scored');
+    idea.focus();
+    expect(document.activeElement).toBe(idea);
     await act(async () => {
       idea.click();
     });
+    const hiddenList = view.host.querySelector('.books');
+    expect(hiddenList?.getAttribute('aria-hidden')).toBe('true');
+    expect(hiddenList?.contains(document.activeElement)).toBe(false);
     const detail = view.host.querySelector('.books-detail');
     expect(detail?.querySelector('h2')?.textContent).toBe('Same-day city-high weather');
     expect(detail?.textContent).toContain(WEATHER_SUMMARY);

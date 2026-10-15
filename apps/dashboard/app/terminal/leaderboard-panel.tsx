@@ -29,7 +29,7 @@ export function LeaderboardPanel({
 }: {
   desk: DeskPayload;
   now: number | null;
-  onOpenTeam?: () => void;
+  onOpenTeam?: (slug: string) => void;
 }) {
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
@@ -157,7 +157,7 @@ export function LeaderboardPanel({
               {onOpenTeam ? (
                 <>
                   {' · '}
-                  <a href="/team" onClick={(event) => onDeskClick(event, onOpenTeam)}>team</a>
+                  <a href="/team" onClick={(event) => onDeskClick(event, () => onOpenTeam(row.slug))}>team</a>
                 </>
               ) : null}
               {row.last_marked
