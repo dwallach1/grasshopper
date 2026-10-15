@@ -8,8 +8,9 @@ import {
   crtTapeScrollText,
   formatCrtTapeLine,
 } from '../../lib/desk-crt-tape';
-import type { DeskPayload } from '../../lib/ledger-types';
-import { age } from './format';
+import type { DeskPayload, DeskRoutine } from '../../lib/ledger-types';
+import { NO_RUN_RECORDED } from '../../lib/routines';
+import { age, nyStamp } from './format';
 
 export function CrtTape({
   desk,
@@ -29,10 +30,11 @@ export function CrtTape({
       <header className="crt-tape-hud">
         <b>TAPE</b>
         <span>{lines.length}</span>
-        {newest ? <i>{age(newest.at, now)}</i> : null}
+        {newest?.at ? <i>{age(newest.at, now)}</i> : null}
       </header>
       <p className="crt-tape-glyphs" aria-hidden="true">{glyphs}</p>
       {newest ? <p className="crt-tape-head">{formatCrtTapeLine(newest)}</p> : null}
+      <RoutineList desk={desk} now={now} />
       <div className="crt-tape-viewport">
         {reduced ? (
           <p className="crt-tape-static">{scroll}</p>
@@ -49,6 +51,33 @@ export function CrtTape({
         ))}
       </ol>
     </section>
+  );
+}
+
+function routineWhen(routine: DeskRoutine, now: number | null): string {
+  if (!routine.last_run_at) return NO_RUN_RECORDED;
+  const when = now === null ? nyStamp(routine.last_run_at) : age(routine.last_run_at, now);
+  return routine.last_outcome ? `${routine.last_outcome} · ${when}` : when;
+}
+
+function RoutineList({
+  desk,
+  now,
+}: {
+  desk: DeskPayload;
+  now: number | null;
+}) {
+  const routines = desk.routines ?? [];
+  if (routines.length === 0) return null;
+  return (
+    <ul className="crt-tape-routines" aria-label="Routines">
+      {routines.map((routine) => (
+        <li key={routine.id} data-routine={routine.id}>
+          <b>{routine.name}</b>
+          <span>{routineWhen(routine, now)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

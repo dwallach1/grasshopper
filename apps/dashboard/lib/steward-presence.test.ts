@@ -8,6 +8,7 @@ import {
   PRESENCE_DONE_MS,
   presenceSettle,
   presenceTempo,
+  heartbeatOverTradingDay,
   stewardPresence,
   stewardPresences,
 } from './steward-presence';
@@ -282,6 +283,39 @@ describe('steward presence', () => {
       }],
     });
     expect(stewardPresence(aged, 'quantanamo', NOW)).toEqual({ presence: 'idle', settle: 0 });
+  });
+
+  test('a heartbeat older than the latest trading day blocks; a touch on that day does not', () => {
+    // NOW is Sunday 2026-09-06. The latest NYSE session is Friday 2026-09-04
+    // (Monday 2026-09-07 is Labor Day). Sunday is still that session's day.
+    expect(heartbeatOverTradingDay(null, NOW)).toBe(true);
+    expect(heartbeatOverTradingDay('2026-09-03T20:00:00.000Z', NOW)).toBe(true);
+    expect(heartbeatOverTradingDay('2026-09-04T18:00:00.000Z', NOW)).toBe(false);
+    expect(heartbeatOverTradingDay(FRESH, NOW)).toBe(false);
+
+    const staleHeartbeat = desk({
+      team: assembleTeam({
+        ...team(),
+        agents: team().agents.map((row) => (
+          row.slug === 'grasshopper' ? { ...row, heartbeat_at: '2026-09-01T13:00:00.000Z' } : row
+        )),
+      }),
+    });
+    expect(stewardPresence(staleHeartbeat, 'grasshopper', NOW).presence).toBe('blocked');
+    expect(stewardDeskFace(staleHeartbeat, 'grasshopper', NOW).presence).toBe('blocked');
+
+    const waitingStale = desk({
+      positions: [equityOpen()],
+      team: assembleTeam({
+        ...team(),
+        agents: team().agents.map((row) => (
+          row.slug === 'quantanamo' ? { ...row, heartbeat_at: '2026-09-01T13:00:00.000Z' } : row
+        )),
+      }),
+    });
+    expect(stewardPresence(waitingStale, 'quantanamo', NOW).presence).toBe('blocked');
+    expect(stewardPresence(desk(), 'quantanamo', NOW).presence).toBe('idle');
+    expect(stewardPresence(desk({ positions: [equityOpen()] }), 'quantanamo', NOW).presence).toBe('waiting');
   });
 
   test('Board and Team read the same map', () => {

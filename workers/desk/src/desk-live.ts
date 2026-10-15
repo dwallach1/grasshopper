@@ -215,6 +215,9 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
       pnl_start: asObjectRow(bag.meme?.pnl_start),
       notes: asObjectRows(bag.meme?.notes),
     }),
+    runs: asJsonRows(bag.runs),
+    cloudRuns: asJsonRows(bag.cloudRuns),
+    automations: asJsonRows(bag.automations),
     team: assembleTeam({
       agents: asUnknownRows(bag.team?.agents),
       domains: asUnknownRows(bag.team?.domains),
@@ -240,3 +243,4 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
 export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
   return (await loadPublicDeskServe(env)).desk;
 }
+

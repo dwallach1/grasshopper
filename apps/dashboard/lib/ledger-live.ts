@@ -285,16 +285,16 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'prediction'
   | 'meme'
   | 'team'
-> & Partial<Pick<RestDeskBag, 'scorecard' | 'watchdog'>>): DeskPayload {
+> & Partial<Pick<RestDeskBag, 'runs' | 'cloudRuns' | 'automations' | 'scorecard' | 'watchdog'>>): DeskPayload {
   return withScorecard(assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
     beliefs: mapBeliefs(bag.beliefs),
     evidence: [],
     scores: [],
     relations: [],
-    runs: [],
-    cloud_runs: [],
+    runs: mapRuns(bag.runs ?? []),
+    cloud_runs: mapCloudRuns(bag.cloudRuns ?? []),
     cloud_tasks: [],
-    automations: [],
+    automations: mapAutomations(bag.automations ?? []),
     catalysts: [],
     queue: [],
     lessons: mapLessons(bag.lessons),

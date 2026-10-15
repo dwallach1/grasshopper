@@ -24,7 +24,7 @@ export type CrtTapeLine = {
   steward: CrtTapeSteward;
   label: string;
   status: string;
-  at: string;
+  at: string | null;
 };
 
 function clip(value: string, max: number): string {
@@ -93,6 +93,9 @@ export function formatCrtFillLabel(row: FillLogRow): string {
 }
 
 function compareTape(a: CrtTapeLine, b: CrtTapeLine): number {
+  if (a.at === null && b.at === null) return a.id.localeCompare(b.id);
+  if (a.at === null) return 1;
+  if (b.at === null) return -1;
   const byTime = b.at.localeCompare(a.at);
   if (byTime !== 0) return byTime;
   return a.id.localeCompare(b.id);
@@ -156,16 +159,16 @@ function markLine(row: LeaderboardStanding): CrtTapeLine | null {
   };
 }
 
-function scanLine(routine: DeskRoutine): CrtTapeLine | null {
-  if (!routine.last_run_at) return null;
+function scanLine(routine: DeskRoutine): CrtTapeLine {
   const outcome = (routine.last_outcome ?? '').toLowerCase();
+  const recorded = Boolean(routine.last_run_at);
   return {
-    id: `scan:${routine.id}:${routine.last_run_at}`,
+    id: recorded ? `scan:${routine.id}:${routine.last_run_at}` : `scan:${routine.id}:none`,
     kind: 'scan',
     glyph: ':',
     steward: 'QNT',
     label: /scan/i.test(routine.name) ? 'SCAN' : 'RUN',
-    status: outcome === 'passed' ? 'OK' : outcome === 'failed' ? 'FAIL' : 'RUN',
+    status: recorded ? (outcome === 'passed' ? 'OK' : outcome === 'failed' ? 'FAIL' : 'RUN') : 'NO RUN',
     at: routine.last_run_at,
   };
 }
@@ -176,12 +179,10 @@ export function assembleCrtTape(desk: DeskPayload): CrtTapeLine[] {
   const marks = board.rows
     .map(markLine)
     .filter((row): row is CrtTapeLine => row !== null);
-  const scan = (desk.routines ?? [])
+  const scans = (desk.routines ?? [])
     .filter((row) => row.status === 'live')
-    .map(scanLine)
-    .find((row) => row !== null);
-  const rows = [...fills, snapLine(desk), ...marks];
-  if (scan) rows.push(scan);
+    .map(scanLine);
+  const rows = [...fills, snapLine(desk), ...marks, ...scans];
   return rows.sort(compareTape).slice(0, CRT_TAPE_MAX);
 }
 

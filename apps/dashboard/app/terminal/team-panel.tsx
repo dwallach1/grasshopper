@@ -63,7 +63,7 @@ export function TeamPanel({
                   <div className="team-card-copy">
                     <b>{card.display_name}</b>
                     <i>{card.domain}</i>
-                    <span>pulse {age(card.heartbeat_at ?? undefined, now)}</span>
+                    <span>pulse {card.heartbeat_at ? age(card.heartbeat_at, now) : 'no heartbeat'}</span>
                   </div>
                 </article>
                 {score && <StewardScorecard card={score} name={card.display_name} />}

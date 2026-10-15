@@ -30,6 +30,7 @@ const AGENTIC_LAST4 = '7638';
 /** Slim /bundle/public keys. Omit beliefs/lessons here and the Worker hydrates []. */
 const PUBLIC_KEYS = new Set([
   'theses', 'symbols', 'beliefs', 'lessons',
+  'runs', 'cloudRuns', 'automations',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
   'themes', 'candidates',
 ]);
@@ -302,6 +303,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       body.accountFirst = accounts.accountFirst;
       body.beliefs = clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT);
       body.lessons = clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT);
+      body.runs = clipRows(asRows(body.runs), 'notes', PUBLIC_TEXT);
       pm = { ...pm, notes: clipRows(asRows(pm.notes), 'body', PUBLIC_NOTE_BODY) };
       meme = { ...meme, notes: clipRows(asRows(meme.notes), 'body', PUBLIC_NOTE_BODY) };
     }
