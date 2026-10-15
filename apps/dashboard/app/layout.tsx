@@ -33,12 +33,13 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: isPublicDesk() ? '#f3ead8' : '#07080a',
+  themeColor: isPublicDesk() ? '#f4ecda' : '#07080a',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const publicDesk = isPublicDesk();
   return (
-    <html lang="en">
+    <html lang="en" className={publicDesk ? 'is-public-desk' : undefined}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -47,7 +48,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {publicDesk ? (
+          <>
+            <div className="edge-top" aria-hidden="true" />
+            <div className="edge-bottom" aria-hidden="true" />
+          </>
+        ) : null}
+        {children}
+      </body>
     </html>
   );
 }
