@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from '
 
 import { holdingTicket } from '../../lib/book-holdings';
 import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip';
+import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 import { formatAmount } from '../../lib/money-units';
@@ -68,6 +69,12 @@ export function BookPanel({
   const tickets = useMemo(() => assembleBookOpen(desk).rows.flatMap((row) => row.tickets), [desk]);
   const [reading, setReading] = useState<Reading | null>(null);
   const detailRef = useRef<HTMLElement>(null);
+  const booksRef = useRef<HTMLDivElement>(null);
+
+  function openReading(next: Reading) {
+    blurFocusWithin(booksRef.current);
+    setReading(next);
+  }
 
   const lotById = useMemo(() => {
     const map = new Map<string, { lot: BooksLot; section: BooksSection }>();
@@ -103,6 +110,7 @@ export function BookPanel({
   return (
     <div className="books-stage" data-reading={open ? '1' : '0'}>
       <div
+        ref={booksRef}
         className="books"
         data-desk-nested-scroll="1"
         aria-hidden={open ? true : undefined}
@@ -115,8 +123,8 @@ export function BookPanel({
           <StewardSection
             key={section.slug}
             section={section}
-            onOpenLot={(id) => setReading({ kind: 'lot', id })}
-            onOpenIdea={(id) => setReading({ kind: 'idea', id })}
+            onOpenLot={(id) => openReading({ kind: 'lot', id })}
+            onOpenIdea={(id) => openReading({ kind: 'idea', id })}
           />
         ))}
         {canReview || canIncorporate ? (

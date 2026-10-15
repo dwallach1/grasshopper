@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import { scrollTeamStageToSteward } from '../../lib/desk-team-scroll';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { assembleTeamRoster } from '../../lib/steward-id';
 import type { DeskPayload } from '../../lib/ledger-types';
@@ -14,16 +15,27 @@ import { age } from './format';
 export function TeamPanel({
   desk,
   now = null,
+  scrollTo = null,
 }: {
   desk: DeskPayload;
   reduceMotion?: boolean;
   now?: number | null;
+  /** Bump `seq` to pin that steward's row to the top of this page. */
+  scrollTo?: { slug: string; seq: number } | null;
 }) {
   const cards = assembleTeamRoster(desk);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!scrollTo || !stage) return;
+    scrollTeamStageToSteward(stage, scrollTo.slug);
+  }, [scrollTo]);
 
   return (
     <div
+      ref={stageRef}
       className="steward-stage"
       data-roster="desk_agents"
       data-desk-nested-scroll="1"
