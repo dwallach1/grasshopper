@@ -18,7 +18,7 @@ import {
 import { nextHeldCatalyst } from './held-catalyst';
 import type { AccountRow, AutomationRow, CatalystRow, CloudRunRow, ExposureRow, RunRow } from './ledger-types';
 import { nyDateKey } from './ny-date';
-import { assembleRoutines } from './routines';
+import { assembleRoutines, NO_RUN_RECORDED } from './routines';
 import { AGENTIC_LAST4 } from './thesis-book';
 
 function snapshot(partial: Partial<AccountRow> & Pick<AccountRow, 'observed_at' | 'total_value'>): AccountRow {
@@ -410,7 +410,11 @@ describe('QUANTANAMO routines', () => {
     const live = routines.filter((row) => row.status === 'live');
     expect(live.map((row) => row.id)).toEqual(['market_scan', 'missed_swing_autopsy']);
     expect(live[0]?.last_run_at).toBe('2026-08-26T20:03:24.218Z');
+    expect(live[0]?.last_outcome).toBe('passed');
+    expect(live[0]?.last_summary).toBe('First scheduled market_scan');
     expect(live[1]?.last_run_at).toBeNull();
+    expect(live[1]?.last_outcome).toBeNull();
+    expect(live[1]?.last_summary).toBe(NO_RUN_RECORDED);
     expect(routines.some((row) => 'at' in row)).toBe(false);
     const retired = routines.filter((row) => row.status === 'retired');
     expect(retired.some((row) => row.name.includes('ThesisForge'))).toBe(true);

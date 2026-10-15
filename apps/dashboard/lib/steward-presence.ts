@@ -4,9 +4,12 @@
  * no second chip.
  *
  * Priority: blocked, then working, then waiting, then a brief done
- * settle, then idle. Blocked uses the same stale-mark and missing-gate
- * facts the freshness chips and learning pulse already show.
+ * settle, then idle. Blocked is a heartbeat older than the latest trading
+ * day, or the same stale-mark and missing-gate facts the freshness chips
+ * and learning pulse already show.
  */
+import { usEquitySession } from '@quantanamo/contracts/market-calendar';
+
 import { assembleBookHoldings, isClosedPositionStatus } from './book-holdings';
 import { stewardThinking } from './desk-avatar';
 import { assembleDeskBookHealth } from './desk-book-health';
@@ -34,6 +37,43 @@ export const PRESENCE_DONE_MS = 2 * 60 * 1000;
  * heartbeat. A mark refresh alone does not count as venue work.
  */
 export const PRESENCE_ACTIVITY_MS = HEARTBEAT_FRESH_MS;
+
+const TRADING_DATE_STEP_MS = 20 * 60 * 60 * 1000;
+
+/** Latest NYSE session date on or before `nowMs` (America/New_York, YYYY-MM-DD). */
+export function latestTradingDate(nowMs: number): string | null {
+  let cursor = nowMs;
+  const seen = new Set<string>();
+  for (let step = 0; step < 16; step += 1) {
+    const session = usEquitySession(cursor);
+    if (!seen.has(session.date)) {
+      seen.add(session.date);
+      if (session.status !== 'weekend' && session.status !== 'holiday') return session.date;
+    }
+    cursor -= TRADING_DATE_STEP_MS;
+  }
+  return null;
+}
+
+/** Midnight America/New_York on `date` (YYYY-MM-DD), as UTC epoch milliseconds. */
+function nyMidnightMs(date: string): number {
+  const noonUtc = Date.parse(`${date}T12:00:00Z`);
+  return noonUtc - usEquitySession(noonUtc).minutes * 60_000;
+}
+
+/**
+ * True when `at` is missing or older than midnight ET on the latest NYSE
+ * session. A touch on that session — including the weekend after Friday —
+ * is still inside a trading day. A new session date makes the prior touch stale.
+ */
+export function heartbeatOverTradingDay(at: string | null | undefined, nowMs: number): boolean {
+  if (!at) return true;
+  const ms = Date.parse(at);
+  if (!Number.isFinite(ms)) return true;
+  const latest = latestTradingDate(nowMs);
+  if (!latest) return true;
+  return ms < nyMidnightMs(latest);
+}
 
 /** Quicker morph while working; calm blink while idle. */
 export const PRESENCE_TEMPO = {
@@ -94,11 +134,16 @@ export function stewardPresences(desk: DeskPayload, nowMs: number): Map<string, 
   const books = bookSignals(desk, nowMs);
   const cards = teamCards(deskTeam(desk));
   const statusBySlug = new Map(cards.map((card) => [card.slug, card.status]));
+  const heartbeatBySlug = new Map(cards.map((card) => [card.slug, card.heartbeat_at]));
   const slugs = new Set<string>([...statusBySlug.keys(), ...BOOK_SLUGS]);
   const faces = new Map<string, StewardPresenceState>();
   for (const slug of slugs) {
     const book = isBookSlug(slug) ? books.get(slug) ?? QUIET_BOOK : QUIET_BOOK;
-    faces.set(slug, resolvePresence(stewardThinking(statusBySlug.get(slug) ?? ''), book));
+    faces.set(slug, resolvePresence(
+      stewardThinking(statusBySlug.get(slug) ?? ''),
+      book,
+      heartbeatOverTradingDay(heartbeatBySlug.get(slug) ?? null, nowMs),
+    ));
   }
   return faces;
 }
@@ -107,8 +152,8 @@ export function stewardPresence(desk: DeskPayload, slug: string, nowMs: number):
   return stewardPresences(desk, nowMs).get(slug) ?? { presence: 'idle', settle: 0 };
 }
 
-function resolvePresence(scan: boolean, book: BookSignals): StewardPresenceState {
-  if (book.blocked) return { presence: 'blocked', settle: 0 };
+function resolvePresence(scan: boolean, book: BookSignals, heartbeatStale: boolean): StewardPresenceState {
+  if (heartbeatStale || book.blocked) return { presence: 'blocked', settle: 0 };
   if (scan || book.inFlightRecent || book.recentFillWhileOpen) {
     return { presence: 'working', settle: 0 };
   }

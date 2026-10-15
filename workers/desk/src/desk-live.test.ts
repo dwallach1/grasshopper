@@ -56,7 +56,7 @@ describe('loadPublicDeskServe', () => {
     globalThis.fetch = (async () => {
       calls += 1;
       await new Promise((resolve) => setTimeout(resolve, 15));
-      return new Response(JSON.stringify({}), {
+      return new Response(JSON.stringify({ runs: [], cloudRuns: [], automations: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -73,6 +73,44 @@ describe('loadPublicDeskServe', () => {
       const before = calls;
       await loadPublicDeskServe(readerEnv);
       expect(calls).toBe(before);
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('bundle run rows join into routines, and a missing list does not invent a time', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({
+        runs: [{
+          id: 441,
+          run_type: 'market_scan',
+          started_at: '2026-10-15T17:07:37.315Z',
+          completed_at: '2026-10-15T17:12:37.052Z',
+          notes: 'market_scan 2026-10-15',
+        }],
+        cloudRuns: [],
+        automations: [],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const serve = await loadPublicDeskServe(readerEnv);
+      const desk = JSON.parse(serve.json) as {
+        routines: Array<{ id: string; last_run_at: string | null; last_outcome: string | null; last_summary: string | null }>;
+      };
+      const scan = desk.routines.find((row) => row.id === 'market_scan');
+      const autopsy = desk.routines.find((row) => row.id === 'missed_swing_autopsy');
+      expect(scan?.last_run_at).toBe('2026-10-15T17:07:37.315Z');
+      expect(scan?.last_outcome).toBe('passed');
+      expect(scan?.last_summary).toBe('market_scan 2026-10-15');
+      expect(autopsy?.last_run_at).toBeNull();
+      expect(autopsy?.last_summary).toBe('No run recorded');
+      expect(urls.every((url) => url.includes('/bundle/public'))).toBe(true);
+      expect(urls.some((url) => url.includes('/rest/v1/'))).toBe(false);
     } finally {
       globalThis.fetch = original;
       resetPublicDeskLiveCache();

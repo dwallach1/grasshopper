@@ -36,7 +36,7 @@ function agent(id: string, slug: string, name: string, status: string, sort: num
     accent: '#5b8def',
     avatar_key: slug,
     status,
-    heartbeat_at: null,
+    heartbeat_at: FRESH,
     sort_order: sort,
     meta: {},
   };

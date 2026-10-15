@@ -1,11 +1,11 @@
 /**
  * Team ID-card face. Ledger roster only — never the fallback identity cast.
- * Domain is one of Stocks / Predictions / Coins / Crypto. No P/L, hold, or beat.
+ * Domain is Ledger / Stocks / Predictions / Coins / Crypto. No P/L, hold, or beat.
  */
 import { currentStewards, deskTeam, teamCards } from './desk-team';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 
-export const STEWARD_ID_DOMAINS = ['Stocks', 'Predictions', 'Coins', 'Crypto'] as const;
+export const STEWARD_ID_DOMAINS = ['Ledger', 'Stocks', 'Predictions', 'Coins', 'Crypto'] as const;
 export type StewardIdDomain = (typeof STEWARD_ID_DOMAINS)[number];
 
 export type StewardIdCard = {
@@ -25,6 +25,8 @@ export function stewardDomainFace(slug: string, name = ''): StewardIdDomain | nu
 
 export function stewardSlugFace(slug: string): StewardIdDomain | null {
   switch (slug.trim().toLowerCase()) {
+    case 'grasshopper':
+      return 'Ledger';
     case 'quantanamo':
       return 'Stocks';
     case 'oddsborne':
@@ -40,6 +42,8 @@ export function stewardSlugFace(slug: string): StewardIdDomain | null {
 
 function domainToken(raw: string): StewardIdDomain | null {
   switch (raw.trim().toLowerCase()) {
+    case 'ledger':
+      return 'Ledger';
     case 'equity':
     case 'stock':
     case 'stocks':

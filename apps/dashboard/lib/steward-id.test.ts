@@ -76,24 +76,24 @@ function ledgerRoster() {
 }
 
 describe('steward ID card face', () => {
-  test('maps venue names to the four card domains and skips Ledger', () => {
+  test('maps venue names onto card domains, including the ledger steward', () => {
+    expect(stewardDomainFace('ledger', 'Ledger')).toBe('Ledger');
     expect(stewardDomainFace('equity', 'Stocks')).toBe('Stocks');
     expect(stewardDomainFace('prediction', 'Predictions')).toBe('Predictions');
     expect(stewardDomainFace('meme', 'Meme coins')).toBe('Coins');
     expect(stewardDomainFace('crypto', 'Crypto')).toBe('Crypto');
-    expect(stewardDomainFace('ledger', 'Ledger')).toBeNull();
+    expect(stewardSlugFace('grasshopper')).toBe('Ledger');
     expect(stewardSlugFace('quantanamo')).toBe('Stocks');
     expect(stewardSlugFace('oddsborne')).toBe('Predictions');
     expect(stewardSlugFace('bandit')).toBe('Coins');
     expect(stewardSlugFace('cointanamo')).toBe('Crypto');
-    expect(stewardSlugFace('grasshopper')).toBeNull();
   });
 
   test('paints ledger stewards only — empty roster is honest empty', () => {
     const cards = stewardIdCards({ team: ledgerRoster() });
-    expect(cards.map((row) => row.slug)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
-    expect(cards.map((row) => row.domain)).toEqual(['Stocks', 'Predictions', 'Coins']);
-    expect(cards.some((row) => row.slug === 'grasshopper')).toBe(false);
+    expect(cards.map((row) => row.slug)).toEqual(['grasshopper', 'quantanamo', 'oddsborne', 'bandit']);
+    expect(cards.map((row) => row.domain)).toEqual(['Ledger', 'Stocks', 'Predictions', 'Coins']);
+    expect(cards.some((row) => row.slug === 'grasshopper')).toBe(true);
     expect(stewardIdCards({})).toEqual([]);
     expect(stewardIdCards({ team: emptyTeam() })).toEqual([]);
     expect(stewardIdCards({ team: { agents: [], domains: [], stewards: [], accounts: [] } })).toEqual([]);
@@ -132,12 +132,12 @@ describe('steward ID card face', () => {
       ],
     });
     const cards = stewardIdCards({ team: withCoin });
-    expect(cards.map((row) => row.slug)).toEqual(['quantanamo', 'oddsborne', 'bandit', 'cointanamo']);
+    expect(cards.map((row) => row.slug)).toEqual(['grasshopper', 'quantanamo', 'oddsborne', 'bandit', 'cointanamo']);
     expect(cards.find((row) => row.slug === 'cointanamo')?.domain).toBe('Crypto');
   });
 
   test('card face has no book or board facts', () => {
-    const card = stewardIdCards({ team: ledgerRoster() })[0];
+    const card = stewardIdCards({ team: ledgerRoster() }).find((row) => row.slug === 'quantanamo');
     expect(card).toEqual({
       slug: 'quantanamo',
       display_name: 'QUANTANAMO',
@@ -156,11 +156,15 @@ describe('steward ID card face', () => {
 
   test('team roster keeps pulse age and still omits book facts', () => {
     const roster = assembleTeamRoster({ team: ledgerRoster() });
-    expect(roster.map((row) => row.slug)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
-    expect(roster[0]).toMatchObject({
+    expect(roster.map((row) => row.slug)).toEqual(['grasshopper', 'quantanamo', 'oddsborne', 'bandit']);
+    expect(roster.find((row) => row.slug === 'quantanamo')).toMatchObject({
       display_name: 'QUANTANAMO',
       domain: 'Stocks',
       heartbeat_at: '2026-09-06T12:00:00.000Z',
+    });
+    expect(roster.find((row) => row.slug === 'grasshopper')).toMatchObject({
+      domain: 'Ledger',
+      heartbeat_at: '2026-09-06T13:23:04.000Z',
     });
     expect(roster[0]).not.toHaveProperty('pnl');
     expect(roster[0]).not.toHaveProperty('win_rate');
