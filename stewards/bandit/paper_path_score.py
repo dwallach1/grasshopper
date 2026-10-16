@@ -21,7 +21,9 @@ Theses and promotion bars:
    (fallback: top-reserve pool).
 3. Exit (house): sell all at +50% if high >= 1.5x entry; kill at -40% if low <= 0.6x (kill wins if both in a bar);
    else close of the 48th bar (4h). Net = gross - 2.0 pp. Missing entry bar / incomplete window -> 'unscored'.
-4. Dedupe for edge3/4/5: first pass per coin per 4h (by entry time); later ones are 'dup_4h' and not counted.
+4. Voids: rows with blocked_by 'paper_void_stale' (edge5 pending entries voided after 2h; scan_https_once.py) are
+   reported as their own count ('void') and are never scored, deduped against, or counted toward n.
+5. Dedupe for edge3/4/5: first pass per coin per 4h (by entry time); later ones are 'dup_4h' and not counted.
    edge2 keeps its existing behaviour (no scorer-side dedupe; the scan already dedupes).
 Writes <out-dir>/paper_scores.json and paper_scores.csv; prints one table row per thesis.
 """
@@ -40,6 +42,7 @@ THESES = {
     "meme_grad_pullback":    dict(edge="edge4", entry="meta", pool_key="mig_pool", bar="se_top2", dedupe=True),
     "meme_liq_accum":        dict(edge="edge5", entry="decided_at", bar="se_top2", dedupe=True),
 }
+VOID_TAGS = {"paper_void_stale"}
 BAR_TEXT = {"edge2_locked": "n >= 20 and mean net with top 2 winners removed > 0",
             "se_top2": "n >= 20 and mean - SE > 0 and mean net with top 2 winners removed > 0"}
 
@@ -110,7 +113,7 @@ def summarize(thesis, cfg, out, n_passes, now):
         met = bool(n >= 20 and se is not None and mean - se > 0 and top2 is not None and top2 > 0)
     cnt = lambda s: sum(r["status"] == s for r in out)
     return {"run_pt": now.astimezone(PT).isoformat(), "thesis_id": thesis, "edge": cfg["edge"], "passes": n_passes,
-            "n_scored": n, "n_open": cnt("open"), "n_unscored": cnt("unscored"), "n_dup_4h": cnt("dup_4h"),
+            "n_scored": n, "n_open": cnt("open"), "n_unscored": cnt("unscored"), "n_dup_4h": cnt("dup_4h"), "n_void": cnt("void"),
             "mean_net_pct": None if mean is None else round(mean, 3), "se_pct": None if se is None else round(se, 3),
             "mean_minus_se_pct": None if se is None else round(mean - se, 3),
             "mean_net_top2_removed_pct": None if top2 is None else round(top2, 3),
@@ -125,6 +128,10 @@ def run_thesis(thesis, cfg, now):
         rec = {"thesis_id": thesis, "decision_id": p["decision_id"], "mint": p["instrument"],
                "decided_at_pt": t0.astimezone(PT).isoformat(), "book_price_sol": p.get("book_price"),
                "source_id": p.get("source_id")}
+        bb = p.get("blocked_by") or _meta(p).get("blocked_by")
+        if bb in VOID_TAGS:
+            rec.update(status="void", why=f"{bb}: {(_meta(p).get('void') or {}).get('reason') or 'voided'}")
+            recs.append((p, rec, None)); continue
         start, err = entry_ts(p, cfg)
         if err: rec.update(status="unscored", why=err)
         else: rec.update(entry_ts=start, entry_pt=datetime.fromtimestamp(start, PT).isoformat())
@@ -162,9 +169,9 @@ def main():
     with open(os.path.join(a.out_dir, "paper_scores.csv"), "w", newline="") as fh:
         w = csv.DictWriter(fh, keys); w.writeheader(); w.writerows(allp)
     f = lambda v: "-" if v is None else f"{v:+.2f}"
-    print(f"{'thesis_id':24} {'edge':5} {'n':>3} {'open':>4} {'unsc':>4} {'dup':>3} {'mean%':>7} {'exTop2%':>8} {'mean-SE%':>9}  bar_met")
+    print(f"{'thesis_id':24} {'edge':5} {'n':>3} {'open':>4} {'unsc':>4} {'dup':>3} {'void':>4} {'mean%':>7} {'exTop2%':>8} {'mean-SE%':>9}  bar_met")
     for s in summ:
-        print(f"{s['thesis_id']:24} {s['edge']:5} {s['n_scored']:>3} {s['n_open']:>4} {s['n_unscored']:>4} {s['n_dup_4h']:>3} "
+        print(f"{s['thesis_id']:24} {s['edge']:5} {s['n_scored']:>3} {s['n_open']:>4} {s['n_unscored']:>4} {s['n_dup_4h']:>3} {s['n_void']:>4} "
               f"{f(s['mean_net_pct']):>7} {f(s['mean_net_top2_removed_pct']):>8} {f(s['mean_minus_se_pct']):>9}  {s['promotion_bar_met']}")
     for s in summ: print(f"  {s['edge']}: {s['promotion_bar']}")
 
