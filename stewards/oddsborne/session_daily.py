@@ -21,7 +21,6 @@ sys.path.insert(0, "/workspace/oddsborne")
 sys.path.insert(0, "/workspace/oddsborne/deepdive_raw")
 
 from load_secrets import load_secrets
-from db_connect import connect
 from polymarket_us import PolymarketUS
 import _afternoon_helpers_20260930 as H
 
@@ -259,12 +258,21 @@ def venue_snap(c):
     }
 
 
-def slug_for_market_id(cur, market_id):
-    if not market_id:
+def slug_for_lot(lot, rpc):
+    """Slug already on the lot, else oddsborne_position_get over HTTPS. Never opens the pooler.
+    A lookup failure returns None so the exit loop can log that lot and keep going."""
+    slug = lot.get("slug")
+    if slug or not lot.get("id"):
+        return slug
+    try:
+        row = rpc("oddsborne_position_get", {"position_id": str(lot["id"])}, idempotent=True)
+    except Exception as e:
+        print("ERROR check_exits slug lookup failed (exit check continues)", lot.get("id"),
+              type(e).__name__, str(e)[:160], flush=True)
         return None
-    cur.execute("SELECT slug FROM public.pm_markets WHERE id=%s::uuid", (str(market_id),))
-    row = cur.fetchone()
-    return row[0] if row else None
+    if isinstance(row, dict):
+        return (row.get("market") or {}).get("slug") or row.get("slug")
+    return None
 
 
 def sell_whole_position(c, slug, outcome, qty, print_px, inval, pos_id):
@@ -330,25 +338,13 @@ def sell_whole_position(c, slug, outcome, qty, print_px, inval, pos_id):
         out["error"] = f"create_failed: {type(e).__name__}: {str(e)[:300]}"
         out["decision"] = "SELL_FAILED"
         return out
-    # Close ledger only if fill confirmed
+    # Live exits close the ledger in pm_exit.py (oddsborne_exit_record over HTTPS). This helper is
+    # not on the session exit path; it used to UPDATE pm_positions on the pooler, which times out
+    # from the box and skips fills and realized P/L.
     if out.get("decision") == "SELL_FILLED" and not DRY_RUN:
-        try:
-            conn = connect()
-            cur = conn.cursor()
-            cur.execute(
-                """UPDATE public.pm_positions SET status='closed', closed_at=now(), updated_at=now(),
-                       meta = coalesce(meta,'{}'::jsonb) || %s::jsonb
-                   WHERE id=%s::uuid AND status='open' RETURNING id""",
-                (json.dumps({"exit": "invalidation", "session": SESSION, "print": px, "inval": inval,
-                             "venue_order_id": out.get("venue_order_id"), "at": datetime.now(timezone.utc).isoformat()}),
-                 str(pos_id)),
-            )
-            closed = cur.fetchone()
-            conn.commit()
-            conn.close()
-            out["ledger_closed"] = str(closed[0]) if closed else None
-        except Exception as e:
-            out["ledger_err"] = f"{type(e).__name__}: {str(e)[:200]}"
+        out["ledger_closed"] = None
+        out["ledger_err"] = "legacy pooler close removed; use pm_exit.py (oddsborne_exit_record)"
+        print("ERROR sell_whole_position ledger close not written; exits use pm_exit.py", flush=True)
     return out
 
 
@@ -375,19 +371,25 @@ def pm_exit_invalidation(pos_id):
 
 
 def check_exits(c, open_lots, pos_by_slug):
-    """For every open pm_positions row: compare venue print to invalidation_price; sell if <=."""
+    """For every open pm_positions row: compare venue print to invalidation_price; sell if <=.
+    A missing slug is resolved over HTTPS. That lookup failing logs and skips the lot; it does not
+    stop the other exits."""
     exits = []
     covered = set()
-    conn = cur = None
-    try:
-        conn = connect()
-        cur = conn.cursor()
-    except Exception as e:
-        print("check_exits_db_offline", type(e).__name__, str(e)[:120], flush=True)
+    rpc = None
     for lot in open_lots:
         slug = lot.get("slug")
-        if not slug and cur is not None:
-            slug = slug_for_market_id(cur, lot.get("market_id"))
+        if not slug:
+            if rpc is None:
+                try:
+                    from pm_enter import make_rpc
+                    rpc = make_rpc()
+                except Exception as e:
+                    print("ERROR check_exits slug rpc unavailable (exit check continues)",
+                          type(e).__name__, str(e)[:160], flush=True)
+                    rpc = False
+            if rpc:
+                slug = slug_for_lot(lot, rpc)
         lot["slug"] = slug
         d = {"lot_id": lot["id"], "slug": slug, "outcome": lot.get("outcome"),
              "qty": lot.get("qty"), "avg": lot.get("avg"), "inv": lot.get("inv"),
@@ -435,11 +437,6 @@ def check_exits(c, open_lots, pos_by_slug):
             d["why"] = f"print {print_px} > inval {inv}; hold; watch routines active"
             print(f"EXIT HOLD {slug} print={print_px} inval={inv}", flush=True)
         exits.append(d)
-    if conn is not None:
-        try:
-            conn.close()
-        except Exception:
-            pass
     return exits, covered
 
 
@@ -579,14 +576,6 @@ def try_enter(pick, cash):
 
 
 def main():
-    # Box→Supabase pooler TCP is DOWN this session — fail DB instantly; ledger via MCP.
-    def _connect_offline():
-        raise TimeoutError("ConnectionTimeout: pooler TCP unreachable (session forced offline)")
-    global connect
-    import db_connect as _dbc
-    _dbc.connect = _connect_offline
-    connect = _connect_offline
-
     sec = load_secrets()
     for k, v in sec.items():
         os.environ[k] = v
@@ -609,7 +598,7 @@ def main():
     notes0 = (
         f"Daily session AM {TODAY} ~{datetime.now(PT).strftime('%-I:%M %p PT')}. "
         f"Venue cash={cash} equity={equity} positions={snap['n_pos']} orders={snap['n_orders']}. "
-        f"Fresh morning snap. Cash snapshot not period P/L. Ledger over HTTPS (steward-rpc) + Supabase MCP for notes."
+        f"Fresh morning snap. Cash snapshot not period P/L. Ledger over HTTPS (steward-rpc), including pm_notes."
     )
     # 1b) Refresh pm_pnl over HTTPS BEFORE the entry gate (guidance refuses entries on a stale book), so a
     # missed earlier session can't silently block this one. Failure is a loud ERROR and blocks entries.
@@ -639,22 +628,6 @@ def main():
              "inv_note": r.get("invalidation_note"), "market_id": r.get("market_id"), "slug": r.get("slug") or r.get("market_slug")}
             for r in _rows
         ]
-        raise StopIteration  # skip legacy psycopg path
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute(
-            """SELECT id, thesis_id, outcome, quantity, average_cost, invalidation_price, invalidation_note, market_id
-               FROM public.pm_positions WHERE status='open' ORDER BY opened_at DESC NULLS LAST"""
-        )
-        open_lots = [
-            {"id": str(r[0]), "thesis_id": r[1], "outcome": r[2], "qty": float(r[3] or 0),
-             "avg": float(r[4]) if r[4] is not None else None,
-             "inv": float(r[5]) if r[5] is not None else None, "inv_note": r[6], "market_id": str(r[7]) if r[7] else None}
-            for r in cur.fetchall()
-        ]
-        conn.close()
-    except StopIteration:
-        pass
     except Exception as e:
         print("open_lots_db_offline", type(e).__name__, str(e)[:120], flush=True)
         lots_path = Path(f"/workspace/oddsborne/deepdive_raw/session_{DSTAMP}_open_lots.json")
@@ -1081,42 +1054,36 @@ def main():
                  "n_seen": p2.get("n_seen"), "weather_non_skip": len(wx_trade)}
     skip_meta = {"comps_top": sorted(comps, key=lambda x: -(x.get("post_fee_maker") or -9))[:10],
                  "weather": [{k: w.get(k) for k in ("city","day","decision","reason","mode","mode_mid","nws","hmax","obsmax","belief_weighed")} for w in weather]}
+    scan_args = skip_args = None
     note_scan = note_skip = hb2 = None
     try:
+        from pm_session_notes import note_args, write_session_notes
+        scan_args = note_args(
+            thesis_id=THESIS_WX, note_type="scan", title=f"Morning full-book + weather scan {TODAY}",
+            body=scan_body, decision=scan_decision, meta=scan_meta,
+        )
+        skip_args = note_args(
+            thesis_id=THESIS_SPORTS, note_type="skip", title=f"Morning skips AM {TODAY}",
+            body="\n".join(skip_bits)[:8000], decision="skip", meta=skip_meta,
+        )
         if DRY_RUN:  # --dry-run writes nothing: route to the would-write file below, no blocker
             raise _DryRunNoWrite()
-        conn = connect()
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO public.pm_notes (thesis_id, note_type, title, body, decision, meta)
-               VALUES (%s, 'scan', %s, %s, %s, %s::jsonb) RETURNING id""",
-            (THESIS_WX, f"Morning full-book + weather scan {TODAY}", scan_body, scan_decision,
-             json.dumps(scan_meta, default=str)),
-        )
-        note_scan = str(cur.fetchone()[0])
-        cur.execute(
-            """INSERT INTO public.pm_notes (thesis_id, note_type, title, body, decision, meta)
-               VALUES (%s, 'skip', %s, %s, 'skip', %s::jsonb) RETURNING id""",
-            (THESIS_SPORTS, f"Morning skips AM {TODAY}", "\n".join(skip_bits)[:8000],
-             json.dumps(skip_meta, default=str)),
-        )
-        note_skip = str(cur.fetchone()[0])
-        cur.execute("select public.oddsborne_touch_heartbeat()")
-        hb2 = str(cur.fetchone()[0])
-        conn.commit()
-        conn.close()
+        from pm_enter import make_rpc
+        wrote = write_session_notes(make_rpc(), scan_args, skip_args)
+        note_scan, note_skip, hb2 = wrote["scan"], wrote["skip"], wrote["heartbeat"]
     except Exception as e:
+        partial = getattr(e, "partial", None) or {}
         if not isinstance(e, _DryRunNoWrite):
-            print("pm_notes_offline", type(e).__name__, str(e)[:160], flush=True)
+            msg = (
+                f"ERROR pm_notes write failed (exits not blocked) stage={getattr(e, 'stage', 'notes')}: "
+                f"{type(e).__name__}: {str(e)[:300]}"
+            )
+            print(msg, file=sys.stderr, flush=True)
+            print(msg, flush=True)
         else:
             print("DRY_RUN: would write pm_notes scan+skip + heartbeat", flush=True)
-        pending = {
-            "scan": {"thesis_id": THESIS_WX, "note_type": "scan", "title": f"Morning full-book + weather scan {TODAY}",
-                     "body": scan_body, "decision": None, "meta": scan_meta},
-            "skip": {"thesis_id": THESIS_SPORTS, "note_type": "skip", "title": f"Morning skips AM {TODAY}",
-                     "body": "\n".join(skip_bits)[:8000], "decision": None, "meta": skip_meta},
-            "error": f"{type(e).__name__}: {e}",
-        }
+        pending = {"scan": scan_args, "skip": skip_args, "partial": partial,
+                   "error": f"{type(e).__name__}: {e}"}
         if isinstance(e, _DryRunNoWrite):
             path = OUT / f"session_raw_{SESSION}_notes_would_write.json"
             path.write_text(json.dumps(pending, indent=2, default=str))
@@ -1124,10 +1091,10 @@ def main():
         else:
             path = OUT / f"session_raw_{SESSION}_notes_pending.json"
             path.write_text(json.dumps(pending, indent=2, default=str))
-            note_scan = f"PENDING_MCP:scan:{path.name}"
-            note_skip = f"PENDING_MCP:skip:{path.name}"
-            hb2 = hb if isinstance(hb, str) else "PENDING_HB"
-            blockers.append(f"pm_notes via MCP pending file: {type(e).__name__}")
+            note_scan = partial.get("scan") or f"PENDING_MCP:scan:{path.name}"
+            note_skip = partial.get("skip") or f"PENDING_MCP:skip:{path.name}"
+            hb2 = partial.get("heartbeat") or (hb if isinstance(hb, str) else "PENDING_HB")
+            blockers.append(f"ERROR pm_notes steward-rpc failed; pending file {path.name}: {type(e).__name__}")
 
     entered = any(
         isinstance(se.get("live"), dict) and se["live"].get("decision") == "PLACED"

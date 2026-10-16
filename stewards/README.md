@@ -177,6 +177,7 @@ A lot opened by `live_trade_clip.py` or `pm_enter.py` is marked and closed from 
 | `pm_fills_sync.py --venue-order-id <buy id>` | Records maker fills that landed after `pm_enter.py` returned, and adds them to the open lot. It refuses when the venue no longer holds the shares (already sold); record those with the exit instead. |
 | `close_lesson.py --position-id <id> --rationale "<lesson>" --confidence-delta <-n> [--dry-run]` | Same as BANDIT's (an identical file). |
 | `pm_pnl_snapshot.py [--notes "<standup>"]` | Writes a `pm_pnl` snapshot of venue cash plus asset notional (`oddsborne_pnl_snapshot`). |
+| `session_daily.py` / `session_pm.py` | Write the scan and skip `pm_notes` with `oddsborne_insert_note` over steward-rpc, then `oddsborne_touch_heartbeat`. A failed note is logged and does not block exits (those already ran through `pm_exit.py`). |
 
 ### QUANTANAMO close lessons (equity lots)
 
@@ -201,7 +202,7 @@ The box only egresses HTTPS (443), through a proxy that resolves every host to a
 - Check the path: `cd /workspace/<steward> && .venv/bin/python steward_rpc.py <steward>` prints the role and DB time.
 - `STEWARD_DB_TRANSPORT=pg` switches back to a direct psycopg connection through `db_connect` (for a host that can reach the pooler). `STEWARD_RPC_URL` overrides the function URL.
 
-Ad-hoc box scripts that still `import db_connect` (the per-symbol `_<sym>_exit_once.py` / `_mark_once.py` clones, ODDSBORNE's `watch_*` and session scripts) will keep timing out on the box until they are ported. Use the exit/mark scripts above instead. Other scripts must be ported to `steward_rpc` (add a function to the allowlist and the schema file) or until box egress allows TCP to the pooler.
+Ad-hoc box scripts that still `import db_connect` (the per-symbol `_<sym>_exit_once.py` / `_mark_once.py` clones and ODDSBORNE's `watch_*` scripts) will keep timing out on the box until they are ported. Session scan and skip notes go through `oddsborne_insert_note` (`supabase/schemas/72_oddsborne_insert_note.sql`). Use the exit/mark scripts above instead. Other scripts must be ported to `steward_rpc` (add a function to the allowlist and the schema file) or until box egress allows TCP to the pooler.
 
 ## Shadow exits (all stewards)
 
