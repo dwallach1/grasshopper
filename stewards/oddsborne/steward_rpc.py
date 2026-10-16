@@ -138,10 +138,12 @@ def _call_pg(steward: str, fn: str, args: dict) -> object:
 
 def log_decision(steward: str, *, decision: str, instrument: str, side: str, price,
                  probability=None, expected_move=None, thesis_id=None, reason=None,
-                 source_id=None, decided_at=None, blocked_by=None, meta=None) -> object:
+                 source_id=None, decided_at=None, blocked_by=None, meta=None, no_price_reason=None) -> object:
     """Record one enter or skip that can be scored later.
 
-    A write missing the market, the side, or the price is refused (`refusal:unscoreable`).
+    A write missing the market, the side, or the price is refused (`refusal:unscoreable`), except a meme skip
+    that passes price=None with `no_price_reason`: it is stored unscoreable and never scored (needs migration
+    20261016200000). Never send a made-up price.
     Prediction markets also need `probability` (0 to 1). Equity and meme passes may include
     `expected_move` as a fraction of price (0.08 = +8%). `meta` (a dict) is stored with the decision.
     This does not place or size an order.
@@ -160,6 +162,7 @@ def log_decision(steward: str, *, decision: str, instrument: str, side: str, pri
         "decided_at": decided_at,
         "blocked_by": blocked_by,
         "meta": meta,
+        "no_price_reason": no_price_reason,
     }
     return call(steward, "steward_log_decision", {k: v for k, v in args.items() if v is not None})
 

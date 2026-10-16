@@ -434,15 +434,21 @@ def _px_sol(r):
         return px, o.get("priceImpactPct"), None if px else "no_price"
     except Exception as e:
         return None, None, f"quote_err {type(e).__name__}"
-def _paper_log(r, thesis, suffix, reason, meta, blocked_by=PAPER_TAG, px_fallback=None):
+def _paper_log(r, thesis, suffix, reason, meta, blocked_by=PAPER_TAG, px_fallback=None, allow_priceless=False):
+    """Log one paper-only skip. allow_priceless (edge5 voids only): with no live quote and no stored signal price,
+    log it with NO price (never an invented one) plus no_price_reason; the ledger stores it unscoreable."""
     px, imp, err = _px_sol(r)
     if (err or not px) and px_fallback: px, err, imp = px_fallback, None, "n/a (signal-time quote)"
-    if err or not px: return None, err or "no_price"
+    no_px = None
+    if err or not px:
+        if not allow_priceless: return None, err or "no_price"
+        px, imp, no_px = None, "n/a (no price)", f"void, no live quote ({err or 'no_price'}) and no stored signal price"
+        reason, meta = f"[no_price] {reason}", dict(meta, no_price=no_px)   # prefix: the ledger keeps 280 chars
     if _no_log: return None, f"dry_run would_log blocked_by={blocked_by} px={px} {meta}"
     import steward_rpc
     res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
         thesis_id=thesis, reason=f"{reason}; impact {imp}", blocked_by=blocked_by, decided_at=_dec_pt,
-        source_id=f"scan_https_{_stamp}_{r['mint'][:8]}_{suffix}", meta=meta)
+        source_id=f"scan_https_{_stamp}_{r['mint'][:8]}_{suffix}", meta=meta, no_price_reason=no_px)
     return (res or {}).get("id"), "ok" if (res or {}).get("ok") else res
 def _iso_ts(x):
     try: return datetime.fromisoformat(str(x).replace("Z", "+00:00")).timestamp()
@@ -595,7 +601,7 @@ def _e5_void(mint, pend):
     meta = {"edge5": dict(pend["info"], signal_scan_ts=pend["signal_ts"]), "void": {"reason": "stale_2h", "signal_ts": pend["signal_ts"],
             "retries": pend.get("retries", 0), "last_error": pend.get("last_error")}}
     return _paper_log(r, "meme_liq_accum", "edge5void", f"{r['symbol']}: edge5 pending entry VOID (paper only, not a pass): signal {sig_pt}; {why}",
-                      meta, blocked_by=E5_VOID_TAG, px_fallback=pend.get("signal_px_sol"))
+                      meta, blocked_by=E5_VOID_TAG, px_fallback=pend.get("signal_px_sol"), allow_priceless=True)
 _e5_syms = {m: p_.get("symbol") for m, p_ in e5_state.get("pending", {}).items()}
 for _m, _lid, _st in edge5_process_pending(e5_state, _now_ts, _e5_entry, _e5_void, _no_log):
     edge5_logged.append((_e5_syms.get(_m) or _m, _lid, _st))
