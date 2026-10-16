@@ -216,6 +216,21 @@ class Scorer(unittest.TestCase):
         self.assertEqual(out[2]["status"], "scored")                                        # not a dup of the void
         self.assertEqual((s["n_void"], s["n_scored"], s["n_dup_4h"], s["passes"]), (2, 1, 0, 3))
 
+    def test_server_tagged_voids_still_counted_as_void(self):
+        # rows as stored once steward_log_decision tags voids (20261016210000): unscoreable, resolve_status void,
+        # the caller's meta.void kept; one priced, one priceless (book_price null)
+        d = T0 + 6 * 86400
+        tag = {"blocked_by": "paper_void_stale", "unscoreable": "true", "resolve_status": "void",
+               "unscoreable_reason": "void: paper_void_stale, not a decision", "void": {"reason": "stale_2h"}}
+        rows = [row(1, "meme_liq_accum", "M", d, dict(tag), blocked_by="paper_void_stale"),
+                row(2, "meme_liq_accum", "N", d, dict(tag, unscoreable_reason="void: paper_void_stale, not a decision; no_price: x"),
+                    blocked_by="paper_void_stale")]
+        rows[1]["book_price"] = None
+        s, out, fx = self.run_rows("meme_liq_accum", rows, {})
+        self.assertEqual((out[1]["status"], out[2]["status"]), ("void", "void"))
+        self.assertEqual((s["n_void"], s["n_scored"], s["passes"]), (2, 0, 2))
+        self.assertEqual(fx.calls, [])                                                       # never priced
+
     def test_new_bar_mean_minus_se_and_top2(self):
         cfg = PS.THESES["meme_liq_accum"]
         mk = lambda vals: [{"status": "scored", "net_pct": v} for v in vals]
