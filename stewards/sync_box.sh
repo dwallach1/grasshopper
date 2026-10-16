@@ -45,6 +45,7 @@ else
     "$here/bandit/pass_marks.py:$box/bandit/pass_marks.py"
     "$here/bandit/close_lesson.py:$box/bandit/close_lesson.py"
     "$here/bandit/edge2_path_score.py:$box/bandit/edge2_path_score.py"
+    "$here/bandit/paper_path_score.py:$box/bandit/paper_path_score.py"
     "$here/bandit/scan_https_once.py:$box/bandit/_scan_https_once.py"
     "$here/bandit/requirements.txt:$box/bandit/requirements.txt"
     "$here/oddsborne/pm_enter.py:$box/oddsborne/pm_enter.py"
