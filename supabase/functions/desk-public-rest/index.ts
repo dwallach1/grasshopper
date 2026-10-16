@@ -332,10 +332,10 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       const cycleIds = [...new Set(projected.map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id) && id > 0))];
       const [cycles, scenarios] = await Promise.all([
         cycleIds.length
-          ? restGet(`research_cycles?select=id,thesis_id,stage,status,market_regime,hypothesis,preregistered_outcome&id=in.(${cycleIds.join(',')})`)
+          ? restGet(`research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&id=in.(${cycleIds.join(',')})`)
           : Promise.resolve([]),
         testIds.length
-          ? restGet(`test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value&test_id=in.(${testIds.join(',')})`)
+          ? restGet(`test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&test_id=in.(${testIds.join(',')})`)
           : Promise.resolve([]),
       ]);
       body.cycles = cycles.map((row) => {

@@ -315,17 +315,34 @@ export function mapPostmortems(rows: JsonObjectRow[]): PostmortemRow[] {
   return z.array(PostmortemSchema).parse(rows);
 }
 
+const OptionalCycleKey = z.string().nullable().optional().transform((value) => {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+});
+
+const OptionalCycleTime = z.union([z.string(), z.date(), z.null()]).optional().transform((value) => {
+  if (value == null) return null;
+  return requireIso(value, 'timestamp');
+});
+
+const OptionalIteration = z.union([z.string(), z.number(), z.null()]).optional().transform((value) => {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+});
+
 const CycleSchema = z
   .object({
     id: Id,
-    external_key: z.string(),
+    external_key: OptionalCycleKey,
     thesis_id: z.string(),
     hypothesis: z.string(),
     preregistered_outcome: z.string(),
-    preregistered_at: Timestamp,
+    preregistered_at: OptionalCycleTime,
     stage: z.string(),
     status: z.string(),
-    iteration: Id,
+    iteration: OptionalIteration,
     market_regime: z.string().nullable(),
   })
   .passthrough();
@@ -406,7 +423,7 @@ const ScenarioSchema = z
     cost_multiplier: Money,
     outcome: z.string(),
     metric_value: OptionalMoney,
-    breach_type: z.string().nullable(),
+    breach_type: z.string().nullable().optional().transform((value) => value ?? null),
   })
   .passthrough();
 

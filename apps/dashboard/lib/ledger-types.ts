@@ -168,16 +168,17 @@ export type PostmortemRow = {
   lesson: string;
 };
 
+/** `external_key`, `preregistered_at`, and `iteration` are null when the public bundle omits them. */
 export type CycleRow = {
   id: number;
-  external_key: string;
+  external_key: string | null;
   thesis_id: string;
   hypothesis: string;
   preregistered_outcome: string;
-  preregistered_at: string;
+  preregistered_at: string | null;
   stage: string;
   status: string;
-  iteration: number;
+  iteration: number | null;
   market_regime: string | null;
 };
 

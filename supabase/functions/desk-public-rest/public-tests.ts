@@ -42,9 +42,10 @@ export const PUBLIC_SUMMARY_COLUMNS = [
   'spy_a:payload_json->spy_same_dates_book',
   'spy_same:payload_json->spy_book_same_dates',
   'spy_open:payload_json->spy_open_to_close_book',
-  'mean10:payload_json->by_cost->10->mean_net_pct',
-  'n10:payload_json->by_cost->10->n',
-  'win10:payload_json->by_cost->10->win',
+  // "10" is an object key (10 bps), not an array index. Unquoted ->10 reads null.
+  'mean10:payload_json->by_cost->"10"->mean_net_pct',
+  'n10:payload_json->by_cost->"10"->n',
+  'win10:payload_json->by_cost->"10"->win',
   'regime_mean:payload_json->regime->mean',
   'regime_n:payload_json->regime->n',
   'other_mean:payload_json->non_regime->mean',
@@ -196,6 +197,18 @@ function signed(value: number, digits: number): string {
   return `+${text}`;
 }
 
+/**
+ * Half-away-from-zero to `digits`. `Number(-5.645).toFixed(2)` is `-5.64`
+ * because the JSON value is just under the decimal. Used for means that are
+ * already stored in percent, so the line matches the ledger figure.
+ */
+function roundHalfAway(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  const sign = value < 0 ? -1 : 1;
+  const nudged = Number((Math.abs(value) * factor).toPrecision(12));
+  return sign * (Math.round(nudged) / factor);
+}
+
 function percentHit(fraction: number): string {
   const points = Math.round(fraction * 1000) / 10;
   const text = Number.isInteger(points) ? String(points) : points.toFixed(1);
@@ -329,7 +342,7 @@ export function measureStrategyTest(summary: unknown, context: MeasureContext = 
   if (fractionMean !== null || meanPct !== null) {
     const alreadyPercent = fractionMean === null;
     const mean = alreadyPercent ? meanPct! : fractionMean!;
-    const shown = alreadyPercent ? mean : mean * 100;
+    const shown = alreadyPercent ? roundHalfAway(mean, 2) : mean * 100;
     const ciFrac = chase !== null
       ? firstPair(record, [['ci90_60']])
       : mean30 !== null
