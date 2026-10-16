@@ -537,6 +537,8 @@ export type DeskCounts = {
   open_research: number;
   tests_killed: number;
   tests_survived: number;
+  /** Strategy tests still `queued`. Placeholder and lookahead rows are not counted. */
+  tests_queued?: number;
   scenario_cells: number;
   open_positions: number;
   queued_tasks: number;

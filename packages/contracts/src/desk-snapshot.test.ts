@@ -156,6 +156,36 @@ describe('public desk snapshot contract', () => {
     ]);
   });
 
+  test('public snapshot keeps finished strategy tests instead of an empty 0/0 panel', () => {
+    const published = toPublicDeskSnapshot({
+      ...sample,
+      tests: [{ id: 40, status: 'survived', variant_label: 'serial-negative-reactor-hold-vs-exit-v1' }],
+      backtest_artifacts: [{ id: 9, test_id: 40, artifact_kind: 'summary_json', title: 'summary' }],
+      cycles: [{ id: 144, thesis_id: 'earnings_gap_structure' }],
+      scenarios: [{ id: 1, test_id: 40, outcome: 'survived' }],
+      counts: {
+        sources: 0,
+        symbols: 0,
+        open_research: 0,
+        tests_killed: 8,
+        tests_survived: 1,
+        tests_queued: 16,
+        scenario_cells: 1,
+        open_positions: 2,
+        queued_tasks: 0,
+      },
+    });
+    expect(published.tests).toEqual([
+      { id: 40, status: 'survived', variant_label: 'serial-negative-reactor-hold-vs-exit-v1' },
+    ]);
+    expect(published.backtest_artifacts).toHaveLength(1);
+    expect(published.cycles).toHaveLength(1);
+    expect(published.scenarios).toHaveLength(1);
+    expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 8, tests_queued: 16 });
+    expect(published.evidence).toEqual([]);
+    expect(published.runs).toEqual([]);
+  });
+
   test('review ranking prefers memberships, drops deny-list junk, keeps ledger scores', () => {
     expect(PUBLIC_CANDIDATE_CAP).toBe(40);
     expect(PUBLIC_CANDIDATE_FETCH).toBe(72);

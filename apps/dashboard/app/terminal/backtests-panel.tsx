@@ -12,6 +12,7 @@ import {
 } from '../../lib/backtest-artifacts';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
+import { formatTestReturn, strategyTestCounts } from '../../lib/strategy-tests-public';
 import {
   ledgerCount,
   ledgerPct,
@@ -46,13 +47,20 @@ export function BacktestsPanel({
   const scenarios = desk.scenarios.filter((row) =>
     selected ? row.test_id === selected.test.id : true,
   );
+  const tally = desk.tests.length
+    ? strategyTestCounts(desk.tests)
+    : {
+        tests_survived: desk.counts.tests_survived,
+        tests_killed: desk.counts.tests_killed,
+        tests_queued: desk.counts.tests_queued ?? 0,
+      };
 
   return (
     <div className="term-grid term-grid-backtests">
       <section className="term-panel">
         <header>
           <b>STRATEGY TESTS</b>
-          <span>{desk.counts.tests_survived} survived / {desk.counts.tests_killed} killed</span>
+          <span>{tally.tests_survived} survived / {tally.tests_killed} killed / {tally.tests_queued} queued</span>
         </header>
         <div className="term-scroll term-tests-table">
         <table>
@@ -82,8 +90,8 @@ export function BacktestsPanel({
                 <td>{formatWindow(row.window_start, row.window_end)}</td>
                 <td>{formatSymbols(row.symbols)}</td>
                 <td>{formatPriceSourceLabel(row)}</td>
-                <td className={pnlTone(row.total_return)}>{ledgerPct(row.total_return)}</td>
-                <td className={row.max_drawdown === null ? 'muted' : 'down'}>{ledgerPct(row.max_drawdown)}</td>
+                <td className={pnlTone(row.total_return)}>{formatReturn(row.total_return, row.test.status)}</td>
+                <td className={row.max_drawdown === null ? 'muted' : 'down'}>{formatReturn(row.max_drawdown, row.test.status)}</td>
                 <td>{ledgerCount(row.trade_count)}</td>
               </tr>
             ))}
@@ -110,11 +118,11 @@ export function BacktestsPanel({
                 {' · '}
                 {formatWindow(row.window_start, row.window_end)}
               </p>
-              <p>{formatSymbols(row.symbols)}</p>
+              <p>{shortSymbols(row.symbols)}</p>
               <div className="term-test-card-metrics">
-                <span className={pnlTone(row.total_return)}>Ret {ledgerPct(row.total_return)}</span>
+                <span className={pnlTone(row.total_return)}>Return {formatReturn(row.total_return, row.test.status)}</span>
                 <span className={row.max_drawdown === null ? 'muted' : 'down'}>
-                  DD {ledgerPct(row.max_drawdown)}
+                  Drawdown {formatReturn(row.max_drawdown, row.test.status)}
                 </span>
                 <span>Trades {ledgerCount(row.trade_count)}</span>
               </div>
@@ -298,6 +306,16 @@ function BacktestDetail({ view }: { view: ReturnType<typeof assembleBacktestView
       )}
     </>
   );
+}
+
+function formatReturn(value: number | null, status: string): string {
+  return formatTestReturn(value, status) ?? NOT_IN_LEDGER;
+}
+
+function shortSymbols(symbols: string[] | null): string {
+  if (!symbols || symbols.length === 0) return NOT_IN_LEDGER;
+  if (symbols.length <= 8) return symbols.join(' ');
+  return `${symbols.slice(0, 6).join(' ')} · ${symbols.length} names`;
 }
 
 function formatMetric(numeric: number | null, text: string | null): string {

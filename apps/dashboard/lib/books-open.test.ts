@@ -7,6 +7,7 @@ import { deskFromWire } from './desk-client';
 import { fallbackTeam } from './desk-team';
 import type { DeskPayload } from './ledger-types';
 import { emptyLedgerWatchdog } from './ledger-watchdog';
+import type { CycleRow, StrategyTestRow } from './ledger-types';
 import { emptyStewardScorecard } from './steward-scorecard';
 
 const AT = '2026-09-16T20:00:00.000Z';
@@ -523,6 +524,62 @@ describe('Books page: one section per steward', () => {
       button(view.host, '.books-more').click();
     });
     expect(shown()).toHaveLength(7);
+    view.unmount();
+  });
+
+  test('a survived test sits with the lesson that cites it, and a placeholder does not', async () => {
+    const survived: StrategyTestRow = {
+      id: 40,
+      external_key: 'serial-negative-reactor-hold-vs-exit-v1-20261016',
+      cycle_id: 144,
+      variant_label: 'serial-negative-reactor-hold-vs-exit-v1',
+      status: 'survived',
+      total_return: 0.932264,
+      max_drawdown: -0.242176,
+      deflated_sharpe: -0.067909,
+      cost_multiplier: 1,
+      stress_regime: null,
+      failure_reason: null,
+      autopsy: null,
+      tested_at: AT,
+      price_source: null,
+      window_start: '2025-10-06',
+      window_end: '2026-10-15',
+      symbols: ['AAPL'],
+      params_json: null,
+    };
+    const placeholder: StrategyTestRow = { ...survived, id: 1, status: 'placeholder', total_return: 11.2, variant_label: 'power-breadth-v4' };
+    const cycle: CycleRow = {
+      id: 144,
+      external_key: 'cycle-144',
+      thesis_id: EARNINGS,
+      hypothesis: 'Hold through the print.',
+      preregistered_outcome: 'Hold beats the exit.',
+      preregistered_at: AT,
+      stage: 'tested',
+      status: 'complete',
+      iteration: 1,
+      market_regime: null,
+    };
+    const payload = desk([], [], [{
+      ...lesson(132, 'Test 40 survived the preregistered rule.'),
+      test_id: 40,
+      lesson_type: 'pattern_confirm',
+    }]);
+    payload.tests = [survived, placeholder];
+    payload.cycles = [cycle];
+    payload.counts = { ...payload.counts, tests_survived: 0, tests_killed: 0 };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
+    });
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.textContent).toContain('Tests · 1');
+    expect(detail?.textContent).toContain('serial negative reactor hold vs exit v1 · passed · return +93.2%');
+    expect(detail?.textContent).not.toContain('power breadth');
+    expect(detail?.querySelector('[data-test="40"]')?.getAttribute('data-status')).toBe('survived');
+    expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('passed');
+    expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('return +93.2%');
     view.unmount();
   });
 

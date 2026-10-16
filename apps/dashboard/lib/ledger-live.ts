@@ -1,4 +1,9 @@
 import { mapBacktestArtifacts } from './backtest-artifacts';
+import {
+  slimPublicArtifacts,
+  slimPublicTests,
+  strategyTestCounts,
+} from './strategy-tests-public';
 import * as z from 'zod';
 
 import {
@@ -267,7 +272,11 @@ export const SCORECARD_QUERIES = {
   gates: 'v_gate_report?select=steward,gate,skips,scored,would_have_won,would_have_won_rate,mean_outcome_pct,verdict,thesis_id,at_stake_pnl,unit,sd_outcome_pct,more_needed&order=steward.asc,scored.desc,skips.desc,gate.asc',
 } as const;
 
-/** Phone Worker path — skip operator tables the public snapshot already drops. */
+/**
+ * Phone Worker path. Operator audit tables stay empty. Strategy tests publish
+ * as a slim result: survived / killed / queued, no placeholder or lookahead rows,
+ * no parameter bag. Counts come from those rows — a finished test cannot read as 0.
+ */
 export function assemblePublicDeskFromRestBag(bag: Pick<
   RestDeskBag,
   | 'theses'
@@ -285,7 +294,21 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'prediction'
   | 'meme'
   | 'team'
-> & Partial<Pick<RestDeskBag, 'runs' | 'cloudRuns' | 'automations' | 'scorecard' | 'watchdog'>>): DeskPayload {
+> & Partial<Pick<RestDeskBag,
+  | 'runs'
+  | 'cloudRuns'
+  | 'automations'
+  | 'cycles'
+  | 'tests'
+  | 'artifacts'
+  | 'scenarios'
+  | 'scorecard'
+  | 'watchdog'
+>>): DeskPayload {
+  const mappedTests = mapTests(slimPublicTests(bag.tests ?? []));
+  const mappedArtifacts = mapBacktestArtifacts(slimPublicArtifacts(bag.artifacts ?? []));
+  const mappedScenarios = mapScenarios(bag.scenarios ?? []);
+  const testCounts = strategyTestCounts(mappedTests);
   return withScorecard(assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
     beliefs: mapBeliefs(bag.beliefs),
     evidence: [],
@@ -299,10 +322,10 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
     queue: [],
     lessons: mapLessons(bag.lessons),
     postmortems: [],
-    cycles: [],
-    tests: [],
-    backtest_artifacts: [],
-    scenarios: [],
+    cycles: mapCycles(bag.cycles ?? []),
+    tests: mappedTests,
+    backtest_artifacts: mappedArtifacts,
+    scenarios: mappedScenarios,
     agent_runs: [],
     ...bookFields(bag.accountLatest, bag.accountFirst, bag.positions, bag.exposures),
     intents: mapIntents(bag.intents),
@@ -319,9 +342,10 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       sources: 0,
       symbols: 0,
       open_research: 0,
-      tests_killed: 0,
-      tests_survived: 0,
-      scenario_cells: 0,
+      tests_killed: testCounts.tests_killed,
+      tests_survived: testCounts.tests_survived,
+      tests_queued: testCounts.tests_queued,
+      scenario_cells: mappedScenarios.length,
       open_positions: 0,
       queued_tasks: 0,
     },

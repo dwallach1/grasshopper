@@ -4,6 +4,7 @@
  * SELECTs desk_public_reader tables and returns one bundle. Writes are 405.
  */
 import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception.ts';
+import { slimPublicArtifacts, slimPublicTests } from './public-tests.ts';
 
 const ALLOWED_TABLES = new Set([
   'theses', 'thesis_symbols', 'thesis_evidence', 'thesis_scores', 'thesis_relations', 'runs',
@@ -27,13 +28,21 @@ const ALLOWED_TABLES = new Set([
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
 const AGENTIC_LAST4 = '7638';
 
-/** Slim /bundle/public keys. Omit beliefs/lessons here and the Worker hydrates []. */
+/**
+ * Slim /bundle/public keys. Omit a key here and the Worker hydrates [].
+ * Tests stay: the phone shows finished results. The select below drops the
+ * parameter bag; artifact kinds drop the trade blotter and storage paths.
+ */
 const PUBLIC_KEYS = new Set([
   'theses', 'symbols', 'beliefs', 'lessons',
   'runs', 'cloudRuns', 'automations',
+  'cycles', 'tests', 'artifacts', 'scenarios',
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
   'themes', 'candidates',
 ]);
+
+const PUBLIC_TEST_QUERY = 'strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at,price_source,window_start,window_end,symbols&order=tested_at.desc.nullslast,id.desc';
+const PUBLIC_ARTIFACT_QUERY = 'backtest_artifacts?select=id,test_id,thesis_id,artifact_kind,title,mime_type,payload_json,source,created_at&artifact_kind=in.(summary_json,equity_curve,chart_svg,price_source)&order=created_at.desc,id.desc';
 
 /** Pending window before the phone cap of 40. Memberships sort first, so 72 still fills the queue. */
 const PUBLIC_CANDIDATE_FETCH = 72;
@@ -273,6 +282,8 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     ).map(([key, query]) => {
       if (mode !== 'public') return [key, query] as const;
       if (key === 'candidates') return [key, publicCandidateQuery()] as const;
+      if (key === 'tests') return [key, PUBLIC_TEST_QUERY] as const;
+      if (key === 'artifacts') return [key, PUBLIC_ARTIFACT_QUERY] as const;
       if (key === 'intents') {
         return [key, `trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&${openOrRecent('created_at', since)}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`] as const;
       }
@@ -304,6 +315,9 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       body.beliefs = clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT);
       body.lessons = clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT);
       body.runs = clipRows(asRows(body.runs), 'notes', PUBLIC_TEXT);
+      body.cycles = clipRows(clipRows(asRows(body.cycles), 'hypothesis', PUBLIC_TEXT), 'preregistered_outcome', PUBLIC_TEXT);
+      body.tests = slimPublicTests(asRows(body.tests));
+      body.artifacts = slimPublicArtifacts(asRows(body.artifacts));
       pm = { ...pm, notes: clipRows(asRows(pm.notes), 'body', PUBLIC_NOTE_BODY) };
       meme = { ...meme, notes: clipRows(asRows(meme.notes), 'body', PUBLIC_NOTE_BODY) };
     }

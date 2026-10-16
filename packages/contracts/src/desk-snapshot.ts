@@ -39,10 +39,6 @@ const PUBLIC_OMIT = new Set([
   'catalysts',
   'queue',
   'postmortems',
-  'cycles',
-  'tests',
-  'backtest_artifacts',
-  'scenarios',
   'agent_runs',
   'insights',
   'predictions',
@@ -564,7 +560,8 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
  * *rows* so GET /api/desk stays JSON-healthy under Worker CPU, then puts empty
  * arrays back so the phone client can index `tests[0]`. Book / Board / Team
  * keep `prediction_markets`, `meme_coins`, `team`, theses, beliefs, lessons,
- * pending ontology candidates, and the book. Never invent marks.
+ * pending ontology candidates, the book, and the slim strategy-test result
+ * (`tests`, `cycles`, `scenarios`, `backtest_artifacts`). Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const slim: Record<string, unknown> = { source: 'snapshot' };

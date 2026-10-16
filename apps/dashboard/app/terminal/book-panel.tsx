@@ -31,6 +31,12 @@ import {
   type StewardBooks,
 } from '../../lib/steward-books';
 import type { ThesisRosterRow } from '../../lib/thesis-roster';
+import type { StrategyTestRow } from '../../lib/ledger-types';
+import {
+  formatTestReturn,
+  testStatusText,
+  testsForThesis,
+} from '../../lib/strategy-tests-public';
 import { CandidateReviewQueue } from './candidate-review';
 import { DeskLiveline } from './desk-liveline';
 import { age, pnlClass } from './format';
@@ -146,6 +152,8 @@ export function BookPanel({
           ticket={holdingTicket(lotHit.lot.holding, tickets)}
           markedAt={lotHit.lot.holding.venue === 'equity' && lotHit.lot.holding.life === 'live' ? desk.book.observed_at : null}
           now={nowMs}
+          tests={desk.tests ?? []}
+          cycles={desk.cycles ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -156,6 +164,8 @@ export function BookPanel({
           section={ideaHit.section}
           thesis={ideaHit.idea.thesis}
           now={nowMs}
+          tests={desk.tests ?? []}
+          cycles={desk.cycles ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -345,6 +355,8 @@ function BooksDetail({
   ticket,
   markedAt = null,
   now,
+  tests,
+  cycles,
   onClose,
   onOpenLot,
 }: {
@@ -356,6 +368,8 @@ function BooksDetail({
   ticket?: BookOpenTicket;
   markedAt?: string | null;
   now: number;
+  tests: StrategyTestRow[];
+  cycles: { id: number; thesis_id: string }[];
   onClose: () => void;
   onOpenLot: (id: string) => void;
 }) {
@@ -442,6 +456,7 @@ function BooksDetail({
           wins={scoreWins(books, thesis.id)}
           lots={lotsForThesis(books, thesis.id).filter((row) => row.holding.id !== h?.id)}
           lessons={books.lessons_by_thesis.get(thesis.id) ?? []}
+          tests={testsForThesis(thesis.id, tests, cycles, books.lessons_by_thesis.get(thesis.id) ?? [])}
           onOpenLot={onOpenLot}
         />
       ) : null}
@@ -466,6 +481,7 @@ function ThesisBody({
   wins,
   lots,
   lessons,
+  tests,
   onOpenLot,
 }: {
   thesis: ThesisRosterRow;
@@ -475,10 +491,12 @@ function ThesisBody({
   wins: number | null;
   lots: BooksLot[];
   lessons: LessonRow[];
+  tests: StrategyTestRow[];
   onOpenLot: (id: string) => void;
 }) {
   const [allLessons, setAllLessons] = useState(false);
   const shown = allLessons ? lessons : lessons.slice(0, LESSONS_SHOWN);
+  const byId = new Map(tests.map((row) => [row.id, row]));
   return (
     <section className="books-thesis" aria-label="Thesis">
       {nested ? (
@@ -562,6 +580,18 @@ function ThesisBody({
       ) : (
         <p className="books-note is-muted">{nested ? 'No other positions on this idea.' : 'No positions on this idea yet.'}</p>
       )}
+      {tests.length ? (
+        <>
+          <p className="books-section-label">Tests · {tests.length}</p>
+          <ul className="thesis-evidence books-tests" aria-label="Strategy tests">
+            {tests.map((row) => (
+              <li key={row.id} data-test={row.id} data-status={row.status}>
+                <TestOutcome test={row} />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
       {lessons.length ? (
         <>
           <p className="books-section-label">Lessons · {lessons.length}</p>
@@ -576,6 +606,9 @@ function ThesisBody({
                   {row.incorporated ? ' · in the playbook' : ''}
                 </span>
                 <p>{row.summary}</p>
+                {row.test_id !== null && byId.get(row.test_id) ? (
+                  <TestOutcome test={byId.get(row.test_id)!} linked />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -587,6 +620,18 @@ function ThesisBody({
         </>
       ) : null}
     </section>
+  );
+}
+
+function TestOutcome({ test, linked = false }: { test: StrategyTestRow; linked?: boolean }) {
+  const headline = formatTestReturn(test.total_return, test.status);
+  return (
+    <p className={linked ? 'books-test-link' : undefined} data-linked-test={linked ? test.id : undefined}>
+      {plainWords(test.variant_label)}
+      {' · '}
+      {testStatusText(test.status)}
+      {headline ? ` · return ${headline}` : ''}
+    </p>
   );
 }
 
