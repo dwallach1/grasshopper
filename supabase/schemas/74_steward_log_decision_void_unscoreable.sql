@@ -1,10 +1,16 @@
--- steward_log_decision: a void is not a decision. A row logged with blocked_by = 'paper_void_stale' (BANDIT's
--- edge5 pending entry that was never logged within 2h) is tagged server-side, from blocked_by, so a caller can't
--- forget: meta.unscoreable = 'true', meta.unscoreable_reason = 'void: paper_void_stale, not a decision' (plus the
--- no_price reason for a priceless void), resolve_status 'void'. public.decision_is_scoreable() is then false, so
--- steward_pending_decision_marks never hands it to the horizon sweep, resolve_marked_decisions never scores it,
--- and no scorecard counts it. The caller's meta.void detail and blocked_by are kept (the paper scorer counts it
--- as n_void). Builds on 20261016200000 (priceless meme skip); every other write is unchanged.
+-- steward_log_decision: a void is not a decision. BANDIT logs an edge5 pending entry that was never logged
+-- within 2h as a meme SKIP with blocked_by = 'paper_void_stale'. Guards, set server-side from blocked_by so a
+-- caller can't forget:
+--   * only decision = 'skip' AND venue = 'meme' AND blocked_by = 'paper_void_stale' is flagged:
+--     meta.unscoreable = 'true', meta.unscoreable_reason = 'void: paper_void_stale, not a decision' (plus the
+--     no_price reason for a priceless void), resolve_status 'void'. public.decision_is_scoreable() is then false,
+--     so steward_pending_decision_marks never hands it to the horizon sweep, resolve_marked_decisions never
+--     scores it, and no scorecard counts it;
+--   * an enter (any non-skip) carrying blocked_by = 'paper_void_stale' is refused (refusal:void);
+--   * a non-meme skip with that tag is not flagged and stays scoreable.
+-- The caller's meta.void detail and blocked_by are kept (the paper scorer counts it as n_void).
+-- Builds on #159 (priceless meme skip), applied as version 20261016164725 (repo file
+-- 20261016200000_steward_log_decision_priceless_skip.sql); every other write is unchanged.
 
 create or replace function public.steward_log_decision(p jsonb)
 returns jsonb
@@ -37,9 +43,11 @@ declare
   -- entry whose coin has no quote). Stored unscoreable, so it is never marked, scored, or counted as a pass.
   v_no_price text := nullif(btrim(coalesce(p->>'no_price_reason', '')), '');
   v_priceless boolean := false;
-  -- a void is not a decision: a paper entry that was never logged in time (blocked_by paper_void_stale). Tagged
-  -- unscoreable here, from blocked_by, so the caller can't forget and the horizon marks never score it as a skip.
-  v_void boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';
+  -- a void is not a decision: a paper entry that was never logged in time (blocked_by paper_void_stale). Only a
+  -- meme skip with that tag is a void; it is tagged unscoreable here, from blocked_by, so the caller can't forget
+  -- and the horizon marks never score it as a skip. An enter carrying the tag is refused.
+  v_void_tag boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';
+  v_void boolean := false;
   v_extra jsonb := case
     when jsonb_typeof(p->'meta') = 'object' then p->'meta'
     else '{}'::jsonb
@@ -63,6 +71,11 @@ begin
     raise exception 'refusal:unscoreable: decision must be enter or skip'
       using errcode = 'P0001';
   end if;
+  if v_void_tag and v_decision <> 'skip' then
+    raise exception 'refusal:void: blocked_by paper_void_stale marks a void, which is not a decision; only a skip may carry it'
+      using errcode = 'P0001';
+  end if;
+  v_void := v_void_tag and v_decision = 'skip' and v_venue = 'meme';
   if v_instrument is null then
     raise exception 'refusal:unscoreable: name the market or the ticker'
       using errcode = 'P0001';
@@ -202,14 +215,16 @@ end;
 $$;
 
 comment on function public.steward_log_decision(jsonb) is
-  'Log one enter or skip that can be scored later. Refuses (refusal:unscoreable) when the market, side, price, or (for prediction) probability is missing, except a meme SKIP that omits the price and gives no_price_reason: it is stored unscoreable (resolve_status no_price) and never scored. A row with blocked_by paper_void_stale is a void, not a decision: stored unscoreable (resolve_status void), so it is never marked or scored. Does not size or gate a trade. Equity resolves after 5 regular sessions, memes after 4 hours, prediction markets at resolution. Prediction: price and probability are the named side''s own (meta.price_terms = ''side''; pass meta.price_terms = ''yes'' for YES terms); a slug with no pm_markets row gets a ''watch'' stub so it can resolve (optional question, close_time). No price is invented.';
+  'Log one enter or skip that can be scored later. Refuses (refusal:unscoreable) when the market, side, price, or (for prediction) probability is missing, except a meme SKIP that omits the price and gives no_price_reason: it is stored unscoreable (resolve_status no_price) and never scored. A meme skip with blocked_by paper_void_stale is a void, not a decision: stored unscoreable (resolve_status void), so it is never marked or scored; an enter carrying that tag is refused (refusal:void). Does not size or gate a trade. Equity resolves after 5 regular sessions, memes after 4 hours, prediction markets at resolution. Prediction: price and probability are the named side''s own (meta.price_terms = ''side''; pass meta.price_terms = ''yes'' for YES terms); a slug with no pm_markets row gets a ''watch'' stub so it can resolve (optional question, close_time). No price is invented.';
 
--- backfill: tag any void logged before this change (0 rows when written, 2026-10-16). Only meta changes; a void
+-- backfill: tag any meme-skip void logged before this change (0 rows when written, 2026-10-16). Only meta changes; a void
 -- that was already marked keeps its mark but leaves every scorecard, which is the point.
 update public.decision_candidates
    set meta = meta || jsonb_build_object(
          'unscoreable', 'true',
          'unscoreable_reason', 'void: paper_void_stale, not a decision',
          'resolve_status', 'void')
- where meta->>'blocked_by' = 'paper_void_stale'
+ where decision = 'skip'
+   and venue = 'meme'
+   and meta->>'blocked_by' = 'paper_void_stale'
    and coalesce(meta->>'unscoreable', '') is distinct from 'true';

@@ -24,9 +24,16 @@ def is_scoreable(book_price, meta) -> bool:
             and str(meta.get("superseded", "")) != "true")
 
 
-def stored_meta(caller_meta: dict, blocked_by, priceless=False, no_price="x") -> dict:
-    """Python mirror of the meta steward_log_decision stores after 20261016210000 (meme skip)."""
-    void = (blocked_by or "").strip().lower() == "paper_void_stale"
+class Refused(Exception):
+    pass
+
+
+def stored_meta(caller_meta: dict, blocked_by, priceless=False, no_price="x", decision="skip", venue="meme") -> dict:
+    """Python mirror of the void guards and the meta steward_log_decision stores after 20261016210000."""
+    tag = (blocked_by or "").strip().lower() == "paper_void_stale"
+    if tag and decision != "skip":
+        raise Refused("refusal:void")
+    void = tag and decision == "skip" and venue == "meme"
     m = {k: v for k, v in caller_meta.items() if k not in ("unscoreable", "superseded", "legacy_probability_absent")}
     m.update(origin="steward_log_decision", horizon="4 hours", blocked_by=blocked_by,
              resolve_status="void" if void else "no_price" if priceless else "awaiting_mark")
@@ -51,7 +58,8 @@ class VoidNotADecision(unittest.TestCase):
         self.assertEqual(defs[-1], MIG.name)
 
     def test_void_tag_is_server_side_from_blocked_by(self):
-        self.assertIn("v_void boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';", self.fn)
+        self.assertIn("v_void_tag boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';", self.fn)
+        self.assertIn("v_void := v_void_tag and v_decision = 'skip' and v_venue = 'meme';", self.fn)
         self.assertIn("v_status := case when v_void then 'void' when v_priceless then 'no_price' else 'awaiting_mark' end;", self.fn)
         self.assertRegex(self.fn, r"when v_void then jsonb_build_object\(\s*'unscoreable', 'true', 'unscoreable_reason', 'void: paper_void_stale, not a decision'")
         # the caller can't set unscoreable itself (still stripped), so the tag only ever comes from blocked_by / no price
@@ -89,9 +97,39 @@ class VoidNotADecision(unittest.TestCase):
         self.assertFalse(is_scoreable(None, pl))
         self.assertTrue(pl["unscoreable_reason"].startswith("void: paper_void_stale, not a decision; no_price: "))
 
+    def test_enter_with_void_tag_is_refused(self):
+        # SQL: the refusal sits after the enter/skip check and before anything is written or flagged
+        guard = ("if v_void_tag and v_decision <> 'skip' then\n"
+                 "    raise exception 'refusal:void: blocked_by paper_void_stale marks a void, which is not a decision; "
+                 "only a skip may carry it'\n      using errcode = 'P0001';")
+        self.assertIn(guard, self.fn)
+        i = self.fn.index(guard)
+        self.assertLess(self.fn.index("decision must be enter or skip"), i)
+        self.assertLess(i, self.fn.index("v_void := v_void_tag"))
+        self.assertLess(i, self.fn.index("insert into public.decision_candidates"))
+        with self.assertRaises(Refused):
+            stored_meta({}, "paper_void_stale", decision="enter")
+        with self.assertRaises(Refused):
+            stored_meta({}, " PAPER_VOID_STALE ", decision="enter", venue="equity")
+        self.assertTrue(is_scoreable(1.5e-7, stored_meta({}, "paper_only", decision="enter")))   # untagged enter untouched
+
+    def test_non_meme_skip_with_void_tag_stays_scoreable(self):
+        for venue in ("equity", "prediction"):
+            m = stored_meta({}, "paper_void_stale", venue=venue)
+            self.assertNotIn("unscoreable", m)
+            self.assertEqual(m["resolve_status"], "awaiting_mark")
+            self.assertTrue(is_scoreable(0.5, m))
+        # SQL: the flag and the void status are driven only by v_void (meme skip), never by the raw tag
+        self.assertNotRegex(self.fn, r"when v_void_tag then|case when v_void_tag")
+
+    def test_header_names_applied_159_version(self):
+        head = self.sql[:self.sql.index("create or replace function")]
+        self.assertIn("20261016164725", head)
+        self.assertNotIn("Builds on 20261016200000", head)
+
     def test_backfill_is_scoped_and_idempotent(self):
         up = self.sql[self.sql.index("update public.decision_candidates"):]
-        self.assertIn("where meta->>'blocked_by' = 'paper_void_stale'", up)
+        self.assertIn("where decision = 'skip'\n   and venue = 'meme'\n   and meta->>'blocked_by' = 'paper_void_stale'", up)
         self.assertIn("and coalesce(meta->>'unscoreable', '') is distinct from 'true';", up)
         self.assertNotRegex(up, r"counterfactual_pnl|book_price|delete")
         self.assertEqual(len(re.findall(r"^update ", self.sql, re.M)), 1)
