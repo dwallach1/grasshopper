@@ -1,6 +1,7 @@
 /**
  * steward-rpc: the HTTPS path for steward ledger writes (BANDIT live_trade_clip / mark_clip / exit_clip,
- * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync, steward_close_lesson (BANDIT, ODDSBORNE and,
+ * ODDSBORNE pm_enter / pm_watch / pm_exit / pm_fills_sync / session pm_notes (oddsborne_insert_note),
+ * steward_close_lesson (BANDIT, ODDSBORNE and,
  * since 65, QUANTANAMO's equity lots),
  * steward_log_decision for a scoreable enter or skip — QUANTANAMO included — and the decision marks that
  * score them: steward_pending_decision_marks / steward_record_decision_mark, 58_decision_marks.sql).
@@ -15,8 +16,8 @@
  *
  * Body: {"fn": "<allowlisted function>", "args": {...}}. Each call runs
  *   select public.<fn>($1::text::jsonb)::text
- * in one transaction (the SQL functions are SECURITY INVOKER; supabase/schemas/50_steward_entry_rpc.sql and
- * 51_steward_exit_rpc.sql).
+ * in one transaction (the SQL functions are SECURITY INVOKER; supabase/schemas/50_steward_entry_rpc.sql,
+ * 51_steward_exit_rpc.sql, and 72_oddsborne_insert_note.sql).
  * The jsonb result is returned verbatim as text so numerics keep their exact digits.
  * "ping" is built in: it returns the connected role and the database time (read-only).
  */
@@ -53,6 +54,8 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'oddsborne_mark_position',
     'oddsborne_exit_record',
     'oddsborne_pnl_snapshot',
+    // session scan/skip notes (supabase/schemas/72_oddsborne_insert_note.sql)
+    'oddsborne_insert_note',
     'steward_close_lesson',
     'steward_log_decision',
     // closing-line marks for logged decisions (supabase/schemas/58_decision_marks.sql)
