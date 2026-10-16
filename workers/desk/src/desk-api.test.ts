@@ -323,8 +323,9 @@ describe('public desk reader credentials', () => {
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]tests['"]/s);
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]artifacts['"]/s);
     expect(fn).toContain('PUBLIC_TEST_QUERY');
-    expect(fn).toContain('artifact_kind=in.(summary_json,equity_curve,chart_svg,price_source)');
-    expect(fn).toContain('slimPublicTests');
+    expect(fn).toContain('PUBLIC_SUMMARY_QUERY');
+    expect(fn).not.toContain('artifact_kind=in.(summary_json,equity_curve,chart_svg,price_source)');
+    expect(fn).toContain('projectPublicTests');
     expect(fn).toContain('slimPublicArtifacts');
     expect(fn).not.toContain('params_json&order=tested_at.desc.nullslast');
     expect(fn).toContain('not_allowed');

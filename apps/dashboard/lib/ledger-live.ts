@@ -1,8 +1,8 @@
 import { mapBacktestArtifacts } from './backtest-artifacts';
 import {
-  slimPublicArtifacts,
   slimPublicTests,
   strategyTestCounts,
+  withMeasuredTests,
 } from './strategy-tests-public';
 import * as z from 'zod';
 
@@ -305,9 +305,15 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'scorecard'
   | 'watchdog'
 >>): DeskPayload {
-  const mappedTests = mapTests(slimPublicTests(bag.tests ?? []));
-  const mappedArtifacts = mapBacktestArtifacts(slimPublicArtifacts(bag.artifacts ?? []));
-  const mappedScenarios = mapScenarios(bag.scenarios ?? []);
+  const mappedArtifacts = mapBacktestArtifacts(bag.artifacts ?? []);
+  const mappedCycles = mapCycles(bag.cycles ?? []);
+  const mappedTests = withMeasuredTests(
+    mapTests(slimPublicTests(bag.tests ?? [])),
+    mappedArtifacts,
+    mappedCycles,
+  );
+  const publishedIds = new Set(mappedTests.map((row) => row.id));
+  const mappedScenarios = mapScenarios(bag.scenarios ?? []).filter((row) => publishedIds.has(row.test_id));
   const testCounts = strategyTestCounts(mappedTests);
   return withScorecard(assembleDesk('postgrest', decorateDesk(bag.theses, bag.symbols, {
     beliefs: mapBeliefs(bag.beliefs),
@@ -322,9 +328,9 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
     queue: [],
     lessons: mapLessons(bag.lessons),
     postmortems: [],
-    cycles: mapCycles(bag.cycles ?? []),
+    cycles: mappedCycles.filter((row) => mappedTests.some((test) => test.cycle_id === row.id)),
     tests: mappedTests,
-    backtest_artifacts: mappedArtifacts,
+    backtest_artifacts: [],
     scenarios: mappedScenarios,
     agent_runs: [],
     ...bookFields(bag.accountLatest, bag.accountFirst, bag.positions, bag.exposures),

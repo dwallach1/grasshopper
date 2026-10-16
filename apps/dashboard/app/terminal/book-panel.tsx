@@ -31,9 +31,9 @@ import {
   type StewardBooks,
 } from '../../lib/steward-books';
 import type { ThesisRosterRow } from '../../lib/thesis-roster';
-import type { StrategyTestRow } from '../../lib/ledger-types';
+import type { BacktestArtifactRow, StrategyTestRow } from '../../lib/ledger-types';
 import {
-  formatTestReturn,
+  measuredForTest,
   testStatusText,
   testsForThesis,
 } from '../../lib/strategy-tests-public';
@@ -154,6 +154,7 @@ export function BookPanel({
           now={nowMs}
           tests={desk.tests ?? []}
           cycles={desk.cycles ?? []}
+          artifacts={desk.backtest_artifacts ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -166,6 +167,7 @@ export function BookPanel({
           now={nowMs}
           tests={desk.tests ?? []}
           cycles={desk.cycles ?? []}
+          artifacts={desk.backtest_artifacts ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -357,6 +359,7 @@ function BooksDetail({
   now,
   tests,
   cycles,
+  artifacts,
   onClose,
   onOpenLot,
 }: {
@@ -369,7 +372,8 @@ function BooksDetail({
   markedAt?: string | null;
   now: number;
   tests: StrategyTestRow[];
-  cycles: { id: number; thesis_id: string }[];
+  cycles: { id: number; thesis_id: string; preregistered_outcome?: string | null }[];
+  artifacts: BacktestArtifactRow[];
   onClose: () => void;
   onOpenLot: (id: string) => void;
 }) {
@@ -457,6 +461,8 @@ function BooksDetail({
           lots={lotsForThesis(books, thesis.id).filter((row) => row.holding.id !== h?.id)}
           lessons={books.lessons_by_thesis.get(thesis.id) ?? []}
           tests={testsForThesis(thesis.id, tests, cycles, books.lessons_by_thesis.get(thesis.id) ?? [])}
+          cycles={cycles}
+          artifacts={artifacts}
           onOpenLot={onOpenLot}
         />
       ) : null}
@@ -482,6 +488,8 @@ function ThesisBody({
   lots,
   lessons,
   tests,
+  cycles,
+  artifacts,
   onOpenLot,
 }: {
   thesis: ThesisRosterRow;
@@ -492,6 +500,8 @@ function ThesisBody({
   lots: BooksLot[];
   lessons: LessonRow[];
   tests: StrategyTestRow[];
+  cycles: { id: number; preregistered_outcome?: string | null }[];
+  artifacts: BacktestArtifactRow[];
   onOpenLot: (id: string) => void;
 }) {
   const [allLessons, setAllLessons] = useState(false);
@@ -586,7 +596,7 @@ function ThesisBody({
           <ul className="thesis-evidence books-tests" aria-label="Strategy tests">
             {tests.map((row) => (
               <li key={row.id} data-test={row.id} data-status={row.status}>
-                <TestOutcome test={row} />
+                <TestOutcome test={row} cycles={cycles} artifacts={artifacts} />
               </li>
             ))}
           </ul>
@@ -607,7 +617,7 @@ function ThesisBody({
                 </span>
                 <p>{row.summary}</p>
                 {row.test_id !== null && byId.get(row.test_id) ? (
-                  <TestOutcome test={byId.get(row.test_id)!} linked />
+                  <TestOutcome test={byId.get(row.test_id)!} cycles={cycles} artifacts={artifacts} linked />
                 ) : null}
               </li>
             ))}
@@ -623,14 +633,26 @@ function ThesisBody({
   );
 }
 
-function TestOutcome({ test, linked = false }: { test: StrategyTestRow; linked?: boolean }) {
-  const headline = formatTestReturn(test.total_return, test.status);
+function TestOutcome({
+  test,
+  cycles,
+  artifacts,
+  linked = false,
+}: {
+  test: StrategyTestRow;
+  cycles: { id: number; preregistered_outcome?: string | null }[];
+  artifacts: BacktestArtifactRow[];
+  linked?: boolean;
+}) {
+  const measured = measuredForTest(test, artifacts, cycles);
   return (
     <p className={linked ? 'books-test-link' : undefined} data-linked-test={linked ? test.id : undefined}>
+      {measured.result ? <span className="books-test-measured">{measured.result}</span> : null}
+      {measured.result ? ' · ' : ''}
       {plainWords(test.variant_label)}
       {' · '}
       {testStatusText(test.status)}
-      {headline ? ` · return ${headline}` : ''}
+      {measured.book ? <span className="books-test-book">{` · ${measured.book}`}</span> : null}
     </p>
   );
 }

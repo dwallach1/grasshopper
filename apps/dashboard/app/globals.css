@@ -3681,11 +3681,26 @@ a:focus-visible {
     font-size: 12px;
   }
 
-  .term-test-card p {
-    margin: 0;
-    color: var(--text-2);
+.term-test-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+  .term-test-card p.term-test-measured,
+  p.term-test-measured,
+  .books-test-measured {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .term-test-card p.term-test-book,
+  p.term-test-book,
+  .books-test-book {
+    color: var(--text-3, var(--text-2));
     font-size: 12px;
-    overflow-wrap: anywhere;
   }
 
   .term-test-card-metrics {

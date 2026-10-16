@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { isPublicDesk } from '../../../lib/desk-mode';
 import { loadDeskFromPostgres } from '../../../lib/ledger';
 import { hasDatabaseUrl } from '../../../lib/postgres';
+import { withMeasuredTests } from '../../../lib/strategy-tests-public';
 import { loadRootEnvLocal } from '../../../load-root-env';
 
 export const dynamic = 'force-dynamic';
@@ -34,8 +35,10 @@ export async function GET() {
     return NextResponse.json(publicDeskJsonError(), { status: 503 });
   }
   try {
+    const live = await loadDeskFromPostgres();
     const published = toPublicDeskSnapshot({
-      ...await loadDeskFromPostgres(),
+      ...live,
+      tests: withMeasuredTests(live.tests, live.backtest_artifacts, live.cycles),
       source: 'postgres',
     });
     if (!isPublicSnapshot(published)) {

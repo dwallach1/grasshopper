@@ -12,7 +12,8 @@ import {
 } from '../../lib/backtest-artifacts';
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
-import { formatTestReturn, strategyTestCounts } from '../../lib/strategy-tests-public';
+import { plainWords } from '../../lib/steward-books';
+import { measuredForTest, perTradeText, strategyTestCounts, type MeasuredTest } from '../../lib/strategy-tests-public';
 import {
   ledgerCount,
   ledgerPct,
@@ -43,6 +44,13 @@ export function BacktestsPanel({
       ),
     [desk.tests, desk.cycles, desk.theses, desk.backtest_artifacts],
   );
+  const measuredById = useMemo(() => {
+    const map = new Map<number, MeasuredTest>();
+    for (const test of desk.tests) {
+      map.set(test.id, measuredForTest(test, desk.backtest_artifacts, desk.cycles));
+    }
+    return map;
+  }, [desk.tests, desk.backtest_artifacts, desk.cycles]);
   const selected = views.find((row) => row.test.id === selectedId) ?? views[0];
   const scenarios = desk.scenarios.filter((row) =>
     selected ? row.test_id === selected.test.id : true,
@@ -72,8 +80,8 @@ export function BacktestsPanel({
               <th>Window</th>
               <th>Symbols</th>
               <th>Price source</th>
-              <th>Ret</th>
-              <th>DD</th>
+              <th>Per trade</th>
+              <th>Book drawdown</th>
               <th>Trades</th>
             </tr>
           </thead>
@@ -84,14 +92,18 @@ export function BacktestsPanel({
                 className={row.test.id === selected?.test.id ? 'sel term-pick' : 'term-pick'}
                 onClick={() => onSelect(row.test.id)}
               >
-                <td>{row.test.variant_label}</td>
+                <td>{plainWords(row.test.variant_label)}</td>
                 <td>{ledgerOrMissing(row.thesis_id)}</td>
                 <td className={toneForStatus(row.test.status)}>{row.test.status}</td>
                 <td>{formatWindow(row.window_start, row.window_end)}</td>
                 <td>{formatSymbols(row.symbols)}</td>
                 <td>{formatPriceSourceLabel(row)}</td>
-                <td className={pnlTone(row.total_return)}>{formatReturn(row.total_return, row.test.status)}</td>
-                <td className={row.max_drawdown === null ? 'muted' : 'down'}>{formatReturn(row.max_drawdown, row.test.status)}</td>
+                <td className={pnlTone(measuredById.get(row.test.id)?.per_trade?.mean ?? null)}>
+                  {perTradeText(measuredById.get(row.test.id)?.per_trade) ?? '—'}
+                </td>
+                <td className={row.max_drawdown === null ? 'muted' : 'down'}>
+                  {bookDrawdown(row.max_drawdown, row.test.status) ?? '—'}
+                </td>
                 <td>{ledgerCount(row.trade_count)}</td>
               </tr>
             ))}
@@ -110,29 +122,25 @@ export function BacktestsPanel({
               onClick={() => onSelect(row.test.id)}
             >
               <div className="term-test-card-head">
-                <b>{row.test.variant_label}</b>
+                <b>{plainWords(row.test.variant_label)}</b>
                 <i className={toneForStatus(row.test.status)}>{row.test.status}</i>
               </div>
-              <p>
-                {ledgerOrMissing(row.thesis_id)}
-                {' · '}
-                {formatWindow(row.window_start, row.window_end)}
-              </p>
-              <p>{shortSymbols(row.symbols)}</p>
-              <div className="term-test-card-metrics">
-                <span className={pnlTone(row.total_return)}>Return {formatReturn(row.total_return, row.test.status)}</span>
-                <span className={row.max_drawdown === null ? 'muted' : 'down'}>
-                  Drawdown {formatReturn(row.max_drawdown, row.test.status)}
-                </span>
-                <span>Trades {ledgerCount(row.trade_count)}</span>
-              </div>
+              {measuredById.get(row.test.id)?.result ? (
+                <p className="term-test-measured">{measuredById.get(row.test.id)?.result}</p>
+              ) : null}
+              {measuredById.get(row.test.id)?.book ? (
+                <p className="term-test-book">{measuredById.get(row.test.id)?.book}</p>
+              ) : null}
+              {row.thesis_id ? <p>{row.thesis_id}</p> : null}
             </button>
           ))}
           {!views.length && <p className="empty">No strategy tests in ledger</p>}
         </div>
       </section>
       <section className="term-panel">
-        {selected ? <BacktestDetail view={selected} /> : <p className="empty">No test selected</p>}
+        {selected ? (
+          <BacktestDetail view={selected} measured={measuredById.get(selected.test.id) ?? { result: null, per_trade: null, book: null }} />
+        ) : <p className="empty">No test selected</p>}
       </section>
       <section className="term-panel">
         <header><b>CYCLES</b></header>
@@ -164,25 +172,35 @@ export function BacktestsPanel({
   );
 }
 
-function BacktestDetail({ view }: { view: ReturnType<typeof assembleBacktestView> }) {
+function BacktestDetail({
+  view,
+  measured,
+}: {
+  view: ReturnType<typeof assembleBacktestView>;
+  measured: MeasuredTest;
+}) {
   const chart = view.chart_svg ?? equityCurveSvg(view.equity_points);
   const price = view.price_source;
+  const hasArtifacts = view.artifact_count > 0;
   return (
     <>
       <header>
-        <b>{view.test.variant_label}</b>
+        <b>{plainWords(view.test.variant_label)}</b>
         <span className={toneForStatus(view.test.status)}>
           {view.test.status} · {ledgerOrMissing(view.thesis_id)}
         </span>
       </header>
+      {measured.result ? <p className="term-test-measured">{measured.result}</p> : null}
+      {measured.book ? <p className="term-test-book">{measured.book}</p> : null}
+      {!hasArtifacts && !measured.result ? (
+        <p className="empty">No per-trade result in the ledger</p>
+      ) : null}
+      {hasArtifacts ? (
+      <>
       <p className="term-prose dim">
         {view.test.external_key}
-        {view.test.autopsy ? ` · ${view.test.autopsy}` : ''}
         {view.test.failure_reason ? ` · ${view.test.failure_reason}` : ''}
       </p>
-      {view.artifact_count === 0 && (
-        <p className="empty">no artifacts in ledger</p>
-      )}
       <header>
         <b>SUMMARY</b>
         <span>summary_json</span>
@@ -304,18 +322,18 @@ function BacktestDetail({ view }: { view: ReturnType<typeof assembleBacktestView
       ) : (
         <p className="empty">{NOT_IN_LEDGER}</p>
       )}
+      </>
+      ) : null}
     </>
   );
 }
 
-function formatReturn(value: number | null, status: string): string {
-  return formatTestReturn(value, status) ?? NOT_IN_LEDGER;
-}
-
-function shortSymbols(symbols: string[] | null): string {
-  if (!symbols || symbols.length === 0) return NOT_IN_LEDGER;
-  if (symbols.length <= 8) return symbols.join(' ');
-  return `${symbols.slice(0, 6).join(' ')} · ${symbols.length} names`;
+function bookDrawdown(value: number | null, status: string): string | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  if (status !== 'survived' && status !== 'killed') return null;
+  const points = value * 100;
+  const text = points.toFixed(1);
+  return `${text}%`;
 }
 
 function formatMetric(numeric: number | null, text: string | null): string {

@@ -377,6 +377,19 @@ const TestSchema = z
     window_end: OptionalDate,
     symbols: OptionalSymbols,
     params_json: OptionalJsonBag,
+    result: z.string().nullable().optional(),
+    per_trade: z
+      .object({
+        n: z.number().nullable(),
+        unit: z.enum(['pts', 'percent']).nullable(),
+        mean: z.number().nullable(),
+        ci90: z.tuple([z.number(), z.number()]).nullable(),
+        hit: z.number().nullable(),
+        hit_other: z.number().nullable(),
+      })
+      .nullable()
+      .optional(),
+    book: z.string().nullable().optional(),
   })
   .passthrough();
 

@@ -6,7 +6,12 @@ import { fallbackTeam } from './desk-team';
 import { assemblePublicDeskFromRestBag } from './ledger-live';
 import { toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 import {
-  formatTestReturn,
+  measureStrategyTest,
+  perTradeText,
+  projectPublicTests,
+  PUBLIC_SUMMARY_COLUMNS,
+  PUBLIC_SUMMARY_QUERY,
+  PUBLIC_TEST_QUERY,
   slimPublicArtifacts,
   slimPublicTests,
   strategyTestCounts,
@@ -88,32 +93,94 @@ describe('public strategy test projection', () => {
     expect(published.some((row) => 'params_json' in row)).toBe(false);
   });
 
-  test('formats the stored fractional book return and leaves a missing one blank', () => {
-    expect(formatTestReturn(0.932264, 'survived')).toBe('+93.2%');
-    expect(formatTestReturn(-0.32597, 'killed')).toBe('-32.6%');
-    expect(formatTestReturn(-0.706122, 'killed')).toBe('-70.6%');
-    expect(formatTestReturn(null, 'survived')).toBeNull();
-    expect(formatTestReturn(-1.772, 'queued')).toBe('-1.8%');
-    expect(formatTestReturn(0.929116, 'queued')).toBe('+92.9%');
+  test('leads with the per-trade measurement and labels the book as secondary', () => {
+    const held = measureStrategyTest({
+      mean_diff_a_minus_b: 0.019635894872020693,
+      bootstrap90_diff: [0.005222170077015214, 0.03414937865245927],
+      hit_a: 0.7,
+      hit_b: 0.5,
+      trade_count: 50,
+      total_return_a_book: 0.9322635607284417,
+      spy_same_dates_book: 0.09744632442763934,
+      events: [{ symbol: 'NFLX' }],
+    }, {
+      variant: 'serial-negative-reactor-hold-vs-exit-v1',
+      windowStart: '2025-10-06',
+      windowEnd: '2026-10-15',
+    });
+    expect(held.result).toBe('hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50');
+    expect(held.book).toBe('1-yr compounded book +93.2% (SPY +9.7%)');
+    expect(held.per_trade).toMatchObject({ n: 50, unit: 'pts', mean: 1.96, hit: 0.7, hit_other: 0.5 });
+
+    const serial = measureStrategyTest({
+      mean30: 0.0023655073555425526,
+      ci90: [-0.0061863714649018535, 0.011111310020344125],
+      hit_rate: 0.497131931166348,
+      trade_count: 523,
+      total_return_book: -0.7102959919094324,
+      spy_book_same_dates: -0.013363464795873248,
+    }, { windowStart: '2025-10-06', windowEnd: '2026-10-06' });
+    expect(serial.result).toBe('mean +0.24%/trade (90% CI -0.62 to +1.11), hit 49.7%, n=523');
+    expect(serial.book).toBe('1-yr compounded book -71.0% (SPY -1.3%)');
+    expect(serial.result).not.toContain('-71');
   });
 
-  test('summary artifacts keep scalar headlines and drop the blotter and storage path', () => {
+  test('queued rows omit a return when the unit is not explicit', () => {
+    const percentPoints = measureStrategyTest({ hit_rate: 0.5, n_trades: 2, total_return: -1.772, total_return_frac: -0.01772 });
+    expect(percentPoints.result).toBe('hit 50%, n=2');
+    expect(percentPoints.book).toBeNull();
+    expect(percentPoints.result).not.toContain('1.8');
+    expect(percentPoints.result).not.toContain('177');
+
+    const ambiguous = measureStrategyTest({ hit_rate: 1, trade_count: 2, total_return: 0.929116 });
+    expect(ambiguous.result).toBe('hit 100%, n=2');
+    expect(ambiguous.result).not.toContain('92');
+    expect(measureStrategyTest({ total_return: 0.929116 }).result).toBeNull();
+    expect(perTradeText({ n: 2, unit: null, mean: null, ci90: null, hit: 0.5, hit_other: null })).toBeNull();
+    expect(perTradeText({ n: 2, hit: 0.5 } as never)).toBeNull();
+    expect(perTradeText({ n: 50, unit: 'pts', mean: 1.96, ci90: [0.52, 3.41], hit: 0.7, hit_other: 0.5 })).toBe('+1.96 pts');
+  });
+
+  test('public artifacts drop curves, charts, price lists, and non-results', () => {
     const slim = slimPublicArtifacts([
       {
         id: 1,
         test_id: 40,
         artifact_kind: 'summary_json',
-        payload_json: { trade_count: 50, verdict: 'survived', events: [{ symbol: 'NFLX' }] },
+        payload_json: { trade_count: 50, events: [{ symbol: 'NFLX' }] },
         storage_bucket: 'private',
         storage_path: 'secret/path',
       },
-      { id: 2, test_id: 40, artifact_kind: 'trades', payload_json: { trades: [{ symbol: 'AAPL' }] } },
-      { id: 3, test_id: 40, artifact_kind: 'params_json', payload_json: { hold_sessions: 6 } },
-      { id: 4, test_id: 40, artifact_kind: 'chart_svg', payload_text: '<svg></svg>' },
+      { id: 2, test_id: 40, artifact_kind: 'equity_curve', payload_json: { points: [1] } },
+      { id: 3, test_id: 40, artifact_kind: 'chart_svg', payload_text: '<svg></svg>' },
+      { id: 4, test_id: 40, artifact_kind: 'price_source', payload_json: { tickers: ['AAPL'] } },
+      { id: 5, test_id: 15, artifact_kind: 'summary_json', payload_json: { trade_count: 9 } },
+      { id: 6, test_id: 1, artifact_kind: 'summary_json', payload_json: { trade_count: 1 } },
+    ], [
+      { id: 40, status: 'survived' },
+      { id: 15, status: 'lookahead_invalid' },
+      { id: 1, status: 'placeholder' },
     ]);
-    expect(slim.map((row) => row.artifact_kind)).toEqual(['summary_json', 'chart_svg']);
-    expect(slim[0]?.payload_json).toEqual({ trade_count: 50, verdict: 'survived' });
-    expect(slim[0]).not.toHaveProperty('storage_path');
+    expect(slim).toEqual([]);
+    const byStatus = slimPublicArtifacts([
+      { id: 7, test_id: 40, artifact_kind: 'note', title: 'kept' },
+      { id: 8, test_id: 15, artifact_kind: 'note', title: 'lookahead leak' },
+      { id: 9, test_id: 1, artifact_kind: 'note', title: 'placeholder leak' },
+      { id: 10, test_id: 40, artifact_kind: 'note', title: 'path leak', storage_path: 'secret/path' },
+    ], [
+      { id: 40, status: 'survived' },
+      { id: 15, status: 'lookahead_invalid' },
+      { id: 1, status: 'placeholder' },
+    ], new Set(['note']));
+    expect(byStatus).toEqual([{ id: 7, test_id: 40, artifact_kind: 'note', title: 'kept' }]);
+    expect(PUBLIC_SUMMARY_QUERY).toContain('artifact_kind=eq.summary_json');
+    expect(PUBLIC_SUMMARY_QUERY).not.toContain('equity_curve');
+    expect(PUBLIC_SUMMARY_QUERY).not.toContain('chart_svg');
+    expect(PUBLIC_SUMMARY_QUERY).not.toContain('price_source');
+    expect(PUBLIC_SUMMARY_COLUMNS).not.toMatch(/(^|,)payload_json(,|&|$)/);
+    expect(PUBLIC_TEST_QUERY).not.toContain('params_json');
+    expect(PUBLIC_TEST_QUERY).not.toContain('failure_reason');
+    expect(PUBLIC_TEST_QUERY).not.toContain('autopsy');
   });
 
   test('a thesis test sits with the lesson that cites it', () => {
@@ -181,7 +248,16 @@ describe('public strategy test projection', () => {
         artifact_kind: 'summary_json',
         title: 'summary',
         mime_type: 'application/json',
-        payload_json: { trade_count: 50, verdict: 'survived', events: [{ n: 50 }] },
+        payload_json: {
+          mean_diff_a_minus_b: 0.019635894872020693,
+          bootstrap90_diff: [0.005222170077015214, 0.03414937865245927],
+          hit_a: 0.7,
+          hit_b: 0.5,
+          trade_count: 50,
+          total_return_a_book: 0.9322635607284417,
+          spy_same_dates_book: 0.09744632442763934,
+          events: [{ symbol: 'NFLX' }],
+        },
         source: 'robinhood_mcp',
         created_at: AT,
       }],
@@ -194,13 +270,83 @@ describe('public strategy test projection', () => {
     expect(desk.tests.map((row) => row.id)).toContain(40);
     expect(desk.tests.some((row) => row.status === 'placeholder' || row.status === 'lookahead_invalid')).toBe(false);
     expect(desk.tests.every((row) => row.params_json === null)).toBe(true);
-    expect(desk.backtest_artifacts).toHaveLength(1);
-    expect(desk.backtest_artifacts[0]?.payload_json).toEqual({ trade_count: 50, verdict: 'survived' });
+    expect(desk.tests.find((row) => row.id === 40)?.result).toBe(
+      'hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50',
+    );
+    expect(desk.backtest_artifacts).toEqual([]);
+    expect(JSON.stringify(desk.tests)).not.toContain('NFLX');
     const lesson = desk.lessons.find((row) => row.id === 132);
     expect(lesson?.test_id).toBe(40);
     const published = toPublicDeskSnapshot({ ...desk, source: 'postgrest' });
     expect(published.source).toBe('snapshot');
     expect(published.tests).toHaveLength(desk.tests.length);
     expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 8, tests_queued: 16 });
+    expect(published.backtest_artifacts).toEqual([]);
+    const wire = JSON.stringify(published);
+    expect(wire).not.toContain('params_json');
+    expect(wire).not.toContain('do not publish');
+    expect(wire).not.toContain('events');
+    expect(wire).toContain('hold-through beat selling before');
+  });
+
+  test('the public slice stays under 25 KB for the live week shape', () => {
+    const summaries = [{
+      id: 143,
+      test_id: 40,
+      mean_diff: 0.019635894872020693,
+      ci_diff: [0.005222170077015214, 0.03414937865245927],
+      hit_a: 0.7,
+      hit_b: 0.5,
+      trade_count: 50,
+      book_a: 0.9322635607284417,
+      spy_a: 0.09744632442763934,
+      events: Array.from({ length: 50 }, () => ({ symbol: 'NFLX', path: 's3://private/blotter' })),
+    }];
+    const projected = projectPublicTests(finishedLedger(), summaries);
+    projected.forEach((row, index) => {
+      row.cycle_id = 1000 + (index % 22);
+    });
+    const cycles = Array.from({ length: 22 }, (_, index) => ({
+      id: index === 0 ? 144 : 1000 + index,
+      thesis_id: 'earnings_gap_structure',
+      hypothesis: 'h'.repeat(800),
+      preregistered_outcome: 'p'.repeat(800),
+      stage: 'tested',
+      status: 'complete',
+      market_regime: null,
+    }));
+    const scenarios = Array.from({ length: 62 }, (_, index) => ({
+      id: index + 1,
+      test_id: projected[index % projected.length]?.id,
+      scenario_key: 'cost',
+      market_regime: 'base',
+      cost_multiplier: 1,
+      outcome: 'killed',
+      metric_value: -0.01,
+      breach_type: null,
+    }));
+    const published = toPublicDeskSnapshot({
+      generated_at: AT,
+      source: 'postgrest',
+      theses: [thesis()],
+      book: { current_nav: null, starting_nav: null, observed_at: null },
+      routines: [],
+      tests: projected,
+      cycles,
+      scenarios,
+      backtest_artifacts: [{ id: 1, test_id: 15, artifact_kind: 'summary_json', storage_path: 'secret' }],
+      counts: { sources: 0, symbols: 0, open_research: 0, tests_killed: 0, tests_survived: 0, scenario_cells: 0, open_positions: 0, queued_tasks: 0 },
+    });
+    const slice = JSON.stringify({
+      tests: published.tests,
+      cycles: published.cycles,
+      scenarios: published.scenarios,
+      backtest_artifacts: published.backtest_artifacts,
+    });
+    expect(slice.length).toBeLessThan(25_000);
+    expect(published.backtest_artifacts).toEqual([]);
+    expect(slice).not.toContain('s3://private');
+    const hypothesis = (published.cycles as { hypothesis?: string }[])[0]?.hypothesis ?? '';
+    expect(hypothesis.length).toBeLessThanOrEqual(160);
   });
 });

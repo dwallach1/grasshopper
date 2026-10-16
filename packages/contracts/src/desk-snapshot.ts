@@ -555,19 +555,117 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
   return out as DeskWire;
 }
 
+const STRATEGY_TEST_HIDDEN = new Set(['placeholder', 'lookahead_invalid']);
+const PUBLIC_TEST_KEYS = ['id', 'cycle_id', 'variant_label', 'status', 'result', 'per_trade', 'book'] as const;
+const PUBLIC_PER_TRADE_KEYS = ['n', 'unit', 'mean', 'ci90', 'hit', 'hit_other'] as const;
+/** Cycle hypothesis and preregistered outcome on the phone. */
+export const PUBLIC_CYCLE_NOTE_CHARS = 160;
+
+function isSnapshotRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function clipSnapshotNote(value: unknown, max = PUBLIC_CYCLE_NOTE_CHARS): unknown {
+  if (typeof value !== 'string' || value.length <= max) return value;
+  return value.slice(0, max);
+}
+
+function publishPerTrade(value: unknown): Record<string, unknown> | null {
+  if (!isSnapshotRecord(value)) return null;
+  const next: Record<string, unknown> = {};
+  for (const key of PUBLIC_PER_TRADE_KEYS) {
+    const item = value[key];
+    if (item === undefined || item === null) continue;
+    next[key] = item;
+  }
+  return Object.keys(next).length ? next : null;
+}
+
+function publishTests(rows: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(rows)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    if (!isSnapshotRecord(row) || STRATEGY_TEST_HIDDEN.has(String(row.status ?? ''))) continue;
+    const next: Record<string, unknown> = {};
+    for (const key of PUBLIC_TEST_KEYS) {
+      const value = key === 'per_trade' ? publishPerTrade(row[key]) : row[key];
+      if (value === undefined || value === null || value === '') continue;
+      next[key] = value;
+    }
+    if (typeof next.id !== 'number' && typeof next.id !== 'string') continue;
+    out.push(next);
+  }
+  return out;
+}
+
+function publishCycles(rows: unknown, cycleIds: Set<number>): Record<string, unknown>[] {
+  if (!Array.isArray(rows)) return [];
+  const out: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    if (!isSnapshotRecord(row) || !cycleIds.has(Number(row.id))) continue;
+    out.push({
+      id: row.id,
+      thesis_id: row.thesis_id,
+      stage: row.stage,
+      status: row.status,
+      market_regime: row.market_regime ?? null,
+      hypothesis: clipSnapshotNote(row.hypothesis) ?? '',
+      preregistered_outcome: clipSnapshotNote(row.preregistered_outcome) ?? '',
+    });
+  }
+  return out;
+}
+
+function publishScenarios(rows: unknown, testIds: Set<number>): Record<string, unknown>[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row): row is Record<string, unknown> =>
+    isSnapshotRecord(row) && testIds.has(Number(row.test_id)),
+  );
+}
+
 /**
  * Mark a live desk payload as the public snapshot. Strips operator-only audit
  * *rows* so GET /api/desk stays JSON-healthy under Worker CPU, then puts empty
  * arrays back so the phone client can index `tests[0]`. Book / Board / Team
  * keep `prediction_markets`, `meme_coins`, `team`, theses, beliefs, lessons,
  * pending ontology candidates, the book, and the slim strategy-test result
- * (`tests`, `cycles`, `scenarios`, `backtest_artifacts`). Never invent marks.
+ * (name, status, measured line, per-trade stats; cycles and scenarios only
+ * for those tests). Curves, charts, price lists, params, and blotters stay off.
+ * Never invent marks.
  */
 export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
   const slim: Record<string, unknown> = { source: 'snapshot' };
+  const source = desk as Record<string, unknown>;
   for (const [key, value] of Object.entries(desk)) {
     if (key === 'source' || PUBLIC_OMIT.has(key)) continue;
     slim[key] = key === 'ontology_candidates' ? publicPendingCandidates(value) : value;
+  }
+  if (Array.isArray(source.tests)) {
+    const tests = publishTests(source.tests);
+    const testIds = new Set(tests.map((row) => Number(row.id)));
+    const cycleIds = new Set(tests.map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id)));
+    const scenarios = publishScenarios(source.scenarios, testIds);
+    slim.tests = tests;
+    slim.cycles = publishCycles(source.cycles, cycleIds);
+    slim.scenarios = scenarios;
+    slim.backtest_artifacts = [];
+    if (isSnapshotRecord(slim.counts)) {
+      let tests_survived = 0;
+      let tests_killed = 0;
+      let tests_queued = 0;
+      for (const row of tests) {
+        if (row.status === 'survived') tests_survived += 1;
+        else if (row.status === 'killed') tests_killed += 1;
+        else if (row.status === 'queued') tests_queued += 1;
+      }
+      slim.counts = {
+        ...slim.counts,
+        tests_survived,
+        tests_killed,
+        tests_queued,
+        scenario_cells: scenarios.length,
+      };
+    }
   }
   return hydratePublicDesk(slim as DeskWire);
 }

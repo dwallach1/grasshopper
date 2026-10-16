@@ -4,7 +4,14 @@
  * SELECTs desk_public_reader tables and returns one bundle. Writes are 405.
  */
 import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception.ts';
-import { slimPublicArtifacts, slimPublicTests } from './public-tests.ts';
+import {
+  clipPublicNote,
+  projectPublicTests,
+  PUBLIC_NOTE_CHARS,
+  PUBLIC_SUMMARY_QUERY,
+  PUBLIC_TEST_QUERY,
+  slimPublicArtifacts,
+} from './public-tests.ts';
 
 const ALLOWED_TABLES = new Set([
   'theses', 'thesis_symbols', 'thesis_evidence', 'thesis_scores', 'thesis_relations', 'runs',
@@ -30,8 +37,8 @@ const AGENTIC_LAST4 = '7638';
 
 /**
  * Slim /bundle/public keys. Omit a key here and the Worker hydrates [].
- * Tests stay: the phone shows finished results. The select below drops the
- * parameter bag; artifact kinds drop the trade blotter and storage paths.
+ * Tests stay as a measured line (name, status, per-trade result). The select
+ * below does not pull parameter bags, blotters, curves, or full summaries.
  */
 const PUBLIC_KEYS = new Set([
   'theses', 'symbols', 'beliefs', 'lessons',
@@ -40,9 +47,6 @@ const PUBLIC_KEYS = new Set([
   'accountLatest', 'accountFirst', 'positions', 'exposures', 'intents', 'fills',
   'themes', 'candidates',
 ]);
-
-const PUBLIC_TEST_QUERY = 'strategy_tests?select=id,external_key,cycle_id,variant_label,status,total_return,max_drawdown,deflated_sharpe,cost_multiplier,stress_regime,failure_reason,autopsy,tested_at,price_source,window_start,window_end,symbols&order=tested_at.desc.nullslast,id.desc';
-const PUBLIC_ARTIFACT_QUERY = 'backtest_artifacts?select=id,test_id,thesis_id,artifact_kind,title,mime_type,payload_json,source,created_at&artifact_kind=in.(summary_json,equity_curve,chart_svg,price_source)&order=created_at.desc,id.desc';
 
 /** Pending window before the phone cap of 40. Memberships sort first, so 72 still fills the queue. */
 const PUBLIC_CANDIDATE_FETCH = 72;
@@ -277,13 +281,18 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
   try {
     const since = mode === 'public' ? new Date(Date.now() - PUBLIC_RECENT_MS).toISOString() : '';
     const tables = (mode === 'public'
-      ? REQUIRED.filter(([key]) => PUBLIC_KEYS.has(key) && key !== 'accountLatest' && key !== 'accountFirst')
+      ? REQUIRED.filter(([key]) =>
+        PUBLIC_KEYS.has(key)
+        && key !== 'accountLatest'
+        && key !== 'accountFirst'
+        && key !== 'cycles'
+        && key !== 'scenarios'
+        && key !== 'artifacts')
       : REQUIRED
     ).map(([key, query]) => {
       if (mode !== 'public') return [key, query] as const;
       if (key === 'candidates') return [key, publicCandidateQuery()] as const;
       if (key === 'tests') return [key, PUBLIC_TEST_QUERY] as const;
-      if (key === 'artifacts') return [key, PUBLIC_ARTIFACT_QUERY] as const;
       if (key === 'intents') {
         return [key, `trade_intents?select=id,account_key,symbol,side,status,mode,notional,quantity,order_type,broker_order_id,created_at,updated_at&${openOrRecent('created_at', since)}&order=created_at.desc&limit=${PUBLIC_ORDER_LIMIT}`] as const;
       }
@@ -295,7 +304,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
-    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog] = await Promise.all([
+    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
@@ -305,6 +314,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       pnlWindow('meme_pnl', memePnlCols, pnlLimit),
       objectFrom(SCORECARD),
       objectFrom(WATCHDOG),
+      mode === 'public' ? restGet(PUBLIC_SUMMARY_QUERY) : Promise.resolve([]),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
@@ -315,9 +325,30 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       body.beliefs = clipRows(asRows(body.beliefs), 'rationale', PUBLIC_TEXT);
       body.lessons = clipRows(asRows(body.lessons), 'summary', PUBLIC_TEXT);
       body.runs = clipRows(asRows(body.runs), 'notes', PUBLIC_TEXT);
-      body.cycles = clipRows(clipRows(asRows(body.cycles), 'hypothesis', PUBLIC_TEXT), 'preregistered_outcome', PUBLIC_TEXT);
-      body.tests = slimPublicTests(asRows(body.tests));
-      body.artifacts = slimPublicArtifacts(asRows(body.artifacts));
+      const rawTests = asRows(body.tests);
+      const projected = projectPublicTests(rawTests, summaries);
+      body.tests = projected;
+      const testIds = projected.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
+      const cycleIds = [...new Set(projected.map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id) && id > 0))];
+      const [cycles, scenarios] = await Promise.all([
+        cycleIds.length
+          ? restGet(`research_cycles?select=id,thesis_id,stage,status,market_regime,hypothesis,preregistered_outcome&id=in.(${cycleIds.join(',')})`)
+          : Promise.resolve([]),
+        testIds.length
+          ? restGet(`test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value&test_id=in.(${testIds.join(',')})`)
+          : Promise.resolve([]),
+      ]);
+      body.cycles = cycles.map((row) => {
+        const record = row && typeof row === 'object' && !Array.isArray(row) ? row as Record<string, unknown> : null;
+        if (!record) return row;
+        return {
+          ...record,
+          hypothesis: clipPublicNote(record.hypothesis, PUBLIC_NOTE_CHARS) ?? '',
+          preregistered_outcome: clipPublicNote(record.preregistered_outcome, PUBLIC_NOTE_CHARS) ?? '',
+        };
+      });
+      body.scenarios = scenarios;
+      body.artifacts = slimPublicArtifacts(summaries, rawTests);
       pm = { ...pm, notes: clipRows(asRows(pm.notes), 'body', PUBLIC_NOTE_BODY) };
       meme = { ...meme, notes: clipRows(asRows(meme.notes), 'body', PUBLIC_NOTE_BODY) };
     }

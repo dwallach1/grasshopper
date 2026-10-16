@@ -568,6 +568,30 @@ describe('Books page: one section per steward', () => {
     }]);
     payload.tests = [survived, placeholder];
     payload.cycles = [cycle];
+    payload.backtest_artifacts = [{
+      id: 143,
+      test_id: 40,
+      thesis_id: EARNINGS,
+      artifact_kind: 'summary_json',
+      title: 'summary',
+      mime_type: 'application/json',
+      payload_json: {
+        mean_diff_a_minus_b: 0.019635894872020693,
+        bootstrap90_diff: [0.005222170077015214, 0.03414937865245927],
+        hit_a: 0.7,
+        hit_b: 0.5,
+        trade_count: 50,
+        total_return_a_book: 0.9322635607284417,
+        spy_same_dates_book: 0.09744632442763934,
+        events: [{ symbol: 'NFLX', note: 'do not publish the blotter' }],
+      },
+      payload_items: null,
+      payload_text: null,
+      storage_bucket: null,
+      storage_path: null,
+      source: 'robinhood_mcp',
+      created_at: AT,
+    }];
     payload.counts = { ...payload.counts, tests_survived: 0, tests_killed: 0 };
     const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
     await act(async () => {
@@ -575,11 +599,14 @@ describe('Books page: one section per steward', () => {
     });
     const detail = view.host.querySelector('.books-detail');
     expect(detail?.textContent).toContain('Tests · 1');
-    expect(detail?.textContent).toContain('serial negative reactor hold vs exit v1 · passed · return +93.2%');
+    expect(detail?.textContent).toContain('hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50');
+    expect(detail?.textContent).toContain('1-yr compounded book +93.2% (SPY +9.7%)');
+    expect(detail?.textContent).not.toContain('return +93.2%');
+    expect(detail?.textContent).not.toContain('do not publish the blotter');
     expect(detail?.textContent).not.toContain('power breadth');
     expect(detail?.querySelector('[data-test="40"]')?.getAttribute('data-status')).toBe('survived');
+    expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('hold-through beat selling before');
     expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('passed');
-    expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('return +93.2%');
     view.unmount();
   });
 

@@ -159,10 +159,35 @@ describe('public desk snapshot contract', () => {
   test('public snapshot keeps finished strategy tests instead of an empty 0/0 panel', () => {
     const published = toPublicDeskSnapshot({
       ...sample,
-      tests: [{ id: 40, status: 'survived', variant_label: 'serial-negative-reactor-hold-vs-exit-v1' }],
-      backtest_artifacts: [{ id: 9, test_id: 40, artifact_kind: 'summary_json', title: 'summary' }],
-      cycles: [{ id: 144, thesis_id: 'earnings_gap_structure' }],
-      scenarios: [{ id: 1, test_id: 40, outcome: 'survived' }],
+      tests: [{
+        id: 40,
+        cycle_id: 144,
+        status: 'survived',
+        variant_label: 'serial-negative-reactor-hold-vs-exit-v1',
+        tested_at: '2026-10-16T13:15:29.712Z',
+        result: 'hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50',
+        book: '1-yr compounded book +93.2% (SPY +9.7%)',
+        params_json: { secret_rule: 'do not publish' },
+        autopsy: 'x'.repeat(400),
+        total_return: 0.932264,
+      }, {
+        id: 15,
+        cycle_id: 3,
+        status: 'lookahead_invalid',
+        variant_label: 'cash-reserve',
+      }],
+      backtest_artifacts: [
+        { id: 9, test_id: 40, artifact_kind: 'summary_json', title: 'summary', storage_path: 'secret/path' },
+        { id: 10, test_id: 15, artifact_kind: 'equity_curve', payload_json: { points: [1, 2, 3] } },
+      ],
+      cycles: [
+        { id: 144, thesis_id: 'earnings_gap_structure', hypothesis: 'H'.repeat(400), preregistered_outcome: 'Hold through.', stage: 'tested', status: 'complete', market_regime: null },
+        { id: 3, thesis_id: 'other', hypothesis: 'unrelated cycle' },
+      ],
+      scenarios: [
+        { id: 1, test_id: 40, outcome: 'survived' },
+        { id: 2, test_id: 15, outcome: 'killed' },
+      ],
       counts: {
         sources: 0,
         symbols: 0,
@@ -176,12 +201,32 @@ describe('public desk snapshot contract', () => {
       },
     });
     expect(published.tests).toEqual([
-      { id: 40, status: 'survived', variant_label: 'serial-negative-reactor-hold-vs-exit-v1' },
+      {
+        id: 40,
+        cycle_id: 144,
+        status: 'survived',
+        variant_label: 'serial-negative-reactor-hold-vs-exit-v1',
+        result: 'hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50',
+        book: '1-yr compounded book +93.2% (SPY +9.7%)',
+      },
     ]);
-    expect(published.backtest_artifacts).toHaveLength(1);
-    expect(published.cycles).toHaveLength(1);
-    expect(published.scenarios).toHaveLength(1);
-    expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 8, tests_queued: 16 });
+    expect(published.backtest_artifacts).toEqual([]);
+    expect(published.cycles).toEqual([
+      {
+        id: 144,
+        thesis_id: 'earnings_gap_structure',
+        hypothesis: 'H'.repeat(160),
+        preregistered_outcome: 'Hold through.',
+        stage: 'tested',
+        status: 'complete',
+        market_regime: null,
+      },
+    ]);
+    expect(published.scenarios).toEqual([{ id: 1, test_id: 40, outcome: 'survived' }]);
+    expect(JSON.stringify(published)).not.toContain('do not publish');
+    expect(JSON.stringify(published)).not.toContain('secret/path');
+    expect(JSON.stringify(published)).not.toContain('lookahead');
+    expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 0, tests_queued: 0 });
     expect(published.evidence).toEqual([]);
     expect(published.runs).toEqual([]);
   });
