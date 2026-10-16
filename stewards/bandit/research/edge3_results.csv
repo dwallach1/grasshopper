@@ -1,0 +1,2 @@
+half,coin,pool_file,signal_ts,entry_ts,entry_pt,entry_px,exit_trigger,exit_bar_offset,gross_pct,net_pct,net_sol,range_pct,vol_mult,vol6h_usd,window_span_h
+newer,FEELSGOOD,raw/ohlcv5_FEELSGOOD_8V79sJMP_usd.json,1789833900,1789834200,2026-09-19 09:10,3.873982852998407e-06,4h_stop,48,11.14,9.14,0.04113,2.96,10.51,632611,6.0
