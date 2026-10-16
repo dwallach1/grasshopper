@@ -147,7 +147,7 @@ export function BacktestsPanel({
         {desk.cycles.map((cycle) => (
           <div key={cycle.id} className="term-line">
             <b>{cycle.thesis_id}</b>
-            <span>{cycle.stage} · {cycle.status} · {cycle.market_regime}</span>
+            <span>{cycleMeta(cycle)}</span>
             <p>{cycle.hypothesis}</p>
             <p className="dim">Preregistered: {cycle.preregistered_outcome}</p>
           </div>
@@ -326,6 +326,16 @@ function BacktestDetail({
       ) : null}
     </>
   );
+}
+
+function cycleMeta(cycle: {
+  stage: string;
+  status: string;
+  market_regime: string | null;
+}): string {
+  const parts = [cycle.stage, cycle.status];
+  if (cycle.market_regime) parts.push(cycle.market_regime);
+  return parts.join(' · ');
 }
 
 function bookDrawdown(value: number | null, status: string): string | null {

@@ -141,6 +141,32 @@ describe('public strategy test projection', () => {
     expect(perTradeText({ n: 50, unit: 'pts', mean: 1.96, ci90: [0.52, 3.41], hit: 0.7, hit_other: 0.5 })).toBe('+1.96 pts');
   });
 
+  test('test 16 reads the 10 bps object key, and a bare n stays n=', () => {
+    const summarySelect = PUBLIC_SUMMARY_COLUMNS;
+    expect(summarySelect).toContain('payload_json->by_cost->"10"->mean_net_pct');
+    expect(summarySelect).not.toContain('->10->');
+    const stored = {
+      n: 4,
+      by_cost: {
+        '10': { n: 4, win: 2, mean_net_pct: -5.645, total_return: -0.2323 },
+        '30': { mean_net_pct: -5.845 },
+      },
+    };
+    const fromPayload = measureStrategyTest(stored);
+    expect(fromPayload.result).toBe('mean -5.65%/trade, hit 50%, n=4');
+    expect(fromPayload.per_trade).toMatchObject({ n: 4, unit: 'percent', mean: -5.65, hit: 0.5 });
+    const fromSelect = measureStrategyTest({ n: 4, mean10: -5.645, win10: 2, n10: 4 });
+    expect(fromSelect.result).toBe('mean -5.65%/trade, hit 50%, n=4');
+    const projected = projectPublicTests(
+      [{ id: 16, external_key: 'serial-gap-dump-v1-20260903', cycle_id: 25, variant_label: 'serial-gap-dump-v1', status: 'killed', tested_at: AT }],
+      [{ id: 111, test_id: 16, n: 4, mean10: -5.645, win10: 2, n10: 4 }],
+    );
+    expect(projected[0]?.result).toBe('mean -5.65%/trade, hit 50%, n=4');
+    expect(projected[0]?.per_trade).toMatchObject({ n: 4, unit: 'percent', mean: -5.65, hit: 0.5 });
+    expect(measureStrategyTest({ n: 4 }).result).toBe('n=4');
+    expect(measureStrategyTest({ n: 4 }).per_trade).toMatchObject({ mean: null, hit: null, unit: null });
+  });
+
   test('public artifacts drop curves, charts, price lists, and non-results', () => {
     const slim = slimPublicArtifacts([
       {

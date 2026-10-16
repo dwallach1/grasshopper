@@ -141,6 +141,13 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
     throw new Error(`desk_bundle_${response.status}`);
   }
   const raw = await readBoundedJson(response, MAX_SNAPSHOT_BYTES);
+  const serve = assemblePublicBundle(raw);
+  liveCache = { at: Date.now(), serve };
+  return serve;
+}
+
+/** Zod-parse a `/bundle/public` body and publish the phone snapshot. */
+export function assemblePublicBundle(raw: unknown): PublicDeskServe {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('desk_bundle_not_json');
   }
@@ -239,9 +246,7 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
     throw new Error('desk_live_rejected');
   }
   const json = JSON.stringify(published);
-  const serve = { desk: published, json, generated_at: published.generated_at };
-  liveCache = { at: Date.now(), serve };
-  return serve;
+  return { desk: published, json, generated_at: published.generated_at };
 }
 
 export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {
