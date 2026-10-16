@@ -434,13 +434,14 @@ def _px_sol(r):
         return px, o.get("priceImpactPct"), None if px else "no_price"
     except Exception as e:
         return None, None, f"quote_err {type(e).__name__}"
-def _paper_log(r, thesis, suffix, reason, meta):
+def _paper_log(r, thesis, suffix, reason, meta, blocked_by=PAPER_TAG, px_fallback=None):
     px, imp, err = _px_sol(r)
+    if (err or not px) and px_fallback: px, err, imp = px_fallback, None, "n/a (signal-time quote)"
     if err or not px: return None, err or "no_price"
-    if _no_log: return None, f"dry_run would_log px={px} {meta}"
+    if _no_log: return None, f"dry_run would_log blocked_by={blocked_by} px={px} {meta}"
     import steward_rpc
     res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
-        thesis_id=thesis, reason=f"{reason}; impact {imp}", blocked_by=PAPER_TAG, decided_at=_dec_pt,
+        thesis_id=thesis, reason=f"{reason}; impact {imp}", blocked_by=blocked_by, decided_at=_dec_pt,
         source_id=f"scan_https_{_stamp}_{r['mint'][:8]}_{suffix}", meta=meta)
     return (res or {}).get("id"), "ok" if (res or {}).get("ok") else res
 def _iso_ts(x):
@@ -545,24 +546,59 @@ for r in universe345:
         edge4_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
 
 # ---- edge5 meme_liq_accum (forward-paper-only; Jupiter liquidity/price snapshots; entry on the NEXT scan) ----
+E5_VOID_TAG = "paper_void_stale"; E5_STALE_S = 2 * 3600; E5_HISTORY_MAX = 500
+def edge5_process_pending(state, now_ts, entry_fn, void_fn, no_log=False):
+    """Pure (no I/O of its own): enter or void each pending edge5 signal; mutates `state` unless no_log.
+    entry_fn / void_fn(mint, pend) -> (ledger id, status); status == "ok" means logged.
+    - fresh + entry ok      -> removed from pending, dedupe[mint] = signal_ts, history 'entered'
+    - fresh + entry failed  -> stays pending; retries += 1, last_error / last_try_ts recorded (retried next scan)
+    - stale (> 2h)          -> void logged; ok -> removed, history 'void_stale'; failed -> stays, void_retries += 1
+    Returns [(mint, id, status)]."""
+    res = []
+    hist = state.setdefault("history", [])
+    for mint, pend in list(state.get("pending", {}).items()):
+        stale = now_ts - pend["signal_ts"] > E5_STALE_S
+        fn = void_fn if stale else entry_fn
+        try: lid, st_ = fn(mint, pend)
+        except Exception as e: lid, st_ = None, f"err {type(e).__name__}: {str(e)[:120]}"
+        tag = "void_stale" if stale else "entry"
+        res.append((mint, lid, f"{tag}: {st_}" if st_ != "ok" else f"{tag}: ok"))
+        if no_log: continue
+        if st_ == "ok":
+            state["pending"].pop(mint)
+            if not stale: state.setdefault("dedupe", {})[mint] = pend["signal_ts"]
+            hist.append(dict(mint=mint, symbol=pend.get("symbol"), signal_ts=pend["signal_ts"], outcome="void_stale" if stale else "entered",
+                             ledger_id=lid, at_ts=now_ts, retries=pend.get("retries", 0), void_retries=pend.get("void_retries", 0),
+                             last_error=pend.get("last_error")))
+        else:
+            k = "void_retries" if stale else "retries"
+            pend[k] = pend.get(k, 0) + 1; pend["last_error"] = str(st_)[:200]; pend["last_try_ts"] = now_ts
+    del hist[:-E5_HISTORY_MAX]
+    return res
 snaps = _load(LIQ_SNAP, {})
-e5_state = _load(E5_STATE, {"pending": {}, "dedupe": {}})
+e5_state = _load(E5_STATE, {"pending": {}, "dedupe": {}, "history": []})
 edge5_logged = []; edge5_checked = 0
 _rows_by_mint = {r["mint"]: r for r in elig}
-# 1) signals from the previous scan enter now (next scan), or are void if that scan was > 2h ago
-for mint, pend in list(e5_state["pending"].items()):
-    r = _rows_by_mint.get(mint) or {"mint": mint, "symbol": pend.get("symbol"), "decimals": pend.get("decimals")}
-    if _now_ts - pend["signal_ts"] > 2 * 3600:
-        edge5_logged.append((r["symbol"], None, "void: no_next_scan")); e5_state["pending"].pop(mint); continue
-    meta = {"edge5": dict(pend["info"], signal_scan_ts=pend["signal_ts"], entry_scan_ts=_now_ts), "horizon": "4h"}
-    try:
-        lid, st_ = _paper_log(r, "meme_liq_accum", "edge5",
-            f"{r['symbol']}: edge5 liq-accum entry on next scan (paper only): liq +{pend['info']['liq_chg_pct']}% / price {pend['info']['px_chg_pct']}% over {pend['info']['ref_age_h']}h, buy share {pend['info']['buy_share']}", meta)
-    except Exception as e:
-        lid, st_ = None, f"err {type(e).__name__}: {str(e)[:120]}"
-    edge5_logged.append((r["symbol"], lid, st_))
-    if st_ == "ok": e5_state["dedupe"][mint] = pend["signal_ts"]
-    if not _no_log: e5_state["pending"].pop(mint)
+# 1) signals from earlier scans enter now (next scan). A failed entry log stays pending and is retried next scan
+#    (retries counted). Only staleness (> 2h since the signal scan) voids a pending entry; the void is itself logged
+#    to the ledger (blocked_by=paper_void_stale, source_id ..._edge5void) and kept in state history. A failed void
+#    log is retried too. See edge5_process_pending (pure; tested in stewards/test_bandit_edge5_pending.py).
+def _e5_row(mint, pend): return _rows_by_mint.get(mint) or {"mint": mint, "symbol": pend.get("symbol"), "decimals": pend.get("decimals")}
+def _e5_entry(mint, pend):
+    r = _e5_row(mint, pend); i = pend["info"]
+    meta = {"edge5": dict(i, signal_scan_ts=pend["signal_ts"], entry_scan_ts=_now_ts, entry_retries=pend.get("retries", 0)), "horizon": "4h"}
+    return _paper_log(r, "meme_liq_accum", "edge5",
+        f"{r['symbol']}: edge5 liq-accum entry on next scan (paper only): liq +{i['liq_chg_pct']}% / price {i['px_chg_pct']}% over {i['ref_age_h']}h, buy share {i['buy_share']}", meta)
+def _e5_void(mint, pend):
+    r = _e5_row(mint, pend); sig_pt = datetime.fromtimestamp(pend["signal_ts"], timezone.utc).astimezone(PT).strftime('%Y-%m-%d %H:%M PT')
+    why = f"no successful entry log within 2h of the signal ({pend.get('retries', 0)} failed entry attempts; last error: {pend.get('last_error') or 'none (no scan ran)'})"
+    meta = {"edge5": dict(pend["info"], signal_scan_ts=pend["signal_ts"]), "void": {"reason": "stale_2h", "signal_ts": pend["signal_ts"],
+            "retries": pend.get("retries", 0), "last_error": pend.get("last_error")}}
+    return _paper_log(r, "meme_liq_accum", "edge5void", f"{r['symbol']}: edge5 pending entry VOID (paper only, not a pass): signal {sig_pt}; {why}",
+                      meta, blocked_by=E5_VOID_TAG, px_fallback=pend.get("signal_px_sol"))
+_e5_syms = {m: p_.get("symbol") for m, p_ in e5_state.get("pending", {}).items()}
+for _m, _lid, _st in edge5_process_pending(e5_state, _now_ts, _e5_entry, _e5_void, _no_log):
+    edge5_logged.append((_e5_syms.get(_m) or _m, _lid, _st))
 # 2) record this scan's snapshot for every eligible coin (always, even with no signal), prune > 9h
 for r in elig:
     try: px = float(r.get("usdPrice")) if r.get("usdPrice") is not None else None
@@ -600,7 +636,8 @@ for r in universe345:
                 ref_age_h=round((_now_ts - ref[0]) / 3600, 2), buy_share=round(bs, 4), age_h=round(r["age_h"], 1))
     edge5_logged.append((r["symbol"], None, f"signal: pending entry at next scan {info}"))
     if not _no_log:
-        e5_state["pending"][r["mint"]] = {"signal_ts": _now_ts, "symbol": r["symbol"], "decimals": r["decimals"], "info": info}
+        e5_state["pending"][r["mint"]] = {"signal_ts": _now_ts, "symbol": r["symbol"], "decimals": r["decimals"], "info": info,
+                                          "retries": 0, "signal_px_sol": _px_sol(r)[0]}   # signal-time price: void-log fallback
 if not _no_log:
     _save(E3_STATE, e3_state); _save(E4_STATE, e4_state); _save(E5_STATE, e5_state); _save(LAST_SCAN, {"ts": _now_ts})
 out["edge3_checked"] = edge3_checked; out["edge3_logged"] = edge3_logged
