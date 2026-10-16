@@ -1,0 +1,84 @@
+{
+ "prereg_sha256": "f88d7e42876ccf6e02ddeb2af2295bb34114aeeff28cd329007803e3d20bde30",
+ "older": {
+  "n": 2,
+  "wins": 1,
+  "mean_net_pct": 18.18,
+  "se_pct": 29.81,
+  "mean_minus_se_pct": -11.63,
+  "mean_ex_top2_pct": null,
+  "net_sol": 0.1637
+ },
+ "newer": {
+  "n": 2,
+  "wins": 2,
+  "mean_net_pct": 48.0,
+  "se_pct": 0.0,
+  "mean_minus_se_pct": 48.0,
+  "mean_ex_top2_pct": null,
+  "net_sol": 0.432
+ },
+ "all": {
+  "n": 4,
+  "wins": 3,
+  "mean_net_pct": 33.09,
+  "se_pct": 14.91,
+  "mean_minus_se_pct": 18.19,
+  "mean_ex_top2_pct": 18.18,
+  "net_sol": 0.5957
+ },
+ "gate": {
+  "c1_sample": false,
+  "c2_newer_positive": true,
+  "c3_overall_sol_positive": true
+ },
+ "verdict": "FAIL: insufficient sample",
+ "coins": {
+  "Agency": {
+   "status": "edge2_precedence (consumed)",
+   "signal_bar": 103,
+   "signal_pt": "2026-10-02 00:20"
+  },
+  "COLLECT": {
+   "status": "trade",
+   "signal_pt": "2026-09-24 22:35"
+  },
+  "FEELSGOOD": {
+   "status": "no_pumpswap_pool",
+   "mint": "HgcxVs6kJhPAaGqnPNGaa7zYgNT49hJrLufiqcNMuYZT"
+  },
+  "JEANPHIL": {
+   "status": "edge2_precedence (consumed)",
+   "signal_bar": 73,
+   "signal_pt": "2026-09-19 18:15"
+  },
+  "QUEEF": {
+   "status": "no_pumpswap_pool",
+   "mint": "4UHmZGe6X4DZ5dxYGiGXMhi3Sp34uPWtHB7qDMyvRbYB"
+  },
+  "SHARTCOIN": {
+   "status": "no_pumpswap_pool",
+   "mint": "UpBBfyC75u3kxDGWmmmW2yauk9YY3CqZhdt1KUDkids"
+  },
+  "SI": {
+   "status": "no_pumpswap_pool",
+   "mint": "DEW9dSN6QpWyNthphCpMmAbZP1Q4cEKR9xQXAri98WDP"
+  },
+  "TIGRINO": {
+   "status": "trade",
+   "signal_pt": "2026-09-18 05:40"
+  },
+  "X7": {
+   "status": "no_pumpswap_pool",
+   "mint": "CdhZy8wrRxNxoV8HtoByXKN7mvS46avtuZ1b39tKfx7"
+  },
+  "familiars": {
+   "status": "trade",
+   "signal_pt": "2026-09-23 18:20"
+  },
+  "goon": {
+   "status": "trade",
+   "signal_pt": "2026-09-23 19:40"
+  }
+ }
+}

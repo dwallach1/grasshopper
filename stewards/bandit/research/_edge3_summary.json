@@ -1,0 +1,123 @@
+{
+ "prereg_sha256": "599acd6d6a50e4bacc6eeaca000dddee5ae6ef5c7816de86e796e8fa093bba04",
+ "older": {
+  "n": 0,
+  "wins": 0,
+  "mean_net_pct": null,
+  "se_pct": null,
+  "mean_minus_se_pct": null,
+  "mean_ex_top2_pct": null,
+  "net_sol": 0
+ },
+ "newer": {
+  "n": 1,
+  "wins": 1,
+  "mean_net_pct": 9.14,
+  "se_pct": null,
+  "mean_minus_se_pct": null,
+  "mean_ex_top2_pct": null,
+  "net_sol": 0.0411
+ },
+ "all": {
+  "n": 1,
+  "wins": 1,
+  "mean_net_pct": 9.14,
+  "se_pct": null,
+  "mean_minus_se_pct": null,
+  "mean_ex_top2_pct": null,
+  "net_sol": 0.0411
+ },
+ "gate": {
+  "c1_sample": false,
+  "c2_newer_positive": true,
+  "c3_overall_sol_positive": true
+ },
+ "verdict": "FAIL: insufficient sample",
+ "exit_triggers": {
+  "4h_stop": 1
+ },
+ "trades_per_coin": {
+  "FEELSGOOD": 1
+ },
+ "excluded_median_gt_1": [
+  "GROK"
+ ],
+ "pools": {
+  "Agency": "raw/ohlcv5_Agency_GDoenRAG_usd.json",
+  "COLLECT": "raw/ohlcv5_COLLECT_99C6TUp7_usd.json",
+  "FEELSGOOD": "raw/ohlcv5_FEELSGOOD_8V79sJMP_usd.json",
+  "GROK": "raw/ohlcv5_GROK_3NAxQ3Ug_usd.json",
+  "JEANPHIL": "raw/ohlcv5_JEANPHIL_4R8CiMnJ_usd.json",
+  "QUEEF": "raw/ohlcv5_QUEEF_AZ82R741_usd.json",
+  "SHARTCOIN": "raw/ohlcv5_SHARTCOIN_82BHvVSe_usd.json",
+  "SI": "raw/ohlcv5_SI_AG1EhPjs_usd.json",
+  "TIGRINO": "raw/ohlcv5_TIGRINO_2fwy38cJ_usd.json",
+  "X7": "raw/ohlcv5_X7_DM7mLVfN_usd.json",
+  "familiars": "raw/ohlcv5_familiars_ENiVH49X_usd.json",
+  "goon": "raw/ohlcv5_goon_9PYormkW_usd.json"
+ },
+ "bars": {
+  "Agency": 1000,
+  "COLLECT": 375,
+  "FEELSGOOD": 723,
+  "GROK": 758,
+  "JEANPHIL": 413,
+  "QUEEF": 403,
+  "SHARTCOIN": 1000,
+  "SI": 475,
+  "TIGRINO": 542,
+  "X7": 306,
+  "familiars": 360,
+  "goon": 413
+ },
+ "date_range_pt": {
+  "Agency": [
+   "2026-10-03 11:40",
+   "2026-10-07 08:30"
+  ],
+  "COLLECT": [
+   "2026-09-24 18:05",
+   "2026-09-26 01:15"
+  ],
+  "FEELSGOOD": [
+   "2026-09-18 14:35",
+   "2026-09-21 02:50"
+  ],
+  "GROK": [
+   "2026-09-21 11:50",
+   "2026-09-24 02:55"
+  ],
+  "JEANPHIL": [
+   "2026-09-19 12:05",
+   "2026-09-20 22:25"
+  ],
+  "QUEEF": [
+   "2026-09-19 21:50",
+   "2026-09-21 07:20"
+  ],
+  "SHARTCOIN": [
+   "2026-09-30 15:20",
+   "2026-10-07 21:10"
+  ],
+  "SI": [
+   "2026-09-21 09:25",
+   "2026-09-23 22:30"
+  ],
+  "TIGRINO": [
+   "2026-09-18 04:05",
+   "2026-09-20 01:10"
+  ],
+  "X7": [
+   "2026-09-21 21:00",
+   "2026-09-22 22:25"
+  ],
+  "familiars": [
+   "2026-09-23 16:20",
+   "2026-09-24 22:15"
+  ],
+  "goon": [
+   "2026-09-23 15:45",
+   "2026-09-25 02:05"
+  ]
+ }
+}
