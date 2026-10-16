@@ -186,6 +186,15 @@ export type JsonBag = {
   [key: string]: JsonScalar | JsonScalar[] | JsonBag | JsonBag[] | undefined;
 };
 
+export type PerTradeStats = {
+  n: number | null;
+  unit: 'pts' | 'percent' | null;
+  mean: number | null;
+  ci90: [number, number] | null;
+  hit: number | null;
+  hit_other: number | null;
+};
+
 export type StrategyTestRow = {
   id: number;
   external_key: string;
@@ -205,6 +214,10 @@ export type StrategyTestRow = {
   window_end: string | null;
   symbols: string[] | null;
   params_json: JsonBag | null;
+  /** Plain per-trade result. The compounded book, when present, is `book`. */
+  result?: string | null;
+  per_trade?: PerTradeStats | null;
+  book?: string | null;
 };
 
 export type BacktestArtifactKind =
@@ -537,6 +550,8 @@ export type DeskCounts = {
   open_research: number;
   tests_killed: number;
   tests_survived: number;
+  /** Strategy tests still `queued`. Placeholder and lookahead rows are not counted. */
+  tests_queued?: number;
   scenario_cells: number;
   open_positions: number;
   queued_tasks: number;

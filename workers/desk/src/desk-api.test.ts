@@ -263,6 +263,10 @@ describe('public desk reader credentials', () => {
     expect(source).toContain('assemblePublicDeskFromRestBag');
     expect(source).toContain('beliefs: asJsonRows(bag.beliefs)');
     expect(source).toContain('lessons: asJsonRows(bag.lessons)');
+    expect(source).toContain('tests: asJsonRows(bag.tests)');
+    expect(source).toContain('artifacts: asJsonRows(bag.artifacts)');
+    expect(source).toContain('cycles: asJsonRows(bag.cycles)');
+    expect(source).toContain('scenarios: asJsonRows(bag.scenarios)');
     expect(source).toContain('candidates: asJsonRows(bag.candidates)');
     expect(source).toContain('pnl_start: asObjectRow(bag.pm?.pnl_start)');
     expect(source).toContain('pnl_start: asObjectRow(bag.meme?.pnl_start)');
@@ -316,6 +320,14 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain('thesis_text,invalidation_price,invalidation_note,untagged:meta->>untagged');
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]beliefs['"]/);
     expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]lessons['"]/s);
+    expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]tests['"]/s);
+    expect(fn).toMatch(/PUBLIC_KEYS = new Set\(\[[^\]]*['"]artifacts['"]/s);
+    expect(fn).toContain('PUBLIC_TEST_QUERY');
+    expect(fn).toContain('PUBLIC_SUMMARY_QUERY');
+    expect(fn).not.toContain('artifact_kind=in.(summary_json,equity_curve,chart_svg,price_source)');
+    expect(fn).toContain('projectPublicTests');
+    expect(fn).toContain('slimPublicArtifacts');
+    expect(fn).not.toContain('params_json&order=tested_at.desc.nullslast');
     expect(fn).toContain('not_allowed');
     expect(fn).not.toContain("key === 'beliefs'");
     const api = await Bun.file(new URL('./desk-api.ts', import.meta.url)).text();
