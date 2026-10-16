@@ -5,7 +5,7 @@ Ledger mints come from the Supabase connector (meme_positions JOIN meme_tokens),
 Output: /workspace/bandit/_scan_https_out.json (local file only).
 """
 from __future__ import annotations
-import json, os, time
+import json, os, statistics, time
 from datetime import datetime, timezone
 from decimal import Decimal, getcontext
 from zoneinfo import ZoneInfo
@@ -342,6 +342,7 @@ def edge2_check(mint):
     """Return (triggered, info). Rule exactly per edge2_prereg.md, on the top-reserve pool's closed 5m USD bars."""
     pools = gt_get(f"networks/solana/tokens/{mint}/pools", {"page": 1})
     pl = (pools or {}).get("data") or []
+    GT_POOLS[mint] = pl if pools is not None else None  # None = call failed (edge4/edge5 then skip, never guess)
     if not pl: return False, "no_pool"
     pool = max(pl, key=lambda x: float((x.get("attributes") or {}).get("reserve_in_usd") or 0))["attributes"]["address"]
     time.sleep(2.1)
@@ -349,6 +350,7 @@ def edge2_check(mint):
     time.sleep(2.1)
     b = sorted(((d or {}).get("data") or {}).get("attributes", {}).get("ohlcv_list") or [], key=lambda r: r[0])
     b = [r for r in b if r[0] + 300 <= now.timestamp()]  # closed bars only
+    GT_BARS[mint] = (pool, b)
     if len(b) < 73: return False, f"bars {len(b)} < 73"
     t = len(b) - 1; w = b[t - 71:t + 1]; cl = [r[4] for r in w]; P = max(cl); pi = cl.index(P)
     if pi == 0 or len(w) - 1 - pi < 6: return False, "peak too recent/at window start"
@@ -357,6 +359,7 @@ def edge2_check(mint):
                 peak_age_bars=len(w) - 1 - pi, vol6h_usd=round(vol), reclaim=c > b[t - 1][2])
     ok = run >= 0.40 and 0.6 * P <= c <= 0.8 * P and c > b[t - 1][2] and vol >= 50000
     return ok, info
+GT_POOLS = {}; GT_BARS = {}; E2_HITS = set()  # shared with edge3/4/5 below
 edge2_logged = []; edge2_checked = 0
 try: e2_state = json.load(open(E2_STATE))
 except Exception: e2_state = {}
@@ -367,6 +370,7 @@ for r in elig:
     try: ok, info = edge2_check(r["mint"])
     except Exception as e: ok, info = False, f"err {type(e).__name__}"
     if not ok: continue
+    E2_HITS.add(r["mint"])  # edge2 precedence for edge3/4/5 (counts even if deduped/unlogged)
     last = e2_state.get(r["mint"])
     if last and now.timestamp() - last < 4 * 3600:
         edge2_logged.append((r["symbol"], None, "dedupe_4h")); continue
@@ -400,9 +404,212 @@ if not _no_log:
     with open(E2_STATE, "w") as fh: json.dump(e2_state, fh)
 out["edge2_checked"] = edge2_checked
 out["edge2_logged"] = edge2_logged
+# ---------------------------------------------------------------------------------------------------------------
+# edge3 meme_range_breakout / edge4 meme_grad_pullback / edge5 meme_liq_accum: PAPER ONLY, never trade.
+# Rules exactly per stewards/bandit/research/edge{3,4,5}_prereg.md (sha256 599acd6d.../f88d7e42.../71cfaa04...);
+# edge3/edge4 on forward paper per research/edge3_edge4_amendment_20261016.md. Each logs a skip with
+# blocked_by="paper_only" and its own 4h dedupe/state file. edge2 precedence: a coin edge2 triggered this scan is skipped.
+# Hourly scan vs 5m rules: edge3/edge4 look at bars that closed since the previous scan (capped at 75 min); the log
+# carries signal_bar_ts and prereg_entry_ts (open of the bar after the signal bar) in meta for the path scorer.
+# Dry run (BANDIT_SCAN_NO_LOG=1): nothing logged, dedupe/pending state not written; edge5 snapshots still recorded.
+PAPER_TAG = "paper_only"
+E3_STATE = "/workspace/bandit/_edge3_dedupe.json"; E4_STATE = "/workspace/bandit/_edge4_state.json"
+E5_STATE = os.environ.get("BANDIT_E5_STATE", "/workspace/bandit/_edge5_state.json"); LIQ_SNAP = os.environ.get("BANDIT_LIQ_SNAP", "/workspace/bandit/_liq_snapshots.json")
+LAST_SCAN = "/workspace/bandit/_edge34_last_scan.json"
+_now_ts = now.timestamp(); _stamp = now.astimezone(PT).strftime('%Y%m%dT%H%M'); _dec_pt = now.astimezone(PT).isoformat()
+def _load(path, default):
+    try: return json.load(open(path))
+    except Exception: return default
+def _save(path, obj):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as fh: json.dump(obj, fh)
+    os.replace(tmp, path)
+def _px_sol(r):
+    """Jupiter /order quote price (SOL per token), same as edge2. Unsigned, never executed."""
+    q = r.get("quote")
+    if q and q.get("price_sol"): return q.get("price_sol"), q.get("priceImpactPct"), None
+    try:
+        o = jup_order(r["mint"]); dec = int(r["decimals"] or 6); out_raw = o.get("outAmount")
+        px = float((Decimal(o.get("inAmount") or QUOTE_LAMPORTS) / Decimal(10**9)) / (Decimal(out_raw) / Decimal(10) ** dec)) if out_raw and Decimal(out_raw) > 0 else None
+        return px, o.get("priceImpactPct"), None if px else "no_price"
+    except Exception as e:
+        return None, None, f"quote_err {type(e).__name__}"
+def _paper_log(r, thesis, suffix, reason, meta):
+    px, imp, err = _px_sol(r)
+    if err or not px: return None, err or "no_price"
+    if _no_log: return None, f"dry_run would_log px={px} {meta}"
+    import steward_rpc
+    res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
+        thesis_id=thesis, reason=f"{reason}; impact {imp}", blocked_by=PAPER_TAG, decided_at=_dec_pt,
+        source_id=f"scan_https_{_stamp}_{r['mint'][:8]}_{suffix}", meta=meta)
+    return (res or {}).get("id"), "ok" if (res or {}).get("ok") else res
+def _iso_ts(x):
+    try: return datetime.fromisoformat(str(x).replace("Z", "+00:00")).timestamp()
+    except Exception: return None
+def _dex_id(p): return (((p.get("relationships") or {}).get("dex") or {}).get("data") or {}).get("id")
+def _e2_bar(b, t):
+    """edge2 meme_pullback_reclaim on bar t of a bar list (same test as edge2_check)."""
+    if t < 71: return False
+    w = b[t-71:t+1]; cl = [x[4] for x in w]; P = max(cl); pi = cl.index(P)
+    if not (pi > 0 and len(w) - 1 - pi >= 6): return False
+    L = min(cl[:pi]); c = b[t][4]
+    return P / L - 1 >= 0.40 and 0.6 * P <= c <= 0.8 * P and c > b[t-1][2] and sum(x[5] for x in w) >= 50000
+_prev_scan = (_load(LAST_SCAN, {}) or {}).get("ts")
+_since = max(_prev_scan or 0, _now_ts - 75 * 60) if _prev_scan else _now_ts - 65 * 60   # bars that closed after this
+universe345 = [r for r in elig if r["liq"] >= MIN_LIQ and r["age_h"] is not None and r["age_h"] < MAX_AGE_H]
+
+# ---- edge3 meme_range_breakout (top-reserve pool bars reused from the edge2 fetch) ----
+def edge3_signal(b, t):
+    if t < 72: return None
+    w = b[t-72:t]; H = max(x[2] for x in w); L = min(x[3] for x in w)
+    if not L > 0 or H / L - 1 > 0.25: return None
+    o, h, lo, c, v = b[t][1:6]; M = statistics.median(x[5] for x in w); vol = sum(x[5] for x in w)
+    if not (c > H and c > o and M > 0 and v >= 3.0 * M and vol >= 50000): return None
+    return dict(range_pct=round((H / L - 1) * 100, 2), vol_mult=round(v / M, 2), vol6h_usd=round(vol))
+edge3_logged = []; edge3_checked = 0; e3_state = _load(E3_STATE, {})
+for r in universe345:
+    pb = GT_BARS.get(r["mint"])
+    if not pb or len(pb[1]) < 73: continue
+    pool, b = pb; edge3_checked += 1
+    cand = [t for t in range(72, len(b)) if b[t][0] + 300 > _since]        # bars closed since the previous scan
+    hit = next(((t, i) for t in cand for i in [edge3_signal(b, t)] if i), None)   # first qualifying bar
+    if not hit: continue
+    t, info = hit
+    if _e2_bar(b, t): edge3_logged.append((r["symbol"], None, "edge2_precedence")); continue  # impossible by construction; kept as a guard
+    last = e3_state.get(r["mint"])
+    if last and b[t][0] - last < 4 * 3600: edge3_logged.append((r["symbol"], None, "dedupe_4h")); continue
+    meta = {"edge3": dict(info, pool=pool, signal_bar_ts=b[t][0], prereg_entry_ts=b[t][0] + 300,
+                          lag_min=round((_now_ts - (b[t][0] + 300)) / 60, 1)), "horizon": "4h"}
+    try:
+        lid, st_ = _paper_log(r, "meme_range_breakout", "edge3",
+            f"{r['symbol']}: edge3 range-breakout trigger (paper only): 6h range {info['range_pct']}%, close > 6h high, green, vol {info['vol_mult']}x median, 6h vol ${info['vol6h_usd']:,}", meta)
+        if st_ == "ok": e3_state[r["mint"]] = b[t][0]
+        edge3_logged.append((r["symbol"], lid, st_))
+    except Exception as e:
+        edge3_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
+
+# ---- edge4 meme_grad_pullback (pumpswap migration pool; one signal per graduation, ever) ----
+def edge4_eval(b, G):
+    """First post-G bar satisfying prereg conditions 2-5 within 24h of G, or None."""
+    for t in range(len(b)):
+        if b[t][0] - G >= 86400: return None
+        if t < 3: continue
+        cl = [x[4] for x in b[:t]]; P = max(cl); p = cl.index(P)
+        if p > t - 3: continue
+        o, h, lo, c = b[t][1:5]
+        if not (0.65 * P <= c <= 0.80 * P and c > b[t-1][2] and c > o): continue
+        vol = sum(x[5] for x in b[:t])
+        if vol < 50000: continue
+        return t, dict(post_grad_high=P, pullback_pct=round((1 - c / P) * 100, 2), vol_since_G_usd=round(vol))
+    return None
+edge4_logged = []; edge4_checked = 0; e4_state = _load(E4_STATE, {})
+for r in universe345:
+    pl = GT_POOLS.get(r["mint"])
+    if pl is None: continue                                              # pools call failed / not fetched
+    sw = sorted([(_iso_ts((p.get("attributes") or {}).get("pool_created_at")), (p.get("attributes") or {}).get("address"))
+                 for p in pl if _dex_id(p) == "pumpswap"], key=lambda x: x[0] or 9e18)
+    sw = [x for x in sw if x[0]]
+    if not sw: continue
+    G, mig = sw[0]
+    if _now_ts - G >= 86400 + 300: continue                              # past the 24h window
+    if (r.get("launchpad") or "").lower() != "pump.fun" or r.get("graduated") is False:
+        edge4_logged.append((r["symbol"], None, "grad_mismatch")); continue
+    if e4_state.get(r["mint"], {}).get("G") == G and e4_state[r["mint"]].get("consumed"):
+        continue                                                         # first pullback already used
+    edge4_checked += 1
+    time.sleep(2.1)
+    d = gt_get(f"networks/solana/pools/{mig}/ohlcv/minute", {"aggregate": 5, "limit": 300, "currency": "usd", "token": r["mint"]})
+    b = sorted(((d or {}).get("data") or {}).get("attributes", {}).get("ohlcv_list") or [], key=lambda x: x[0])
+    b = [x for x in b if x[0] >= G and x[0] + 300 <= _now_ts]
+    if d is None: edge4_logged.append((r["symbol"], None, "bars_err")); continue
+    ev = edge4_eval(b, G)
+    if not ev: continue
+    t, info = ev
+    state = {"G": G, "mig_pool": mig, "consumed": True, "signal_bar_ts": b[t][0]}
+    if b[t][0] + 300 <= _since: outcome = "first_pullback_before_this_scan_window"
+    elif t < 12: outcome = "first_pullback_before_12_bars"
+    elif _e2_bar(b, t): outcome = "edge2_precedence"                     # prereg rule 7: same bar, same pool
+    else: outcome = None
+    if outcome:
+        edge4_logged.append((r["symbol"], None, f"consumed: {outcome}"))
+        if not _no_log: e4_state[r["mint"]] = dict(state, outcome=outcome)
+        continue
+    meta = {"edge4": dict(info, mig_pool=mig, G_ts=G, hours_since_G=round((b[t][0] - G) / 3600, 2), signal_bar_ts=b[t][0],
+                          prereg_entry_ts=b[t][0] + 300, lag_min=round((_now_ts - (b[t][0] + 300)) / 60, 1)), "horizon": "4h"}
+    try:
+        lid, st_ = _paper_log(r, "meme_grad_pullback", "edge4",
+            f"{r['symbol']}: edge4 grad-pullback trigger (paper only): {meta['edge4']['hours_since_G']}h after pumpswap graduation, pullback {info['pullback_pct']}% from post-grad high, green reclaim bar, vol since grad ${info['vol_since_G_usd']:,}", meta)
+        if st_ == "ok": e4_state[r["mint"]] = dict(state, outcome="logged", id=lid)
+        edge4_logged.append((r["symbol"], lid, st_))
+    except Exception as e:
+        edge4_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
+
+# ---- edge5 meme_liq_accum (forward-paper-only; Jupiter liquidity/price snapshots; entry on the NEXT scan) ----
+snaps = _load(LIQ_SNAP, {})
+e5_state = _load(E5_STATE, {"pending": {}, "dedupe": {}})
+edge5_logged = []; edge5_checked = 0
+_rows_by_mint = {r["mint"]: r for r in elig}
+# 1) signals from the previous scan enter now (next scan), or are void if that scan was > 2h ago
+for mint, pend in list(e5_state["pending"].items()):
+    r = _rows_by_mint.get(mint) or {"mint": mint, "symbol": pend.get("symbol"), "decimals": pend.get("decimals")}
+    if _now_ts - pend["signal_ts"] > 2 * 3600:
+        edge5_logged.append((r["symbol"], None, "void: no_next_scan")); e5_state["pending"].pop(mint); continue
+    meta = {"edge5": dict(pend["info"], signal_scan_ts=pend["signal_ts"], entry_scan_ts=_now_ts), "horizon": "4h"}
+    try:
+        lid, st_ = _paper_log(r, "meme_liq_accum", "edge5",
+            f"{r['symbol']}: edge5 liq-accum entry on next scan (paper only): liq +{pend['info']['liq_chg_pct']}% / price {pend['info']['px_chg_pct']}% over {pend['info']['ref_age_h']}h, buy share {pend['info']['buy_share']}", meta)
+    except Exception as e:
+        lid, st_ = None, f"err {type(e).__name__}: {str(e)[:120]}"
+    edge5_logged.append((r["symbol"], lid, st_))
+    if st_ == "ok": e5_state["dedupe"][mint] = pend["signal_ts"]
+    if not _no_log: e5_state["pending"].pop(mint)
+# 2) record this scan's snapshot for every eligible coin (always, even with no signal), prune > 9h
+for r in elig:
+    try: px = float(r.get("usdPrice")) if r.get("usdPrice") is not None else None
+    except Exception: px = None
+    snaps.setdefault(r["mint"], []).append([_now_ts, r["liq"], px])
+for mint in list(snaps):
+    snaps[mint] = [s_ for s_ in snaps[mint] if _now_ts - s_[0] <= 9 * 3600]
+    if not snaps[mint]: snaps.pop(mint)
+_save(LIQ_SNAP, snaps)
+# 3) new signals at this scan (they enter at the next scan)
+for r in universe345:
+    refs = [s_ for s_ in snaps.get(r["mint"], []) if 5 * 3600 <= _now_ts - s_[0] <= 7 * 3600]
+    if not refs: continue
+    edge5_checked += 1
+    ref = min(refs, key=lambda s_: (abs(_now_ts - s_[0] - 6 * 3600), s_[0]))   # closest to 6h; ties -> older
+    liq_ref, px_ref = ref[1], ref[2]
+    try: px_now = float(r.get("usdPrice"))
+    except Exception: continue
+    if not liq_ref or liq_ref < 50000 or not px_ref: continue
+    liq_chg = r["liq"] / liq_ref - 1; px_chg = px_now / px_ref - 1
+    bs = max(r["buy_share_vol_1h"] or 0, r["buy_share_tx_1h"] or 0)
+    if not (liq_chg >= 0.50 and abs(px_chg) <= 0.10 and bs >= 0.52 and r["age_h"] >= 12): continue
+    pl = GT_POOLS.get(r["mint"])
+    if pl is None:
+        time.sleep(2.1); pr = gt_get(f"networks/solana/tokens/{r['mint']}/pools", {"page": 1})
+        pl = (pr or {}).get("data") if pr is not None else None
+    if pl is None: edge5_logged.append((r["symbol"], None, "pools_err")); continue
+    if any((ct := _iso_ts((p.get("attributes") or {}).get("pool_created_at"))) and ct >= ref[0] for p in pl):
+        edge5_logged.append((r["symbol"], None, "new_pool_in_window")); continue
+    if r["mint"] in E2_HITS: edge5_logged.append((r["symbol"], None, "edge2_precedence")); continue
+    last = e5_state["dedupe"].get(r["mint"])
+    if r["mint"] in e5_state["pending"] or (last and _now_ts - last < 4 * 3600):
+        edge5_logged.append((r["symbol"], None, "dedupe_4h")); continue
+    info = dict(liq_now=round(r["liq"]), liq_ref=round(liq_ref), liq_chg_pct=round(liq_chg * 100, 1), px_chg_pct=round(px_chg * 100, 2),
+                ref_age_h=round((_now_ts - ref[0]) / 3600, 2), buy_share=round(bs, 4), age_h=round(r["age_h"], 1))
+    edge5_logged.append((r["symbol"], None, f"signal: pending entry at next scan {info}"))
+    if not _no_log:
+        e5_state["pending"][r["mint"]] = {"signal_ts": _now_ts, "symbol": r["symbol"], "decimals": r["decimals"], "info": info}
+if not _no_log:
+    _save(E3_STATE, e3_state); _save(E4_STATE, e4_state); _save(E5_STATE, e5_state); _save(LAST_SCAN, {"ts": _now_ts})
+out["edge3_checked"] = edge3_checked; out["edge3_logged"] = edge3_logged
+out["edge4_checked"] = edge4_checked; out["edge4_logged"] = edge4_logged
+out["edge5_checked"] = edge5_checked; out["edge5_logged"] = edge5_logged
+out["liq_snapshots"] = {"coins": len(snaps), "path": LIQ_SNAP}
 out["cap_blocked"] = [{"symbol": r["symbol"], "mint": r["mint"], "pc1h": r["pc1h"], "price_sol": (r.get("quote") or {}).get("price_sol")} for r in cap_blocked]
 out["cap_logged"] = cap_logged
-with open("/workspace/bandit/_scan_https_out.json", "w") as fh:
+with open(os.environ.get("BANDIT_SCAN_OUT", "/workspace/bandit/_scan_https_out.json"), "w") as fh:
     json.dump(out, fh, indent=2, default=str)
 print("SCAN_PT", out["scan_pt"], "SOLUSD", SOLUSD)
 print("CLEAR", len(clear), [r["symbol"] for r in clear])
@@ -411,3 +618,6 @@ print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r 
 print("CAP_BLOCKED_LOGGED", cap_logged)
 print("PAPER_LOGGED", paper_logged)
 print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
+print("EDGE3_CHECKED", edge3_checked, "EDGE3_LOGGED", edge3_logged)
+print("EDGE4_CHECKED", edge4_checked, "EDGE4_LOGGED", edge4_logged)
+print("EDGE5_CHECKED", edge5_checked, "EDGE5_LOGGED", edge5_logged)
