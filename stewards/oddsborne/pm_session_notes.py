@@ -15,6 +15,19 @@ DECISIONS = frozenset({"skip", "watch", "enter", "exit", "hold"})
 _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 TITLE_MAX = 500
 BODY_MAX = 32000
+SKIP_BODY_MAX = 8000
+
+# Thesis tagging (GRASSHOPPER ruling 2026-10-17):
+# - a skip note carries the thesis of the bet it skips (weather -> weather_same_day_high,
+#   sports maker -> sports_devig_maker_edge); a session that skips both writes one skip note per thesis;
+# - session-wide scan/summary notes stay untagged (thesis_id null) and never set decision;
+# - every split skip note sets decision='skip' (AM and PM): the pm_notes trigger
+#   (private.decision_candidate_from_pm_note -> private.pm_note_scoreable_decisions) only scores notes
+#   with decision 'skip'/'enter', exploding meta.comps_top[] entries {market|market_slug, bid, fair, why,
+#   decision:'SKIP'} into one decision_candidates row per market. Without decision the skips score nothing.
+THESIS_SPORTS = "sports_devig_maker_edge"
+THESIS_WX = "weather_same_day_high"
+_GROUP_LABEL = {THESIS_WX: "weather", THESIS_SPORTS: "sports"}
 
 
 class NotesWriteError(RuntimeError):
@@ -76,6 +89,42 @@ def note_args(*, thesis_id=None, note_type: str, title: str, body: str, decision
     return args
 
 
+def summary_note_args(*, note_type: str = "scan", title: str, body: str, meta=None) -> dict:
+    """A session-wide scan/summary note: never thesis-tagged, never sets decision."""
+    return note_args(thesis_id=None, note_type=note_type, title=title, body=body, decision=None, meta=meta)
+
+
+def skip_note_args(*, title: str, groups, meta=None) -> list:
+    """One skip note per thesis. `groups` is an iterable of (thesis_id, lines, group_meta).
+
+    Groups with no lines are dropped. When more than one thesis has skips, each note's title gets a
+    " (weather)" / " (sports)" suffix so the split rows are distinguishable. Returns [] when nothing
+    was skipped. thesis_id must be set on every group: a skip note is always about one thesis.
+    Every skip note sets decision='skip' (GRASSHOPPER 2026-10-17, reversing the no-decision ruling) so
+    the pm_notes scoring trigger explodes its meta (comps_top[]) into per-market decisions. There is no
+    decision argument on purpose: a skip note is always decision='skip'.
+    """
+    kept = []
+    for thesis_id, lines, group_meta in groups:
+        lines = [str(x) for x in (lines or [])]
+        if not lines:
+            continue
+        if not thesis_id:
+            raise ValueError("every skip-note group needs a thesis_id")
+        kept.append((thesis_id, lines, group_meta or {}))
+    if len({t for t, _, _ in kept}) != len(kept):
+        raise ValueError("skip-note groups must have distinct thesis_ids")
+    out = []
+    for thesis_id, lines, group_meta in kept:
+        t = title if len(kept) == 1 else f"{title} ({_GROUP_LABEL.get(thesis_id, thesis_id)})"
+        m = dict(meta or {})
+        m.update(group_meta)
+        m["thesis_id"] = thesis_id
+        out.append(note_args(thesis_id=thesis_id, note_type="skip", title=t,
+                             body="\n".join(lines)[:SKIP_BODY_MAX], decision="skip", meta=m))
+    return out
+
+
 def _insert(rpc, args: dict) -> str:
     try:
         res = rpc("oddsborne_insert_note", args)
@@ -90,25 +139,33 @@ def _insert(rpc, args: dict) -> str:
     return str(res["pm_note_id"])
 
 
-def write_session_notes(rpc, scan_args: dict, skip_args: dict) -> dict:
-    """Write the scan note, the skip note, then oddsborne_touch_heartbeat.
+def write_session_notes(rpc, scan_args: dict, skip_args) -> dict:
+    """Write the scan note, the skip note(s), then oddsborne_touch_heartbeat.
 
-    Each call is its own transaction. On failure, NotesWriteError.partial holds the ids that
-    already committed and .stage is scan, skip, or heartbeat. Writes are not retried.
+    skip_args is one note_args dict (partial["skip"] is its id) or a list of them, one per thesis
+    (partial["skip"] is the list of ids, possibly empty). Each call is its own transaction. On failure,
+    NotesWriteError.partial holds the ids that already committed and .stage is scan, skip, or heartbeat.
+    Writes are not retried.
     """
-    partial = {"scan": None, "skip": None, "heartbeat": None}
+    many = isinstance(skip_args, (list, tuple))
+    partial = {"scan": None, "skip": [] if many else None, "heartbeat": None}
     try:
         partial["scan"] = _insert(rpc, scan_args)
     except NotesWriteError as e:
         e.stage = "scan"
         e.partial = dict(partial)
         raise
-    try:
-        partial["skip"] = _insert(rpc, skip_args)
-    except NotesWriteError as e:
-        e.stage = "skip"
-        e.partial = dict(partial)
-        raise
+    for one in (skip_args if many else [skip_args]):
+        try:
+            nid = _insert(rpc, one)
+        except NotesWriteError as e:
+            e.stage = "skip"
+            e.partial = dict(partial, skip=list(partial["skip"]) if many else None)
+            raise
+        if many:
+            partial["skip"].append(nid)
+        else:
+            partial["skip"] = nid
     try:
         hb = rpc("oddsborne_touch_heartbeat", {})
     except Exception as e:
