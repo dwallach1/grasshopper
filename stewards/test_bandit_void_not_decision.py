@@ -53,9 +53,17 @@ class VoidNotADecision(unittest.TestCase):
         self.assertEqual(SCHEMA.read_text(), self.sql)
 
     def test_latest_steward_log_decision_is_this_one(self):
+        # 20261017131644_theses_paper_only only adds the paper_only enter refusal; the void lines must carry over.
         defs = sorted(p.name for p in (ROOT / "supabase" / "migrations").glob("*.sql")
                       if "create or replace function public.steward_log_decision(" in p.read_text())
-        self.assertEqual(defs[-1], MIG.name)
+        self.assertIn(MIG.name, defs)
+        self.assertEqual(defs[-1], "20261017131644_theses_paper_only.sql")
+        latest = _fn((ROOT / "supabase" / "migrations" / defs[-1]).read_text(), "public.steward_log_decision")
+        for line in ("v_void_tag boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';",
+                     "v_void := v_void_tag and v_decision = 'skip' and v_venue = 'meme';",
+                     "v_status := case when v_void then 'void' when v_priceless then 'no_price' else 'awaiting_mark' end;",
+                     "(v_extra - 'unscoreable' - 'superseded' - 'legacy_probability_absent')"):
+            self.assertIn(line, latest)
 
     def test_void_tag_is_server_side_from_blocked_by(self):
         self.assertIn("v_void_tag boolean := lower(btrim(coalesce(p->>'blocked_by', ''))) = 'paper_void_stale';", self.fn)
