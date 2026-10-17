@@ -1044,33 +1044,32 @@ def main():
         f"Weather non-skip={len(wx_trade)}. Fed hike25={fed.get('rdc-usfed-fomc-2026-10-28-hike25')}. "
         f"Midway/LAX-SFO treated as beliefs not bans. Θ={THETA}. Cash snapshot not period P/L."
     )
-    skip_bits = []
-    for w in weather:
-        skip_bits.append(f"{w.get('city')} {w.get('day')}: {w.get('decision')} — {str(w.get('reason',''))[:90]}")
-    for sc in sorted(comps, key=lambda x: -(x.get("post_fee_maker") or -9))[:8]:
-        skip_bits.append(f"SPORT {sc.get('market')}: {sc.get('decision')} — {str(sc.get('why',''))[:100]}")
-    scan_decision = "hold" if not (sports_enter and (sports_enter.get("live") or {}).get("decision") == "PLACED") else "enter"
+    # Skip notes carry the thesis of the bet they skip, one note per thesis (GRASSHOPPER 2026-10-17);
+    # the session-wide scan note stays untagged and never sets decision. See pm_session_notes.
+    wx_skip_bits = [f"{w.get('city')} {w.get('day')}: {w.get('decision')} — {str(w.get('reason',''))[:90]}" for w in weather]
+    comps_top = sorted(comps, key=lambda x: -(x.get("post_fee_maker") or -9))
+    sports_skip_bits = [f"SPORT {sc.get('market')}: {sc.get('decision')} — {str(sc.get('why',''))[:100]}" for sc in comps_top[:8]]
     scan_meta = {"session": SESSION, "best": best, "n_candidates": len(cands), "fed": fed,
                  "n_seen": p2.get("n_seen"), "weather_non_skip": len(wx_trade)}
-    skip_meta = {"comps_top": sorted(comps, key=lambda x: -(x.get("post_fee_maker") or -9))[:10],
-                 "weather": [{k: w.get(k) for k in ("city","day","decision","reason","mode","mode_mid","nws","hmax","obsmax","belief_weighed")} for w in weather]}
+    wx_skip_meta = {"weather": [{k: w.get(k) for k in ("city","day","decision","reason","mode","mode_mid","nws","hmax","obsmax","belief_weighed")} for w in weather]}
+    sports_skip_meta = {"comps_top": comps_top[:10]}
     scan_args = skip_args = None
     note_scan = note_skip = hb2 = None
     try:
-        from pm_session_notes import note_args, write_session_notes
-        scan_args = note_args(
-            thesis_id=THESIS_WX, note_type="scan", title=f"Morning full-book + weather scan {TODAY}",
-            body=scan_body, decision=scan_decision, meta=scan_meta,
+        from pm_session_notes import skip_note_args, summary_note_args, write_session_notes
+        scan_args = summary_note_args(
+            note_type="scan", title=f"Morning full-book + weather scan {TODAY}", body=scan_body, meta=scan_meta,
         )
-        skip_args = note_args(
-            thesis_id=THESIS_SPORTS, note_type="skip", title=f"Morning skips AM {TODAY}",
-            body="\n".join(skip_bits)[:8000], decision="skip", meta=skip_meta,
+        skip_args = skip_note_args(
+            title=f"Morning skips AM {TODAY}", decision="skip", meta={"session": SESSION},
+            groups=[(THESIS_WX, wx_skip_bits, wx_skip_meta), (THESIS_SPORTS, sports_skip_bits, sports_skip_meta)],
         )
         if DRY_RUN:  # --dry-run writes nothing: route to the would-write file below, no blocker
             raise _DryRunNoWrite()
         from pm_enter import make_rpc
         wrote = write_session_notes(make_rpc(), scan_args, skip_args)
-        note_scan, note_skip, hb2 = wrote["scan"], wrote["skip"], wrote["heartbeat"]
+        note_scan, hb2 = wrote["scan"], wrote["heartbeat"]
+        note_skip = ", ".join(wrote["skip"]) or "none"
     except Exception as e:
         partial = getattr(e, "partial", None) or {}
         if not isinstance(e, _DryRunNoWrite):
@@ -1092,7 +1091,7 @@ def main():
             path = OUT / f"session_raw_{SESSION}_notes_pending.json"
             path.write_text(json.dumps(pending, indent=2, default=str))
             note_scan = partial.get("scan") or f"PENDING_MCP:scan:{path.name}"
-            note_skip = partial.get("skip") or f"PENDING_MCP:skip:{path.name}"
+            note_skip = ", ".join(partial.get("skip") or []) or f"PENDING_MCP:skip:{path.name}"
             hb2 = partial.get("heartbeat") or (hb if isinstance(hb, str) else "PENDING_HB")
             blockers.append(f"ERROR pm_notes steward-rpc failed; pending file {path.name}: {type(e).__name__}")
 
