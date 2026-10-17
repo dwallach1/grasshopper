@@ -21,8 +21,10 @@ SKIP_BODY_MAX = 8000
 # - a skip note carries the thesis of the bet it skips (weather -> weather_same_day_high,
 #   sports maker -> sports_devig_maker_edge); a session that skips both writes one skip note per thesis;
 # - session-wide scan/summary notes stay untagged (thesis_id null) and never set decision;
-# - skip notes are summaries too (multi-market, can't be scored): they never set decision either.
-#   Per-market skips are scored through steward_log_decision instead.
+# - every split skip note sets decision='skip' (AM and PM): the pm_notes trigger
+#   (private.decision_candidate_from_pm_note -> private.pm_note_scoreable_decisions) only scores notes
+#   with decision 'skip'/'enter', exploding meta.comps_top[] entries {market|market_slug, bid, fair, why,
+#   decision:'SKIP'} into one decision_candidates row per market. Without decision the skips score nothing.
 THESIS_SPORTS = "sports_devig_maker_edge"
 THESIS_WX = "weather_same_day_high"
 _GROUP_LABEL = {THESIS_WX: "weather", THESIS_SPORTS: "sports"}
@@ -98,8 +100,9 @@ def skip_note_args(*, title: str, groups, meta=None) -> list:
     Groups with no lines are dropped. When more than one thesis has skips, each note's title gets a
     " (weather)" / " (sports)" suffix so the split rows are distinguishable. Returns [] when nothing
     was skipped. thesis_id must be set on every group: a skip note is always about one thesis.
-    Skip notes are summaries and never set decision (GRASSHOPPER 2026-10-17); there is no decision
-    argument on purpose.
+    Every skip note sets decision='skip' (GRASSHOPPER 2026-10-17, reversing the no-decision ruling) so
+    the pm_notes scoring trigger explodes its meta (comps_top[]) into per-market decisions. There is no
+    decision argument on purpose: a skip note is always decision='skip'.
     """
     kept = []
     for thesis_id, lines, group_meta in groups:
@@ -118,7 +121,7 @@ def skip_note_args(*, title: str, groups, meta=None) -> list:
         m.update(group_meta)
         m["thesis_id"] = thesis_id
         out.append(note_args(thesis_id=thesis_id, note_type="skip", title=t,
-                             body="\n".join(lines)[:SKIP_BODY_MAX], decision=None, meta=m))
+                             body="\n".join(lines)[:SKIP_BODY_MAX], decision="skip", meta=m))
     return out
 
 

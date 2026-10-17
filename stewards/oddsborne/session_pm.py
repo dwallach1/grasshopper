@@ -1068,7 +1068,8 @@ def main():
         f"Midway/LAX-SFO treated as beliefs not bans. Θ={THETA}. Cash snapshot not period P/L."
     )
     # Skip notes carry the thesis of the bet they skip, one note per thesis (GRASSHOPPER 2026-10-17);
-    # skip and scan notes are summaries: neither sets decision; the scan note is untagged. See pm_session_notes.
+    # skip notes set decision='skip' (scored per market from meta.comps_top by the pm_notes trigger);
+    # the untagged whole-scan summary note sets no decision. See pm_session_notes.
     wx_skip_bits = [f"{w.get('city')} {w.get('day')}: {w.get('decision')} — {str(w.get('reason',''))[:90]}" for w in weather]
     comps_top = sorted(comps, key=lambda x: -(x.get("post_fee_maker") or -9))
     sports_skip_bits = [f"SPORT {sc.get('market')}: {sc.get('decision')} — {str(sc.get('why',''))[:100]}" for sc in comps_top[:8]]

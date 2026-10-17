@@ -6,6 +6,7 @@ SECURITY INVOKER, validates its inputs, and is granted only to oddsborne_worker 
 from __future__ import annotations
 
 import ast
+import json
 import importlib.util
 import unittest
 from datetime import datetime, timezone
@@ -71,8 +72,8 @@ class NoteArgsTests(unittest.TestCase):
 
 class ThesisTaggingTests(unittest.TestCase):
     """GRASSHOPPER 2026-10-17: skip notes carry the skipped bet's thesis, one note per thesis;
-    session-wide scan/summary notes are untagged and never set decision. Skip notes are summaries too
-    (multi-market, unscoreable; per-market skips go through steward_log_decision): no decision ever."""
+    the untagged whole-scan summary note never sets decision. Every split skip note sets decision='skip'
+    (AM and PM) so the pm_notes trigger scores it per market from meta.comps_top."""
 
     WX = ["Chicago Midway 2026-10-17: SKIP — mode bucket priced", "NYC 2026-10-17: SKIP — no edge"]
     SPORTS = ["SPORT aec-nfl-dal-gb-2026-10-18: COVERED — held", "SPORT aec-mlb-tb-cle: SKIP — post-fee < 0"]
@@ -87,13 +88,13 @@ class ThesisTaggingTests(unittest.TestCase):
         self.assertEqual(notes[0]["thesis_id"], "weather_same_day_high")
         self.assertEqual(notes[0]["title"], "Morning skips AM 2026-10-17")
         self.assertEqual(notes[0]["note_type"], "skip")
-        self.assertNotIn("decision", notes[0])
+        self.assertEqual(notes[0]["decision"], "skip")
         self.assertNotIn("SPORT", notes[0]["body"])
 
     def test_sports_only_skip_note_gets_sports_thesis(self):
         notes = NS.skip_note_args(title="Afternoon skips PM 2026-10-17", groups=self._groups([], self.SPORTS))
         self.assertEqual([n["thesis_id"] for n in notes], ["sports_devig_maker_edge"])
-        self.assertNotIn("decision", notes[0])
+        self.assertEqual(notes[0]["decision"], "skip")  # afternoon skip notes used to have no decision
 
     def test_mixed_skips_split_one_note_per_thesis(self):
         notes = NS.skip_note_args(title="Morning skips AM 2026-10-17",
@@ -102,8 +103,8 @@ class ThesisTaggingTests(unittest.TestCase):
         self.assertEqual([n["title"] for n in notes],
                          ["Morning skips AM 2026-10-17 (weather)", "Morning skips AM 2026-10-17 (sports)"])
         wx, sp = notes
-        self.assertNotIn("decision", wx)
-        self.assertNotIn("decision", sp)
+        self.assertEqual(wx["decision"], "skip")
+        self.assertEqual(sp["decision"], "skip")
         self.assertTrue(all(line in wx["body"] for line in self.WX))
         self.assertNotIn("SPORT", wx["body"])
         self.assertTrue(all(line in sp["body"] for line in self.SPORTS))
@@ -112,20 +113,71 @@ class ThesisTaggingTests(unittest.TestCase):
         self.assertEqual(sp["meta"]["comps_top"], 2)
         self.assertNotIn("weather", sp["meta"])
 
-    def test_skip_notes_cannot_set_decision(self):
-        # GRASSHOPPER 2026-10-17: morning skip notes used decision="skip"; skip notes are summaries.
+    def test_skip_notes_always_decide_skip(self):
+        # There is no decision argument: a skip note is always decision='skip', whatever meta says.
         with self.assertRaises(TypeError):
-            NS.skip_note_args(title="t", decision="skip", groups=self._groups(self.WX, []))
+            NS.skip_note_args(title="t", decision=None, groups=self._groups(self.WX, []))
         for wx, sp in ((self.WX, []), ([], self.SPORTS), (self.WX, self.SPORTS)):
             for note in NS.skip_note_args(title="t", meta={"decision": "ignored-meta"}, groups=self._groups(wx, sp)):
-                self.assertNotIn("decision", note)
+                self.assertEqual(note["decision"], "skip")
 
-    def test_sessions_never_set_decision_on_any_note(self):
+    def test_split_skip_note_keeps_decision_skip_and_market_meta_in_trigger_shape(self):
+        # Comps as session_daily/session_pm build them (comp = {...}); sports_skip_meta = {"comps_top": comps_top[:10]}.
+        comps = [
+            {"sport": "nfl", "market": "aec-nfl-dal-gb-2026-10-18", "outcome": "yes", "fair": 0.48839,
+             "bid": 0.4725, "ask": 0.475, "post_fee_maker": 0.013, "decision": "COVERED", "why": "already held"},
+            {"sport": "mlb", "market": "aec-mlb-tb-cle-2026-10-17", "outcome": "yes", "fair": 0.512992,
+             "bid": 0.515, "ask": 0.52, "post_fee_maker": -0.004, "decision": "SKIP", "why": "post-fee maker < bar"},
+            {"sport": "nfl", "market": "aec-nfl-was-sf-2026-10-19", "outcome": "yes", "fair": 0.21,
+             "bid": 0.22, "ask": 0.225, "post_fee_maker": -0.012, "decision": "SKIP", "why": "no edge",
+             "at": datetime(2026, 10, 17, 14, tzinfo=timezone.utc)},
+            {"sport": "mlb", "market": "aec-mlb-nyy-bos-2026-10-17", "outcome": "yes", "fair": None,
+             "bid": None, "ask": None, "post_fee_maker": None, "decision": "SKIP", "why": "missing fair/bbo"},
+        ]
+        wx_meta = {"weather": [{"city": "NYC", "day": "2026-10-17", "decision": "SKIP", "reason": "x"}]}
+        notes = NS.skip_note_args(
+            title="Afternoon skips PM 2026-10-17", meta={"session": "20261017_pm"},
+            groups=[(NS.THESIS_WX, ["NYC 2026-10-17: SKIP — x"], wx_meta),
+                    (NS.THESIS_SPORTS, [f"SPORT {c['market']}: {c['decision']}" for c in comps], {"comps_top": comps})])
+        wx, sp = notes
+        self.assertEqual((sp["thesis_id"], sp["note_type"], sp["decision"]), (NS.THESIS_SPORTS, "skip", "skip"))
+        self.assertEqual(wx["decision"], "skip")
+        # Same extraction as private.pm_note_scoreable_decisions on meta.comps / meta.comps_top:
+        # lower(decision)='skip'; instrument = market_slug|market; book_price = bid in (0,1]; prob = fair in [0,1].
+        def scored(meta):
+            out = []
+            for e in (meta.get("comps") or []) + (meta.get("comps_top") or []):
+                if str(e.get("decision") or "").lower() != "skip":
+                    continue
+                inst = e.get("market_slug") or e.get("market")
+                try:
+                    bid, fair = float(e.get("bid")), float(e.get("fair"))
+                except (TypeError, ValueError):
+                    continue
+                if inst and 0 < bid <= 1 and 0 <= fair <= 1:
+                    out.append((inst, "yes", bid, fair))
+            return sorted(out)
+        payload = json.loads(json.dumps(sp))  # what steward-rpc actually sends
+        self.assertEqual(payload["meta"]["comps_top"][2]["at"], "2026-10-17 14:00:00+00:00")
+        self.assertEqual(scored(payload["meta"]), [
+            ("aec-mlb-tb-cle-2026-10-17", "yes", 0.515, 0.512992),
+            ("aec-nfl-was-sf-2026-10-19", "yes", 0.22, 0.21),
+        ])
+        # The weather note's meta carries no comps/candidates and no market key, so the trigger writes
+        # nothing for it (no scored row, no unscoreable placeholder); weather passes go via weather_pass_log.
+        self.assertEqual(scored(wx["meta"]), [])
+        self.assertFalse({"comps", "comps_top", "candidates", "market_id", "market_slug", "slug", "instrument"} & set(wx["meta"]))
+
+    def test_sessions_build_comps_top_in_trigger_shape(self):
         for path in SESSIONS:
-            notes = path.read_text().split("# 9) Write pm_notes", 1)[1].split("# 10) Artifacts", 1)[0]
+            text = path.read_text()
+            comp = text.split("comp = {", 1)[1].split("}\n", 1)[0]
+            for key in ('"market": ms', '"fair": f_side', '"bid": mk_px', '"decision": decision, "why": why'):
+                self.assertIn(key, comp, path.name)
+            notes = text.split("# 9) Write pm_notes", 1)[1].split("# 10) Artifacts", 1)[0]
+            self.assertIn('sports_skip_meta = {"comps_top": comps_top[:10]}', notes, path.name)
             skip = notes.split("skip_args = skip_note_args(", 1)[1].split("\n        )", 1)[0]
-            self.assertNotIn("decision", skip, path.name)
-            self.assertNotIn("decision=", notes, path.name)
+            self.assertNotIn("decision", skip, path.name)  # the helper forces decision='skip'
 
     def test_no_skips_writes_no_skip_note(self):
         self.assertEqual(NS.skip_note_args(title="t", groups=self._groups([], [])), [])
@@ -250,12 +302,10 @@ class SessionWiringTests(unittest.TestCase):
             self.assertIn('blockers.append(f"ERROR pm_notes steward-rpc failed', notes, path.name)
         daily = (HERE / "oddsborne" / "session_daily.py").read_text()
         pm = (HERE / "oddsborne" / "session_pm.py").read_text()
-        self.assertNotIn('decision="skip"', daily.split("# 9) Write pm_notes", 1)[1])
         self.assertNotIn("scan_decision", daily)
         self.assertNotIn("scan_decision", pm)
         for text in (daily, pm):
-            skip = text.split("skip_args = skip_note_args(", 1)[1].split("note_scan", 1)[0]
-            self.assertNotIn("decision", skip)
+            self.assertIn("skip_args = skip_note_args(", text)  # decision='skip' is set by the helper
         self.assertIn('"$here/oddsborne/pm_session_notes.py:$box/oddsborne/pm_session_notes.py"',
                       (HERE / "sync_box.sh").read_text())
 
@@ -268,6 +318,30 @@ class SessionWiringTests(unittest.TestCase):
             self.assertEqual(lookup({"id": "lot-1", "slug": "already"}, boom), "already")
             self.assertIsNone(lookup({"id": "lot-1"}, boom))
             self.assertIn("oddsborne_position_get", path.read_text())
+
+
+class ScoringTriggerContractTests(unittest.TestCase):
+    """Pin the pm_notes scoring trigger contract the split skip notes rely on (latest migrations)."""
+
+    def _latest(self, signature):
+        files = [f for f in sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
+                 if f"create or replace function {signature}" in f.read_text()]
+        self.assertTrue(files, signature)
+        text = files[-1].read_text()
+        block = text[text.index(f"create or replace function {signature}"):]
+        return block[:block.index("\n$")]
+
+    def test_trigger_scores_only_skip_or_enter_notes(self):
+        trig = self._latest("private.decision_candidate_from_pm_note()")
+        self.assertIn("new.decision not in ('enter', 'skip')", trig)
+        self.assertIn("from private.pm_note_scoreable_decisions(new) d", trig)
+
+    def test_scoreable_decisions_reads_comps_top_market_bid_fair(self):
+        fn = self._latest("private.pm_note_scoreable_decisions(p_note public.pm_notes)")
+        for needle in ("p_note.meta->'comps_top'", "coalesce(elem->>'market_slug', elem->>'market')",
+                       "private.try_numeric(elem->>'bid')", "private.try_numeric(elem->>'fair')",
+                       "lower(coalesce(elem->>'decision', '')) = 'skip'"):
+            self.assertIn(needle, fn)
 
 
 class SqlContractTests(unittest.TestCase):
