@@ -20,7 +20,9 @@ SKIP_BODY_MAX = 8000
 # Thesis tagging (GRASSHOPPER ruling 2026-10-17):
 # - a skip note carries the thesis of the bet it skips (weather -> weather_same_day_high,
 #   sports maker -> sports_devig_maker_edge); a session that skips both writes one skip note per thesis;
-# - session-wide scan/summary notes stay untagged (thesis_id null) and never set decision.
+# - session-wide scan/summary notes stay untagged (thesis_id null) and never set decision;
+# - skip notes are summaries too (multi-market, can't be scored): they never set decision either.
+#   Per-market skips are scored through steward_log_decision instead.
 THESIS_SPORTS = "sports_devig_maker_edge"
 THESIS_WX = "weather_same_day_high"
 _GROUP_LABEL = {THESIS_WX: "weather", THESIS_SPORTS: "sports"}
@@ -90,12 +92,14 @@ def summary_note_args(*, note_type: str = "scan", title: str, body: str, meta=No
     return note_args(thesis_id=None, note_type=note_type, title=title, body=body, decision=None, meta=meta)
 
 
-def skip_note_args(*, title: str, groups, decision=None, meta=None) -> list:
+def skip_note_args(*, title: str, groups, meta=None) -> list:
     """One skip note per thesis. `groups` is an iterable of (thesis_id, lines, group_meta).
 
     Groups with no lines are dropped. When more than one thesis has skips, each note's title gets a
     " (weather)" / " (sports)" suffix so the split rows are distinguishable. Returns [] when nothing
     was skipped. thesis_id must be set on every group: a skip note is always about one thesis.
+    Skip notes are summaries and never set decision (GRASSHOPPER 2026-10-17); there is no decision
+    argument on purpose.
     """
     kept = []
     for thesis_id, lines, group_meta in groups:
@@ -114,7 +118,7 @@ def skip_note_args(*, title: str, groups, decision=None, meta=None) -> list:
         m.update(group_meta)
         m["thesis_id"] = thesis_id
         out.append(note_args(thesis_id=thesis_id, note_type="skip", title=t,
-                             body="\n".join(lines)[:SKIP_BODY_MAX], decision=decision, meta=m))
+                             body="\n".join(lines)[:SKIP_BODY_MAX], decision=None, meta=m))
     return out
 
 

@@ -71,7 +71,8 @@ class NoteArgsTests(unittest.TestCase):
 
 class ThesisTaggingTests(unittest.TestCase):
     """GRASSHOPPER 2026-10-17: skip notes carry the skipped bet's thesis, one note per thesis;
-    session-wide scan/summary notes are untagged and never set decision."""
+    session-wide scan/summary notes are untagged and never set decision. Skip notes are summaries too
+    (multi-market, unscoreable; per-market skips go through steward_log_decision): no decision ever."""
 
     WX = ["Chicago Midway 2026-10-17: SKIP — mode bucket priced", "NYC 2026-10-17: SKIP — no edge"]
     SPORTS = ["SPORT aec-nfl-dal-gb-2026-10-18: COVERED — held", "SPORT aec-mlb-tb-cle: SKIP — post-fee < 0"]
@@ -81,26 +82,28 @@ class ThesisTaggingTests(unittest.TestCase):
 
     def test_weather_only_skip_note_gets_weather_thesis(self):
         # Regression: 7c47deb6 (10/16) and 9675de0a (10/17) were weather-only but tagged sports.
-        notes = NS.skip_note_args(title="Morning skips AM 2026-10-17", decision="skip", groups=self._groups(self.WX, []))
+        notes = NS.skip_note_args(title="Morning skips AM 2026-10-17", groups=self._groups(self.WX, []))
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0]["thesis_id"], "weather_same_day_high")
         self.assertEqual(notes[0]["title"], "Morning skips AM 2026-10-17")
         self.assertEqual(notes[0]["note_type"], "skip")
-        self.assertEqual(notes[0]["decision"], "skip")
+        self.assertNotIn("decision", notes[0])
         self.assertNotIn("SPORT", notes[0]["body"])
 
     def test_sports_only_skip_note_gets_sports_thesis(self):
-        notes = NS.skip_note_args(title="Afternoon skips PM 2026-10-17", decision=None, groups=self._groups([], self.SPORTS))
+        notes = NS.skip_note_args(title="Afternoon skips PM 2026-10-17", groups=self._groups([], self.SPORTS))
         self.assertEqual([n["thesis_id"] for n in notes], ["sports_devig_maker_edge"])
         self.assertNotIn("decision", notes[0])
 
     def test_mixed_skips_split_one_note_per_thesis(self):
-        notes = NS.skip_note_args(title="Morning skips AM 2026-10-17", decision="skip",
+        notes = NS.skip_note_args(title="Morning skips AM 2026-10-17",
                                   meta={"session": "20261017_am"}, groups=self._groups(self.WX, self.SPORTS))
         self.assertEqual([n["thesis_id"] for n in notes], ["weather_same_day_high", "sports_devig_maker_edge"])
         self.assertEqual([n["title"] for n in notes],
                          ["Morning skips AM 2026-10-17 (weather)", "Morning skips AM 2026-10-17 (sports)"])
         wx, sp = notes
+        self.assertNotIn("decision", wx)
+        self.assertNotIn("decision", sp)
         self.assertTrue(all(line in wx["body"] for line in self.WX))
         self.assertNotIn("SPORT", wx["body"])
         self.assertTrue(all(line in sp["body"] for line in self.SPORTS))
@@ -108,6 +111,21 @@ class ThesisTaggingTests(unittest.TestCase):
         self.assertEqual(wx["meta"], {"session": "20261017_am", "weather": 2, "thesis_id": "weather_same_day_high"})
         self.assertEqual(sp["meta"]["comps_top"], 2)
         self.assertNotIn("weather", sp["meta"])
+
+    def test_skip_notes_cannot_set_decision(self):
+        # GRASSHOPPER 2026-10-17: morning skip notes used decision="skip"; skip notes are summaries.
+        with self.assertRaises(TypeError):
+            NS.skip_note_args(title="t", decision="skip", groups=self._groups(self.WX, []))
+        for wx, sp in ((self.WX, []), ([], self.SPORTS), (self.WX, self.SPORTS)):
+            for note in NS.skip_note_args(title="t", meta={"decision": "ignored-meta"}, groups=self._groups(wx, sp)):
+                self.assertNotIn("decision", note)
+
+    def test_sessions_never_set_decision_on_any_note(self):
+        for path in SESSIONS:
+            notes = path.read_text().split("# 9) Write pm_notes", 1)[1].split("# 10) Artifacts", 1)[0]
+            skip = notes.split("skip_args = skip_note_args(", 1)[1].split("\n        )", 1)[0]
+            self.assertNotIn("decision", skip, path.name)
+            self.assertNotIn("decision=", notes, path.name)
 
     def test_no_skips_writes_no_skip_note(self):
         self.assertEqual(NS.skip_note_args(title="t", groups=self._groups([], [])), [])
@@ -232,11 +250,12 @@ class SessionWiringTests(unittest.TestCase):
             self.assertIn('blockers.append(f"ERROR pm_notes steward-rpc failed', notes, path.name)
         daily = (HERE / "oddsborne" / "session_daily.py").read_text()
         pm = (HERE / "oddsborne" / "session_pm.py").read_text()
-        self.assertIn('decision="skip"', daily.split("# 9) Write pm_notes", 1)[1])
+        self.assertNotIn('decision="skip"', daily.split("# 9) Write pm_notes", 1)[1])
         self.assertNotIn("scan_decision", daily)
         self.assertNotIn("scan_decision", pm)
-        skip = pm.split("title=f\"Afternoon skips PM", 1)[1].split("note_scan", 1)[0]
-        self.assertIn("decision=None", skip)
+        for text in (daily, pm):
+            skip = text.split("skip_args = skip_note_args(", 1)[1].split("note_scan", 1)[0]
+            self.assertNotIn("decision", skip)
         self.assertIn('"$here/oddsborne/pm_session_notes.py:$box/oddsborne/pm_session_notes.py"',
                       (HERE / "sync_box.sh").read_text())
 
