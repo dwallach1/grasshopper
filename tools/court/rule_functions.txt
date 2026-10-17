@@ -25,3 +25,6 @@ private.steward_risk_basis
 private.expected_max_normal
 private.backtest_evidence_derive
 private.backtest_evidence_sync
+public.thesis_max_stakes
+private.theses_paper_only_guard
+private.refuse_paper_only_meme_buy

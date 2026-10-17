@@ -90,6 +90,8 @@ describe('rules court', () => {
       ['47_backtest_credit_live_gated.sql', '20260927233853_backtest_credit_live_gated.sql'],
       ['48_quantanamo_gate_small_sample.sql', '20260930192137_quantanamo_gate_small_sample.sql'],
       ['64_bandit_1h_entry_cap.sql', '20261008044007_bandit_1h_entry_cap.sql'],
+      ['76_theses_paper_only.sql', '20261017131644_theses_paper_only.sql'],
+      ['77_theses_paper_only_lockdown.sql', '20261017131924_theses_paper_only_lockdown.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
