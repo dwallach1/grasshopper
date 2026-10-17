@@ -360,6 +360,7 @@ def edge2_check(mint):
     ok = run >= 0.40 and 0.6 * P <= c <= 0.8 * P and c > b[t - 1][2] and vol >= 50000
     return ok, info
 GT_POOLS = {}; GT_BARS = {}; E2_HITS = set()  # shared with edge3/4/5 below
+E345_HITS = set()  # coins edge3/4/5 signalled this scan: precedence over edge6
 edge2_logged = []; edge2_checked = 0
 try: e2_state = json.load(open(E2_STATE))
 except Exception: e2_state = {}
@@ -482,6 +483,7 @@ for r in universe345:
     hit = next(((t, i) for t in cand for i in [edge3_signal(b, t)] if i), None)   # first qualifying bar
     if not hit: continue
     t, info = hit
+    E345_HITS.add(r["mint"])
     if _e2_bar(b, t): edge3_logged.append((r["symbol"], None, "edge2_precedence")); continue  # impossible by construction; kept as a guard
     last = e3_state.get(r["mint"])
     if last and b[t][0] - last < 4 * 3600: edge3_logged.append((r["symbol"], None, "dedupe_4h")); continue
@@ -537,6 +539,7 @@ for r in universe345:
     elif t < 12: outcome = "first_pullback_before_12_bars"
     elif _e2_bar(b, t): outcome = "edge2_precedence"                     # prereg rule 7: same bar, same pool
     else: outcome = None
+    if not outcome: E345_HITS.add(r["mint"])
     if outcome:
         edge4_logged.append((r["symbol"], None, f"consumed: {outcome}"))
         if not _no_log: e4_state[r["mint"]] = dict(state, outcome=outcome)
@@ -603,6 +606,7 @@ def _e5_void(mint, pend):
     return _paper_log(r, "meme_liq_accum", "edge5void", f"{r['symbol']}: edge5 pending entry VOID (paper only, not a pass): signal {sig_pt}; {why}",
                       meta, blocked_by=E5_VOID_TAG, px_fallback=pend.get("signal_px_sol"), allow_priceless=True)
 _e5_syms = {m: p_.get("symbol") for m, p_ in e5_state.get("pending", {}).items()}
+E345_HITS.update(_e5_syms)   # pending edge5 entries/voids handled this scan keep precedence over edge6
 for _m, _lid, _st in edge5_process_pending(e5_state, _now_ts, _e5_entry, _e5_void, _no_log):
     edge5_logged.append((_e5_syms.get(_m) or _m, _lid, _st))
 # 2) record this scan's snapshot for every eligible coin (always, even with no signal), prune > 9h
@@ -641,14 +645,52 @@ for r in universe345:
     info = dict(liq_now=round(r["liq"]), liq_ref=round(liq_ref), liq_chg_pct=round(liq_chg * 100, 1), px_chg_pct=round(px_chg * 100, 2),
                 ref_age_h=round((_now_ts - ref[0]) / 3600, 2), buy_share=round(bs, 4), age_h=round(r["age_h"], 1))
     edge5_logged.append((r["symbol"], None, f"signal: pending entry at next scan {info}"))
+    E345_HITS.add(r["mint"])
     if not _no_log:
         e5_state["pending"][r["mint"]] = {"signal_ts": _now_ts, "symbol": r["symbol"], "decimals": r["decimals"], "info": info,
                                           "retries": 0, "signal_px_sol": _px_sol(r)[0]}   # signal-time price: void-log fallback
+# ---- edge6 meme_flush_rebound (paper only; research/edge6_prereg.md, sha256 d4770a56...) ----
+# Buy the 30-50% flush: close of a closed 5m bar between 50% and 70% of the 6h high (72 bars incl. that bar), 6h USD
+# volume >= $50k, not an edge2 bar. Bars closed since the previous scan, first qualifying bar. Precedence: edge2 >
+# edge3 > edge4 > edge5 > edge6 (E2_HITS / E345_HITS). 4h dedupe per coin. Never trades.
+E6_STATE = os.environ.get("BANDIT_E6_STATE", "/workspace/bandit/_edge6_dedupe.json")
+def edge6_signal(b, t):
+    """Same test as research/edge6_rule.py signal()."""
+    if t < 72: return None
+    w = b[t-71:t+1]; H = max(x[2] for x in w); c = b[t][4]; vol = sum(x[5] for x in w)
+    if not (H > 0 and c > 0): return None
+    d = c / H
+    if not (0.50 <= d <= 0.70 and vol >= 50000): return None
+    if _e2_bar(b, t): return None
+    return dict(flush_pct=round((1 - d) * 100, 2), h6_high=H, vol6h_usd=round(vol))
+edge6_logged = []; edge6_checked = 0; e6_state = _load(E6_STATE, {})
+for r in universe345:
+    pb = GT_BARS.get(r["mint"])
+    if not pb or len(pb[1]) < 73: continue
+    pool, b = pb; edge6_checked += 1
+    cand = [t for t in range(72, len(b)) if b[t][0] + 300 > _since]        # bars closed since the previous scan
+    hit = next(((t, i) for t in cand for i in [edge6_signal(b, t)] if i), None)
+    if not hit: continue
+    t, info = hit
+    if r["mint"] in E2_HITS: edge6_logged.append((r["symbol"], None, "edge2_precedence")); continue
+    if r["mint"] in E345_HITS: edge6_logged.append((r["symbol"], None, "edge345_precedence")); continue
+    last = e6_state.get(r["mint"])
+    if last and b[t][0] - last < 4 * 3600: edge6_logged.append((r["symbol"], None, "dedupe_4h")); continue
+    meta = {"edge6": dict(info, pool=pool, signal_bar_ts=b[t][0], prereg_entry_ts=b[t][0] + 300,
+                          lag_min=round((_now_ts - (b[t][0] + 300)) / 60, 1)), "horizon": "4h"}
+    try:
+        lid, st_ = _paper_log(r, "meme_flush_rebound", "edge6",
+            f"{r['symbol']}: edge6 flush-rebound trigger (paper only): close {info['flush_pct']}% below 6h high, 6h vol ${info['vol6h_usd']:,}", meta)
+        if st_ == "ok": e6_state[r["mint"]] = b[t][0]
+        edge6_logged.append((r["symbol"], lid, st_))
+    except Exception as e:
+        edge6_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
 if not _no_log:
-    _save(E3_STATE, e3_state); _save(E4_STATE, e4_state); _save(E5_STATE, e5_state); _save(LAST_SCAN, {"ts": _now_ts})
+    _save(E3_STATE, e3_state); _save(E4_STATE, e4_state); _save(E5_STATE, e5_state); _save(E6_STATE, e6_state); _save(LAST_SCAN, {"ts": _now_ts})
 out["edge3_checked"] = edge3_checked; out["edge3_logged"] = edge3_logged
 out["edge4_checked"] = edge4_checked; out["edge4_logged"] = edge4_logged
 out["edge5_checked"] = edge5_checked; out["edge5_logged"] = edge5_logged
+out["edge6_checked"] = edge6_checked; out["edge6_logged"] = edge6_logged
 out["liq_snapshots"] = {"coins": len(snaps), "path": LIQ_SNAP}
 out["cap_blocked"] = [{"symbol": r["symbol"], "mint": r["mint"], "pc1h": r["pc1h"], "price_sol": (r.get("quote") or {}).get("price_sol")} for r in cap_blocked]
 out["cap_logged"] = cap_logged
@@ -664,3 +706,4 @@ print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
 print("EDGE3_CHECKED", edge3_checked, "EDGE3_LOGGED", edge3_logged)
 print("EDGE4_CHECKED", edge4_checked, "EDGE4_LOGGED", edge4_logged)
 print("EDGE5_CHECKED", edge5_checked, "EDGE5_LOGGED", edge5_logged)
+print("EDGE6_CHECKED", edge6_checked, "EDGE6_LOGGED", edge6_logged)

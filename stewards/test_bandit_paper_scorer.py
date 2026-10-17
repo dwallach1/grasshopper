@@ -158,6 +158,15 @@ class Scorer(unittest.TestCase):
             s, out = PS.run_thesis(thesis, PS.THESES[thesis], self.NOW)
         return s, {r["decision_id"]: r for r in out}, fx
 
+    def test_edge6_entry_and_pool_from_meta_with_new_bar(self):
+        e = T0 + 2 * 86400 + 5 * BAR
+        rows = [row(1, "meme_flush_rebound", "M", e + 30 * 60, {"edge6": {"prereg_entry_ts": e, "pool": "P6"}})]
+        s, out, fx = self.run_rows("meme_flush_rebound", rows, {"P6": flat(e, 48, close=1.1)})
+        self.assertEqual(out[1]["status"], "scored"); self.assertEqual(out[1]["entry_ts"], e)
+        self.assertEqual(out[1]["pool"], "P6"); self.assertAlmostEqual(out[1]["net_pct"], 8.0, places=3)
+        self.assertEqual(PS.THESES["meme_flush_rebound"]["bar"], "se_top2")
+        self.assertTrue(PS.THESES["meme_flush_rebound"]["dedupe"])
+
     def test_edge3_entry_and_pool_from_meta(self):
         e = T0 + 86400 + 7 * BAR                       # prereg_entry_ts: NOT the bar after decided_at
         bars = {"P_META": with_bar(flat(e, 48), 2, h=1.6)}
