@@ -131,6 +131,18 @@ class ThesisTaggingTests(unittest.TestCase):
             {"sport": "nfl", "market": "aec-nfl-was-sf-2026-10-19", "outcome": "yes", "fair": 0.21,
              "bid": 0.22, "ask": 0.225, "post_fee_maker": -0.012, "decision": "SKIP", "why": "no edge",
              "at": datetime(2026, 10, 17, 14, tzinfo=timezone.utc)},
+            {"sport": "nfl", "market": "aec-nfl-was-sf-2026-10-19", "outcome": "yes", "fair": 0.25,
+             "bid": 0.30, "decision": "SKIP", "why": "dearer duplicate of the same side"},
+            {"sport": "mlb", "market": "aec-mlb-tb-cle-2026-10-17", "outcome": " NO ", "fair": 0.49,
+             "bid": 0.48, "decision": "SKIP", "why": "no side, prices already in NO terms"},
+            {"sport": "nfl", "market": "aec-nfl-kc-buf-2026-10-18", "fair": 0.30, "bid": 0.33,
+             "decision": "SKIP", "why": "no side field, defaults to yes"},
+            {"sport": "nfl", "market": "aec-nfl-nyj-ne-2026-10-18", "side": "YES", "outcome": "no",
+             "fair": 0.60, "bid": 0.61, "decision": "SKIP", "why": "side wins over outcome"},
+            {"sport": "mlb", "market": "aec-mlb-la-sd-2026-10-17", "token": "no", "fair": 0.40,
+             "bid": 0.44, "decision": "SKIP", "why": "token when side and outcome are absent"},
+            {"sport": "nfl", "market": "aec-nfl-chi-det-2026-10-18", "outcome": "maybe", "fair": 0.5,
+             "bid": 0.5, "decision": "SKIP", "why": "a side field that is not yes or no is dropped"},
             {"sport": "mlb", "market": "aec-mlb-nyy-bos-2026-10-17", "outcome": "yes", "fair": None,
              "bid": None, "ask": None, "post_fee_maker": None, "decision": "SKIP", "why": "missing fair/bbo"},
         ]
@@ -143,24 +155,49 @@ class ThesisTaggingTests(unittest.TestCase):
         self.assertEqual((sp["thesis_id"], sp["note_type"], sp["decision"]), (NS.THESIS_SPORTS, "skip", "skip"))
         self.assertEqual(wx["decision"], "skip")
         # Same extraction as private.pm_note_scoreable_decisions on meta.comps / meta.comps_top:
-        # lower(decision)='skip'; instrument = market_slug|market; book_price = bid in (0,1]; prob = fair in [0,1].
+        # lower(decision)='skip'; instrument = market_slug|market; side = side, else outcome, else token,
+        # else yes (only when the element has no side field); book_price = bid in (0,1]; prob = fair in [0,1].
+        # Prices stay in that side's terms. distinct on (instrument, side) keeps the cheaper book_price.
+        def comp_side(elem):
+            for key in ("side", "outcome", "token"):
+                raw = elem.get(key)
+                if raw is None:
+                    continue
+                text = str(raw).strip().lower()
+                if text:
+                    return text
+            return "yes"
+
         def scored(meta):
-            out = []
+            best = {}
             for e in (meta.get("comps") or []) + (meta.get("comps_top") or []):
                 if str(e.get("decision") or "").lower() != "skip":
                     continue
                 inst = e.get("market_slug") or e.get("market")
+                if not inst or not str(inst).strip():
+                    continue
+                side = comp_side(e)
+                if side not in ("yes", "no"):
+                    continue
                 try:
                     bid, fair = float(e.get("bid")), float(e.get("fair"))
                 except (TypeError, ValueError):
                     continue
-                if inst and 0 < bid <= 1 and 0 <= fair <= 1:
-                    out.append((inst, "yes", bid, fair))
-            return sorted(out)
+                if not (0 < bid <= 1 and 0 <= fair <= 1):
+                    continue
+                key = (inst, side)
+                prev = best.get(key)
+                if prev is None or bid < prev[2]:
+                    best[key] = (inst, side, bid, fair)
+            return sorted(best.values())
         payload = json.loads(json.dumps(sp))  # what steward-rpc actually sends
         self.assertEqual(payload["meta"]["comps_top"][2]["at"], "2026-10-17 14:00:00+00:00")
         self.assertEqual(scored(payload["meta"]), [
+            ("aec-mlb-la-sd-2026-10-17", "no", 0.44, 0.40),
+            ("aec-mlb-tb-cle-2026-10-17", "no", 0.48, 0.49),
             ("aec-mlb-tb-cle-2026-10-17", "yes", 0.515, 0.512992),
+            ("aec-nfl-kc-buf-2026-10-18", "yes", 0.33, 0.30),
+            ("aec-nfl-nyj-ne-2026-10-18", "yes", 0.61, 0.60),
             ("aec-nfl-was-sf-2026-10-19", "yes", 0.22, 0.21),
         ])
         # The weather note's meta carries no comps/candidates and no market key, so the trigger writes
@@ -172,7 +209,8 @@ class ThesisTaggingTests(unittest.TestCase):
         for path in SESSIONS:
             text = path.read_text()
             comp = text.split("comp = {", 1)[1].split("}\n", 1)[0]
-            for key in ('"market": ms', '"fair": f_side', '"bid": mk_px', '"decision": decision, "why": why'):
+            for key in ('"market": ms', '"outcome": side', '"fair": f_side', '"bid": mk_px',
+                        '"decision": decision, "why": why'):
                 self.assertIn(key, comp, path.name)
             notes = text.split("# 9) Write pm_notes", 1)[1].split("# 10) Artifacts", 1)[0]
             self.assertIn('sports_skip_meta = {"comps_top": comps_top[:10]}', notes, path.name)
@@ -332,16 +370,32 @@ class ScoringTriggerContractTests(unittest.TestCase):
         return block[:block.index("\n$")]
 
     def test_trigger_scores_only_skip_or_enter_notes(self):
+        applied = "20261017162807_pm_note_skip_direct_dedup.sql"
+        mig = sorted((ROOT / "supabase" / "migrations").glob("*_pm_note_skip_direct_dedup.sql"))
+        self.assertEqual([p.name for p in mig], [applied])
         trig = self._latest("private.decision_candidate_from_pm_note()")
         self.assertIn("new.decision not in ('enter', 'skip')", trig)
-        self.assertIn("from private.pm_note_scoreable_decisions(new) d", trig)
+        self.assertIn("from private.pm_note_scoreable_decisions(new) scored", trig)
+        self.assertIn("private.pm_note_skip_covered_by_direct('oddsborne', scored.instrument, scored.side, new.created_at)", trig)
+        self.assertIn("62: a rollup note naming no market", trig)
+        self.assertIn("'price_terms', d.price_terms", trig)
 
     def test_scoreable_decisions_reads_comps_top_market_bid_fair(self):
         fn = self._latest("private.pm_note_scoreable_decisions(p_note public.pm_notes)")
         for needle in ("p_note.meta->'comps_top'", "coalesce(elem->>'market_slug', elem->>'market')",
                        "private.try_numeric(elem->>'bid')", "private.try_numeric(elem->>'fair')",
-                       "lower(coalesce(elem->>'decision', '')) = 'skip'"):
+                       "lower(coalesce(elem->>'decision', '')) = 'skip'",
+                       "nullif(lower(btrim(elem->>'side')), '')",
+                       "nullif(lower(btrim(elem->>'outcome')), '')",
+                       "nullif(lower(btrim(elem->>'token')), '')",
+                       "distinct on (r.instrument, r.side)"):
             self.assertIn(needle, fn)
+        comps = fn.split("-- comps / comps_top.", 1)[1].split("union all", 1)[0]
+        self.assertIn("'side'::text", comps)
+        self.assertIn("elem->>'bid'", comps)
+        self.assertIn("elem->>'fair'", comps)
+        self.assertNotIn("1 -", comps)
+        self.assertEqual(fn.count("'yes'::text as side"), 1)
 
 
 class SqlContractTests(unittest.TestCase):
