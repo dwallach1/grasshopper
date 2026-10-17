@@ -9,21 +9,22 @@ Theses and promotion bars:
   meme_range_breakout   (edge3)  bar (research/edge3_prereg.md + edge3_edge4_amendment_20261016.md):
   meme_grad_pullback    (edge4)    n >= 20 forward passes AND mean - SE > 0 AND mean with top 2 winners removed > 0.
   meme_liq_accum        (edge5)    SE = sample stdev (n-1) / sqrt(n). Backtest trades never count.
+  meme_flush_rebound    (edge6)  same bar (research/edge6_prereg.md); kill rule there (retire at n >= 10 if mean + SE < 0).
 
 1. Passes: steward_rpc bandit_decision_passes(thesis_id) (read-only; supabase/schemas/69_bandit_decision_passes.sql),
    decision == 'skip' only.
 2. Entry (bar open, GeckoTerminal 5m USD bars):
    edge2 / edge5: first 5m bar starting at or after decided_at (edge5 logs at the NEXT scan, so decided_at is the
                   next-scan entry per its prereg).
-   edge3 / edge4: the bar starting at meta.<edge>.prereg_entry_ts (open of the bar after the signal bar). Needs the
+   edge3 / edge4 / edge6: the bar starting at meta.<edge>.prereg_entry_ts (open of the bar after the signal bar). Needs the
                   RPC to return meta; rows without it are 'unscored' (never guessed).
-   Pool: edge2/edge5 top-reserve pool now (as edge2_path_score.py); edge3 meta.edge3.pool, edge4 meta.edge4.mig_pool
+   Pool: edge2/edge5 top-reserve pool now (as edge2_path_score.py); edge3/edge6 meta.<edge>.pool, edge4 meta.edge4.mig_pool
    (fallback: top-reserve pool).
 3. Exit (house): sell all at +50% if high >= 1.5x entry; kill at -40% if low <= 0.6x (kill wins if both in a bar);
    else close of the 48th bar (4h). Net = gross - 2.0 pp. Missing entry bar / incomplete window -> 'unscored'.
 4. Voids: rows with blocked_by 'paper_void_stale' (edge5 pending entries voided after 2h; scan_https_once.py) are
    reported as their own count ('void') and are never scored, deduped against, or counted toward n.
-5. Dedupe for edge3/4/5: first pass per coin per 4h (by entry time); later ones are 'dup_4h' and not counted.
+5. Dedupe for edge3/4/5/6: first pass per coin per 4h (by entry time); later ones are 'dup_4h' and not counted.
    edge2 keeps its existing behaviour (no scorer-side dedupe; the scan already dedupes).
 Writes <out-dir>/paper_scores.json and paper_scores.csv; prints one table row per thesis.
 """
@@ -41,6 +42,7 @@ THESES = {
     "meme_range_breakout":   dict(edge="edge3", entry="meta", pool_key="pool", bar="se_top2", dedupe=True),
     "meme_grad_pullback":    dict(edge="edge4", entry="meta", pool_key="mig_pool", bar="se_top2", dedupe=True),
     "meme_liq_accum":        dict(edge="edge5", entry="decided_at", bar="se_top2", dedupe=True),
+    "meme_flush_rebound":    dict(edge="edge6", entry="meta", pool_key="pool", bar="se_top2", dedupe=True),
 }
 VOID_TAGS = {"paper_void_stale"}
 BAR_TEXT = {"edge2_locked": "n >= 20 and mean net with top 2 winners removed > 0",

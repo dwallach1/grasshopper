@@ -1,0 +1,122 @@
+{
+ "fetch_ts": 1792242428,
+ "chosen": [
+  {
+   "mint": "DneSmn3NenxC8CMm4vTJUpTYfigZZKWWbyymq8MjFkw3",
+   "pool": "Ds2fyB2fnz8F1KjZ8WycHMh2u6aRpjy81errtEtY5nEw",
+   "name": "ALLOX / SOL",
+   "reserve": 321142.0994,
+   "vol24": 142245731.107031,
+   "created": "2026-10-15T20:28:55Z",
+   "bars_file": "raw/edge6/ohlcv5_DneSmn3N_Ds2fyB2f_usd.json"
+  },
+  {
+   "mint": "CfRbEWpLB8pWUwrkEGMwMtVBFzAsgJhs4LRNpChUBBDi",
+   "pool": "9DMCBmDYtHbiuL1ctf3M4txTV5ZmdqXipkTgQ1LdFYyv",
+   "name": "RSGP / SOL",
+   "reserve": 354401.1549,
+   "vol24": 126587211.642137,
+   "created": "2026-10-16T03:02:40Z",
+   "bars_file": "raw/edge6/ohlcv5_CfRbEWpL_9DMCBmDY_usd.json"
+  },
+  {
+   "mint": "BP172LqcuPuADw7WtYg961dVQ778xC6zc1pvm6NfZSR",
+   "pool": "2oaQZSyrPESA5Ud6WunKnm8qewhxRmoys6r9X9oR7bMf",
+   "name": "SEXCOIN / SOL",
+   "reserve": 193994.8389,
+   "vol24": 15457299.3788939,
+   "created": "2026-10-17T03:36:22Z",
+   "bars_file": "raw/edge6/ohlcv5_BP172Lqc_2oaQZSyr_usd.json"
+  },
+  {
+   "mint": "EjPr9rQuavUaSMs2HHsbPdAi5KWfvwwF2r1AdW9kRkLR",
+   "pool": "8dvFN9YTbWW3Lo6zV9Uxs6Mzkgg6fyuA6vAYDN94twvN",
+   "name": "RSGP / SOL",
+   "reserve": 362684.7191,
+   "vol24": 14664124.4134309,
+   "created": "2026-10-17T10:39:05Z",
+   "bars_file": "raw/edge6/ohlcv5_EjPr9rQu_8dvFN9YT_usd.json"
+  },
+  {
+   "mint": "MFmKFZqoaQ7qN4VsSM8F7E2TnvxWaxoteK2jUmN1wjs",
+   "pool": "DNJTX1uZU87hBr9mbza9C5WJKP2zgu6gfaEVUT6ov7Gp",
+   "name": "PRIME / SOL",
+   "reserve": 190987.5668,
+   "vol24": 12795041.8065449,
+   "created": "2026-10-17T11:17:35Z",
+   "bars_file": "raw/edge6/ohlcv5_MFmKFZqo_DNJTX1uZ_usd.json"
+  },
+  {
+   "mint": "BcczGav161jFJmdYTpKLco1TEEkhitsEjr7WqBnvbanW",
+   "pool": "9gxCdLJQbnXkZ3tiYTPqXtyTjoKXo6J7cY3y3r48Xu4e",
+   "name": "AE / SOL",
+   "reserve": 208544.0766,
+   "vol24": 10853757.4073848,
+   "created": "2026-10-17T08:44:19Z",
+   "bars_file": "raw/edge6/ohlcv5_BcczGav1_9gxCdLJQ_usd.json"
+  },
+  {
+   "mint": "CY27QvCQBCmLBuz3V7c8snEeD4z67iyoSTkwo35Ypump",
+   "pool": "ABqXgS5c78P8Nix49kqsBTNQjAmMAhCBH2mvjq1zqQZ2",
+   "name": "Eternia / SOL",
+   "reserve": 106151.5742,
+   "vol24": 7358354.86731312,
+   "created": "2026-10-17T02:47:50Z",
+   "bars_file": "raw/edge6/ohlcv5_CY27QvCQ_ABqXgS5c_usd.json"
+  },
+  {
+   "mint": "B2GESkSErPjuCq6n4LcaJP5v2z1kJnw3xHVZnop2sZx",
+   "pool": "CnHqem7jPbjA5p2xHBGPHQG7E9NkZWcQr9q6R9YWb7zf",
+   "name": "ELON / MUSK4",
+   "reserve": 101667.7358,
+   "vol24": 4391821.01664333,
+   "created": "2026-10-16T17:30:40Z",
+   "bars_file": "raw/edge6/ohlcv5_B2GESkSE_CnHqem7j_usd.json"
+  },
+  {
+   "mint": "2bCCHQadi4QeHWPKG3w13siCyWWQPgkFtniouTqVpump",
+   "pool": "AQN7UkKYSnaZns61dVW2Q6hQmm7WiFSAyjBon6FVwhGf",
+   "name": "1 / TRUMP",
+   "reserve": 115961.9063,
+   "vol24": 3358584.29337006,
+   "created": "2026-10-15T20:19:27Z",
+   "bars_file": "raw/edge6/ohlcv5_2bCCHQad_AQN7UkKY_usd.json"
+  },
+  {
+   "mint": "21cNUrgmDbEopERsbZ3woF3tehMSnRftH7xx5mfraitR",
+   "pool": "7kMxqvCqLbHCXDy25oVX7Bx44Z3ud6SYZBK2jhJpRLsf",
+   "name": "DNA / SOL",
+   "reserve": 126589.1233,
+   "vol24": 3123788.39693001,
+   "created": "2026-10-16T20:57:51Z",
+   "bars_file": "raw/edge6/ohlcv5_21cNUrgm_7kMxqvCq_usd.json"
+  },
+  {
+   "mint": "xpobox1HU5SKAr2RFxnT4t5SrF8WowmWnbWauCrpump",
+   "pool": "CdzcWtaqxcsfebQNySbzdTUxEsyMH2t59jBTZRWdEppA",
+   "name": "KURP / SOL",
+   "reserve": 156874.7183,
+   "vol24": 2548922.98320375,
+   "created": "2026-10-16T15:58:10Z",
+   "bars_file": "raw/edge6/ohlcv5_xpobox1H_CdzcWtaq_usd.json"
+  },
+  {
+   "mint": "12EAJfBMELK8xWhBjzuDPk49M4EUiz8DmszY6qYpZnvE",
+   "pool": "GFWfucwZFRyp14hkNzotiyRVtKi8zVJYLfNtTQafFpVM",
+   "name": "HULKED / SOL",
+   "reserve": 142292.5981,
+   "vol24": 2379605.80056443,
+   "created": "2026-10-16T23:32:09Z",
+   "bars_file": "raw/edge6/ohlcv5_12EAJfBM_GFWfucwZ_usd.json"
+  },
+  {
+   "mint": "42WBoegFzwNCgM51oZVaAE9LDZZRemyGRxNTA4KihJem",
+   "pool": "BDhM6wgJPbQHkPB2ufbzsrd7y9jRPu1FBVjT4dpKeQq9",
+   "name": "MAKERS / SOL",
+   "reserve": 135113.6269,
+   "vol24": 2092676.88981784,
+   "created": "2026-10-17T12:47:48Z",
+   "bars_file": "raw/edge6/ohlcv5_42WBoegF_BDhM6wgJ_usd.json"
+  }
+ ]
+}

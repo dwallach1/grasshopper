@@ -1,0 +1,265 @@
+{
+ "prereg_sha256": "d4770a56b42bf33a1d1f7dcfd114c896ae3bbaec1c2d76f99fee8e8c12b893ca",
+ "run_pt": "2026-10-17T06:09:02.649930-07:00",
+ "fetch_ts_B": 1792242428,
+ "datasets": [
+  {
+   "set": "A",
+   "coin": "Agency",
+   "file": "raw/ohlcv5_Agency_GDoenRAG_usd.json",
+   "status": "excluded: in-sample mint",
+   "bars": null
+  },
+  {
+   "set": "A",
+   "coin": "COLLECT",
+   "file": "raw/ohlcv5_COLLECT_99C6TUp7_usd.json",
+   "status": "ok",
+   "bars": 375
+  },
+  {
+   "set": "A",
+   "coin": "FEELSGOOD",
+   "file": "raw/ohlcv5_FEELSGOOD_51nGR5Xc_usd.json",
+   "status": "ok",
+   "bars": 688
+  },
+  {
+   "set": "A",
+   "coin": "GROK",
+   "file": "raw/ohlcv5_GROK_3NAxQ3Ug_usd.json",
+   "status": "excluded: median close > $1",
+   "bars": null
+  },
+  {
+   "set": "A",
+   "coin": "JEANPHIL",
+   "file": "raw/ohlcv5_JEANPHIL_4R8CiMnJ_usd.json",
+   "status": "ok",
+   "bars": 413
+  },
+  {
+   "set": "A",
+   "coin": "QUEEF",
+   "file": "raw/ohlcv5_QUEEF_AZ82R741_usd.json",
+   "status": "ok",
+   "bars": 403
+  },
+  {
+   "set": "A",
+   "coin": "SHARTCOIN",
+   "file": "raw/ohlcv5_SHARTCOIN_82BHvVSe_usd.json",
+   "status": "ok",
+   "bars": 1000
+  },
+  {
+   "set": "A",
+   "coin": "SI",
+   "file": "raw/ohlcv5_SI_AG1EhPjs_usd.json",
+   "status": "ok",
+   "bars": 475
+  },
+  {
+   "set": "A",
+   "coin": "TIGRINO",
+   "file": "raw/ohlcv5_TIGRINO_2fwy38cJ_usd.json",
+   "status": "ok",
+   "bars": 542
+  },
+  {
+   "set": "A",
+   "coin": "X7",
+   "file": "raw/ohlcv5_X7_DM7mLVfN_usd.json",
+   "status": "ok",
+   "bars": 306
+  },
+  {
+   "set": "A",
+   "coin": "familiars",
+   "file": "raw/ohlcv5_familiars_ENiVH49X_usd.json",
+   "status": "ok",
+   "bars": 360
+  },
+  {
+   "set": "A",
+   "coin": "goon",
+   "file": "raw/ohlcv5_goon_9PYormkW_usd.json",
+   "status": "ok",
+   "bars": 413
+  },
+  {
+   "set": "B",
+   "coin": "ALLOX / SOL",
+   "file": "raw/edge6/ohlcv5_DneSmn3N_Ds2fyB2f_usd.json",
+   "status": "ok",
+   "bars": 489
+  },
+  {
+   "set": "B",
+   "coin": "RSGP / SOL",
+   "file": "raw/edge6/ohlcv5_CfRbEWpL_9DMCBmDY_usd.json",
+   "status": "ok",
+   "bars": 378
+  },
+  {
+   "set": "B",
+   "coin": "SEXCOIN / SOL",
+   "file": "raw/edge6/ohlcv5_BP172Lqc_2oaQZSyr_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 24
+  },
+  {
+   "set": "B",
+   "coin": "RSGP / SOL",
+   "file": "raw/edge6/ohlcv5_EjPr9rQu_8dvFN9YT_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 31
+  },
+  {
+   "set": "B",
+   "coin": "PRIME / SOL",
+   "file": "raw/edge6/ohlcv5_MFmKFZqo_DNJTX1uZ_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 20
+  },
+  {
+   "set": "B",
+   "coin": "AE / SOL",
+   "file": "raw/edge6/ohlcv5_BcczGav1_9gxCdLJQ_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 54
+  },
+  {
+   "set": "B",
+   "coin": "Eternia / SOL",
+   "file": "raw/edge6/ohlcv5_CY27QvCQ_ABqXgS5c_usd.json",
+   "status": "ok",
+   "bars": 125
+  },
+  {
+   "set": "B",
+   "coin": "ELON / MUSK4",
+   "file": "raw/edge6/ohlcv5_B2GESkSE_CnHqem7j_usd.json",
+   "status": "ok",
+   "bars": 236
+  },
+  {
+   "set": "B",
+   "coin": "1 / TRUMP",
+   "file": "raw/edge6/ohlcv5_2bCCHQad_AQN7UkKY_usd.json",
+   "status": "ok",
+   "bars": 489
+  },
+  {
+   "set": "B",
+   "coin": "DNA / SOL",
+   "file": "raw/edge6/ohlcv5_21cNUrgm_7kMxqvCq_usd.json",
+   "status": "ok",
+   "bars": 103
+  },
+  {
+   "set": "B",
+   "coin": "KURP / SOL",
+   "file": "raw/edge6/ohlcv5_xpobox1H_CdzcWtaq_usd.json",
+   "status": "ok",
+   "bars": 255
+  },
+  {
+   "set": "B",
+   "coin": "HULKED / SOL",
+   "file": "raw/edge6/ohlcv5_12EAJfBM_GFWfucwZ_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 5
+  },
+  {
+   "set": "B",
+   "coin": "MAKERS / SOL",
+   "file": "raw/edge6/ohlcv5_42WBoegF_BDhM6wgJ_usd.json",
+   "status": "excluded: < 74 bars",
+   "bars": 5
+  }
+ ],
+ "pooled": {
+  "n": 66,
+  "wins": 37,
+  "mean": 11.687,
+  "median": 6.525,
+  "se": 4.24,
+  "mean_minus_se": 7.447,
+  "mean_ex_top2": 10.552,
+  "net_sol": 3.4711,
+  "triggers": {
+   "tp_full": 27,
+   "kill": 9,
+   "4h_stop": 30
+  }
+ },
+ "older": {
+  "n": 33,
+  "wins": 17,
+  "mean": 9.066,
+  "median": 3.19,
+  "se": 6.164,
+  "mean_minus_se": 2.902,
+  "mean_ex_top2": 6.555,
+  "net_sol": 1.3464,
+  "triggers": {
+   "tp_full": 13,
+   "kill": 5,
+   "4h_stop": 15
+  }
+ },
+ "newer": {
+  "n": 33,
+  "wins": 20,
+  "mean": 14.308,
+  "median": 12.177,
+  "se": 5.882,
+  "mean_minus_se": 8.426,
+  "mean_ex_top2": 12.134,
+  "net_sol": 2.1247,
+  "triggers": {
+   "tp_full": 14,
+   "kill": 4,
+   "4h_stop": 15
+  }
+ },
+ "set_A": {
+  "n": 56,
+  "wins": 31,
+  "mean": 12.131,
+  "median": 5.335,
+  "se": 4.659,
+  "mean_minus_se": 7.472,
+  "mean_ex_top2": 10.802,
+  "net_sol": 3.0569,
+  "triggers": {
+   "tp_full": 24,
+   "kill": 7,
+   "4h_stop": 25
+  }
+ },
+ "set_B": {
+  "n": 10,
+  "wins": 6,
+  "mean": 9.203,
+  "median": 8.874,
+  "se": 10.643,
+  "mean_minus_se": -1.44,
+  "mean_ex_top2": -0.496,
+  "net_sol": 0.4142,
+  "triggers": {
+   "tp_full": 3,
+   "kill": 2,
+   "4h_stop": 5
+  }
+ },
+ "first_entry_pt": "2026-09-18T10:10:00-07:00",
+ "last_entry_pt": "2026-10-17T03:15:00-07:00",
+ "gate": {
+  "g1_sample": true,
+  "g2_mean_and_newer": true,
+  "g3_ex_top2": true,
+  "verdict": "PASS"
+ }
+}
