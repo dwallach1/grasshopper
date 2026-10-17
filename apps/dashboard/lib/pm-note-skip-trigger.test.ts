@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 
 const root = join(import.meta.dir, '../../..');
-const migrationName = '20261017162111_pm_note_skip_direct_dedup.sql';
+const migrationName = '20261017162807_pm_note_skip_direct_dedup.sql';
 const schemaName = '78_pm_note_skip_direct_dedup.sql';
 
 function readSql(dir: string, name: string): string {

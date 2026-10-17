@@ -370,6 +370,9 @@ class ScoringTriggerContractTests(unittest.TestCase):
         return block[:block.index("\n$")]
 
     def test_trigger_scores_only_skip_or_enter_notes(self):
+        applied = "20261017162807_pm_note_skip_direct_dedup.sql"
+        mig = sorted((ROOT / "supabase" / "migrations").glob("*_pm_note_skip_direct_dedup.sql"))
+        self.assertEqual([p.name for p in mig], [applied])
         trig = self._latest("private.decision_candidate_from_pm_note()")
         self.assertIn("new.decision not in ('enter', 'skip')", trig)
         self.assertIn("from private.pm_note_scoreable_decisions(new) scored", trig)
