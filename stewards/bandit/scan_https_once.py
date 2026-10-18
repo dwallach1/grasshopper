@@ -184,7 +184,9 @@ for mid, t in seen.items():
     if max(bs_vol or 0, bs_tx or 0) < 0.52:
         f.append(f"buy share tx={None if bs_tx is None else round(bs_tx,4)} vol={None if bs_vol is None else round(bs_vol,4)} < 0.52")
     if pc5 is None or not pc5 > -8: f.append(f"5m {pc5 if pc5 is None else round(pc5,2)}% <= -8%")
-    if pc1 is not None and pc1 > 30: f.append(f"1h +{pc1:.0f}% > +30% (1h_cap_30 trial, desk 2026-10-07)")
+    # desk rule #127 bandit-1h-entry-cap (+30%) repealed by GRASSHOPPER 2026-10-18: the original +200% ceiling is back.
+    # Coins above +30% are still tagged (meta.hot_1h / chg_1h on every log, _hot_meta below), never blocked for it.
+    if pc1 is not None and pc1 > 200: f.append(f"1h +{pc1:.0f}% > +200%")
     if pc24 is None or not pc24 > -40: f.append(f"24h {pc24 if pc24 is None else round(pc24,2)}% <= -40%")
     row["market_fails"] = f
     rows_all.append(row)
@@ -235,12 +237,6 @@ def dex(mint):
 
 SOLUSD = sol_usd()
 to_quote = mkt_pass + one_fail[:15] + two_fail[:5]
-# desk rule #127 bandit-1h-entry-cap: always quote coins blocked ONLY by the 1h cap so they can be logged as passes
-CAP_TAG = "1h_cap_30"
-_q_ids = {r["mint"] for r in to_quote}
-for r in elig:
-    if r["market_fails"] and all(CAP_TAG in x for x in r["market_fails"]) and r["mint"] not in _q_ids:
-        to_quote.append(r); _q_ids.add(r["mint"])
 for r in to_quote:
     o = jup_order(r["mint"]); time.sleep(0.3)
     dec = int(r["decimals"] or 6)
@@ -281,27 +277,17 @@ out = {"scan_utc": now.isoformat(), "scan_pt": now.astimezone(PT).isoformat(), "
        "clear": clear, "near_misses": near[:12],
        "standing": [r for r in rows_all if r["standing_skip"]],
        "excluded_in_universe": [(r["symbol"], r["excluded"]) for r in rows_all if r["excluded"]]}
-# auto-log every coin blocked only by the 1h cap (rule #127) as a pass, scored at the 4h horizon
-cap_blocked = [r for r in to_quote if r.get("all_fails") and all(CAP_TAG in x for x in r["all_fails"])]
-cap_logged = []
-if os.environ.get("BANDIT_SCAN_NO_LOG") != "1":
-    try:
-        import steward_rpc
-        for r in cap_blocked:
-            px = (r.get("quote") or {}).get("price_sol")
-            if not px:
-                cap_logged.append((r["symbol"], None, "no_price")); continue
-            try:
-                res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
-                    thesis_id="meme_4h_momentum_clip",
-                    reason=f"{r['symbol']}: blocked only by 1h cap (1h +{r['pc1h']:.1f}% > +30%); 6h {r['pc6h']}%, liq ${r['liq']:,.0f}, impact {r.get('impact_frac')}",
-                    blocked_by=CAP_TAG, decided_at=now.astimezone(PT).isoformat(),
-                    source_id=f"scan_https_{now.astimezone(PT).strftime('%Y%m%dT%H%M')}_{r['mint'][:8]}_1hcap")
-                cap_logged.append((r["symbol"], (res or {}).get("id"), "ok" if (res or {}).get("ok") else res))
-            except Exception as e:
-                cap_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
-    except Exception as e:
-        cap_logged.append(("*", None, f"import err {type(e).__name__}"))
+# hot_1h tag (GRASSHOPPER 2026-10-18, after repealing the +30% 1h cap): non-blocking. Every decision this scan logs
+# (thesis_paused skips, edge2-6 paper logs, any future enter) carries meta.hot_1h (1h change > +30%) and meta.chg_1h
+# (the Jupiter stats1h change at scan time, percent) so a later review can compare hot coins with the rest.
+HOT_1H_PCT = 30
+def _hot_meta(r):
+    """{'hot_1h': bool, 'chg_1h': pct} from the scan row; {} when the 1h change is unknown (never guessed)."""
+    pc = (r or {}).get("pc1h")
+    if pc is None: return {}
+    try: pc = float(pc)
+    except Exception: return {}
+    return {"hot_1h": pc > HOT_1H_PCT, "chg_1h": round(pc, 2)}
 # thesis paused (desk 2026-10-09): paper-log every coin that clears all gates as a pass, scored at 4h.
 # Set BANDIT_THESIS_PAUSED=0 to turn off once the thesis is live again.
 PAUSE_TAG = "thesis_paused"
@@ -318,7 +304,8 @@ if os.environ.get("BANDIT_SCAN_NO_LOG") != "1" and os.environ.get("BANDIT_THESIS
                     thesis_id="meme_4h_momentum_clip",
                     reason=f"{r['symbol']}: cleared every gate but thesis paused (paper forward log); 1h +{r['pc1h']:.1f}%, 6h {r['pc6h']:.1f}%, liq ${r['liq']:,.0f}, impact {r.get('impact_frac')}",
                     blocked_by=PAUSE_TAG, decided_at=now.astimezone(PT).isoformat(),
-                    source_id=f"scan_https_{now.astimezone(PT).strftime('%Y%m%dT%H%M')}_{r['mint'][:8]}_paused")
+                    source_id=f"scan_https_{now.astimezone(PT).strftime('%Y%m%dT%H%M')}_{r['mint'][:8]}_paused",
+                    meta=_hot_meta(r) or None)
                 paper_logged.append((r["symbol"], (res or {}).get("id"), "ok" if (res or {}).get("ok") else res))
             except Exception as e:
                 paper_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
@@ -388,14 +375,14 @@ for r in elig:
         edge2_logged.append((r["symbol"], None, "no_price")); continue
     stamp = now.astimezone(PT).strftime('%Y%m%dT%H%M')
     if _no_log:
-        edge2_logged.append((r["symbol"], None, f"dry_run would_log px={px} {info}")); continue
+        edge2_logged.append((r["symbol"], None, f"dry_run would_log px={px} {info} {_hot_meta(r)}")); continue
     try:
         import steward_rpc
         res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
             thesis_id="meme_pullback_reclaim",
             reason=f"{r['symbol']}: edge2 pullback-reclaim trigger (paper only): run +{info['run_pct']}% in 6h, pullback {info['pullback_pct']}%, peak {info['peak_age_bars']} bars ago, reclaim bar, 6h vol ${info['vol6h_usd']:,}; impact {q.get('priceImpactPct')}",
             blocked_by=E2_TAG, decided_at=now.astimezone(PT).isoformat(),
-            source_id=f"scan_https_{stamp}_{r['mint'][:8]}_edge2", meta={"edge2": info, "horizon": "4h"})
+            source_id=f"scan_https_{stamp}_{r['mint'][:8]}_edge2", meta={"edge2": info, "horizon": "4h", **_hot_meta(r)})
         okr = (res or {}).get("ok")
         if okr: e2_state[r["mint"]] = now.timestamp()
         edge2_logged.append((r["symbol"], (res or {}).get("id"), "ok" if okr else res))
@@ -438,6 +425,7 @@ def _px_sol(r):
 def _paper_log(r, thesis, suffix, reason, meta, blocked_by=PAPER_TAG, px_fallback=None, allow_priceless=False):
     """Log one paper-only skip. allow_priceless (edge5 voids only): with no live quote and no stored signal price,
     log it with NO price (never an invented one) plus no_price_reason; the ledger stores it unscoreable."""
+    meta = dict(meta or {}, **_hot_meta(r))                 # hot_1h tag on every paper log (edge3-6, edge5 voids)
     px, imp, err = _px_sol(r)
     if (err or not px) and px_fallback: px, err, imp = px_fallback, None, "n/a (signal-time quote)"
     no_px = None
@@ -692,15 +680,12 @@ out["edge4_checked"] = edge4_checked; out["edge4_logged"] = edge4_logged
 out["edge5_checked"] = edge5_checked; out["edge5_logged"] = edge5_logged
 out["edge6_checked"] = edge6_checked; out["edge6_logged"] = edge6_logged
 out["liq_snapshots"] = {"coins": len(snaps), "path": LIQ_SNAP}
-out["cap_blocked"] = [{"symbol": r["symbol"], "mint": r["mint"], "pc1h": r["pc1h"], "price_sol": (r.get("quote") or {}).get("price_sol")} for r in cap_blocked]
-out["cap_logged"] = cap_logged
 with open(os.environ.get("BANDIT_SCAN_OUT", "/workspace/bandit/_scan_https_out.json"), "w") as fh:
     json.dump(out, fh, indent=2, default=str)
 print("SCAN_PT", out["scan_pt"], "SOLUSD", SOLUSD)
 print("CLEAR", len(clear), [r["symbol"] for r in clear])
 print("NEAR", [(r["symbol"], r["all_fails"]) for r in near[:8]])
 print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r in out["standing"]])
-print("CAP_BLOCKED_LOGGED", cap_logged)
 print("PAPER_LOGGED", paper_logged)
 print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
 print("EDGE3_CHECKED", edge3_checked, "EDGE3_LOGGED", edge3_logged)
