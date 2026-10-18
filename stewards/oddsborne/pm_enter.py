@@ -192,8 +192,26 @@ def compute_quantity(sized_notional, spendable_cash, price: float, theta: float 
     }
 
 
+def scale_quantity(sz: dict, size_mult: float, price: float, theta: float = THETA) -> dict:
+    """Apply a size multiplier (0 < m <= 1) to the guidance quantity, rounding DOWN to whole contracts.
+    Used for single-book sports fairs (GRASSHOPPER 10-18: half of guidance). Never scales up."""
+    m = float(size_mult)
+    if not (0.0 < m <= 1.0):
+        raise Refusal("input", f"size_mult {size_mult} must be in (0, 1]")
+    if m == 1.0:
+        return sz
+    full = int(sz["quantity"])
+    qty = int((Decimal(full) * Decimal(str(m))).to_integral_value(rounding=ROUND_FLOOR))
+    px = Decimal(str(price))
+    return {**sz, "quantity_full_guidance": full, "size_mult": m, "quantity": qty, "notional": float(px * qty),
+            "est_fee_total": round(fee_per_contract(price, theta) * qty, 4)}
+
+
 def check_quantity(q: dict) -> None:
     if q["quantity"] < 1:
+        if q.get("size_mult") is not None:
+            raise Refusal("sizing", f"size_mult {q['size_mult']}: guidance quantity {q.get('quantity_full_guidance')} "
+                                    f"-> {q['quantity']} < 1 (pass)", sizing=q)
         raise Refusal("sizing", f"quantity {q['quantity']} < 1", sizing=q)
 
 
@@ -399,7 +417,8 @@ def upsert_position(rpc, market_id: str, outcome: str, thesis_id: str, invalidat
 def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id: str | None,
           my_probability: float, fair_source: str = "", rationale: str = "", kill_criteria: str = "",
           order_type: str = "maker_gtc", dry_run: bool = True, theta: float = THETA,
-          client=None, rpc=None, invalidation: float | None = None, invalidation_note: str = "") -> dict:
+          client=None, rpc=None, invalidation: float | None = None, invalidation_note: str = "",
+          size_mult: float = 1.0, tags=None) -> dict:
     """Run the full entry pipeline. Returns a JSON-able summary dict with decision in
     {DRY_RUN_OK, PLACED, REFUSED, ERROR}. dry_run defaults to True when called as a function."""
     started = datetime.now(timezone.utc)
@@ -408,7 +427,8 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
                           "thesis_id": thesis_id, "my_probability": my_probability, "fair_source": fair_source,
                           "rationale": rationale, "kill_criteria": kill_criteria, "order_type": order_type,
                           "theta": theta, "invalidation": invalidation,
-                          "invalidation_note": invalidation_note}}
+                          "invalidation_note": invalidation_note, "size_mult": size_mult,
+                          "tags": list(tags or [])}}
     try:
         # ---- 1. input gates (no network)
         if not thesis_id or not str(thesis_id).strip():
@@ -485,6 +505,7 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         summary["guidance"] = g
         check_guidance(g)
         sz = compute_quantity(g["sized_notional"], g.get("spendable_cash"), price, theta)
+        sz = scale_quantity(sz, size_mult, price, theta)  # single-book sports fair: x0.5, floored
         summary["sizing"] = {**sz, "sized_notional": g["sized_notional"],
                              "spendable_cash": g.get("spendable_cash"),
                              "max_stake": g.get("max_stake"), "max_stake_reason": g.get("max_stake_reason"),
@@ -538,7 +559,8 @@ def enter(slug: str, outcome: str, price: float, requested_usd: float, thesis_id
         gate_results = {"guidance": g, "edge": edge, "sizing": sz, "preview_state": po.get("state"),
                         "fair_source": fair_source, "order_type": order_type, "warnings": warnings,
                         "gated_at": started.isoformat(), "writer": "pm_enter",
-                        "invalidation_price": invalidation, "invalidation_note": invalidation_note}
+                        "invalidation_price": invalidation, "invalidation_note": invalidation_note,
+                        "tags": list(tags or []), "size_mult": size_mult}
         summary["warnings"] = warnings
         summary["would_place"] = {
             "desc": f"BUY {qty} {outcome.upper()} ({summary['market']['buying']}) @ {price} on {slug} "
@@ -658,11 +680,15 @@ def main(argv=None) -> int:
     ap.add_argument("--invalidation", type=float, default=None,
                     help="REQUIRED: outcome price at which the entry is wrong (0 < inval < price)")
     ap.add_argument("--invalidation-note", default="", help="what would make this entry wrong")
+    ap.add_argument("--size-mult", type=float, default=1.0,
+                    help="multiply the guidance quantity (0 < m <= 1, floored); e.g. 0.5 for single-book sports fairs")
+    ap.add_argument("--tag", action="append", default=[], help="label stored in gate_results.tags (e.g. single_book)")
     ap.add_argument("--dry-run", action="store_true", help="preview only: no create, no pm_orders write")
     a = ap.parse_args(argv)
     res = enter(a.slug, a.outcome, a.price, a.usd, a.thesis, a.my_probability, a.fair_source, a.rationale,
                 a.kill_criteria, a.order_type, dry_run=a.dry_run, theta=a.theta,
-                invalidation=a.invalidation, invalidation_note=a.invalidation_note)
+                invalidation=a.invalidation, invalidation_note=a.invalidation_note,
+                size_mult=a.size_mult, tags=a.tag)
     print(json.dumps(jsonable(res), indent=1))
     return {"DRY_RUN_OK": 0, "PLACED": 0, "REFUSED": 2}.get(res.get("decision"), 1)
 

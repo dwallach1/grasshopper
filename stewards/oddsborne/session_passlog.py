@@ -3,7 +3,7 @@ via steward_rpc.log_decision.
 Usage: session_passlog.py [--session am|pm] [--date YYYY-MM-DD] [--extra-market SLUG ...] [--existing SLUG:SIDE ...] [--log]
   --date defaults to ODDS_DATE or today in America/New_York; --session defaults to am.
   --extra-market: markets the sweep missed, probed directly. --existing: held/resting sides that are not passes
-  (verify them live first). Gate-clearing sides that were not entered are logged as passes with an explicit reason. Never invents prices: a side with no live BBO or no Bovada fair is not logged."""
+  (verify them live first). Gate-clearing sides that were not entered are logged as passes with an explicit reason. Never invents prices: a side with no live BBO or no fair from any enabled book (lines.py) is not logged."""
 import argparse, json, os, sys, time, importlib.util
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -50,19 +50,13 @@ for cp in prev["comps"]:
         markets.append(cp["market"])
 markets += [m for m in ARGS.extra_market if m not in markets]  # missed by sweep (no p2 event match), probed directly
 
-# fresh Bovada
-urls = {"mlb": "https://www.bovada.lv/services/sports/event/v2/events/A/description/baseball?marketFilterId=def&preMatchOnly=true&lang=en",
-        "nfl": "https://www.bovada.lv/services/sports/event/v2/events/A/description/football/nfl?marketFilterId=def&preMatchOnly=true&lang=en"}
-games = []
-for k, u in urls.items():
-    p = OUT / f"session_raw_{SESSION}_bovada_{k}_relog.json"
-    raw = aft.http_get(u)
-    if raw.strip() in (b"", b"{}", b"[]"):
-        time.sleep(1.0); raw = aft.http_get(u.split("?")[0] + "?lang=en")  # same fallback as daily
-    if raw.strip() in (b"", b"{}", b"[]"):
-        time.sleep(2.0); raw = aft.http_get(u)
-    p.write_bytes(raw)
-    games += S.parse_bovada_ts(p)
+# fresh lines from every ENABLED book (lines.py: Bovada always; The Odds API with ODDS_API_KEY; Pinnacle / ESPN only
+# behind ODDS_ENABLE_PINNACLE / ODDS_ENABLE_ESPN), same multi-book fair as the session
+LINES = S.LINES
+_blockers = []
+games = LINES.group_games(LINES.fetch_all(OUT, f"{SESSION}_relog", ARGS.date, _blockers))
+if _blockers:
+    print("line_blockers", _blockers, flush=True)
 
 sec = load_secrets()
 c = PolymarketUS(key_id=sec["POLYMARKET_US_KEY_ID"], secret_key=sec["POLYMARKET_US_SECRET_KEY"], timeout=45.0)
@@ -76,34 +70,18 @@ for ms in markets:
         nm = (sd.get("team") or {}).get("name") or sd.get("description")
         if sd.get("long"): lt = nm
         else: st = nm
-    g = None
-    for gg in games:
-        if gg["live"] or gg["start"] is None or gst is None: continue
-        if abs((gg["start"] - gst).total_seconds()) <= 3 * 3600 and lt in gg["ml"] and st in gg["ml"]:
-            g = gg; break
+    ffm = LINES.fair_for_market(games, lt, st, gst)  # per-book date guard (±3h), stale + live dropped
     if gst is not None and gst <= datetime.now(timezone.utc):
         rows.append({"market": ms, "error": f"game already started (gst={gst}); not a pass"}); continue
     raw, sb, tries = H.bbo_with_retry(c, ms, tries=4); time.sleep(0.4)
     bid, ask, spr = sb.get("bid"), sb.get("ask"), sb.get("spr")
-    if g is None or bid is None or ask is None:
-        rows.append({"market": ms, "error": f"no date-matched bovada or bbo (gst={gst}, long={lt}, bbo={bid}/{ask})"}); continue
-    fm = aft.devig(g["ml"])
-    dm = (S.MF.devig_methods(g["ml"]) or {}).get(lt)
-    if not dm:
+    if ffm["combo"] is None or bid is None or ask is None:
+        rows.append({"market": ms, "error": f"no date-matched line from any enabled book or bbo (gst={gst}, long={lt}, bbo={bid}/{ask}, "
+                                            f"rejected={[(x['book'], x['reason']) for x in ffm['rejected']]})"}); continue
+    if not ffm["yes_team"]:
         rows.append({"market": ms, "error": f"no two-way de-vig for {lt}"}); continue
-    am = {k: v["american"] for k, v in g["ml"].items()}
-    for side in ("yes", "no"):
-        cf = S.MF.conservative_fair(side, dm["power"], dm["shin"], dm["prop"])
-        fair = cf["used"]  # 10-12: gate on conservative min(prop, power, Shin)
-        team = lt if side == "yes" else st
-        mk = bid if side == "yes" else round(1 - ask, 4)
-        tk = ask if side == "yes" else round(1 - bid, 4)
-        em_raw, et = S.post_fee_maker(fair, mk), S.post_fee(fair, tk)  # maker: +rebate; taker: -THETA fee
-        em = S.post_fee_maker_gate(fair, mk)  # gate = raw - adverse-selection haircut; MIN_EDGE applies here
-        rows.append({"market": ms, "side": side, "team": team, "fair": round(fair, 4), "fair_prop": cf["prop"], "fair_power": cf["power"], "fair_shin": cf["shin"], "fair_used": cf["used"], "fair_method": cf["method"], "maker": mk, "taker": tk,
-                     "yes_bbo": f"{bid}/{ask}", "spr": spr, "pf_maker": em, "pf_maker_raw": em_raw, "maker_haircut": S.MAKER_HAIRCUT, "pf_taker": et, "bovada": am,
-                     "bovada_start": g["start"].isoformat(), "gameStartTime": m.get("gameStartTime"),
-                     "cand": em is not None and em >= S.MIN_EDGE and (spr or 1) <= 0.04})
+    rows += LINES.side_rows(ms, ffm, bid, ask, spr, m.get("gameStartTime"), S.post_fee_maker, S.post_fee_maker_gate,
+                            S.post_fee, S.MIN_EDGE, S.MAKER_HAIRCUT)
 for r in rows:
     print(json.dumps(r, default=str), flush=True)
 cands = [r for r in rows if r.get("cand")]
@@ -151,12 +129,17 @@ def pass_reason(r):
 def blocked_by_for(r):
     """Stable gate key. The ledger stores this as meta.blocked_by."""
     if not r.get("cand"):
+        if r.get("book_tag") == "single_book" and r.get("pf_maker") is not None and r["pf_maker"] >= S.MIN_EDGE \
+                and (r.get("spr") or 1) <= 0.04:
+            return "single_book_gate"  # cleared the normal 1c bar, not the single-book bar
         return "edge_below_gate"
     why = pass_reason(r) or ""
     if why == "same_game":
         return "same_game"
     if why.startswith("guidance_cap"):
         return "guidance_cap"
+    if why.startswith("single_book_size_zero"):
+        return "single_book_size_zero"
     if why.startswith("not_live"):
         return "not_live"
     if why.startswith("not_placed"):
@@ -175,16 +158,18 @@ if LOG:
         sid = f"session_{SESSION}:{r['market']}:{r['side']}"
         reason = (f"{SESSION} pass: fair {r['fair']} [{r['fair_method']}; prop {r['fair_prop']} power {r['fair_power']} shin {r['fair_shin']}] ({r['team']}) maker@{r['maker']} taker@{r['taker']}; "
                   f"post-fee maker raw {r['pf_maker_raw']} (rebate {S.MAKER_REBATE}) gate {r['pf_maker']} "
-                  f"(haircut {r['maker_haircut']}) taker {r['pf_taker']} (bar 0.01 on gate); Bovada {r['bovada']} "
-                  f"start {r['bovada_start']} = gameStartTime {r['gameStartTime']}"
+                  f"(haircut {r['maker_haircut']}) taker {r['pf_taker']} (bar {r['gate_bar']} on gate, {r['book_tag']}); books {'+'.join(r['books'])} {r['americans_by_book']} "
+                  f"start {r['line_start']} = gameStartTime {r['gameStartTime']}"
                   + (f"; CLEARED gate but not entered: {pass_reason(r)}" if r.get("cand") else ""))
         try:
             res = steward_rpc.log_decision("oddsborne", decision="skip", instrument=r["market"], side=r["side"],
                                            price=r["maker"], probability=r["fair"], thesis_id="sports_devig_maker_edge",
-                                           reason=reason, source_id=sid, blocked_by=blocked_by_for(r))
+                                           reason=reason, source_id=sid, blocked_by=blocked_by_for(r),
+                                           meta=LINES.decision_meta(r))
         except Exception as e:
             res = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
         logged.append({"m": r["market"], "side": r["side"], "price": r["maker"], "p": r["fair"],
+                       "books": r.get("books"), "book_tag": r.get("book_tag"),
                        "gameStartTime": r["gameStartTime"], "source_id": sid, "r": res})
         print("LOGGED", r["market"], r["side"], json.dumps(res, default=str), flush=True)
         time.sleep(0.2)
