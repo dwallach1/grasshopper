@@ -5,15 +5,20 @@ Why: Bovada was the only line source, so a game was unscoreable until Bovada hun
 more books and combines them. Every source is a public read; a source that fails or has no line for a game
 simply contributes nothing (never a fabricated price).
 
-Sources (book name -> how it is fetched):
-  bovada       Bovada coupon JSON (public; unchanged URLs).
-  pinnacle     Pinnacle guest "arcadia" JSON (public, no key, no sign-in):
+Sources (book name -> how it is fetched). Default config (no key, no flags) = Bovada only, i.e. today's pricing.
+  bovada       Bovada coupon JSON (public; unchanged URLs). Always on.
+  oddsapi:*    The Odds API v4, ON automatically when ODDS_API_KEY is set (licensed API). Each bookmaker it returns
+               is its own book (pinnacle, draftkings, fanduel, ...), deduped against the direct feeds.
+  pinnacle     OFF unless ODDS_ENABLE_PINNACLE=1. Pinnacle guest "arcadia" JSON (public, undocumented; the site's
+               terms restrict automated use, so GRASSHOPPER ruled it opt-in):
                guest.api.arcadia.pinnacle.com/0.1/leagues/<id>/matchups + /markets/straight.
-  draftkings   DraftKings moneylines as republished on ESPN's public scoreboard JSON (no key):
-               site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard?dates=YYYYMMDD (one call per day).
-               The ESPN provider name becomes the book name (normally "draftkings").
-  oddsapi:*    Optional: The Odds API v4 (needs ODDS_API_KEY; skipped when unset). Each bookmaker it returns is
-               its own book (pinnacle, draftkings, fanduel, ...), deduped against the direct feeds above.
+  draftkings   OFF unless ODDS_ENABLE_ESPN=1. DraftKings moneylines as republished on ESPN's public scoreboard JSON
+               (undocumented; same terms caveat): site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard.
+
+Entry policy (GRASSHOPPER 10-18): a side whose fair comes from exactly ONE book (Bovada alone included) is tagged
+`single_book`, needs SINGLE_BOOK_MIN_EDGE_C (2.0c) of gate edge instead of the normal 1c, and is sized at
+SINGLE_BOOK_SIZE_MULT (0.5) x the steward_sizing_guidance quantity, floored; 0 contracts -> pass. Two or more books
+-> `multi_book`, normal bar and full size. See entry_policy().
 
 Fair value (per market, after the per-book date guard):
   1. De-vig each book separately with maker_fee.devig_methods (prop / power / Shin).
@@ -48,6 +53,8 @@ DEFAULT_WEIGHT = 1.0
 DISAGREE_PP = 0.03            # books' proportional fairs differ by > 3pp -> use the most conservative book
 DATE_TOL_S = 3 * 3600         # 10-05 lesson: a book's start must be within 3h of the venue gameStartTime
 MAX_AGE_MIN = float(os.environ.get("ODDS_LINE_MAX_AGE_MIN") or 30)
+SINGLE_BOOK_MIN_EDGE_C = float(os.environ.get("SINGLE_BOOK_MIN_EDGE_C") or 2.0)  # cents of GATE edge
+SINGLE_BOOK_SIZE_MULT = float(os.environ.get("SINGLE_BOOK_SIZE_MULT") or 0.5)   # x guidance quantity, floored
 BOOK_ORDER = ("bovada", "pinnacle", "draftkings")  # canonical team names come from the first book listed
 
 PINNACLE_LEAGUES = {"mlb": 246, "nfl": 889}
@@ -60,6 +67,30 @@ BOVADA_URLS = {
     "nfl": "https://www.bovada.lv/services/sports/event/v2/events/A/description/football/nfl?marketFilterId=def&preMatchOnly=true&lang=en",
 }
 STOP = ("city", "york", "los", "angeles", "san", "bay", "new")
+
+
+def enabled_sources(env=None) -> dict:
+    """Which sources run. Read at call time so tests and sessions can flip env without re-import."""
+    env = os.environ if env is None else env
+    return {"bovada": True,
+            "oddsapi": bool((env.get("ODDS_API_KEY") or "").strip()),
+            "pinnacle": env.get("ODDS_ENABLE_PINNACLE") == "1",
+            "espn": env.get("ODDS_ENABLE_ESPN") == "1"}
+
+
+def entry_policy(books, gate_edge, base_min_edge: float, single_min_edge_c: float | None = None,
+                 single_size_mult: float | None = None) -> dict:
+    """Gate bar and size multiplier for one side. books = the books that fed its fair.
+    single_book (exactly one book): bar = SINGLE_BOOK_MIN_EDGE_C/100, size_mult = SINGLE_BOOK_SIZE_MULT.
+    multi_book (2+): bar = base_min_edge (1c), size_mult = 1.0. clears = gate_edge >= bar."""
+    n = len(set(book_key(b) for b in (books or [])))
+    single = n == 1
+    c = SINGLE_BOOK_MIN_EDGE_C if single_min_edge_c is None else single_min_edge_c
+    m = SINGLE_BOOK_SIZE_MULT if single_size_mult is None else single_size_mult
+    bar = round(max(base_min_edge, c / 100.0), 6) if single else base_min_edge
+    return {"book_tag": "single_book" if single else ("multi_book" if n > 1 else "no_book"), "n_books": n,
+            "gate_bar": bar, "size_mult": m if single else 1.0,
+            "clears": n > 0 and gate_edge is not None and gate_edge >= bar - 1e-12}
 
 
 def weight(book: str) -> float:
@@ -98,7 +129,7 @@ def _ml(pairs):
         a = _american(am)
         p = MF.am_to_implied(a) if a else None
         if name and p is not None and 0 < p < 1:
-            out[name] = {"american": a, "p": round(p, 6)}
+            out[name] = {"american": a, "p": round(p, 4)}  # 4dp = aft.am_to_p (old Bovada parser), so Bovada-only fairs match exactly
     return out if len(out) == 2 else {}
 
 
@@ -265,12 +296,14 @@ def fetch_all(out_dir: Path, session: str, today: str, blockers: list, get=http_
         except Exception:
             return None
 
+    on = enabled_sources()
+    log("line_sources_enabled", json.dumps(on, sort_keys=True), flush=True)
     for sport in sports:
         p = out_dir / f"session_raw_{session}_bovada_{sport}.json"
         raw = grab(p, BOVADA_URLS[sport], empty_retry=BOVADA_URLS[sport].split("?")[0] + "?lang=en")
         if raw is not None:
             quotes += parse_bovada(raw, sport, _mtime(p))
-        if sport in PINNACLE_LEAGUES:
+        if on["pinnacle"] and sport in PINNACLE_LEAGUES:
             lg = PINNACLE_LEAGUES[sport]
             pm = out_dir / f"session_raw_{session}_pinnacle_{sport}_matchups.json"
             ps = out_dir / f"session_raw_{session}_pinnacle_{sport}_straight.json"
@@ -280,15 +313,15 @@ def fetch_all(out_dir: Path, session: str, today: str, blockers: list, get=http_
             if mu is not None and st is not None:
                 quotes += parse_pinnacle(mu, st, sport, min(_mtime(pm), _mtime(ps)))
         d0 = datetime.fromisoformat(today).date()
-        for i in range(ESPN_DAYS):
+        for i in range(ESPN_DAYS if on["espn"] else 0):
             day = (d0 + timedelta(days=i)).strftime("%Y%m%d")
             pe = out_dir / f"session_raw_{session}_espn_{sport}_{day}.json"
             sb = grab(pe, f"https://site.api.espn.com/apis/site/v2/sports/{ESPN_PATHS[sport]}/scoreboard?dates={day}")
             if sb is not None:
                 quotes += parse_espn(sb, sport, _mtime(pe))
             sleep(0.2)
-        key = os.environ.get("ODDS_API_KEY")
-        if key:
+        key = (os.environ.get("ODDS_API_KEY") or "").strip()
+        if on["oddsapi"] and key:
             po = out_dir / f"session_raw_{session}_oddsapi_{sport}.json"
             url = (f"https://api.the-odds-api.com/v4/sports/{ODDS_API_SPORTS[sport]}/odds?apiKey={key}"
                    f"&regions=us,eu&markets=h2h&oddsFormat=american")
@@ -415,3 +448,62 @@ def book_meta(combo):
                    "as_of": q["as_of"].isoformat() if q.get("as_of") else None,
                    "weight": weight(b), "devig": v["dm"]}
     return rows
+
+
+def fair_for_market(games, long_team, short_team, gst, now=None, max_age_min=None):
+    """Venue market (long/short team names, gameStartTime) -> multi-book fair, used by session_passlog.py.
+    Returns {"combo", "yes_team", "no_team", "rejected", "elig"}; combo is None when zero books pass the
+    per-book date/stale/live guard (no fair, no pass logged)."""
+    want = {team_token(long_team or ""), team_token(short_team or "")}
+    rejected = []
+    for g in games or []:
+        if set(g["tokens"]) != want:
+            continue
+        elig, rej = eligible_quotes(g, gst, now=now, max_age_min=max_age_min)
+        rejected += rej
+        combo = combine(g, elig) if elig else None
+        if combo is None:
+            continue
+        by_tok = {team_token(t): t for t in combo["teams"]}
+        return {"combo": combo, "yes_team": by_tok.get(team_token(long_team)), "no_team": by_tok.get(team_token(short_team)),
+                "rejected": rejected, "elig": elig}
+    return {"combo": None, "yes_team": None, "no_team": None, "rejected": rejected, "elig": []}
+
+
+def side_rows(market, ffm, bid, ask, spr, game_start, pf_maker_raw, pf_maker_gate, pf_taker, min_edge, haircut):
+    """session_passlog.py rows (yes + no) for one market from fair_for_market(); [] if no fair.
+    pf_* are the session fee functions (fair, price) -> edge. cand uses entry_policy (single_book bar)."""
+    combo = (ffm or {}).get("combo")
+    if not combo or not ffm.get("yes_team") or bid is None or ask is None:
+        return []
+    prim = ffm["elig"][0]
+    bov = next((q for q in ffm["elig"] if q["book"] == "bovada"), None)
+    rows = []
+    for side in ("yes", "no"):
+        cf = side_fair(combo, ffm["yes_team"], side)
+        fair = cf["used"]
+        mk = bid if side == "yes" else round(1 - ask, 4)
+        tk = ask if side == "yes" else round(1 - bid, 4)
+        em_raw, em, et = pf_maker_raw(fair, mk), pf_maker_gate(fair, mk), pf_taker(fair, tk)
+        pol = entry_policy(combo["books"], em, min_edge)
+        rows.append({"market": market, "side": side, "team": ffm["yes_team"] if side == "yes" else ffm["no_team"],
+                     "fair": round(fair, 4), "fair_prop": cf["prop"], "fair_power": cf["power"], "fair_shin": cf["shin"],
+                     "fair_used": cf["used"], "fair_method": cf["method"], "maker": mk, "taker": tk,
+                     "yes_bbo": f"{bid}/{ask}", "spr": spr, "pf_maker": em, "pf_maker_raw": em_raw, "maker_haircut": haircut,
+                     "pf_taker": et, "books": combo["books"], "book_weights": combo["weights"],
+                     "fair_by_book": cf["per_book_used"], "line_disagree_pp": combo["disagree_pp"],
+                     "line_disagreement": combo["disagreement"], "book_tag": pol["book_tag"], "gate_bar": pol["gate_bar"],
+                     "size_mult": pol["size_mult"],
+                     "bovada": {k: v["american"] for k, v in bov["ml"].items()} if bov else None,
+                     "bovada_start": bov["start"].isoformat() if bov and bov.get("start") else None,
+                     "americans_by_book": {b: v["americans"] for b, v in book_meta(combo).items()},
+                     "line_start": prim["start"].isoformat() if prim.get("start") else None,
+                     "gameStartTime": game_start,
+                     "cand": pol["clears"] and (spr or 1) <= 0.04})
+    return rows
+
+
+def decision_meta(r):
+    """meta stored with a logged pass so single_book vs multi_book can be scored separately."""
+    return {k: r.get(k) for k in ("books", "book_tag", "book_weights", "fair_by_book", "line_disagree_pp",
+                                  "line_disagreement", "gate_bar", "size_mult", "americans_by_book", "line_start")}

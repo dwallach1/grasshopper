@@ -533,6 +533,8 @@ def try_enter(pick, cash):
     if not (0 < inval < px):
         inval = round(px * 0.5, 4)
     usd = REQUESTED_USD
+    tag = pick.get("book_tag") or "single_book"  # comps rows always carry it; default to the stricter policy
+    size_mult = float(pick.get("size_mult") or (LINES.SINGLE_BOOK_SIZE_MULT if tag == "single_book" else 1.0))
     kill_txt = (
         f"Maker BUY {pick.get('matched')} {outcome.upper()} @{px} vs {'+'.join(pick.get('books') or ['bovada'])} fair~{fair} "
         f"(post-fee maker {pick.get('post_fee_maker')}). KILL: print <= {inval}; "
@@ -546,10 +548,11 @@ def try_enter(pick, cash):
         "/workspace/oddsborne/.venv/bin/python", "/workspace/oddsborne/pm_enter.py",
         "--slug", pick["market"], "--outcome", outcome, "--price", f"{px:.4f}",
         "--usd", str(usd), "--thesis", THESIS_SPORTS, "--p", f"{fair:.4f}",
-        "--fair-source", f"{'+'.join(pick.get('books') or ['bovada'])} (weights {pick.get('book_weights')}) conservative min(prop,power,Shin) de-vig ML {pick.get('line_desc') or pick.get('bovada')} {pick.get('americans')} start {pick.get('line_start') or pick.get('bovada_start')}",
+        "--fair-source", f"{'+'.join(pick.get('books') or ['bovada'])} (weights {pick.get('book_weights')}) conservative min(prop,power,Shin) de-vig ML {pick.get('line_desc') or pick.get('bovada')} {pick.get('americans')} start {pick.get('line_start') or pick.get('bovada_start')} [{tag}; gate bar {pick.get('gate_bar')}; size x{size_mult}]",
         "--rationale", f"ODDSBORNE {SESSION}: post-fee maker {pick.get('post_fee_maker')} > 0 vs {'+'.join(pick.get('books') or ['bovada'])} (date-checked vs gameStartTime {pick.get('gameStartTime')})",
         "--kill", kill_txt, "--order-type", "maker_gtc",
-        "--invalidation", f"{inval:.4f}", "--invalidation-note", inval_note, "--dry-run",
+        "--invalidation", f"{inval:.4f}", "--invalidation-note", inval_note,
+        "--size-mult", f"{size_mult:g}", "--tag", tag, "--dry-run",
     ]
     print("DRY", " ".join(cmd), flush=True)
     dry = subprocess.run(cmd, capture_output=True, text=True, cwd="/workspace/oddsborne")
@@ -574,7 +577,7 @@ def try_enter(pick, cash):
         except Exception:
             live_j = {"raw": (live.stdout or "")[:3000], "rc": live.returncode}
     return {"pick": pick, "px": px, "fair": fair, "invalidation": inval, "usd": usd, "outcome": outcome,
-            "dry": dry_j, "live": live_j, "cmd": cmd}
+            "book_tag": tag, "size_mult": size_mult, "dry": dry_j, "live": live_j, "cmd": cmd}
 
 
 def main():
@@ -851,6 +854,8 @@ def main():
                         et = post_fee(f_side, tk_px) if tk_px is not None else None
                         decision, why = "SKIP", ""
                         books_txt = "+".join(combo["books"])
+                        # GRASSHOPPER 10-18: one book -> single_book: 2c gate bar and half guidance size
+                        pol = LINES.entry_policy(combo["books"], em, MIN_EDGE)
                         if ms in covered_slugs:
                             decision = "COVERED"
                             why = f"already held; fair {f_side} vs maker {mk_px}; post-fee maker raw {em_raw} gate {em}"
@@ -861,10 +866,14 @@ def main():
                             why = f"missing fair/bbo fair={f_side} {bid}/{ask} ({how})"
                         elif spr is not None and spr > 0.04:
                             why = f"spread {spr} wide; post-fee maker raw {em_raw} gate {em}"
-                        elif em is not None and em >= MIN_EDGE:
+                        elif pol["clears"]:
                             decision = "CANDIDATE"
-                            why = (f"post-fee maker gate {em} (raw {em_raw} - haircut {MAKER_HAIRCUT}) fair {f_side} "
+                            why = (f"post-fee maker gate {em} (raw {em_raw} - haircut {MAKER_HAIRCUT}) >= bar {pol['gate_bar']} "
+                                   f"[{pol['book_tag']}, size x{pol['size_mult']}] fair {f_side} "
                                    f"({team}/{how}; {books_txt}) maker@{mk_px} (yes BBO {bid}/{ask})")
+                        elif em is not None and em >= MIN_EDGE:
+                            why = (f"single_book gate: post-fee maker gate {em} < single-book bar {pol['gate_bar']} "
+                                   f"(normal bar {MIN_EDGE}); fair {f_side} ({team}/{how}; {books_txt}) maker@{mk_px}")
                         else:
                             why = (f"fair {f_side} ({team}/{how}; {books_txt}) maker@{mk_px} taker@{tk_px}; post-fee maker raw {em_raw} "
                                    f"gate {em} (haircut {MAKER_HAIRCUT}, bar {MIN_EDGE}) taker {et}")
@@ -875,6 +884,7 @@ def main():
                             "fair_shin": (_cf or {}).get("shin"), "fair_used": (_cf or {}).get("used"),
                             "fair_method": (_cf or {}).get("method"),
                             "books": combo["books"], "book_weights": combo["weights"],
+                            "book_tag": pol["book_tag"], "gate_bar": pol["gate_bar"], "size_mult": pol["size_mult"],
                             "fair_by_book": (_cf or {}).get("per_book_used"),
                             "line_disagree_pp": combo["disagree_pp"], "line_disagreement": combo["disagreement"],
                             "line_stale": [r["book"] for r in stale], "book_lines": bmeta,
@@ -1037,6 +1047,13 @@ def main():
             se = try_enter(pick, cash)
             sports_enters.append(se)
             sports_enter = se  # last/primary for backward compat
+            _j = se.get("live") or se.get("dry")
+            _ref = (_j.get("refused") or {}) if isinstance(_j, dict) else {}
+            if _ref.get("gate") == "sizing" and "size_mult" in str(_ref.get("reason")):
+                print("SINGLE_BOOK_SIZE_ZERO", pick["market"], pick.get("outcome"), _ref.get("reason"), flush=True)
+                not_entered.append({"market": pick["market"], "outcome": pick.get("outcome") or "yes",
+                                    "reason": f"single_book_size_zero ({str(_ref.get('reason'))[:120]})",
+                                    "book_tag": pick.get("book_tag"), "books": pick.get("books")})
             live = se.get("live") or {}
             if live.get("decision") == "PLACED":
                 covered_slugs.add(pick["market"])

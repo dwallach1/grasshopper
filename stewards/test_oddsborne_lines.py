@@ -1,4 +1,4 @@
-"""ODDSBORNE multi-book line sources (lines.py): parsers on mocked responses, per-book date guard, single-book
+"""ODDSBORNE multi-book line sources (lines.py) + GRASSHOPPER 10-18 rulings (opt-in sources, single_book policy, passlog): parsers on mocked responses, per-book date guard, single-book
 fallback, zero-book, staleness, disagreement and weighting. No network: fetch_all gets a fake http getter."""
 from __future__ import annotations
 
@@ -55,6 +55,26 @@ def espn(away="Tampa Bay Rays", home="Cleveland Guardians", a="-132", h="+110", 
                                                                   "away": {"close": {"odds": a}}}}]}]}]}
 
 
+ENV_KEYS = ("ODDS_API_KEY", "ODDS_ENABLE_PINNACLE", "ODDS_ENABLE_ESPN")
+
+
+class EnvPatch:
+    """Set exactly these source env vars (others in ENV_KEYS cleared) for the block."""
+    def __init__(self, **kw):
+        self.kw = kw
+
+    def __enter__(self):
+        self.old = {k: os.environ.pop(k, None) for k in ENV_KEYS}
+        os.environ.update(self.kw)
+        return self
+
+    def __exit__(self, *a):
+        for k in ENV_KEYS:
+            os.environ.pop(k, None)
+            if self.old.get(k) is not None:
+                os.environ[k] = self.old[k]
+
+
 def game_of(quotes):
     gs = L.group_games(quotes)
     assert len(gs) == 1, gs
@@ -100,6 +120,12 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(L.weight(q[0]["book"]), 2.0)
         self.assertEqual(q[0]["as_of"], datetime(2026, 10, 18, 16, 20, tzinfo=timezone.utc))
 
+    def test_implied_p_rounded_like_old_bovada_parser(self):
+        """aft.am_to_p rounds to 4dp; matching it keeps Bovada-only fairs bit-identical to the old scorer."""
+        ml = L.parse_bovada(bovada_coupon(a="-128", h="+107"), "mlb", NOW)[0]["ml"]
+        self.assertEqual(ml["Tampa Bay Rays"]["p"], round(128 / 228, 4))
+        self.assertEqual(ml["Cleveland Guardians"]["p"], round(100 / 207, 4))
+
     def test_bad_prices_never_become_quotes(self):
         self.assertEqual(L._ml([("A", "OFF"), ("B", "-110")]), {})
         self.assertEqual(L._ml([("A", "+50"), ("B", "-110")]), {})
@@ -123,15 +149,10 @@ class FetchAllTests(unittest.TestCase):
                 return b'{"events": []}'
             raise OSError("boom")
 
-        with tempfile.TemporaryDirectory() as d:
-            old = os.environ.pop("ODDS_API_KEY", None)
-            try:
-                blockers = []
-                q = L.fetch_all(Path(d), "t", "2026-10-18", blockers, get=get, sleep=lambda s: None, sports=("mlb",),
-                                log=lambda *a, **k: None)
-            finally:
-                if old is not None:
-                    os.environ["ODDS_API_KEY"] = old
+        with tempfile.TemporaryDirectory() as d, EnvPatch(ODDS_ENABLE_PINNACLE="1", ODDS_ENABLE_ESPN="1"):
+            blockers = []
+            q = L.fetch_all(Path(d), "t", "2026-10-18", blockers, get=get, sleep=lambda s: None, sports=("mlb",),
+                            log=lambda *a, **k: None)
             self.assertEqual(sorted(x["book"] for x in q), ["bovada", "draftkings", "pinnacle"])
             self.assertEqual(blockers, [])
             g = game_of(q)
@@ -145,7 +166,7 @@ class FetchAllTests(unittest.TestCase):
             if "bovada" in url:
                 return json.dumps(bovada_coupon()).encode()
             return b'{"events": []}'
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory() as d, EnvPatch(ODDS_ENABLE_PINNACLE="1"):
             blockers = []
             q = L.fetch_all(Path(d), "t", "2026-10-18", blockers, get=get, sleep=lambda s: None, sports=("mlb",),
                             log=lambda *a, **k: None)
@@ -304,6 +325,205 @@ class SessionWiringTests(unittest.TestCase):
 
     def test_lines_synced_to_box(self):
         self.assertIn("oddsborne/lines.py:$box/oddsborne/deepdive_raw/lines.py", (HERE / "sync_box.sh").read_text())
+
+
+_pe_spec = importlib.util.spec_from_file_location("pm_enter_t", HERE / "oddsborne" / "pm_enter.py")
+PE = importlib.util.module_from_spec(_pe_spec)
+_pe_spec.loader.exec_module(PE)
+
+
+def _recording_get(responses):
+    calls = []
+
+    def get(url, headers=None):
+        calls.append(url)
+        for k, v in responses.items():
+            if k in url:
+                return v
+        return b'{"events": []}' if "scoreboard" in url else b"[]"
+    return get, calls
+
+
+class SourceFlagTests(unittest.TestCase):
+    """GRASSHOPPER 10-18: Pinnacle/ESPN opt-in; The Odds API on with a key; default = Bovada only."""
+
+    def run_fetch(self, **env):
+        mu, st = pinnacle()
+        ev = [{"home_team": "Cleveland Guardians", "away_team": "Tampa Bay Rays",
+               "commence_time": "2026-10-18T21:00:00Z", "bookmakers": [
+                   {"key": "fanduel", "markets": [{"key": "h2h", "last_update": datetime.now(timezone.utc).isoformat(),
+                                                   "outcomes": [{"name": "Cleveland Guardians", "price": 108},
+                                                                {"name": "Tampa Bay Rays", "price": -126}]}]}]}]
+        get, calls = _recording_get({"bovada.lv": json.dumps(bovada_coupon()).encode(),
+                                     "/matchups": json.dumps(mu).encode(),
+                                     "/markets/straight": json.dumps(st).encode(),
+                                     "scoreboard?dates=20261018": json.dumps(espn()).encode(),
+                                     "the-odds-api.com": json.dumps(ev).encode()})
+        with tempfile.TemporaryDirectory() as d, EnvPatch(**env):
+            q = L.fetch_all(Path(d), "t", "2026-10-18", [], get=get, sleep=lambda s: None, sports=("mlb",),
+                            log=lambda *a, **k: None)
+        return q, calls
+
+    def test_default_is_bovada_only(self):
+        q, calls = self.run_fetch()
+        self.assertTrue(calls and all("bovada.lv" in u for u in calls), calls)
+        self.assertEqual({x["book"] for x in q}, {"bovada"})
+        self.assertEqual(L.enabled_sources({}), {"bovada": True, "oddsapi": False, "pinnacle": False, "espn": False})
+
+    def test_default_fair_equals_old_bovada_fair(self):
+        q, _ = self.run_fetch()
+        g = game_of(q)
+        ok, _ = L.eligible_quotes(g, TODAY_START, now=datetime.now(timezone.utc))
+        combo = L.combine(g, ok)
+        dm = MF.devig_methods(q[0]["ml"])["Cleveland Guardians"]
+        for side in ("yes", "no"):
+            self.assertEqual(L.side_fair(combo, "Cleveland Guardians", side)["used"],
+                             MF.conservative_fair(side, dm["power"], dm["shin"], dm["prop"])["used"])
+
+    def test_key_turns_on_odds_api(self):
+        q, calls = self.run_fetch(ODDS_API_KEY="k123")
+        self.assertTrue(any("the-odds-api.com" in u and "apiKey=k123" in u for u in calls))
+        self.assertFalse(any("pinnacle" in u or "espn" in u for u in calls))
+        self.assertEqual({x["book"] for x in q}, {"bovada", "oddsapi:fanduel"})
+
+    def test_blank_key_stays_off(self):
+        _, calls = self.run_fetch(ODDS_API_KEY="  ")
+        self.assertFalse(any("the-odds-api.com" in u for u in calls))
+
+    def test_flags_enable_pinnacle_and_espn_separately(self):
+        q, calls = self.run_fetch(ODDS_ENABLE_PINNACLE="1")
+        self.assertEqual({x["book"] for x in q}, {"bovada", "pinnacle"})
+        self.assertFalse(any("espn" in u for u in calls))
+        q, calls = self.run_fetch(ODDS_ENABLE_ESPN="1")
+        self.assertEqual({x["book"] for x in q}, {"bovada", "draftkings"})
+        self.assertFalse(any("pinnacle" in u for u in calls))
+        q, _ = self.run_fetch(ODDS_ENABLE_PINNACLE="0", ODDS_ENABLE_ESPN="true")  # only "1" enables
+        self.assertEqual({x["book"] for x in q}, {"bovada"})
+
+
+class SingleBookPolicyTests(unittest.TestCase):
+    """GRASSHOPPER 10-18: one book -> 2c gate bar and half guidance size (floored; 0 -> pass)."""
+
+    def test_single_book_1_5c_is_a_pass(self):
+        pol = L.entry_policy(["bovada"], 0.015, 0.01)
+        self.assertEqual(pol["book_tag"], "single_book")
+        self.assertEqual(pol["gate_bar"], 0.02)
+        self.assertFalse(pol["clears"])
+
+    def test_single_book_2_1c_enters_at_half_size(self):
+        pol = L.entry_policy(["draftkings"], 0.021, 0.01)
+        self.assertTrue(pol["clears"])
+        self.assertEqual(pol["size_mult"], 0.5)
+        full = PE.compute_quantity(5.0, 100.0, 0.30)  # guidance $5 @ 0.30 -> 16
+        half = PE.scale_quantity(full, pol["size_mult"], 0.30)
+        self.assertEqual(full["quantity"], 16)
+        self.assertEqual(half["quantity"], 8)
+        self.assertEqual(half["quantity_full_guidance"], 16)
+        PE.check_quantity(half)  # does not refuse
+
+    def test_half_size_rounds_down(self):
+        full = PE.compute_quantity(5.0, 100.0, 0.29)  # 17 contracts
+        self.assertEqual(PE.scale_quantity(full, 0.5, 0.29)["quantity"], 8)
+
+    def test_half_size_zero_is_a_pass(self):
+        full = PE.compute_quantity(0.5, 100.0, 0.40)  # 1 contract
+        half = PE.scale_quantity(full, 0.5, 0.40)
+        self.assertEqual(half["quantity"], 0)
+        with self.assertRaises(PE.Refusal) as cm:
+            PE.check_quantity(half)
+        self.assertEqual(cm.exception.gate, "sizing")
+        self.assertIn("size_mult", cm.exception.reason)
+
+    def test_multi_book_normal_bar_full_size(self):
+        pol = L.entry_policy(["bovada", "pinnacle"], 0.011, 0.01)
+        self.assertEqual((pol["book_tag"], pol["gate_bar"], pol["size_mult"], pol["clears"]), ("multi_book", 0.01, 1.0, True))
+        full = PE.compute_quantity(5.0, 100.0, 0.30)
+        self.assertIs(PE.scale_quantity(full, pol["size_mult"], 0.30), full)
+
+    def test_same_book_twice_is_still_single(self):
+        self.assertEqual(L.entry_policy(["pinnacle", "oddsapi:pinnacle"], 0.03, 0.01)["book_tag"], "single_book")
+
+    def test_zero_books_never_clear(self):
+        self.assertFalse(L.entry_policy([], 0.5, 0.01)["clears"])
+
+    def test_size_mult_bounds(self):
+        full = PE.compute_quantity(5.0, 100.0, 0.30)
+        for bad in (0, 1.5, -1):
+            with self.assertRaises(PE.Refusal):
+                PE.scale_quantity(full, bad, 0.30)
+
+    def test_thresholds_are_env_configurable(self):
+        src = (HERE / "oddsborne" / "lines.py").read_text()
+        self.assertIn('os.environ.get("SINGLE_BOOK_MIN_EDGE_C") or 2.0', src)
+        self.assertIn('os.environ.get("SINGLE_BOOK_SIZE_MULT") or 0.5', src)
+        self.assertTrue(L.entry_policy(["bovada"], 0.015, 0.01, single_min_edge_c=1.0, single_size_mult=1.0)["clears"])
+
+    def test_sessions_apply_policy_and_tag(self):
+        for fn in ("session_daily.py", "session_pm.py"):
+            src = (HERE / "oddsborne" / fn).read_text()
+            self.assertIn('LINES.entry_policy(combo["books"], em, MIN_EDGE)', src)
+            self.assertIn('elif pol["clears"]:', src)
+            self.assertNotIn("elif em is not None and em >= MIN_EDGE:\n                            decision = \"CANDIDATE\"", src)
+            self.assertIn('"--size-mult", f"{size_mult:g}", "--tag", tag', src)
+            self.assertIn("[{tag}; gate bar", src)  # fair-source text carries the tag
+            self.assertIn('"book_tag": pol["book_tag"]', src)
+            self.assertIn("single_book_size_zero", src)
+
+    def test_pm_enter_cli_and_gate_results(self):
+        src = (HERE / "oddsborne" / "pm_enter.py").read_text()
+        self.assertIn('"--size-mult"', src)
+        self.assertIn('"--tag"', src)
+        self.assertIn('"tags": list(tags or []), "size_mult": size_mult}', src)  # gate_results metadata
+
+
+class PasslogMultiBookTests(unittest.TestCase):
+    def games(self, **kw):
+        q = L.parse_bovada(bovada_coupon(), "mlb", NOW) if kw.get("bovada", True) else []
+        if kw.get("pinnacle", True):
+            q += L.parse_pinnacle(*pinnacle(), "mlb", NOW)
+        return L.group_games(q)
+
+    def fees(self):
+        return (MF.post_fee_maker_raw, lambda f, p: MF.post_fee_maker_gate(f, p, 0.006), MF.post_fee_taker)
+
+    def test_multi_book_rows_carry_books(self):
+        ffm = L.fair_for_market(self.games(), "Cleveland Guardians", "Tampa Bay Rays", TODAY_START, now=NOW)
+        self.assertEqual(ffm["combo"]["books"], ["bovada", "pinnacle"])
+        rows = L.side_rows("aec-mlb-tb-cle-2026-10-17", ffm, 0.40, 0.42, 0.02, "2026-10-18T21:08:00Z", *self.fees(), 0.01, 0.006)
+        self.assertEqual([r["side"] for r in rows], ["yes", "no"])
+        for r in rows:
+            self.assertEqual(r["books"], ["bovada", "pinnacle"])
+            self.assertEqual(r["book_tag"], "multi_book")
+            self.assertEqual(set(r["fair_by_book"]), {"bovada", "pinnacle"})
+            meta = L.decision_meta(r)
+            self.assertEqual(meta["book_tag"], "multi_book")
+            self.assertEqual(meta["books"], ["bovada", "pinnacle"])
+        self.assertEqual(rows[0]["team"], "Cleveland Guardians")
+        self.assertEqual(rows[1]["team"], "Tampa Bay Rays")
+
+    def test_pinnacle_only_side_is_a_normal_pass_not_no_bovada(self):
+        ffm = L.fair_for_market(self.games(bovada=False), "Cleveland Guardians", "Tampa Bay Rays", TODAY_START, now=NOW)
+        rows = L.side_rows("m", ffm, 0.40, 0.42, 0.02, None, *self.fees(), 0.01, 0.006)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["books"], ["pinnacle"])
+        self.assertEqual(rows[0]["book_tag"], "single_book")
+        self.assertIsNone(rows[0]["bovada"])
+
+    def test_zero_books_no_rows(self):
+        ffm = L.fair_for_market(self.games(), "Cleveland Guardians", "Tampa Bay Rays", TOMORROW_GST, now=NOW)
+        self.assertIsNone(ffm["combo"])
+        self.assertEqual({r["reason"] for r in ffm["rejected"]}, {"date_mismatch"})
+        self.assertEqual(L.side_rows("m", ffm, 0.4, 0.42, 0.02, None, *self.fees(), 0.01, 0.006), [])
+
+    def test_passlog_wiring(self):
+        src = (HERE / "oddsborne" / "session_passlog.py").read_text()
+        self.assertIn("LINES.fair_for_market(games, lt, st, gst)", src)
+        self.assertIn("LINES.side_rows(", src)
+        self.assertIn("meta=LINES.decision_meta(r)", src)
+        self.assertNotIn("no date-matched bovada", src)
+        self.assertNotIn("parse_bovada_ts", src)
+        self.assertIn('return "single_book_size_zero"', src)
+        self.assertIn('return "single_book_gate"', src)
 
 
 if __name__ == "__main__":
