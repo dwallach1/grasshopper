@@ -134,3 +134,50 @@ describe('pm_notes skip scoring trigger (migration 78)', () => {
     expect(['yes', 'no'].includes(compSide({ outcome: 'maybe' }))).toBe(false);
   });
 });
+
+describe('direct skip after a note supersedes the note (migration 79)', () => {
+  const migrationName = '20261018161700_pm_note_skip_direct_after_note_dedup.sql';
+  const schemaName = '79_pm_note_skip_direct_after_note_dedup.sql';
+  const migration = readSql('migrations', migrationName);
+  const schema = readSql('schemas', schemaName);
+  const fn = latestDefining('private.decision_candidates_direct_supersedes_note()');
+  const triggerAt = migration.indexOf('create trigger decision_candidates_direct_supersedes_note');
+  const triggerSql = triggerAt === -1 ? '' : migration.slice(triggerAt, migration.indexOf('execute function', triggerAt) + 'execute function private.decision_candidates_direct_supersedes_note();'.length);
+  const deleteAt = fn.fn.indexOf('delete from public.decision_candidates n');
+  const updateAt = fn.fn.indexOf('update public.decision_candidates n');
+  const deleteSql = deleteAt === -1 || updateAt === -1 ? '' : fn.fn.slice(deleteAt, updateAt);
+  const updateSql = updateAt === -1 ? '' : fn.fn.slice(updateAt);
+
+  test('schema file is the migration file', () => {
+    expect(migration).toBe(schema);
+    expect(fn.file).toBe(migrationName);
+  });
+
+  test('trigger decision_candidates_direct_supersedes_note fires only for a direct skip', () => {
+    expect(migration).toContain('drop trigger if exists decision_candidates_direct_supersedes_note on public.decision_candidates');
+    expect(triggerSql).toContain('create trigger decision_candidates_direct_supersedes_note');
+    expect(triggerSql).toContain('after insert on public.decision_candidates');
+    expect(triggerSql).toContain('for each row');
+    expect(triggerSql).toContain("when (new.source_table = 'direct' and new.decision = 'skip')");
+    expect(triggerSql).toContain('execute function private.decision_candidates_direct_supersedes_note()');
+    expect(fn.fn).toContain("if new.source_table <> 'direct' or new.decision <> 'skip'");
+  });
+
+  test('deletes only unmarked unscored pm_notes skips and otherwise sets meta.superseded', () => {
+    expect(deleteAt).toBeGreaterThan(-1);
+    expect(updateAt).toBeGreaterThan(deleteAt);
+    expect(deleteSql).toContain("n.source_table = 'pm_notes'");
+    expect(deleteSql).toContain("n.decision = 'skip'");
+    expect(deleteSql).toContain('n.resolved_outcome is null');
+    expect(deleteSql).toContain('n.counterfactual_pnl is null');
+    expect(deleteSql).toContain('n.brier is null');
+    expect(deleteSql).toContain('not exists (select 1 from public.decision_marks m where m.decision_id = n.id)');
+    expect(deleteSql).toContain("coalesce(n.meta->>'superseded', '') <> 'true'");
+    expect(deleteSql).not.toContain("'superseded', 'true'");
+    expect(updateSql).toContain("n.source_table = 'pm_notes'");
+    expect(updateSql).toContain("n.decision = 'skip'");
+    expect(updateSql).toContain("'superseded', 'true'");
+    expect(updateSql).not.toContain('n.resolved_outcome is null');
+    expect(updateSql).not.toContain('not exists (select 1 from public.decision_marks');
+  });
+});
