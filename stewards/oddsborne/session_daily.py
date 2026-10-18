@@ -52,11 +52,13 @@ H.TODAY = TODAY
 H.TOMORROW = TOMORROW
 import discover as DISC  # deepdive_raw/discover.py: read-only market discovery (synced)
 import maker_fee as MF  # /workspace/oddsborne/maker_fee.py: taker fee, maker rebate, adverse-selection haircut
+sys.path.append(str(Path(__file__).resolve().parent))  # repo checkout: sibling lines.py (box: deepdive_raw, already on path)
+import lines as LINES  # deepdive_raw/lines.py: multi-book line sources + combined de-vig (synced)
 THETA = MF.THETA  # TAKER fee coefficient (0.0695): fee = THETA*p*(1-p)
 MAKER_REBATE = MF.MAKER_REBATE  # maker rebate (0.0125), received not paid: rebate = MAKER_REBATE*p*(1-p)
 MAKER_HAIRCUT = MF.HAIRCUT  # adverse-selection haircut ($/contract) subtracted for the maker GATE
 MAKER_HAIRCUT_INFO = MF.HAIRCUT_INFO
-OUT = Path("/workspace/oddsborne")
+OUT = Path(os.environ.get("ODDS_OUT_DIR") or "/workspace/oddsborne")  # ODDS_OUT_DIR: e.g. /tmp for read-only rehearsals
 P2 = Path(f"/workspace/oddsborne/deepdive_raw/sweep_{DSTAMP}_p2.json")
 SESSION = f"{DSTAMP}_am" + ("_dry" if DRY_RUN else "")
 THESIS_SPORTS = "sports_devig_maker_edge"
@@ -532,20 +534,20 @@ def try_enter(pick, cash):
         inval = round(px * 0.5, 4)
     usd = REQUESTED_USD
     kill_txt = (
-        f"Maker BUY {pick.get('matched')} {outcome.upper()} @{px} vs Bovada fair~{fair} "
+        f"Maker BUY {pick.get('matched')} {outcome.upper()} @{px} vs {'+'.join(pick.get('books') or ['bovada'])} fair~{fair} "
         f"(post-fee maker {pick.get('post_fee_maker')}). KILL: print <= {inval}; "
         f"cancel unsold by game start; no revenge size-up."
     )
     inval_note = (
-        f"Fresh print at or below {inval} (Bovada conservative (min prop/power/Shin) fair {fair} at entry minus 8c; "
+        f"Fresh print at or below {inval} ({'+'.join(pick.get('books') or ['bovada'])} conservative (min prop/power/Shin) fair {fair} at entry minus 8c; "
         f"means the line/market moved hard against {pick.get('matched')}); or unfilled at game start."
     )
     cmd = [
         "/workspace/oddsborne/.venv/bin/python", "/workspace/oddsborne/pm_enter.py",
         "--slug", pick["market"], "--outcome", outcome, "--price", f"{px:.4f}",
         "--usd", str(usd), "--thesis", THESIS_SPORTS, "--p", f"{fair:.4f}",
-        "--fair-source", f"Bovada conservative min(prop,power,Shin) de-vig ML {pick.get('bovada')} {pick.get('americans')} start {pick.get('bovada_start')}",
-        "--rationale", f"ODDSBORNE {SESSION}: post-fee maker {pick.get('post_fee_maker')} > 0 vs Bovada (date-checked vs gameStartTime {pick.get('gameStartTime')})",
+        "--fair-source", f"{'+'.join(pick.get('books') or ['bovada'])} (weights {pick.get('book_weights')}) conservative min(prop,power,Shin) de-vig ML {pick.get('line_desc') or pick.get('bovada')} {pick.get('americans')} start {pick.get('line_start') or pick.get('bovada_start')}",
+        "--rationale", f"ODDSBORNE {SESSION}: post-fee maker {pick.get('post_fee_maker')} > 0 vs {'+'.join(pick.get('books') or ['bovada'])} (date-checked vs gameStartTime {pick.get('gameStartTime')})",
         "--kill", kill_txt, "--order-type", "maker_gtc",
         "--invalidation", f"{inval:.4f}", "--invalidation-note", inval_note, "--dry-run",
     ]
@@ -652,26 +654,13 @@ def main():
         covered_slugs.add(str(_ms))
     print("covered_slugs", sorted(covered_slugs), flush=True)
 
-    # 3) Bovada (reuse files if fresh; else refresh)
-    print("=== BOVADA ===", flush=True)
-    for label, url, name in (
-        ("mlb", "https://www.bovada.lv/services/sports/event/v2/events/A/description/baseball?marketFilterId=def&preMatchOnly=true&lang=en", "mlb"),
-        ("nfl", "https://www.bovada.lv/services/sports/event/v2/events/A/description/football/nfl?marketFilterId=def&preMatchOnly=true&lang=en", "nfl"),
-    ):
-        path = OUT / f"session_raw_{SESSION}_bovada_{name}.json"
-        try:
-            raw = aft.http_get(url)
-            if raw.strip() in (b"", b"{}"):
-                raw = aft.http_get(url.split("?")[0] + "?lang=en")
-            path.write_bytes(raw)
-            print(name, "bytes", len(raw), flush=True)
-        except Exception as e:
-            blockers.append(f"bovada_{name}: {type(e).__name__}: {str(e)[:120]}")
-            if not path.exists():
-                path.write_text("[]")
-    mlb = parse_bovada_ts(OUT / f"session_raw_{SESSION}_bovada_mlb.json")
-    nfl = parse_bovada_ts(OUT / f"session_raw_{SESSION}_bovada_nfl.json")
-    print("bovada mlb", len(mlb), "nfl", len(nfl), flush=True)
+    # 3) Lines: Bovada + Pinnacle (guest) + DraftKings via ESPN (+ The Odds API if ODDS_API_KEY). See lines.py.
+    print("=== LINES ===", flush=True)
+    line_quotes = LINES.fetch_all(OUT, SESSION, TODAY, blockers)
+    line_games = LINES.group_games(line_quotes)
+    mlb = [g for g in line_games if g["sport"] == "mlb"]
+    nfl = [g for g in line_games if g["sport"] == "nfl"]
+    print("line games mlb", len(mlb), "nfl", len(nfl), flush=True)
 
     # Discovery: reuse the dated sweep output if fresh, else run discovery in-process (read-only API; local file only).
     try:
@@ -712,8 +701,9 @@ def main():
         print("!" * 80, file=sys.stderr, flush=True)
         print(discovery_error, flush=True)
 
-    # 4) Sports comps — DATE-CHECKED matcher (10-05 lesson): Bovada startTime must match the
-    #    market's gameStartTime (±3h) and fair is matched to venue marketSides long team; score YES and NO.
+    # 4) Sports comps — DATE-CHECKED matcher (10-05 lesson): each book's startTime must match the
+    #    market's gameStartTime (±3h) or that book is dropped for the market; books are de-vigged separately and
+    #    combined (lines.py); fair is matched to venue marketSides long team; score YES and NO.
     print("=== SPORTS ===", flush=True)
     comps = []
     date_mismatch = []
@@ -767,21 +757,10 @@ def main():
         _ev_cache[sl] = (mslugs, titles)
         return mslugs, titles
 
+    no_fair = []  # matched venue markets where no book had a usable line (zero books -> no fair, no score)
     for sport, games in (("mlb", mlb), ("nfl", nfl)):
         for g in games:
-            fair_map = aft.devig(g["ml"])
-            names = list(fair_map.keys())
-            if len(names) < 2:
-                continue
-            if g.get("live"):
-                print(f"  LIVE-SKIP {g.get('desc')}", flush=True)
-                continue
-            bov_start = g.get("start")
-            tokens = []
-            for name in names:
-                toks = [t for t in name.lower().replace(".", "").split()
-                        if len(t) > 3 and t not in ("city", "york", "los", "angeles", "san", "bay", "new")]
-                tokens.append(toks[-1] if toks else name.lower().split()[-1])
+            tokens = g["tokens"]
             hits = []
             for ev in sports_ev:
                 blob = ((ev.get("title") or "") + " " + ev.get("slug", "")).lower()
@@ -797,34 +776,53 @@ def main():
                     if meta.get("marketType") not in (None, "moneyline"):
                         continue
                     gst = pdt(meta.get("gameStartTime"))
-                    if bov_start is None or gst is None or abs((gst - bov_start).total_seconds()) > 3 * 3600:
-                        date_mismatch.append({"market": ms, "bovada": g.get("desc"),
-                                              "bovada_start": bov_start.isoformat() if bov_start else None,
-                                              "gameStartTime": meta.get("gameStartTime")})
+                    # Per-book DATE GUARD (10-05 lesson): only quotes whose start is within 3h of gameStartTime count.
+                    elig, rej = LINES.eligible_quotes(g, gst)
+                    for r in rej:
+                        if r["reason"] == "date_mismatch":
+                            date_mismatch.append({"market": ms, "book": r["book"], "bovada": r["desc"],
+                                                  "bovada_start": r["start"], "gameStartTime": meta.get("gameStartTime")})
+                    stale = [r for r in rej if r["reason"] == "stale"]
+                    for r in stale:
+                        print(f"  STALE-LINE {ms} {r['book']} age {r.get('age_min')}m > {LINES.MAX_AGE_MIN}m (not used)", flush=True)
+                    if not elig:
+                        if stale or any(r["reason"] == "live" for r in rej):
+                            no_fair.append({"market": ms, "rejected": rej, "gameStartTime": meta.get("gameStartTime")})
                         continue
                     matched_any = True
-                    if gst <= datetime.now(timezone.utc):  # 10-12 PM: in-play book vs stale prematch Bovada = not an edge
-                        date_mismatch.append({"market": ms, "bovada": g.get("desc"), "started": True,
+                    if gst <= datetime.now(timezone.utc):  # 10-12 PM: in-play book vs stale prematch line = not an edge
+                        date_mismatch.append({"market": ms, "bovada": elig[0].get("desc"), "started": True,
                                               "gameStartTime": meta.get("gameStartTime")})
                         print(f"  STARTED-SKIP {ms} gameStartTime={meta.get('gameStartTime')}", flush=True)
                         continue
+                    combo = LINES.combine(g, elig)
+                    if combo is None:
+                        no_fair.append({"market": ms, "rejected": rej, "why": "no two-way line from any book"})
+                        continue
+                    if combo["disagreement"]:
+                        print(f"  LINE-DISAGREE {ms} books {combo['books']} spread {combo['disagree_pp']} > "
+                              f"{LINES.DISAGREE_PP}: using the most conservative book per side", flush=True)
+                    fair_map = LINES.fair_map(combo)
+                    bmeta = LINES.book_meta(combo)
+                    prim = elig[0]  # Bovada first when it has the game (BOOK_ORDER), else the next book
+                    bov = next((q for q in elig if q["book"] == "bovada"), None)
+                    bov_start = prim.get("start")
                     raw, sb, tries = H.bbo_with_retry(c, ms, tries=4)
                     time.sleep(0.4)
                     quoted += 1
                     title = titles.get(ms)
                     bid, ask, spr, mid = sb.get("bid"), sb.get("ask"), sb.get("spr"), sb.get("mid")
                     matched, fair_p, how = match_fair_to_market(ms, fair_map, mid=mid, title=title)
-                    americans = {k: v.get("american") for k, v in g["ml"].items()}
+                    americans = {k: v.get("american") for k, v in prim["ml"].items()}
                     for side in ("yes", "no"):
-                        _dm = (MF.devig_methods(g["ml"]) or {}).get(matched) if matched else None
-                        _cf = (MF.conservative_fair(side, _dm["power"], _dm["shin"], _dm["prop"]) if _dm else None)
+                        _cf = LINES.side_fair(combo, matched, side) if matched else None
                         if side == "yes":
-                            f_side = _cf["used"] if _cf else None  # 10-12: conservative min(prop, power, Shin)
+                            f_side = _cf["used"] if _cf else None  # conservative min(prop, power, Shin) of the combined books
                             mk_px = bid
                             tk_px = ask
                             team = matched
                         else:
-                            f_side = _cf["used"] if _cf else None  # 10-12: conservative for NO = min(1-prop, 1-power, 1-Shin)
+                            f_side = _cf["used"] if _cf else None  # NO = min(1-prop, 1-power, 1-Shin)
                             mk_px = round(1 - ask, 4) if ask is not None else None
                             tk_px = round(1 - bid, 4) if bid is not None else None
                             team = meta.get("short_team")
@@ -832,12 +830,13 @@ def main():
                         em = post_fee_maker_gate(f_side, mk_px) if mk_px is not None else None  # gate (haircut)
                         et = post_fee(f_side, tk_px) if tk_px is not None else None
                         decision, why = "SKIP", ""
+                        books_txt = "+".join(combo["books"])
                         if ms in covered_slugs:
                             decision = "COVERED"
                             why = f"already held; fair {f_side} vs maker {mk_px}; post-fee maker raw {em_raw} gate {em}"
-                        elif matched and not _dm:
+                        elif matched and not _cf:
                             decision = "ERROR"
-                            why = f"no clean two-way Bovada line for de-vig ({how}); error, not a pass"
+                            why = f"no clean two-way line for de-vig ({how}; books {books_txt}); error, not a pass"
                         elif f_side is None or mk_px is None:
                             why = f"missing fair/bbo fair={f_side} {bid}/{ask} ({how})"
                         elif spr is not None and spr > 0.04:
@@ -845,9 +844,9 @@ def main():
                         elif em is not None and em >= MIN_EDGE:
                             decision = "CANDIDATE"
                             why = (f"post-fee maker gate {em} (raw {em_raw} - haircut {MAKER_HAIRCUT}) fair {f_side} "
-                                   f"({team}/{how}) maker@{mk_px} (yes BBO {bid}/{ask})")
+                                   f"({team}/{how}; {books_txt}) maker@{mk_px} (yes BBO {bid}/{ask})")
                         else:
-                            why = (f"fair {f_side} ({team}/{how}) maker@{mk_px} taker@{tk_px}; post-fee maker raw {em_raw} "
+                            why = (f"fair {f_side} ({team}/{how}; {books_txt}) maker@{mk_px} taker@{tk_px}; post-fee maker raw {em_raw} "
                                    f"gate {em} (haircut {MAKER_HAIRCUT}, bar {MIN_EDGE}) taker {et}")
                         comp = {
                             "sport": sport, "event": hit.get("slug"), "market": ms, "title": title, "outcome": side,
@@ -855,22 +854,27 @@ def main():
                             "fair_prop": (_cf or {}).get("prop"), "fair_power": (_cf or {}).get("power"),
                             "fair_shin": (_cf or {}).get("shin"), "fair_used": (_cf or {}).get("used"),
                             "fair_method": (_cf or {}).get("method"),
+                            "books": combo["books"], "book_weights": combo["weights"],
+                            "fair_by_book": (_cf or {}).get("per_book_used"),
+                            "line_disagree_pp": combo["disagree_pp"], "line_disagreement": combo["disagreement"],
+                            "line_stale": [r["book"] for r in stale], "book_lines": bmeta,
                             "bid": mk_px, "ask": tk_px, "yes_bid": bid, "yes_ask": ask, "mid": mid, "spr": spr,
                             "post_fee_maker": em, "post_fee_maker_raw": em_raw, "maker_haircut": MAKER_HAIRCUT,
                             "post_fee_taker": et,
-                            "decision": decision, "why": why, "bovada": g.get("desc"),
-                            "bovada_start": bov_start.isoformat() if bov_start else None,
+                            "decision": decision, "why": why, "bovada": bov.get("desc") if bov else None,
+                            "bovada_start": bov["start"].isoformat() if bov and bov.get("start") else None,
+                            "line_desc": prim.get("desc"), "line_start": bov_start.isoformat() if bov_start else None,
                             "gameStartTime": meta.get("gameStartTime"),
                             "americans": americans, "fair_map": fair_map,
                         }
                         comps.append(comp)
                         if _cf:
-                            print(f"    FAIRS {ms} {side} prop={_cf['prop']} power={_cf['power']} shin={_cf['shin']} used={_cf['used']}({_cf['method']})", flush=True)
+                            print(f"    FAIRS {ms} {side} books={books_txt} prop={_cf['prop']} power={_cf['power']} shin={_cf['shin']} used={_cf['used']}({_cf['method']})", flush=True)
                         print(f"  {decision:9s} {ms} {side} {why[:170]}", flush=True)
             if not matched_any:
-                print(f"  NO-DATE-MATCH {g.get('desc')} start={bov_start}", flush=True)
+                print(f"  NO-DATE-MATCH {'/'.join(tokens)} starts={sorted({q['start'].isoformat() for q in g['quotes'] if q.get('start')})}", flush=True)
     print("date_mismatch_discarded", len(date_mismatch), flush=True)
-    (OUT / f"session_raw_{SESSION}_sports_dated.json").write_text(json.dumps({"comps": comps, "date_mismatch": date_mismatch, "discovery_error": discovery_error, "n_sports_events": len(sports_ev)}, indent=2, default=str))
+    (OUT / f"session_raw_{SESSION}_sports_dated.json").write_text(json.dumps({"comps": comps, "date_mismatch": date_mismatch, "no_fair": no_fair, "discovery_error": discovery_error, "n_sports_events": len(sports_ev), "n_priced_markets": len({x["market"] for x in comps if x.get("fair") is not None}), "n_priced_games": len({x["event"] for x in comps if x.get("fair") is not None}), "line_books": sorted({q["book"] for q in line_quotes})}, indent=2, default=str))
     if os.environ.get("SPORTS_ONLY"):
         print("SPORTS_ONLY_DONE", flush=True)
         return
@@ -1202,13 +1206,13 @@ def main():
             f"{w.get('nws')} / {w.get('hmax')} / {w.get('obsmax')} | **{w.get('decision')}** | {str(w.get('reason',''))[:140]} |"
         )
     lines.append("")
-    lines.append("### 3) Sports vs Bovada (post-fee maker > 0; no 8¢ bar)")
+    lines.append("### 3) Sports vs books (Bovada/Pinnacle/DraftKings de-vig; post-fee maker > 0; no 8¢ bar)")
     comps_sorted = sorted([c for c in comps if c.get("post_fee_maker") is not None], key=lambda x: -(x["post_fee_maker"]))
     if not comps_sorted:
-        lines.append("- No matched Bovada↔PM quotes.")
+        lines.append("- No matched book↔PM quotes.")
     for sc in comps_sorted[:20]:
         lines.append(
-            f"- **{sc.get('market')}** `{sc.get('matched')}` BBO {sc.get('bid')}/{sc.get('ask')} vs {sc.get('bovada')} "
+            f"- **{sc.get('market')}** `{sc.get('matched')}` BBO {sc.get('bid')}/{sc.get('ask')} vs {'+'.join(sc.get('books') or [])} {sc.get('line_desc') or sc.get('bovada')} "
             f"(devig ~{sc.get('fair')}) → maker post-fee **{sc.get('post_fee_maker')}** — {sc.get('decision')}"
         )
     if sports_enter:

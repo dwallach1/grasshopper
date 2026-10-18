@@ -66,6 +66,7 @@ else
     "$here/oddsborne/session_pm.py:$box/oddsborne/deepdive_raw/session_pm.py"
     "$here/oddsborne/session_passlog.py:$box/oddsborne/deepdive_raw/session_passlog.py"
     "$here/oddsborne/discover.py:$box/oddsborne/deepdive_raw/discover.py"
+    "$here/oddsborne/lines.py:$box/oddsborne/deepdive_raw/lines.py"
     "$here/oddsborne/requirements.txt:$box/oddsborne/requirements.txt"
     "$here/quantanamo/classify.py:$box/bookmark-ingest/classify.py"
     "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"

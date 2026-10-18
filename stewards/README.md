@@ -178,6 +178,7 @@ A lot opened by `live_trade_clip.py` or `pm_enter.py` is marked and closed from 
 | `close_lesson.py --position-id <id> --rationale "<lesson>" --confidence-delta <-n> [--dry-run]` | Same as BANDIT's (an identical file). |
 | `pm_pnl_snapshot.py [--notes "<standup>"]` | Writes a `pm_pnl` snapshot of venue cash plus asset notional (`oddsborne_pnl_snapshot`). |
 | `session_daily.py` / `session_pm.py` | Write the scan and skip `pm_notes` with `oddsborne_insert_note` over steward-rpc, then `oddsborne_touch_heartbeat`. A failed note is logged and does not block exits (those already ran through `pm_exit.py`). |
+| `deepdive_raw/lines.py` | Sports line sources for the sessions (read-only): Bovada coupons, Pinnacle's public guest odds, DraftKings moneylines from ESPN's public scoreboard, and The Odds API when `ODDS_API_KEY` is set. Each book is de-vigged on its own, then combined (Pinnacle weight 2.0, other books 1.0). Quotes older than `ODDS_LINE_MAX_AGE_MIN` (30) or off the venue start by more than 3h are dropped per book. If books disagree by more than 3pp, the most conservative book is used. One book means that book alone; zero books means no fair value and no score. Comps rows record `books`, `book_weights`, `fair_by_book` and `book_lines`. |
 
 ### QUANTANAMO close lessons (equity lots)
 
