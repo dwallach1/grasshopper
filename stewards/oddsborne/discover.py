@@ -44,6 +44,15 @@ KNOWN_STATIC = [
     "btc-hitprice-high-yr-12-31-2026", "btc-above-yr-12-31-2026",
 ]
 WX_CITIES = ("lax", "nyc", "mia", "sfo", "mdw")
+SPORTS_TAGS = ("nfl", "mlb")  # league tags paged in full as a fallback so game events never depend on window paging
+PAGE_LIMIT = 50
+MAX_PAGES = 200  # safety stop (10k events per listing); hitting it is recorded as a blocker
+
+
+def iso_z(dt: datetime) -> str:
+    """RFC 3339 UTC timestamp. The gateway does not honour date-only (YYYY-MM-DD) endDateMin/endDateMax:
+    it silently returns the stale backlog of never-closed 2025 events instead of the requested window."""
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def session_date(argv=None) -> str:
@@ -154,11 +163,28 @@ class Sweep:
                 return None
         return None
 
+    def page(self, params: dict, label: str, pause: float = 0.55) -> int:
+        """Page events.list until a short/empty page (or a page with nothing new); returns events seen."""
+        n, slugs = 0, set()
+        for i in range(MAX_PAGES):
+            off = i * PAGE_LIMIT
+            r = self.call(lambda off=off: self.c.events.list({**params, "limit": PAGE_LIMIT, "offset": off}), f"{label}[{off}]", pause)
+            evs = (r or {}).get("events") or []
+            new = {(ev.get("event") or ev).get("slug") for ev in evs if isinstance(ev, dict)} - slugs
+            for ev in evs:
+                self.put(ev)
+            n += len(evs)
+            slugs |= new
+            if len(evs) < PAGE_LIMIT or not new:
+                return n
+        self.blockers.append(f"{label}: stopped at MAX_PAGES={MAX_PAGES} ({n} events); window not fully paged")
+        return n
+
     def run(self, day: str) -> dict:
         c, now = self.c, self.now
         cut21, cut120 = now + timedelta(days=21), now + timedelta(days=120)
-        end_min = (now - timedelta(days=2)).strftime("%Y-%m-%d")
-        e21, e120 = cut21.strftime("%Y-%m-%d"), cut120.strftime("%Y-%m-%d")
+        end_min = iso_z((now - timedelta(days=2)).replace(hour=0, minute=0, second=0, microsecond=0))
+        e21, e120 = iso_z(cut21), iso_z(cut120)
         for q in QUERIES:
             r = self.call(lambda q=q: c.search.query({"query": q, "limit": 40, "status": "active"}), f"search[{q}]")
             for ev in (r or {}).get("events") or []:
@@ -172,14 +198,10 @@ class Sweep:
             r = self.call(lambda tag=tag: c.events.list({**base, "tagSlug": tag, "endDateMin": end_min, "endDateMax": e120}), f"tag[{tag}]")
             for ev in (r or {}).get("events") or []:
                 self.put(ev)
-        for lo, hi, offsets, lab in ((end_min, e21, range(0, 350, 50), "near"), (e21, e120, range(0, 250, 50), "long")):
-            for off in offsets:
-                r = self.call(lambda off=off, lo=lo, hi=hi: c.events.list({**base, "offset": off, "endDateMin": lo, "endDateMax": hi}), f"{lab}[{off}]", 0.55)
-                evs = (r or {}).get("events") or []
-                if not evs:
-                    break
-                for ev in evs:
-                    self.put(ev)
+        for lo, hi, lab in ((end_min, e21, "near"), (e21, e120, "long")):
+            self.page({**base, "endDateMin": lo, "endDateMax": hi}, lab)
+        for tag in SPORTS_TAGS:
+            self.page({**base, "tagSlug": tag, "endDateMin": end_min, "endDateMax": e21}, f"sports[{tag}]")
         for slug in known_slugs(day):
             r = self.call(lambda slug=slug: c.events.retrieve_by_slug(slug), f"get[{slug}]")
             if r:
