@@ -1,5 +1,19 @@
 # BANDIT entry gate: skip a coin up more than +30% in the hour before entry (provisional trial)
 
+`rule_id: bandit-1h-entry-cap` · status: **repealed** · verdict: **strike** · ruling 2026-10-18 · sunset review held
+
+**REPEALED** by GRASSHOPPER on 2026-10-18 at its preset sunset review.
+
+Preregistered test: blocked coins versus the clips taken since the cap. Ledger: 8 scored blocked coins, mean +3.5% at 4h, 3 up. BANDIT's count: 11 deduped, mean -1.1%. Clips taken since the cap: 1, DARK -15.5%. Both readings beat the taken clips, so the cap is struck.
+
+PR #168 restored the +200% ceiling and added `meta.hot_1h` / `meta.chg_1h` tags. A coin up more than +30% over the hour is tagged on the decision the scan logs. It is no longer skipped, and the scan no longer writes `blocked_by = '1h_cap_30'`.
+
+## History
+
+The 2026-10-07 provisional ruling follows, unchanged.
+
+# BANDIT entry gate: skip a coin up more than +30% in the hour before entry (provisional trial)
+
 `rule_id: bandit-1h-entry-cap` · status: **in_force** · verdict: **amend** · ruling 2026-10-07 · next review after 10 blocked passes (blocked_by 1h_cap_30) or 10 new clips, whichever comes first
 
 ## Purpose (failure prevented)
