@@ -45,10 +45,10 @@ class FakeRpc:
 def paper_log_fn(rpc, quote=(None, None, "quote_err Timeout"), no_log=False):
     """_paper_log from the scan, with the quote, the dry-run flag and steward_rpc replaced by fakes (no network)."""
     import sys, types
-    fn = next(n for n in ast.parse(SCAN.read_text()).body if isinstance(n, ast.FunctionDef) and n.name == "_paper_log")
-    ns = {"PAPER_TAG": "paper_only", "_px_sol": lambda r: quote, "_no_log": no_log, "_dec_pt": "2026-10-16T12:00:00-07:00",
+    fns = [n for n in ast.parse(SCAN.read_text()).body if isinstance(n, ast.FunctionDef) and n.name in ("_paper_log", "_hot_meta")]
+    ns = {"HOT_1H_PCT": 30, "PAPER_TAG": "paper_only", "_px_sol": lambda r: quote, "_no_log": no_log, "_dec_pt": "2026-10-16T12:00:00-07:00",
           "_stamp": "20261016T1200"}
-    exec(compile(ast.Module([fn], []), str(SCAN), "exec"), ns)
+    exec(compile(ast.Module(fns, []), str(SCAN), "exec"), ns)
     def call(*a, **kw):
         old = sys.modules.get("steward_rpc"); sys.modules["steward_rpc"] = types.SimpleNamespace(log_decision=rpc.log_decision)
         try:
