@@ -15,10 +15,11 @@ Sources (book name -> how it is fetched). Default config (no key, no flags) = Bo
   draftkings   OFF unless ODDS_ENABLE_ESPN=1. DraftKings moneylines as republished on ESPN's public scoreboard JSON
                (undocumented; same terms caveat): site.api.espn.com/apis/site/v2/sports/<sport>/<league>/scoreboard.
 
-Entry policy (GRASSHOPPER 10-18): a side whose fair comes from exactly ONE book (Bovada alone included) is tagged
-`single_book`, needs SINGLE_BOOK_MIN_EDGE_C (2.0c) of gate edge instead of the normal 1c, and is sized at
-SINGLE_BOOK_SIZE_MULT (0.5) x the steward_sizing_guidance quantity, floored; 0 contracts -> pass. Two or more books
--> `multi_book`, normal bar and full size. See entry_policy().
+Entry policy (GRASSHOPPER 10-18, ruling (a)): a side whose fair comes from exactly ONE NEW book (Pinnacle,
+DraftKings/ESPN, any Odds API book other than Bovada) is tagged `single_book`, needs SINGLE_BOOK_MIN_EDGE_C (2.0c)
+of gate edge instead of the normal 1c, and is sized at SINGLE_BOOK_SIZE_MULT (0.5) x the steward_sizing_guidance
+quantity, floored; 0 contracts -> pass. Bovada alone is tagged `bovada_only` and keeps today's rules (1c bar, full
+size). Two or more books -> `multi_book`, normal bar and full size. See entry_policy().
 
 Fair value (per market, after the per-book date guard):
   1. De-vig each book separately with maker_fee.devig_methods (prop / power / Shin).
@@ -80,16 +81,26 @@ def enabled_sources(env=None) -> dict:
 
 def entry_policy(books, gate_edge, base_min_edge: float, single_min_edge_c: float | None = None,
                  single_size_mult: float | None = None) -> dict:
-    """Gate bar and size multiplier for one side. books = the books that fed its fair.
-    single_book (exactly one book): bar = SINGLE_BOOK_MIN_EDGE_C/100, size_mult = SINGLE_BOOK_SIZE_MULT.
-    multi_book (2+): bar = base_min_edge (1c), size_mult = 1.0. clears = gate_edge >= bar."""
-    n = len(set(book_key(b) for b in (books or [])))
-    single = n == 1
+    """Gate bar and size multiplier for one side. books = the books that fed its fair. Tags (for scoring):
+    bovada_only  exactly one book and it is Bovada (direct or oddsapi:bovada): today's rules, bar = base_min_edge
+                 (1c), size_mult = 1.0 (GRASSHOPPER 10-18 ruling (a), permanent).
+    single_book  exactly one book and it is a NEW one (pinnacle, draftkings, any oddsapi book other than bovada):
+                 bar = SINGLE_BOOK_MIN_EDGE_C/100 (2c), size_mult = SINGLE_BOOK_SIZE_MULT (0.5).
+    multi_book   2+ distinct books: bar = base_min_edge (1c), size_mult = 1.0.
+    clears = gate_edge >= bar."""
+    keys = set(book_key(b) for b in (books or []))
+    n = len(keys)
+    if n == 1 and keys == {"bovada"}:
+        tag = "bovada_only"   # GRASSHOPPER 10-18 (a): Bovada alone keeps today's rules (1c bar, full size)
+    elif n == 1:
+        tag = "single_book"   # one NEW book (pinnacle / draftkings / any oddsapi book but bovada)
+    else:
+        tag = "multi_book" if n > 1 else "no_book"
+    single = tag == "single_book"
     c = SINGLE_BOOK_MIN_EDGE_C if single_min_edge_c is None else single_min_edge_c
     m = SINGLE_BOOK_SIZE_MULT if single_size_mult is None else single_size_mult
     bar = round(max(base_min_edge, c / 100.0), 6) if single else base_min_edge
-    return {"book_tag": "single_book" if single else ("multi_book" if n > 1 else "no_book"), "n_books": n,
-            "gate_bar": bar, "size_mult": m if single else 1.0,
+    return {"book_tag": tag, "n_books": n, "gate_bar": bar, "size_mult": m if single else 1.0,
             "clears": n > 0 and gate_edge is not None and gate_edge >= bar - 1e-12}
 
 

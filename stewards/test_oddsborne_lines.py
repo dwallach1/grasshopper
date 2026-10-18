@@ -405,7 +405,7 @@ class SingleBookPolicyTests(unittest.TestCase):
     """GRASSHOPPER 10-18: one book -> 2c gate bar and half guidance size (floored; 0 -> pass)."""
 
     def test_single_book_1_5c_is_a_pass(self):
-        pol = L.entry_policy(["bovada"], 0.015, 0.01)
+        pol = L.entry_policy(["pinnacle"], 0.015, 0.01)
         self.assertEqual(pol["book_tag"], "single_book")
         self.assertEqual(pol["gate_bar"], 0.02)
         self.assertFalse(pol["clears"])
@@ -456,7 +456,7 @@ class SingleBookPolicyTests(unittest.TestCase):
         src = (HERE / "oddsborne" / "lines.py").read_text()
         self.assertIn('os.environ.get("SINGLE_BOOK_MIN_EDGE_C") or 2.0', src)
         self.assertIn('os.environ.get("SINGLE_BOOK_SIZE_MULT") or 0.5', src)
-        self.assertTrue(L.entry_policy(["bovada"], 0.015, 0.01, single_min_edge_c=1.0, single_size_mult=1.0)["clears"])
+        self.assertTrue(L.entry_policy(["pinnacle"], 0.015, 0.01, single_min_edge_c=1.0, single_size_mult=1.0)["clears"])
 
     def test_sessions_apply_policy_and_tag(self):
         for fn in ("session_daily.py", "session_pm.py"):
@@ -474,6 +474,78 @@ class SingleBookPolicyTests(unittest.TestCase):
         self.assertIn('"--size-mult"', src)
         self.assertIn('"--tag"', src)
         self.assertIn('"tags": list(tags or []), "size_mult": size_mult}', src)  # gate_results metadata
+
+
+class BovadaOnlyRulingTests(unittest.TestCase):
+    """GRASSHOPPER 10-18 ruling (a), permanent: Bovada alone keeps today's rules (1c bar, full size), tag bovada_only;
+    the single_book limits apply only to a NEW single book."""
+
+    def test_bovada_only_1_2c_enters_full_size_untagged_single(self):
+        pol = L.entry_policy(["bovada"], 0.012, 0.01)
+        self.assertEqual(pol["book_tag"], "bovada_only")
+        self.assertNotEqual(pol["book_tag"], "single_book")
+        self.assertEqual((pol["gate_bar"], pol["size_mult"], pol["clears"]), (0.01, 1.0, True))
+        full = PE.compute_quantity(5.0, 100.0, 0.30)
+        self.assertIs(PE.scale_quantity(full, pol["size_mult"], 0.30), full)  # guidance quantity untouched (16)
+        self.assertEqual(full["quantity"], 16)
+
+    def test_bovada_only_below_1c_still_a_pass(self):
+        self.assertFalse(L.entry_policy(["bovada"], 0.009, 0.01)["clears"])
+
+    def test_oddsapi_bovada_alone_is_bovada_only(self):
+        pol = L.entry_policy(["oddsapi:bovada"], 0.012, 0.01)
+        self.assertEqual((pol["book_tag"], pol["gate_bar"], pol["size_mult"]), ("bovada_only", 0.01, 1.0))
+        self.assertEqual(L.entry_policy(["bovada", "oddsapi:bovada"], 0.012, 0.01)["book_tag"], "bovada_only")
+
+    def test_pinnacle_only_1_5c_pass_2_1c_half_size(self):
+        p15 = L.entry_policy(["pinnacle"], 0.015, 0.01)
+        self.assertEqual((p15["book_tag"], p15["gate_bar"], p15["clears"]), ("single_book", 0.02, False))
+        p21 = L.entry_policy(["pinnacle"], 0.021, 0.01)
+        self.assertEqual((p21["book_tag"], p21["clears"], p21["size_mult"]), ("single_book", True, 0.5))
+        self.assertEqual(PE.scale_quantity(PE.compute_quantity(5.0, 100.0, 0.30), p21["size_mult"], 0.30)["quantity"], 8)
+
+    def test_other_new_single_books_are_single_book(self):
+        for b in ("draftkings", "oddsapi:fanduel", "oddsapi:pinnacle", "oddsapi:draftkings"):
+            self.assertEqual(L.entry_policy([b], 0.03, 0.01)["book_tag"], "single_book", b)
+
+    def test_bovada_plus_new_book_is_multi(self):
+        pol = L.entry_policy(["bovada", "pinnacle"], 0.012, 0.01)
+        self.assertEqual((pol["book_tag"], pol["gate_bar"], pol["size_mult"], pol["clears"]), ("multi_book", 0.01, 1.0, True))
+
+    def test_default_config_comps_match_main(self):
+        """Default sources -> Bovada quotes only -> every side bovada_only with main's 1c bar and full size, and the
+        same fair as main's Bovada scorer: decisions identical to main."""
+        q = L.parse_bovada(bovada_coupon(), "mlb", NOW)
+        g = game_of(q)
+        ok, _ = L.eligible_quotes(g, TODAY_START, now=NOW)
+        combo = L.combine(g, ok)
+        dm = MF.devig_methods(q[0]["ml"])["Tampa Bay Rays"]
+        for side in ("yes", "no"):
+            f = L.side_fair(combo, "Tampa Bay Rays", side)["used"]
+            self.assertEqual(f, MF.conservative_fair(side, dm["power"], dm["shin"], dm["prop"])["used"])
+            for em in (0.0099, 0.01, 0.012, 0.019, 0.025):
+                pol = L.entry_policy(combo["books"], em, 0.01)
+                self.assertEqual(pol["clears"], em >= 0.01)  # main: em >= MIN_EDGE
+                self.assertEqual((pol["book_tag"], pol["size_mult"]), ("bovada_only", 1.0))
+
+    def test_sessions_and_passlog_share_policy(self):
+        for fn in ("session_daily.py", "session_pm.py"):
+            src = (HERE / "oddsborne" / fn).read_text()
+            self.assertIn('LINES.entry_policy(combo["books"], em, MIN_EDGE)', src)
+            self.assertIn('size_mult = float(pick.get("size_mult")', src)
+        lsrc = (HERE / "oddsborne" / "lines.py").read_text()
+        self.assertIn("pol = entry_policy(combo[\"books\"], em, min_edge)", lsrc)  # side_rows (passlog)
+        psrc = (HERE / "oddsborne" / "session_passlog.py").read_text()
+        self.assertIn('r.get("book_tag") == "single_book"', psrc)
+
+    def test_passlog_bovada_only_rows(self):
+        ffm = L.fair_for_market(L.group_games(L.parse_bovada(bovada_coupon(), "mlb", NOW)),
+                                "Cleveland Guardians", "Tampa Bay Rays", TODAY_START, now=NOW)
+        rows = L.side_rows("m", ffm, 0.40, 0.42, 0.02, None, MF.post_fee_maker_raw,
+                           lambda f, p: MF.post_fee_maker_gate(f, p, 0.006), MF.post_fee_taker, 0.01, 0.006)
+        for r in rows:
+            self.assertEqual((r["book_tag"], r["gate_bar"], r["size_mult"]), ("bovada_only", 0.01, 1.0))
+            self.assertEqual(r["cand"], r["pf_maker"] >= 0.01 and r["spr"] <= 0.04)
 
 
 class PasslogMultiBookTests(unittest.TestCase):
