@@ -34,6 +34,11 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'steward_record_equity_implied_move',
     // lots with no current implied-move row (supabase/schemas/81_equity_implied_move_gaps.sql)
     'steward_implied_move_gaps',
+    // realized move after the print (supabase/schemas/82_equity_earnings_score.sql)
+    'steward_record_equity_earnings_score',
+    'steward_earnings_score_pending',
+    'steward_record_earnings_lesson',
+    'steward_earnings_scorecard',
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'quantanamo_touch_heartbeat',
     'steward_desk_rules',

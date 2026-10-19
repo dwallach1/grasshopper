@@ -11,7 +11,7 @@
 import { assembleBookHoldings, type BookHolding } from './book-holdings';
 import { assembleDeskBookHealth, type DeskBookAlert } from './desk-book-health';
 import { assembleLeaderboard } from './desk-leaderboard';
-import type { DeskPayload, LessonRow } from './ledger-types';
+import type { DeskPayload, EquityEarningsRow, LessonRow } from './ledger-types';
 import { learningGapHoldingId, type ExposureUsage } from './ledger-watchdog';
 import { formatAmount, signedAmount, type MoneyUnit } from './money-units';
 import { HISTORICAL_UNTAGGED } from './position-thesis';
@@ -48,6 +48,8 @@ export type BooksLot = {
   why: string;
   /** `exits below $220.80` · `exit noted` · null */
   exit: string | null;
+  /** Plain earnings line for an open equity lot. Null when the ledger has no print. */
+  earnings: string | null;
   /** Closed lot past the learning-loop grace with no lesson or belief after the close. */
   lesson_waiting: boolean;
   track: BooksTrack;
@@ -167,10 +169,176 @@ export function rowSentence(why: string, exit: string | null): string {
 }
 
 /** Collapsed row. A close still waiting on its lesson says so. Open rows never do. */
-export function lotLine(lot: Pick<BooksLot, 'why' | 'exit' | 'lesson_waiting'>): string {
+export function lotLine(lot: Pick<BooksLot, 'why' | 'exit' | 'lesson_waiting'> & { earnings?: string | null }): string {
   const base = rowSentence(lot.why, lot.exit);
-  if (!lot.lesson_waiting) return base;
-  return base ? `${base} No lesson written yet.` : 'No lesson written yet.';
+  const print = lot.earnings?.trim() ?? '';
+  const held = print ? (base ? `${base} ${print}` : print) : base;
+  if (!lot.lesson_waiting) return held;
+  return held ? `${held} No lesson written yet.` : 'No lesson written yet.';
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+const BAR_GAP_TEXT: Record<string, string> = {
+  bars_unavailable: 'The report has passed. The price bars are not in the ledger yet.',
+  no_reference_bar: 'The report has passed. The price before it is not in the ledger yet.',
+  no_post_open: 'The report has passed. The open after it is not in the ledger yet.',
+  no_post_close: 'The report has passed. The close after it is not in the ledger yet.',
+};
+
+/** Live mark and size for the dollar sentence. A missing mark leaves the dollars off. */
+export type EarningsQuote = {
+  mark: number | null;
+  size: number | null;
+  invalidation: number | null;
+};
+
+function calendarDate(value: string | null): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? '');
+  return match ? match[0] : null;
+}
+
+function weekdayLabel(iso: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  const day = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
+  return WEEKDAYS[day] ?? null;
+}
+
+function etClock(nowMs: number): { ymd: string; minutes: number } | null {
+  if (!Number.isFinite(nowMs)) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs));
+  const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  const year = pick('year');
+  const month = pick('month');
+  const day = pick('day');
+  let hour = Number(pick('hour'));
+  const minute = Number(pick('minute'));
+  if (!year || !month || !day || !Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (hour === 24) hour = 0;
+  return { ymd: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
+}
+
+/** Release clock: 09:30 ET before the open, 20:00 ET after the close, next midnight when the source gave no timing. */
+export function earningsPrintPassed(
+  row: Pick<EquityEarningsRow, 'report_date' | 'report_timing' | 'reported'>,
+  nowMs: number,
+): boolean {
+  if (row.reported) return true;
+  const report = calendarDate(row.report_date);
+  const now = etClock(nowMs);
+  if (!report || !now) return false;
+  if (now.ymd > report) return true;
+  if (now.ymd < report) return false;
+  if (row.report_timing === 'am') return now.minutes >= 9 * 60 + 30;
+  if (row.report_timing === 'pm') return now.minutes >= 20 * 60;
+  return false;
+}
+
+export function impliedMoveFraction(
+  row: Pick<EquityEarningsRow, 'straddle_price' | 'underlying_price'>,
+): number | null {
+  const straddle = row.straddle_price;
+  const underlying = row.underlying_price;
+  if (straddle === null || underlying === null) return null;
+  if (!(straddle > 0) || !(underlying > 0)) return null;
+  if (!Number.isFinite(straddle) || !Number.isFinite(underlying)) return null;
+  return straddle / underlying;
+}
+
+function movePct(fraction: number): string {
+  return `${(Math.abs(fraction) * 100).toFixed(1)}%`;
+}
+
+function aboutDollars(value: number): string {
+  return `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
+function gapDollars(quote: EarningsQuote, implied: number): number | null {
+  if (quote.mark === null || quote.size === null) return null;
+  if (!(quote.mark > 0) || !(quote.size > 0)) return null;
+  if (!Number.isFinite(quote.mark) || !Number.isFinite(quote.size) || !Number.isFinite(implied)) return null;
+  return quote.size * quote.mark * implied;
+}
+
+function lineDollars(quote: EarningsQuote): number | null {
+  if (quote.mark === null || quote.size === null || quote.invalidation === null) return null;
+  if (!(quote.mark > 0) || !(quote.size > 0) || !(quote.invalidation > 0)) return null;
+  if (!Number.isFinite(quote.mark) || !Number.isFinite(quote.size) || !Number.isFinite(quote.invalidation)) return null;
+  return quote.size * Math.max(quote.mark - quote.invalidation, 0);
+}
+
+function versusLine(gap: number, line: number): string {
+  const shown = aboutDollars(line);
+  const band = Math.max(1, 0.05 * Math.max(Math.abs(line), Math.abs(gap)));
+  if (Math.abs(gap - line) <= band) return `about the same as the ${shown} to the exit line`;
+  return gap > line ? `more than the ${shown} to the exit line` : `less than the ${shown} to the exit line`;
+}
+
+function whenPhrase(row: Pick<EquityEarningsRow, 'report_date' | 'report_timing'>): string | null {
+  const date = calendarDate(row.report_date);
+  if (!date) return null;
+  const day = weekdayLabel(date);
+  if (!day) return null;
+  if (row.report_timing === 'am') return `Reports ${day} before the open`;
+  if (row.report_timing === 'pm') return `Reports ${day} after close`;
+  return `Reports ${day}`;
+}
+
+/**
+ * One plain sentence for an open equity lot's earnings print.
+ * Dollars use the live mark. A missing bar does not become a percent.
+ */
+export function earningsBookLine(row: EquityEarningsRow, quote: EarningsQuote, nowMs: number): string | null {
+  if (!calendarDate(row.report_date)) return null;
+  const implied = impliedMoveFraction(row);
+  if (!earningsPrintPassed(row, nowMs)) {
+    const when = whenPhrase(row);
+    if (!when) return null;
+    if (implied === null) return `${when}. The options price is not in the ledger.`;
+    let sentence = `${when}. Options price about a ${movePct(implied)} move`;
+    const gap = gapDollars(quote, implied);
+    const line = lineDollars(quote);
+    if (gap !== null && line !== null) {
+      sentence += `, so a gap could cost about ${aboutDollars(gap)}, ${versusLine(gap, line)}`;
+    } else if (gap !== null) {
+      sentence += `, so a gap could cost about ${aboutDollars(gap)}`;
+    }
+    sentence += '.';
+    if (row.expiry_loose) {
+      sentence += ' That figure is a loose upper bound; the options expire well after the report.';
+    }
+    return sentence;
+  }
+  if (row.realized_close_to_close !== null && Number.isFinite(row.realized_close_to_close)) {
+    const moved = `Moved ${movePct(row.realized_close_to_close)} on earnings`;
+    if (implied === null) return `${moved}.`;
+    const loose = row.expiry_loose ? ', a loose upper bound' : '';
+    return `${moved}; options expected ${movePct(implied)}${loose}.`;
+  }
+  return BAR_GAP_TEXT[row.score_missing_reason ?? ''] ?? 'The report has passed. The move is not in the ledger yet.';
+}
+
+function earningsForHolding(desk: DeskPayload, holding: BookHolding, nowMs: number): string | null {
+  if (holding.venue !== 'equity' || holding.life !== 'live') return null;
+  const symbol = holding.name.trim().toUpperCase();
+  const rows = (desk.earnings ?? []).filter((row) => row.symbol.trim().toUpperCase() === symbol);
+  if (!rows.length) return null;
+  const row = rows.slice().sort((a, b) => (b.report_date ?? '').localeCompare(a.report_date ?? ''))[0];
+  if (!row) return null;
+  return earningsBookLine(row, {
+    mark: holding.mark,
+    size: holding.size,
+    invalidation: holding.invalidation?.price ?? null,
+  }, nowMs);
 }
 
 /** Header fragment when the steward has closes waiting on a lesson. */
@@ -361,6 +529,7 @@ export function beliefKindText(kind: string): string {
   if (value === 'outcome_rescore') return 're-scored on results';
   if (value === 'trade_close_lesson') return 'lesson from a close';
   if (value === 'gate_outcome') return 'what the skips did';
+  if (value === 'earnings_print') return 'lesson from an earnings print';
   return plainWords(value);
 }
 
@@ -425,6 +594,7 @@ export function assembleStewardBooks(desk: DeskPayload, nowMs: number): StewardB
       thesis,
       why,
       exit: holding.life === 'live' ? exitLine(holding) : null,
+      earnings: earningsForHolding(desk, holding, nowMs),
       lesson_waiting: holding.life === 'closed' && gapIds.has(holding.id),
       track: holding.thesis_id ? trackRecord(scores.get(holding.thesis_id)) : trackRecord(null),
     };

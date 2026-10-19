@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import type { BookHolding } from './book-holdings';
 import type { ExposureUsage } from './ledger-watchdog';
+import { mapEarnings } from './ledger-map';
 import {
   beliefKindText,
   changeText,
+  earningsBookLine,
+  earningsPrintPassed,
   exitLine,
   headerAmount,
   leanText,
@@ -192,5 +195,113 @@ describe('Books plain words', () => {
     expect(beliefKindText('outcome_rescore')).toBe('re-scored on results');
     expect(beliefKindText('trade_close_lesson')).toBe('lesson from a close');
     expect(beliefKindText('gate_outcome')).toBe('what the skips did');
+    expect(beliefKindText('earnings_print')).toBe('lesson from an earnings print');
+  });
+});
+
+const FIXTURE_NOW_BEFORE = Date.parse('2026-10-19T15:00:00.000Z');
+const FIXTURE_NOW_AFTER = Date.parse('2026-10-21T21:00:00.000Z');
+
+function fixturePrint(extra: Partial<Parameters<typeof earningsBookLine>[0]> = {}) {
+  return {
+    lot_id: 'fixture-lot',
+    symbol: 'NFLX',
+    report_date: '2026-10-20',
+    report_timing: 'pm' as const,
+    reported: false,
+    straddle_price: 9.7,
+    underlying_price: 100,
+    expiry_date: '2026-10-23',
+    expiry_gap_days: 3,
+    expiry_loose: false,
+    realized_open_gap: null,
+    realized_close_to_close: null,
+    realized_implied_ratio: null,
+    line_jumped: null,
+    score_missing_reason: null,
+    ...extra,
+  };
+}
+
+const FIXTURE_QUOTE = { mark: 48.45, size: 10, invalidation: 45.35 };
+
+describe('Book earnings line', () => {
+  test('before the print, the live mark prices the gap against the exit', () => {
+    const line = earningsBookLine(fixturePrint(), FIXTURE_QUOTE, FIXTURE_NOW_BEFORE);
+    expect(line).toBe(
+      'Reports Tue after close. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line.',
+    );
+    expect(line).not.toMatch(/straddle|ATM|implied move/i);
+    expect(lotLine({ why: 'Streaming demand', exit: 'exits below $45.35', lesson_waiting: false, earnings: line }))
+      .toBe(`Streaming demand. Exits below $45.35. ${line}`);
+  });
+
+  test('a before-the-open print names the morning, and a loose expiry says so', () => {
+    const line = earningsBookLine(fixturePrint({
+      symbol: 'EFX',
+      report_timing: 'am',
+      expiry_date: '2026-11-20',
+      expiry_gap_days: 31,
+      expiry_loose: true,
+    }), FIXTURE_QUOTE, FIXTURE_NOW_BEFORE);
+    expect(line).toBe(
+      'Reports Tue before the open. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line. That figure is a loose upper bound; the options expire well after the report.',
+    );
+  });
+
+  test('after the print, the realized close sits next to the priced move', () => {
+    const line = earningsBookLine(fixturePrint({
+      reported: true,
+      realized_close_to_close: 0.041,
+    }), FIXTURE_QUOTE, FIXTURE_NOW_AFTER);
+    expect(line).toBe('Moved 4.1% on earnings; options expected 9.7%.');
+    expect(line).not.toMatch(/[+-]4\.1/);
+  });
+
+  test('a missing bar does not become a percent, and a missing mark drops the dollars', () => {
+    const missing = earningsBookLine(fixturePrint({
+      reported: true,
+      score_missing_reason: 'bars_unavailable',
+    }), FIXTURE_QUOTE, FIXTURE_NOW_AFTER);
+    expect(missing).toBe('The report has passed. The price bars are not in the ledger yet.');
+    expect(missing).not.toMatch(/\d+(\.\d+)?%/);
+    const noClose = earningsBookLine(fixturePrint({
+      score_missing_reason: 'no_post_close',
+    }), FIXTURE_QUOTE, FIXTURE_NOW_AFTER);
+    expect(noClose).toBe('The report has passed. The close after it is not in the ledger yet.');
+    expect(noClose).not.toContain('gap could cost');
+    const unmarked = earningsBookLine(fixturePrint(), { mark: null, size: 10, invalidation: 45.35 }, FIXTURE_NOW_BEFORE);
+    expect(unmarked).toBe('Reports Tue after close. Options price about a 9.7% move.');
+  });
+
+  test('the morning after an after-close print does not keep the upcoming-gap sentence', () => {
+    const morning = Date.parse('2026-10-21T14:00:00.000Z');
+    expect(earningsPrintPassed(fixturePrint(), morning)).toBe(true);
+    expect(earningsPrintPassed(fixturePrint({ report_timing: 'am' }), Date.parse('2026-10-20T13:00:00.000Z'))).toBe(false);
+    expect(earningsPrintPassed(fixturePrint({ report_timing: 'am' }), Date.parse('2026-10-20T13:30:00.000Z'))).toBe(true);
+    const line = earningsBookLine(fixturePrint(), FIXTURE_QUOTE, morning);
+    expect(line).not.toContain('gap could cost');
+    expect(line).toBe('The report has passed. The move is not in the ledger yet.');
+  });
+
+  test('numeric strings from the ledger map, and a row without a lot is dropped', () => {
+    const rows = mapEarnings([
+      {
+        lot_id: 'fixture-lot',
+        symbol: 'NFLX',
+        report_date: '2026-10-20',
+        report_timing: 'pm',
+        reported: false,
+        straddle_price: '9.70',
+        underlying_price: '100',
+        expiry_loose: false,
+        realized_close_to_close: null,
+      },
+      { symbol: 'NOLOT' },
+      { lot_id: 'bad', symbol: 'BAD', straddle_price: 'nope', report_timing: 'later', reported: false },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ symbol: 'NFLX', straddle_price: 9.7, underlying_price: 100, report_timing: 'pm' });
+    expect(rows[1]).toMatchObject({ symbol: 'BAD', straddle_price: null, report_timing: null });
   });
 });

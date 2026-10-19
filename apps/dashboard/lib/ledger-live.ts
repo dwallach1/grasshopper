@@ -16,6 +16,7 @@ import {
   mapCloudRuns,
   mapCloudTasks,
   mapCycles,
+  mapEarnings,
   mapEvidence,
   mapExposures,
   mapFills,
@@ -183,19 +184,20 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 
-  const [prediction, meme, team, scorecard, watchdog] = await Promise.all([
+  const [prediction, meme, team, scorecard, watchdog, earnings] = await Promise.all([
     loadPredictionMarketsRest(auth),
     loadMemeCoinsRest(auth),
     loadTeamRest(auth),
     loadScorecardRest(auth),
     loadWatchdogRest(auth),
+    restOptional(EARNINGS_QUERY, auth),
   ]);
   return assembleDeskFromRestBag({
     theses, symbols, beliefs, evidence, scores, relations, runs, cloudRuns, cloudTasks,
     automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
     scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
     intents, proposals, fills, insights, predictions, riskControls, themes,
-    ontologySymbols, candidates, actions, prediction, meme, team, scorecard, watchdog,
+    ontologySymbols, candidates, actions, prediction, meme, team, scorecard, watchdog, earnings,
   });
 }
 
@@ -208,6 +210,10 @@ async function loadWatchdogRest(auth: DeskRestAuth): Promise<LedgerWatchdog> {
   ]);
   return mapLedgerWatchdog({ summary, breaches, missing, issues });
 }
+
+/** Columns the Book line reads. Optional: before migration 20261019220000 this select 400s and the desk stays up. */
+export const EARNINGS_QUERY =
+  'equity_implied_moves?select=lot_id,symbol,report_date,report_timing,reported,straddle_price,underlying_price,expiry_date,expiry_gap_days,expiry_loose,realized_open_gap,realized_close_to_close,realized_implied_ratio,line_jumped,score_missing_reason&order=symbol.asc';
 
 async function loadScorecardRest(auth: DeskRestAuth): Promise<StewardScorecardPayload> {
   const [stewards, weekly, trend, theses, forecast, gates] = await Promise.all([
@@ -260,6 +266,7 @@ export type RestDeskBag = {
   team: DeskTeamPayload;
   scorecard?: StewardScorecardPayload;
   watchdog?: LedgerWatchdog;
+  earnings?: JsonObjectRow[];
 };
 
 /** Read-only scorecard views. Optional: a ledger without the outcome migration serves []. */
@@ -304,6 +311,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'scenarios'
   | 'scorecard'
   | 'watchdog'
+  | 'earnings'
 >>): DeskPayload {
   const mappedArtifacts = mapBacktestArtifacts(bag.artifacts ?? []);
   const mappedCycles = mapCycles(bag.cycles ?? []);
@@ -355,15 +363,21 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       open_positions: 0,
       queued_tasks: 0,
     },
-  }, bag.prediction, bag.meme, bag.team)), bag.scorecard, bag.watchdog);
+  }, bag.prediction, bag.meme, bag.team)), bag.scorecard, bag.watchdog, bag.earnings);
 }
 
 export function withScorecard(
   desk: DeskPayload,
   scorecard: StewardScorecardPayload | undefined,
   watchdog?: LedgerWatchdog,
+  earnings?: JsonObjectRow[],
 ): DeskPayload {
-  return { ...desk, scorecard: scorecard ?? emptyStewardScorecard(), watchdog: watchdog ?? emptyLedgerWatchdog() };
+  return {
+    ...desk,
+    scorecard: scorecard ?? emptyStewardScorecard(),
+    watchdog: watchdog ?? emptyLedgerWatchdog(),
+    earnings: mapEarnings(earnings ?? []),
+  };
 }
 
 export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
@@ -417,7 +431,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
-  }, prediction, meme, team)), bag.scorecard, bag.watchdog);
+  }, prediction, meme, team)), bag.scorecard, bag.watchdog, bag.earnings);
 }
 
 async function loadTeamRest(auth: DeskRestAuth): Promise<DeskTeamPayload> {

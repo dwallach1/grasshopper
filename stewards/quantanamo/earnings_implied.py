@@ -9,11 +9,24 @@ copies this file to /workspace/quantanamo/earnings_implied.py.
   python3 stewards/quantanamo/earnings_implied.py write payload.json --execute
 
 plan prints the open lots that lack a current implied-move row (no row, or a report
-still ahead with no straddle and no implied_move_missing flag) and the Robinhood
-calls. write reads the saved MCP responses and emits
-select public.steward_record_equity_implied_move(...). --execute runs that call.
---dry-run prints the SQL only. A missing quote is stored as implied_move_missing.
-This file never invents a price.
+still ahead with no straddle and no implied_move_missing flag), the Robinhood
+calls, and any lot whose report has passed but whose realized move is not stored.
+write reads the saved MCP responses and emits
+select public.steward_record_equity_implied_move(...). --execute runs that call
+and then scores passed prints. --dry-run prints the SQL only. A missing quote is
+stored as implied_move_missing. This file never invents a price.
+
+  python3 stewards/quantanamo/earnings_implied.py score
+  python3 stewards/quantanamo/earnings_implied.py score --execute
+
+score reads daily bars (Financial Datasets, else Robinhood historicals in a
+payload) and emits select public.steward_record_equity_earnings_score(...).
+AM uses the prior session's close. PM uses that session's close. The post
+session is the report session for AM and the next session for PM. A missing
+bar is score_missing_reason. On the box, after sync_box.sh, the morning after
+NFLX (pm 2026-10-20) and EFX (am 2026-10-20) is:
+
+  python3 /workspace/quantanamo/earnings_implied.py score --execute
 
 Tools, per open lot (plan names these; write accepts the raw responses):
   get_earnings_results     one symbol: report date, am/pm, actual EPS (upcoming quarter included)
@@ -403,6 +416,11 @@ def build_observation(symbol: str, payloads: dict, now: datetime) -> dict:
             "writer": "earnings_implied",
             "why": "ATM straddle at the nearest listed expiry",
             "expiry_date": expiry.isoformat(),
+            "expiry_gap_days": (expiry - report["report_date"]).days,
+            "expiry_loose": (expiry - report["report_date"]).days > 7,
+            # select_expiry already took the nearest listed date. A gap over 7
+            # days means that chain had nothing closer.
+            "nearer_expiry_listed": False if (expiry - report["report_date"]).days > 7 else None,
             "strike": str(legs["strike"]),
             "call_id": legs["call_id"],
             "put_id": legs["put_id"],
@@ -650,7 +668,7 @@ def payloads_for(doc: dict, symbol: str) -> dict:
     """Raw MCP responses for one symbol, in the shape build_observation reads."""
     symbol = symbol.upper()
     direct = doc.get(symbol)
-    if isinstance(direct, dict) and any(k in direct for k in ("earnings", "chains", "equity_quote", "instruments", "quotes")):
+    if isinstance(direct, dict) and any(k in direct for k in ("earnings", "chains", "equity_quote", "instruments", "quotes", "historicals")):
         return direct
     sources = []
     nested = doc.get("responses")
@@ -659,7 +677,7 @@ def payloads_for(doc: dict, symbol: str) -> dict:
         if isinstance(per, dict):
             sources.append(per)
     sources.append(doc)
-    results = calendar = chains = equity = instruments = quotes = None
+    results = calendar = chains = equity = instruments = quotes = historicals = None
     for source in sources:
         if not isinstance(source, dict):
             continue
@@ -669,6 +687,7 @@ def payloads_for(doc: dict, symbol: str) -> dict:
         equity = equity or _pick_named(source, ("get_equity_quotes", "equity_quote"), symbol)
         instruments = instruments or _pick_named(source, ("get_option_instruments", "instruments"), symbol)
         quotes = quotes or _pick_named(source, ("get_option_quotes", "quotes"), symbol)
+        historicals = historicals or _pick_named(source, ("get_equity_historicals", "historicals"), symbol)
     earnings = results if results is not None else calendar
     out = {}
     if earnings is not None:
@@ -681,6 +700,8 @@ def payloads_for(doc: dict, symbol: str) -> dict:
         out["instruments"] = instruments
     if quotes is not None:
         out["quotes"] = quotes
+    if historicals is not None:
+        out["historicals"] = historicals
     return out
 
 
@@ -762,30 +783,609 @@ def write_payload(doc: dict, *, execute: bool = False, now: datetime | None = No
     return {"lots": len(lots), "statements": statements, "results": results}
 
 
+LOOSE_DAYS = 7
+OUTLIER_RATIO = Decimal("1.5")
+THIN_N = 5
+SCORE_SOURCE_FD = "financialdatasets_prices_day"
+SCORE_SOURCE_RH = "robinhood_equity_historicals"
+OPEN_ET = time(9, 30)
+
+
+def _pass_marks():
+    """NYSE session close lives in pass_marks.py, copied beside this file on the box."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import pass_marks
+    return pass_marks
+
+
+def session_close_at(day: date):
+    return _pass_marks().session_close_at(day)
+
+
+def _walk_session(start: date, step: int) -> date | None:
+    cursor = start
+    for _ in range(12):
+        cursor += timedelta(days=step)
+        if session_close_at(cursor) is not None:
+            return cursor
+    return None
+
+
+def prior_session(day: date) -> date | None:
+    return _walk_session(day, -1)
+
+
+def next_session(day: date) -> date | None:
+    return _walk_session(day, 1)
+
+
+def reference_session(report_date: date, timing: str | None) -> date | None:
+    """AM: the prior session's close. PM: that session's close (or the prior one if the date is shut)."""
+    if timing == "pm" and session_close_at(report_date) is not None:
+        return report_date
+    return prior_session(report_date)
+
+
+def post_session(report_date: date, timing: str | None) -> date | None:
+    """First regular session after the print. AM uses the report date when that date trades."""
+    if timing == "am" and session_close_at(report_date) is not None:
+        return report_date
+    return next_session(report_date)
+
+
+def expiry_gap_days(report_date: date | None, expiry: date | None) -> int | None:
+    if report_date is None or expiry is None:
+        return None
+    return (expiry - report_date).days
+
+
+def expiry_is_loose(report_date: date | None, expiry: date | None) -> bool:
+    gap = expiry_gap_days(report_date, expiry)
+    return gap is not None and gap > LOOSE_DAYS
+
+
+def _decimal(value) -> Decimal | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def line_was_jumped(post_open, invalidation, quantity) -> bool | None:
+    """Long: the open printed at or below the exit. Short: at or above it. Missing prices stay unknown."""
+    opened = _positive(post_open)
+    line = _positive(invalidation)
+    if opened is None or line is None:
+        return None
+    qty = _decimal(quantity)
+    if qty is not None and qty < 0:
+        return opened >= line
+    return opened <= line
+
+
+def move_fraction(later, reference) -> Decimal | None:
+    after = _positive(later)
+    base = _positive(reference)
+    if after is None or base is None:
+        return None
+    return _q6((after - base) / base)
+
+
+def realized_implied_ratio(realized, straddle, underlying) -> tuple[Decimal | None, Decimal | None]:
+    """(ratio, implied fraction). Ratio is abs(close-to-close) / (straddle / underlying)."""
+    move = _decimal(realized) if realized is not None else None
+    leg = _positive(straddle)
+    spot = _positive(underlying)
+    implied = (leg / spot) if leg is not None and spot is not None else None
+    if move is None or implied is None or implied <= 0:
+        return None, implied
+    return _q6(abs(move) / implied), implied
+
+
+def is_earnings_outlier(ratio, jumped: bool | None) -> bool:
+    """A clear miss: the close ran past 1.5x the priced move, or the open jumped the exit. 1.5x exactly is not."""
+    if jumped:
+        return True
+    if ratio is None:
+        return False
+    return ratio > OUTLIER_RATIO
+
+
+def pct_text(fraction) -> str:
+    value = (abs(Decimal(str(fraction))) * Decimal(100)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    text = format(value, "f")
+    if text.endswith(".0"):
+        text = text[:-2]
+    return f"{text}%"
+
+
+def earnings_lesson_text(*, symbol: str, realized, implied, ratio, jumped: bool | None,
+                         loose: bool, n: int | None) -> str:
+    """Plain lesson. A sample under 5 prints is labeled thin and draws no verdict."""
+    parts = []
+    if realized is not None and implied is not None:
+        ratio_bit = ""
+        if ratio is not None:
+            shown = ratio.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if isinstance(ratio, Decimal) else Decimal(str(ratio))
+            ratio_bit = f" ({format(shown, 'f')}x)"
+        parts.append(f"{symbol} moved {pct_text(realized)} on the print; options had priced {pct_text(implied)}{ratio_bit}.")
+    elif realized is not None:
+        parts.append(f"{symbol} moved {pct_text(realized)} on the print.")
+    if jumped:
+        parts.append("The open went through the exit line.")
+    if not parts:
+        parts.append(f"{symbol} opened outside the priced earnings move.")
+    if loose:
+        parts.append("The option expired more than a week after the report, so the priced move was a loose upper bound.")
+    if n is None or n < THIN_N:
+        label = "a handful of" if n is None else str(n)
+        word = "print" if n == 1 else "prints"
+        parts.append(f"{label} scored {word} so far, too few for a verdict.")
+    return " ".join(parts)
+
+
+def _session_open_at(day: date) -> datetime:
+    return datetime.combine(day, OPEN_ET, tzinfo=ET)
+
+
+def _close_in(day: date, now: datetime) -> bool:
+    close = session_close_at(day)
+    return close is not None and now >= close
+
+
+def _open_in(day: date, now: datetime) -> bool:
+    return session_close_at(day) is not None and now >= _session_open_at(day)
+
+
+def _one_bar(row: dict, symbol: str) -> dict | None:
+    if not isinstance(row, dict):
+        return None
+    ticker = str(row.get("ticker") or row.get("symbol") or "").upper()
+    if ticker and ticker != symbol.upper():
+        return None
+    if row.get("interpolated") is True or str(row.get("interpolated") or "").lower() == "true":
+        return None
+    day = _parse_date(row.get("time") or row.get("begins_at") or row.get("date") or row.get("session"))
+    if day is None:
+        return None
+    volume = row.get("volume")
+    if volume is not None and str(volume).strip() != "":
+        vol = _decimal(volume)
+        if vol is None or vol <= 0:
+            return None
+    return {
+        "day": day,
+        "open": _positive(row.get("open") if row.get("open") is not None else row.get("open_price")),
+        "close": _positive(row.get("close") if row.get("close") is not None else row.get("close_price")),
+    }
+
+
+def _historical_rows(payload, symbol: str) -> list | None:
+    """None when the payload is not a bar response. [] when it is and lists nothing for the symbol."""
+    if payload is None:
+        return None
+    if isinstance(payload, list):
+        return payload
+    if not isinstance(payload, dict):
+        return None
+    data = _data(payload) or payload
+    if isinstance(data.get("prices"), list):
+        return data["prices"]
+    historicals = data.get("historicals")
+    if isinstance(historicals, list):
+        return historicals
+    results = data.get("results")
+    if isinstance(results, list):
+        rows = []
+        want = symbol.upper()
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            named = str(item.get("symbol") or "").upper()
+            if named and named != want:
+                continue
+            nested = item.get("historicals")
+            if isinstance(nested, list):
+                rows.extend(nested)
+            elif item.get("open_price") is not None or item.get("open") is not None or item.get("time"):
+                rows.append(item)
+        return rows
+    return None
+
+
+def parse_daily_bars(payload, symbol: str) -> list[dict] | None:
+    """Real daily bars only. None means the payload could not be read. Interpolated and zero-volume bars are dropped."""
+    rows = _historical_rows(payload, symbol)
+    if rows is None:
+        return None
+    found: dict[date, dict] = {}
+    for row in rows:
+        bar = _one_bar(row, symbol)
+        if bar is None:
+            continue
+        previous = found.get(bar["day"])
+        if previous is None or (previous.get("close") is None and bar.get("close") is not None):
+            found[bar["day"]] = bar
+    return [found[day] for day in sorted(found)]
+
+
+def score_earnings_move(*, report_date: date, timing: str | None, bars: list[dict] | None, now: datetime,
+                        invalidation, quantity, straddle, underlying) -> dict:
+    """Reference close, post open, post close, percents, and a missing reason. Never fills a gap with a guess."""
+    ref_day = reference_session(report_date, timing)
+    post_day = post_session(report_date, timing)
+    by_day = {bar["day"]: bar for bar in (bars or [])}
+    ref_bar = by_day.get(ref_day) if ref_day else None
+    post_bar = by_day.get(post_day) if post_day else None
+    ref_close = ref_bar.get("close") if ref_bar and ref_day and _close_in(ref_day, now) else None
+    post_open = post_bar.get("open") if post_bar and post_day and _open_in(post_day, now) else None
+    post_close = post_bar.get("close") if post_bar and post_day and _close_in(post_day, now) else None
+    reason = None
+    if bars is None or ref_close is None and post_open is None and post_close is None and not bars:
+        reason = "bars_unavailable" if bars is None or not bars else "no_reference_bar"
+        ref_close = post_open = post_close = None
+    elif ref_close is None:
+        reason = "no_reference_bar"
+        post_open = post_close = None
+    elif post_open is None:
+        reason = "no_post_open"
+        post_close = None
+    elif post_close is None:
+        reason = "no_post_close"
+    realized_close = move_fraction(post_close, ref_close)
+    ratio, implied = realized_implied_ratio(realized_close, straddle, underlying)
+    jumped = line_was_jumped(post_open, invalidation, quantity)
+    return {
+        "reference_session": ref_day,
+        "post_session": post_day,
+        "reference_close": ref_close,
+        "post_open": post_open,
+        "post_close": post_close,
+        "realized_open_gap": move_fraction(post_open, ref_close),
+        "realized_close_to_close": realized_close,
+        "implied_fraction": implied,
+        "realized_implied_ratio": ratio,
+        "line_jumped": jumped,
+        "score_missing_reason": reason,
+        "outlier": is_earnings_outlier(ratio, jumped) and (realized_close is not None or jumped is True),
+    }
+
+
+def score_record_args(lot: dict, move: dict, source: str) -> dict:
+    args = {
+        "steward": STEWARD,
+        "lot_id": str(lot.get("lot_id")),
+        "symbol": str(lot.get("symbol") or "").upper(),
+        "score_source": source,
+    }
+    if move.get("score_missing_reason"):
+        args["score_missing_reason"] = move["score_missing_reason"]
+    for key in ("reference_close", "reference_session", "post_open", "post_close", "post_session"):
+        if move.get(key) is not None:
+            args[key] = move[key]
+    return args
+
+
+def _dollar_sql(fn: str, args: dict) -> str:
+    body = json.dumps(_jsonable(args), separators=(",", ":"), sort_keys=True)
+    tag = "sc"
+    while f"${tag}$" in body:
+        tag += "x"
+    return f"select public.{fn}(${tag}${body}${tag}$::jsonb);"
+
+
+def bar_window(lot: dict, now: datetime) -> tuple[date, date]:
+    report = lot.get("report_date")
+    report = report if isinstance(report, date) and not isinstance(report, datetime) else _parse_date(report)
+    timing = lot.get("report_timing") if lot.get("report_timing") in ("am", "pm") else None
+    ref = reference_session(report, timing) if report else None
+    start = (ref or now.astimezone(ET).date()) - timedelta(days=7)
+    return start, now.astimezone(ET).date()
+
+
+def score_calls(lots, now: datetime) -> list[dict]:
+    calls = []
+    for lot in _normalize_lots(lots):
+        start, _end = bar_window(lot, now)
+        calls.append({
+            "tool": "get_equity_historicals",
+            "arguments": {
+                "symbols": [lot["symbol"]],
+                "interval": "day",
+                "bounds": "regular",
+                "adjustment_type": "split",
+                "start_time": datetime.combine(start, time(0, 0), tzinfo=ET).isoformat(),
+            },
+            "note": "regular daily bars only; skip a bar marked interpolated",
+        })
+    return calls
+
+
+def fetch_score_pending() -> list:
+    from steward_rpc import call
+    rows = call(STEWARD, "steward_earnings_score_pending", {"steward": STEWARD}, idempotent=True) or []
+    if not isinstance(rows, list):
+        raise RuntimeError("steward_earnings_score_pending did not return a list")
+    return rows
+
+
+def fetch_fd_prices(symbol: str, start: date, end: date, api_key: str) -> dict:
+    """Daily bars from Financial Datasets. Raises SourceError on transport. 404 is an empty list, not a guess."""
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    bars: list = []
+    url = "https://api.financialdatasets.ai/prices/?" + urllib.parse.urlencode({
+        "ticker": symbol,
+        "interval": "day",
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+    })
+    headers = {
+        "X-API-KEY": api_key,
+        "accept": "application/json",
+        "user-agent": "grasshopper-quantanamo/earnings_implied",
+    }
+    for _ in range(5):
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                body = json.loads(response.read().decode() or "{}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return {"prices": []}
+            raise SourceError(f"financial datasets prices HTTP {exc.code}") from None
+        except SourceError:
+            raise
+        except Exception as exc:
+            raise SourceError(f"{type(exc).__name__}: {str(exc)[:200]}") from None
+        if not isinstance(body, dict) or not isinstance(body.get("prices"), list):
+            raise SourceError("financial datasets prices response has no prices array")
+        bars.extend(body["prices"])
+        nxt = body.get("next_page_url")
+        if not nxt:
+            return {"prices": bars}
+        nxt = str(nxt)
+        if not nxt.startswith("https://api.financialdatasets.ai/"):
+            raise SourceError("financial datasets next_page_url is not on api.financialdatasets.ai")
+        url = nxt
+    raise SourceError("financial datasets prices still had another page after the page cap")
+
+
+def load_fd_prices(symbol: str, start: date, end: date):
+    key = _pass_marks()._api_key()
+    if not key:
+        raise SourceError("financialdatasets: FINANCIAL_DATASETS_API_KEY not set")
+    return fetch_fd_prices(symbol, start, end, key)
+
+
+def _lesson_args(lot: dict, move: dict, summary: str) -> dict:
+    return {
+        "steward": STEWARD,
+        "lot_id": str(lot.get("lot_id")),
+        "symbol": str(lot.get("symbol") or "").upper(),
+        "summary": summary,
+    }
+
+
+def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
+               caller_score=None, caller_lesson=None) -> dict:
+    """Score each lot from load(symbol, start, end). A transport error is a retry, not a missing bar."""
+    statements = []
+    results = []
+    for lot in lots or []:
+        if not isinstance(lot, dict):
+            continue
+        symbol = str(lot.get("symbol") or "").upper()
+        row = {"lot_id": str(lot.get("lot_id") or ""), "symbol": symbol}
+        report = lot.get("report_date")
+        report = report if isinstance(report, date) and not isinstance(report, datetime) else _parse_date(report)
+        if report is None:
+            row.update({"action": "error", "error": "score lot has no report_date"})
+            results.append(row)
+            continue
+        timing = lot.get("report_timing") if lot.get("report_timing") in ("am", "pm") else None
+        start, end = bar_window(lot, now)
+        try:
+            raw = load(symbol, start, end)
+        except SourceError as exc:
+            row.update({"action": "retry", "error": str(exc)[:200]})
+            results.append(row)
+            continue
+        if raw is None:
+            row["action"] = "waiting"
+            results.append(row)
+            continue
+        parsed = parse_daily_bars(raw, symbol)
+        move = score_earnings_move(
+            report_date=report, timing=timing, bars=parsed, now=now,
+            invalidation=lot.get("invalidation_price"), quantity=lot.get("quantity"),
+            straddle=lot.get("straddle_price"), underlying=lot.get("underlying_price"),
+        )
+        args = _jsonable(score_record_args(lot, move, source))
+        sql = _dollar_sql("steward_record_equity_earnings_score", args)
+        statements.append(sql)
+        row.update({
+            "action": "scored" if move.get("realized_close_to_close") is not None else "missing",
+            "score_missing_reason": move.get("score_missing_reason"),
+            "reference_session": None if move.get("reference_session") is None else move["reference_session"].isoformat(),
+            "post_session": None if move.get("post_session") is None else move["post_session"].isoformat(),
+            "outlier": bool(move.get("outlier")),
+            "sql": sql,
+        })
+        wrote = None
+        if execute:
+            try:
+                wrote = (caller_score or _execute_score)(args)
+            except Exception as exc:
+                row.update({"action": "error", "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+                results.append(row)
+                continue
+            if isinstance(wrote, dict):
+                row["outlier"] = bool(wrote.get("outlier"))
+                row["reported"] = wrote.get("reported")
+                row["thin"] = wrote.get("thin")
+                row["n"] = wrote.get("n")
+                if wrote.get("score_missing_reason"):
+                    row["score_missing_reason"] = wrote["score_missing_reason"]
+        if row.get("outlier"):
+            n = None
+            realized = move.get("realized_close_to_close")
+            implied = move.get("implied_fraction")
+            ratio = move.get("realized_implied_ratio")
+            jumped = move.get("line_jumped")
+            if isinstance(wrote, dict):
+                n = wrote.get("n")
+                if wrote.get("realized_close_to_close") is not None:
+                    realized = _decimal(wrote.get("realized_close_to_close"))
+                if wrote.get("implied_fraction") is not None:
+                    implied = _decimal(wrote.get("implied_fraction"))
+                if wrote.get("realized_implied_ratio") is not None:
+                    ratio = _decimal(wrote.get("realized_implied_ratio"))
+                if "line_jumped" in wrote:
+                    jumped = wrote.get("line_jumped")
+            summary = earnings_lesson_text(
+                symbol=symbol, realized=realized, implied=implied, ratio=ratio,
+                jumped=bool(jumped) if jumped is not None else None,
+                loose=bool(lot.get("expiry_loose")),
+                n=int(n) if n is not None and str(n).strip() != "" else None,
+            )
+            lesson = _jsonable(_lesson_args(lot, move, summary))
+            lesson_sql = _dollar_sql("steward_record_earnings_lesson", lesson)
+            statements.append(lesson_sql)
+            row["lesson_sql"] = lesson_sql
+            if execute:
+                try:
+                    noted = (caller_lesson or _execute_lesson)(lesson)
+                    if isinstance(noted, dict):
+                        row["lesson"] = noted.get("skipped") or ("replayed" if noted.get("replayed") else "written")
+                except Exception as exc:
+                    row["lesson_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        results.append(row)
+    return {"lots": len(results), "statements": statements, "results": results}
+
+
+def _execute_score(args: dict):
+    from steward_rpc import call
+    return call(STEWARD, "steward_record_equity_earnings_score", args)
+
+
+def _execute_lesson(args: dict):
+    from steward_rpc import call
+    return call(STEWARD, "steward_record_earnings_lesson", args)
+
+
+def score_from_loads(lots, *, execute: bool, now: datetime | None = None, load=None,
+                     caller_score=None, caller_lesson=None) -> dict:
+    now_i = now or datetime.now(timezone.utc)
+    return score_lots(
+        lots,
+        load=load or load_fd_prices,
+        execute=execute,
+        now=now_i,
+        source=SCORE_SOURCE_FD if load is None else SCORE_SOURCE_RH,
+        caller_score=caller_score,
+        caller_lesson=caller_lesson,
+    )
+
+
+def score_document(doc: dict, *, execute: bool, now: datetime | None = None,
+                   caller_score=None, caller_lesson=None) -> dict:
+    """Score doc['score'] from saved historicals. --execute falls back to Financial Datasets."""
+    now_i = now or datetime.now(timezone.utc)
+    lots = doc.get("score") if isinstance(doc.get("score"), list) else []
+    if execute and not lots:
+        try:
+            lots = fetch_score_pending()
+        except Exception as exc:
+            return {"lots": 0, "statements": [], "results": [],
+                    "error": f"{type(exc).__name__}: {str(exc)[:300]}"}
+
+    def load(symbol: str, start: date, end: date):
+        raw = payloads_for(doc, symbol).get("historicals") if isinstance(doc, dict) else None
+        if raw is not None:
+            return raw
+        if not execute:
+            return None
+        return load_fd_prices(symbol, start, end)
+
+    source = SCORE_SOURCE_RH
+    # A document with no historicals is scored from Financial Datasets.
+    if not any(payloads_for(doc, str(lot.get("symbol") or "")) .get("historicals") is not None
+               for lot in lots if isinstance(lot, dict)):
+        source = SCORE_SOURCE_FD
+    return score_lots(
+        lots, load=load, execute=execute, now=now_i, source=source,
+        caller_score=caller_score, caller_lesson=caller_lesson,
+    )
+
+
+def plan_document(gaps, pending, now: datetime | None = None) -> dict:
+    now_i = now or datetime.now(timezone.utc)
+    out = plan_calls(gaps)
+    rows = pending if isinstance(pending, list) else []
+    out["score"] = rows
+    out["score_calls"] = score_calls(rows, now_i)
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="earnings_implied.py", description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    sub.add_parser("plan", help="open lots with no current implied-move row, and the Robinhood calls")
-    wr = sub.add_parser("write", help="saved Robinhood responses to steward_record_equity_implied_move SQL")
+    sub.add_parser("plan", help="implied-move gaps, score-pending lots, and the Robinhood calls")
+    wr = sub.add_parser("write", help="saved Robinhood responses to ledger SQL, then score passed prints")
     wr.add_argument("payload", help="JSON file: lots plus the raw MCP responses")
     wr.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
     wr.add_argument("--dry-run", action="store_true", help="print the SQL only")
+    sc = sub.add_parser("score", help="score passed prints from Financial Datasets daily bars")
+    sc.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
+    sc.add_argument("--dry-run", action="store_true", help="print the SQL only")
     args = ap.parse_args(argv)
     if args.command == "plan":
         try:
-            print(json.dumps(plan_calls(fetch_gap_lots()), default=str))
+            gaps = fetch_gap_lots()
         except Exception as exc:
             print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
             return 1
+        pending = []
+        score_error = None
+        try:
+            pending = fetch_score_pending()
+        except Exception as exc:
+            score_error = f"{type(exc).__name__}: {str(exc)[:300]}"
+        out = plan_document(gaps, pending)
+        if score_error:
+            out["score_error"] = score_error
+        print(json.dumps(out, default=str))
         return 0
+    if args.command == "score":
+        execute = bool(args.execute) and not args.dry_run
+        try:
+            pending = fetch_score_pending()
+            out = score_from_loads(pending, execute=execute)
+        except Exception as exc:
+            print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
+            return 1
+        print(json.dumps(out, default=str))
+        return 1 if any(row.get("action") == "error" for row in out.get("results", [])) else 0
     try:
         doc = json.loads(open(args.payload).read())
-        out = write_payload(doc, execute=bool(args.execute) and not args.dry_run)
+        execute = bool(args.execute) and not args.dry_run
+        out = write_payload(doc, execute=execute)
+        out["score"] = score_document(doc, execute=execute)
     except (OSError, ValueError) as exc:
         print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
         return 1
     print(json.dumps(out, default=str))
-    return 1 if any(row.get("action") == "error" for row in out["results"]) else 0
+    bad = any(row.get("action") == "error" for row in out["results"])
+    bad = bad or any(row.get("action") == "error" for row in out["score"].get("results", []))
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":

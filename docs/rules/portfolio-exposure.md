@@ -12,8 +12,13 @@ Code paths:
 - `supabase/schemas/41_court_decisions.sql`
 - `supabase/schemas/44_exposure_gap_full_notional.sql`
 - `supabase/schemas/80_equity_implied_move_risk.sql`
+- `supabase/schemas/82_equity_earnings_score.sql`
 - `stewards/quantanamo/earnings_implied.py`
 - `stewards/quantanamo/steward_rpc.py`
+
+## After the print
+
+Once the report's release clock has passed, the steward records the realized move beside the priced one (`reference_close`, the first regular-session open and close, the open gap, the close-to-close move, and whether that open went through the exit). A missing bar is `score_missing_reason`. Nothing in that score changes `private.equity_lot_open_risk`: until the report is out, risk is still the max of the line and the priced move, and a later expiry stays in that max. `expiry_loose` is true when the listed expiry is more than 7 days after the report. That flag means the priced move is a loose upper bound (the nearest listed expiry was already that far out). The scorecard withholds a verdict until 5 closes are scored.
 
 ## The court
 

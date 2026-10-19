@@ -611,6 +611,25 @@ export type DeskTeamPayload = {
   accounts: DeskAccountCatalogRow[];
 };
 
+/** One `equity_implied_moves` row: the priced earnings move, and the realized move once scored. */
+export type EquityEarningsRow = {
+  lot_id: string;
+  symbol: string;
+  report_date: string | null;
+  report_timing: 'am' | 'pm' | null;
+  reported: boolean;
+  straddle_price: number | null;
+  underlying_price: number | null;
+  expiry_date: string | null;
+  expiry_gap_days: number | null;
+  expiry_loose: boolean;
+  realized_open_gap: number | null;
+  realized_close_to_close: number | null;
+  realized_implied_ratio: number | null;
+  line_jumped: boolean | null;
+  score_missing_reason: string | null;
+};
+
 export type DeskPayload = {
   generated_at: string;
   source: 'postgres' | 'postgrest' | 'snapshot';
@@ -624,6 +643,8 @@ export type DeskPayload = {
   scorecard?: import('./steward-scorecard').StewardScorecardPayload;
   /** `v_ledger_watchdog` backstop counts + breach / missing-invalidation lists. Read-only. */
   watchdog?: import('./ledger-watchdog').LedgerWatchdog;
+  /** Open-lot earnings prints. Empty until `equity_implied_moves` is readable. */
+  earnings?: EquityEarningsRow[];
   theses: ThesisRow[];
   /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
   beliefs: import('./beliefs').BeliefUpdateRow[];

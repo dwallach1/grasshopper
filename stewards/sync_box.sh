@@ -7,7 +7,7 @@
 # 2. Creates or repairs each steward venv (/workspace/<steward>/.venv) from the pinned requirements.
 # 3. Runs doctor.sh and exits with its status.
 # QUANTANAMO earnings sweep: earnings_implied.py is copied to /workspace/quantanamo/earnings_implied.py.
-# Run `plan`, then `write <payload.json> --execute`.
+# Run `plan`, then `write <payload.json> --execute`. After a print, `score --execute` records the realized move.
 #
 # Why this exists: the box's durable store deliberately skips `.venv/`, `venv/` and `.cache/` (the box
 # default ignore list), so a box refresh wipes every venv and the pip cache while /workspace files survive.
