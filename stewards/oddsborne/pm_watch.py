@@ -11,10 +11,12 @@ Per lot: live BBO; print = outcome bid -> last -> mid (as the watch scripts did)
 gets mark = print, mark_at, and meta (watch_at, watch_result, print_px, bbo_*, mark_source venue_best_bid,
 invalidation_price, market_state, writer pm_watch) via public.oddsborne_mark_position over HTTPS; the
 pm_positions trigger touches the ODDSBORNE heartbeat. Settled/closed markets are reported, not marked.
-When the pass marks at least one lot it also writes one pm_pnl row through pm_pnl_snapshot.refresh_snapshot
+When a non-trip pass marks at least one lot it also writes one pm_pnl row through pm_pnl_snapshot.refresh_snapshot
 (cash + open lots at the venue mark from account.balances + portfolio.positions, writer pm_watch), so the book
-row keeps up with the marks. A refused or failed refresh prints 'WARN pm_pnl refresh failed' and never changes the
-watch result or exit code (no invented marks; no pm_decision_markets sweep). --dry-run reports the would-write.
+row keeps up with the marks. A pass that trips (exit 10) writes no pm_pnl: the exit comes first, and pm_exit's
+oddsborne_exit_record writes the pm_pnl row with post-sell venue cash. A refused or failed refresh prints
+'WARN pm_pnl refresh failed' and never changes the watch result or exit code (no invented marks; no
+pm_decision_markets sweep). --dry-run reports the would-write.
 """
 from __future__ import annotations
 
@@ -130,7 +132,10 @@ def main(argv=None) -> int:
         if r.get("watch_result") == "trip":
             rc = 10
         results.append(r)
-    pnl = refresh_pnl(c, rpc, sum(1 for r in results if marked(r)), a.dry_run, a.routine)
+    if rc == 10:  # trip: exit first; pm_exit writes pm_pnl after the sell, so a hung ledger can't delay the exit
+        pnl = {"decision": "SKIPPED_TRIP", "why": "pass tripped: pm_exit writes the pm_pnl row after the sell"}
+    else:
+        pnl = refresh_pnl(c, rpc, sum(1 for r in results if marked(r)), a.dry_run, a.routine)
     out = results[0] if not a.all_open and results else {"open_lots": len(ids), "results": results}
     if pnl is not None:
         out["pm_pnl_refresh"] = pnl
