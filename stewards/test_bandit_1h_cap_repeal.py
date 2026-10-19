@@ -50,18 +50,18 @@ class CapRepealed(unittest.TestCase):
         self.assertEqual(len(calls), 3)                     # thesis_paused, edge2, _paper_log (edge3-6, edge5 voids)
         pl = next(n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name == "_paper_log")
         pl_calls = {id(n) for n in ast.walk(pl)}
-        self.assertEqual(ast.unparse(pl.body[1]), "meta = dict(meta or {}, **_hot_meta(r))")   # first statement after the docstring
+        self.assertEqual(ast.unparse(pl.body[1]), "meta = _log_meta(r, meta)")   # first statement after the docstring (audit + hot tag)
         for c in calls:
             meta = next(k.value for k in c.keywords if k.arg == "meta")
             if id(c) in pl_calls:
                 self.assertEqual(ast.unparse(meta), "meta")
             else:
-                self.assertIn("_hot_meta(r)", ast.unparse(meta))
+                self.assertIn("_log_meta(r", ast.unparse(meta))       # _log_meta = audit fields + _hot_meta
 
     def test_paper_log_passes_tag_through(self):
         got = []
         fake = types.SimpleNamespace(log_decision=lambda steward, **kw: got.append(kw) or {"ok": True, "id": 1})
-        ns = _fns("_paper_log", "_hot_meta", HOT_1H_PCT=30, PAPER_TAG="paper_only", _no_log=False,
+        ns = _fns("_paper_log", "_hot_meta", "_audit_meta", "_log_meta", HOT_1H_PCT=30, LIQ_SRC="jupiter_tokens_v2_total", PAPER_TAG="paper_only", _no_log=False,
                   _px_sol=lambda r: (1e-6, 0.001, None), _dec_pt="2026-10-18T06:00:00-07:00", _stamp="20261018T0600")
         old = sys.modules.get("steward_rpc"); sys.modules["steward_rpc"] = fake
         try:
@@ -71,9 +71,9 @@ class CapRepealed(unittest.TestCase):
         finally:
             if old is None: sys.modules.pop("steward_rpc", None)
             else: sys.modules["steward_rpc"] = old
-        self.assertEqual(got[0]["meta"], {"edge6": {"x": 1}, "hot_1h": True, "chg_1h": 88.0})
-        self.assertEqual(got[1]["meta"], {"edge3": {}, "hot_1h": False, "chg_1h": 4.0})
-        self.assertEqual(got[2]["meta"], {"edge5": {}})                               # no 1h change known -> no tag
+        self.assertEqual(got[0]["meta"], {"edge6": {"x": 1}, "mint": "MintHot111", "hot_1h": True, "chg_1h": 88.0})
+        self.assertEqual(got[1]["meta"], {"edge3": {}, "mint": "MintCold11", "hot_1h": False, "chg_1h": 4.0})
+        self.assertEqual(got[2]["meta"], {"edge5": {}, "mint": "MintStub11"})         # no 1h change known -> no tag
         self.assertTrue(all(g["blocked_by"] == "paper_only" for g in got))
 
 
