@@ -11,6 +11,10 @@ Per lot: live BBO; print = outcome bid -> last -> mid (as the watch scripts did)
 gets mark = print, mark_at, and meta (watch_at, watch_result, print_px, bbo_*, mark_source venue_best_bid,
 invalidation_price, market_state, writer pm_watch) via public.oddsborne_mark_position over HTTPS; the
 pm_positions trigger touches the ODDSBORNE heartbeat. Settled/closed markets are reported, not marked.
+When the pass marks at least one lot it also writes one pm_pnl row through pm_pnl_snapshot.refresh_snapshot
+(cash + open lots at the venue mark from account.balances + portfolio.positions, writer pm_watch), so the book
+row keeps up with the marks. A refused or failed refresh prints 'WARN pm_pnl refresh failed' and never changes the
+watch result or exit code (no invented marks; no pm_decision_markets sweep). --dry-run reports the would-write.
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ for _p in (os.environ.get("ODDSBORNE_HOME"), _HERE):
     if _p and _p not in sys.path:
         sys.path.insert(0, _p)
 
-from pm_enter import _require_runtime, jsonable, make_client, make_rpc, market_view, outcome_book  # noqa: E402
+from pm_enter import _require_runtime, jsonable, make_client, make_rpc, market_view, outcome_book, vcall  # noqa: E402
 from pm_exit import print_price  # noqa: E402
 
 
@@ -72,6 +76,33 @@ def watch_one(c, rpc, pos: dict, dry_run: bool, routine: str = "") -> dict:
     return res
 
 
+def marked(r: dict) -> bool:
+    """True when watch_one marked the lot from the venue (live: ledger updated; dry-run: a mark would be written)."""
+    return bool(r.get("ledger_updated")) or "would_write" in r
+
+
+def refresh_pnl(c, rpc, n_marked: int, dry_run: bool, routine: str = "") -> dict | None:
+    """One pm_pnl row after the watch marked lot(s): pm_pnl_snapshot.refresh_snapshot on the venue balances and
+    positions (same valuation as session_daily/session_pm), writer pm_watch. Nothing when no lot was marked.
+    Never raises: a refusal (unvalued venue position) or any failure is a WARN and the watch carries on."""
+    if not n_marked:
+        return None
+    try:
+        import pm_pnl_snapshot as PS
+        bal = vcall(c.account.balances, tries=2)
+        pos = vcall(c.portfolio.positions, tries=2)
+        notes = f"pm_watch {routine or 'manual'}: marked {n_marked} open lot(s) from the venue"
+        res = PS.refresh_snapshot(rpc, bal, pos, notes, dry_run=dry_run, writer="pm_watch")
+        if dry_run:
+            return res
+        return {"decision": res["decision"], "pm_pnl_id": res.get("pm_pnl_id"), "equity": res["args"]["equity"],
+                "cash": res["args"]["cash"], "asset_source": res["args"]["payload"]["asset_source"]}
+    except Exception as e:
+        msg = f"WARN pm_pnl refresh failed: {type(e).__name__}: {str(e)[:300]}"
+        print(msg, file=sys.stderr, flush=True)
+        return {"decision": "WARN", "warn": msg}
+
+
 def main(argv=None) -> int:
     _require_runtime("oddsborne", ("polymarket_us",))
     ap = argparse.ArgumentParser(prog="pm_watch.py", description=__doc__.split("\n")[0])
@@ -99,7 +130,10 @@ def main(argv=None) -> int:
         if r.get("watch_result") == "trip":
             rc = 10
         results.append(r)
+    pnl = refresh_pnl(c, rpc, sum(1 for r in results if marked(r)), a.dry_run, a.routine)
     out = results[0] if not a.all_open and results else {"open_lots": len(ids), "results": results}
+    if pnl is not None:
+        out["pm_pnl_refresh"] = pnl
     print(json.dumps(jsonable(out), indent=1))
     return rc
 
