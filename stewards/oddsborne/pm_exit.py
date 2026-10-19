@@ -22,6 +22,9 @@ Flow:
      10/4 TEN/MIA closes lacked them, so realized_pnl stayed null), exit fills linked, lot closed (or
      reduced), pm_pnl row. Closing needs linked buys = linked sells, so trade_outcomes gets realized_pnl
      with pnl_source 'fills'; otherwise it refuses (fills_incomplete) unless --allow-unpriced "<why>".
+     The pm_pnl row is written here, after the sell, from post-sell account.balances cash; pm_watch skips its own
+     pm_pnl write on a trip so the exit is never delayed by bookkeeping. No cash from the venue -> no pm_pnl row
+     (the close still lands).
 Then: close_lesson.py --position-id <uuid> --rationale "..." --new-confidence N.
 Exit code: 0 closed/reduced/dry-run/order recorded, 2 refused or aborted, 1 error.
 """
