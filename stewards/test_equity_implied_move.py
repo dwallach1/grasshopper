@@ -71,6 +71,105 @@ def _book(*, actual=None, quotes=None, dates=None):
     }
 
 
+def _sql_args(sql: str) -> dict:
+    import json
+    start = sql.index("$") + 1
+    tag, rest = sql[start:].split("$", 1)
+    body = rest.split(f"${tag}$", 1)[0]
+    return json.loads(body)
+
+
+def _contract(side: str, side_name: str, strike: str, expiry: str, iid: str) -> dict:
+    return {
+        "id": iid, "expiration_date": expiry, "strike_price": strike, "type": side_name,
+        "state": "active", "tradability": "tradable", "chain_symbol": None,
+    }
+
+
+def _quote(iid: str, mark: str) -> dict:
+    return {"quote": {"instrument_id": iid, "mark_price": mark, "updated_at": "2026-10-19T15:00:00Z"}}
+
+
+def _mcp_payload() -> dict:
+    """Raw MCP responses. AAPL has a weekly after the report. EFX is monthly-only.
+
+    A decoy expiry sits in each chain (AAPL's later month, EFX's date before the report)
+    so the writer has to pick the nearest listed expiry on or after the report.
+    """
+    aapl_expiry = "2026-10-23"
+    efx_expiry = "2026-11-20"
+    return {
+        "lots": [
+            {"lot_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "symbol": "AAPL"},
+            {"lot_id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "symbol": "EFX"},
+        ],
+        "get_earnings_results": {
+            "AAPL": {"data": {"results": [{
+                "symbol": "AAPL",
+                "eps": {"estimate": "1.98", "actual": None},
+                "report": {"date": "2026-10-22", "timing": "pm", "verified": True},
+            }]}},
+            "EFX": {"data": {"results": [{
+                "symbol": "EFX",
+                "eps": {"estimate": "1.80", "actual": None},
+                "report": {"date": "2026-10-20", "timing": "am", "verified": True},
+            }]}},
+        },
+        "get_option_chains": {
+            "AAPL": {"data": {"chains": [{"symbol": "AAPL", "expiration_dates": [
+                "2026-10-16", "2026-10-23", "2026-11-20",
+            ]}]}},
+            "EFX": {"data": {"chains": [{"symbol": "EFX", "expiration_dates": [
+                "2026-10-16", "2026-11-20", "2026-12-18",
+            ]}]}},
+        },
+        "get_equity_quotes": {"data": {"results": [
+            {"quote": {
+                "symbol": "AAPL", "last_trade_price": "100",
+                "venue_last_trade_time": "2026-10-19T15:00:00Z",
+                "has_traded": True, "state": "active",
+            }},
+            {"quote": {
+                "symbol": "EFX", "last_trade_price": "50",
+                "venue_last_trade_time": "2026-10-19T15:00:00Z",
+                "has_traded": True, "state": "active",
+            }},
+        ]}},
+        "get_option_instruments": {
+            "AAPL": {"data": {"instruments": [
+                _contract("c", "call", "100", aapl_expiry, "c100"),
+                _contract("p", "put", "100", aapl_expiry, "p100"),
+                _contract("c", "call", "110", aapl_expiry, "c110"),
+                _contract("p", "put", "110", aapl_expiry, "p110"),
+                # Later month, closer to nothing we should pick. Marks below are larger on purpose.
+                _contract("c", "call", "100", "2026-11-20", "c100m"),
+                _contract("p", "put", "100", "2026-11-20", "p100m"),
+            ]}},
+            "EFX": {"data": {"instruments": [
+                # Before the report. Must not be the stored expiry.
+                _contract("c", "call", "50", "2026-10-16", "c50early"),
+                _contract("p", "put", "50", "2026-10-16", "p50early"),
+                _contract("c", "call", "45", efx_expiry, "c45"),
+                _contract("p", "put", "45", efx_expiry, "p45"),
+                _contract("c", "call", "50", efx_expiry, "c50"),
+                _contract("p", "put", "50", efx_expiry, "p50"),
+            ]}},
+        },
+        "get_option_quotes": {
+            "AAPL": {"data": {"results": [
+                _quote("c100", "4.25"), _quote("p100", "3.75"),
+                _quote("c110", "1.00"), _quote("p110", "9.00"),
+                _quote("c100m", "9"), _quote("p100m", "9"),
+            ]}},
+            "EFX": {"data": {"results": [
+                _quote("c50early", "1"), _quote("p50early", "1"),
+                _quote("c45", "6"), _quote("p45", "1"),
+                _quote("c50", "3.5"), _quote("p50", "2.5"),
+            ]}},
+        },
+    }
+
+
 class EquityImpliedMove(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -241,3 +340,150 @@ class EquityImpliedMove(unittest.TestCase):
         old = (ROOT / "supabase" / "schemas" / "44_exposure_gap_full_notional.sql").read_text()
         self.assertIn("else m.quantity * greatest(m.mark - m.invalidation_price, 0)", old)
         self.assertNotIn("implied_move_missing", old)
+
+    def test_plan_lists_the_missing_lot_and_the_robinhood_calls(self) -> None:
+        m = self.m
+        lots = [
+            {"lot_id": "lot-efx", "symbol": "efx", "quantity": Decimal(12)},
+            {"lot_id": "lot-rol", "symbol": "ROL", "quantity": 4},
+            {"lot_id": "lot-aapl", "symbol": "AAPL", "quantity": 1},
+        ]
+        # AAPL has a current straddle for a report that is still ahead. EFX has no row.
+        # ROL's report is still ahead and the straddle was never stored.
+        observations = {
+            "lot-aapl": {
+                "report_date": date(2026, 11, 2), "report_timing": "pm", "reported": False,
+                "straddle_price": Decimal("8"), "missing_reason": None,
+            },
+            "lot-rol": {
+                "report_date": date(2026, 11, 5), "report_timing": "am", "reported": False,
+                "straddle_price": None, "missing_reason": None,
+            },
+        }
+        gaps = m.gap_lots(lots, observations, BEFORE)
+        self.assertEqual([row["symbol"] for row in gaps], ["EFX", "ROL"])
+        self.assertEqual(gaps[0]["quantity"], "12")
+        plan = m.plan_calls(gaps)
+        self.assertEqual([row["lot_id"] for row in plan["lots"]], ["lot-efx", "lot-rol"])
+        by_tool = {}
+        for call in plan["calls"]:
+            by_tool.setdefault(call["tool"], []).append(call)
+        self.assertEqual(
+            [call["arguments"] for call in by_tool["get_earnings_results"]],
+            [{"symbol": "EFX"}, {"symbol": "ROL"}],
+        )
+        self.assertEqual(
+            [call["arguments"] for call in by_tool["get_option_chains"]],
+            [{"underlying_symbol": "EFX"}, {"underlying_symbol": "ROL"}],
+        )
+        self.assertEqual(by_tool["get_equity_quotes"][0]["arguments"], {"symbols": ["EFX", "ROL"]})
+        instruments = by_tool["get_option_instruments"]
+        self.assertEqual(instruments[0]["arguments"], {"chain_symbol": "EFX", "state": "active"})
+        self.assertEqual(instruments[0]["fill"]["expiration_dates"].split()[0], "nearest")
+        self.assertEqual(instruments[0]["after"], ["get_earnings_results", "get_option_chains"])
+        quotes = by_tool["get_option_quotes"]
+        self.assertEqual(quotes[1]["arguments"], {})
+        self.assertIn("instrument_ids", quotes[1]["fill"])
+        self.assertEqual(quotes[1]["after"], ["get_option_instruments", "get_equity_quotes"])
+        # A written missing flag, and a passed report, are current: plan does not list them.
+        covered = m.gap_lots(
+            [{"lot_id": "lot-flag", "symbol": "CODA"}, {"lot_id": "lot-out", "symbol": "NBIS"}],
+            {
+                "lot-flag": {"report_date": date(2026, 10, 20), "report_timing": "am", "missing_reason": "implied_move_missing"},
+                "lot-out": {"report_date": date(2026, 10, 20), "report_timing": "am", "reported": True},
+            },
+            BEFORE,
+        )
+        self.assertEqual(covered, [])
+
+    def test_write_weekly_and_monthly_payloads(self) -> None:
+        # Prices here are the fixture's inputs, not live quotes.
+        # AAPL lists a weekly on 2026-10-23. EFX's nearest listed date on or after 2026-10-20 is 2026-11-20.
+        payload = _mcp_payload()
+        out = self.m.write_payload(payload, now=BEFORE)
+        self.assertEqual(out["lots"], 2)
+        self.assertEqual(len(out["statements"]), 2)
+        by_symbol = {row["symbol"]: row for row in out["results"]}
+        weekly = _sql_args(by_symbol["AAPL"]["sql"])
+        self.assertEqual(weekly["expiry_date"], "2026-10-23")
+        self.assertEqual(weekly["strike"], "100")
+        self.assertEqual(weekly["call_price"], "4.25")
+        self.assertEqual(weekly["put_price"], "3.75")
+        self.assertEqual(weekly["straddle_price"], "8.00")
+        self.assertEqual(weekly["underlying_price"], "100")
+        self.assertEqual(weekly["report_date"], "2026-10-22")
+        self.assertEqual(weekly["report_timing"], "pm")
+        self.assertNotIn("missing_reason", weekly)
+        self.assertIn("select public.steward_record_equity_implied_move(", by_symbol["AAPL"]["sql"])
+        monthly = _sql_args(by_symbol["EFX"]["sql"])
+        self.assertEqual(monthly["expiry_date"], "2026-11-20")
+        self.assertEqual(monthly["strike"], "50")
+        self.assertEqual(monthly["call_price"], "3.5")
+        self.assertEqual(monthly["put_price"], "2.5")
+        self.assertEqual(monthly["straddle_price"], "6.0")
+        self.assertEqual(monthly["report_date"], "2026-10-20")
+        self.assertEqual(monthly["report_timing"], "am")
+        self.assertNotEqual(monthly["expiry_date"], "2026-10-16")
+
+    def test_write_missing_data_flags_and_invents_no_price(self) -> None:
+        payload = _mcp_payload()
+        # mark_price 0, with a bid and an ask, is not a price. Neither is an absent mark.
+        payload["get_option_quotes"] = {
+            "AAPL": {"data": {"results": [
+                {"quote": {"instrument_id": "c100", "mark_price": "0", "bid_price": "4.10", "ask_price": "4.40",
+                           "updated_at": "2026-10-19T15:00:00Z"}},
+                {"quote": {"instrument_id": "p100", "bid_price": "3.60", "ask_price": "3.90",
+                           "updated_at": "2026-10-19T15:00:00Z"}},
+            ]}},
+            "EFX": {"data": {"results": []}},
+        }
+        called = []
+        out = self.m.write_payload(payload, execute=True, now=BEFORE, caller=lambda args: called.append(args) or {"ok": True})
+        self.assertEqual(called[0]["missing_reason"], "implied_move_missing")
+        for row in out["results"]:
+            args = _sql_args(row["sql"])
+            self.assertEqual(args["missing_reason"], "implied_move_missing")
+            self.assertEqual(row["action"], "implied_move_missing")
+            for key in ("straddle_price", "underlying_price", "call_price", "put_price", "expiry_date", "strike"):
+                self.assertNotIn(key, args, row["symbol"] + " " + key)
+            self.assertNotIn("4.10", row["sql"])
+            self.assertNotIn("4.40", row["sql"])
+            self.assertNotIn("3.60", row["sql"])
+            self.assertNotIn("3.90", row["sql"])
+        self.assertEqual(_sql_args(out["results"][0]["sql"])["symbol"] in ("AAPL", "EFX"), True)
+        # No responses at all is still a missing row, so the lot flags instead of staying silent.
+        bare = self.m.write_payload(
+            {"lots": [{"lot_id": "lot-new", "symbol": "NEW"}]}, now=BEFORE,
+        )
+        args = _sql_args(bare["statements"][0])
+        self.assertEqual(args["missing_reason"], "implied_move_missing")
+        self.assertNotIn("straddle_price", args)
+        self.assertEqual(args["observed_at"], "2026-10-19T16:00:00Z")
+
+    def test_watchdog_gap_count_matches_the_sql_predicate(self) -> None:
+        # Same six rows as supabase/tests/81_equity_implied_move_gaps.sql. Two are gaps.
+        m = self.m
+        rows = [
+            None,
+            {"report_date": date(2026, 10, 20), "report_timing": "am", "reported": False, "straddle_price": Decimal(6)},
+            {"report_date": date(2026, 10, 20), "report_timing": "am", "reported": False, "missing_reason": "implied_move_missing"},
+            {"report_date": date(2026, 10, 20), "report_timing": "am", "reported": True},
+            {"report_date": None, "reported": False},
+            {"report_date": date(2026, 10, 20), "report_timing": "am", "reported": False, "straddle_price": None},
+        ]
+        lots = [{"lot_id": f"lot-{i}", "symbol": "EFX"} for i in range(len(rows))]
+        observations = {lot["lot_id"]: row for lot, row in zip(lots, rows)}
+        gaps = m.gap_lots(lots, observations, BEFORE)
+        self.assertEqual(len(gaps), 2)
+        self.assertEqual([row["lot_id"] for row in gaps], ["lot-0", "lot-5"])
+        sql = (ROOT / "supabase" / "schemas" / "81_equity_implied_move_gaps.sql").read_text()
+        mig = ROOT / "supabase" / "migrations" / "20261019193000_equity_implied_move_gaps.sql"
+        self.assertEqual(mig.read_text(), sql)
+        self.assertIn("as equity_implied_move_gaps", sql)
+        self.assertIn("from public.v_equity_implied_move_gaps", sql)
+        self.assertIn("public.equity_implied_move_is_gap", sql)
+        self.assertIn("pe.status = 'open'", sql)
+        self.assertIn("security invoker", sql[sql.index("function public.equity_implied_move_is_gap"):sql.index("function public.steward_implied_move_gaps")])
+        self.assertIn("time '09:30'", sql)
+        self.assertIn("time '20:00'", sql)
+        self.assertIn("'steward_implied_move_gaps'", (ROOT / "supabase" / "functions" / "steward-rpc" / "index.ts").read_text())

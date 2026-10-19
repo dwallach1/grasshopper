@@ -95,6 +95,10 @@ describe('ledger watchdog', () => {
     expect(watchdog.integrity_issues).toBe(0);
     expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
     expect(watchdogHealthSummary(watchdog).unscoreable_decisions).toEqual(watchdog.unscoreable_decisions);
+    const gaps = mapLedgerWatchdog({ summary: [{ equity_implied_move_gaps: 2, open_lots: 3 }] });
+    expect(gaps.equity_implied_move_gaps).toBe(2);
+    expect(watchdogHealthSummary(gaps).equity_implied_move_gaps).toBe(2);
+    expect(mapLedgerWatchdog({ summary: [{ open_lots: 1 }] }).equity_implied_move_gaps).toBe(0);
     const health = assembleDeskBookHealth({ watchdog } as unknown as DeskPayload, Date.parse('2026-10-05T17:00:00Z'));
     expect(health.alerts).toEqual([]);
     expect(health.integrity_issues).toBe(0);
@@ -110,6 +114,14 @@ describe('ledger watchdog', () => {
     expect(sql).toContain('l.created_at > c.closed_at');
     expect(sql).toContain('nullif(btrim(pe.thesis_id), \'\') is not null');
     expect(sql).toContain('as learning_gaps');
+    const gaps = readFileSync(join(import.meta.dir, '../../../supabase/schemas/81_equity_implied_move_gaps.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261019193000_equity_implied_move_gaps.sql'), 'utf8')).toBe(gaps);
+    expect(gaps).toContain('as equity_implied_move_gaps');
+    expect(gaps).toContain('public.equity_implied_move_is_gap');
+    expect(gaps).toContain("time '09:30'");
+    expect(gaps).toContain("time '20:00'");
+    expect(gaps).toContain("pe.status = 'open'");
+    expect(gaps).toContain('security invoker');
     const skips = readFileSync(join(import.meta.dir, '../../../supabase/schemas/56_decision_skip_scoring.sql'), 'utf8');
     expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261006173751_decision_skip_scoring.sql'), 'utf8')).toBe(skips);
     expect(skips).toContain('as unscoreable_decisions');

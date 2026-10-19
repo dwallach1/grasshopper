@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """QUANTANAMO earnings implied move: the straddle a held equity can gap on the print.
 
-Usage (from /workspace/quantanamo, after sync_box.sh):
-  .venv/bin/python earnings_implied.py --payloads observations.json --dry-run
-  .venv/bin/python earnings_implied.py --payloads observations.json
+The sweep is two commands. Python does not call Robinhood. On the box, sync_box.sh
+copies this file to /workspace/quantanamo/earnings_implied.py.
 
-There is no Robinhood HTTP client in this process. The steward fetches the payloads
-with the Robinhood tools and passes them in (a JSON object keyed by symbol, or the
-fetch= callable). This file only reads those payloads. It never invents a price.
+  python3 stewards/quantanamo/earnings_implied.py plan
+  python3 stewards/quantanamo/earnings_implied.py write payload.json
+  python3 stewards/quantanamo/earnings_implied.py write payload.json --execute
 
-Tools, per open lot:
-  get_earnings_results (or get_earnings_calendar)  report date, am/pm, actual EPS
-  get_option_chains                                expiration_dates
-  get_equity_quotes                                underlying last trade
-  get_option_instruments                           contracts at the chosen expiry
-  get_option_quotes                                mark_price of the ATM call and put
+plan prints the open lots that lack a current implied-move row (no row, or a report
+still ahead with no straddle and no implied_move_missing flag) and the Robinhood
+calls. write reads the saved MCP responses and emits
+select public.steward_record_equity_implied_move(...). --execute runs that call.
+--dry-run prints the SQL only. A missing quote is stored as implied_move_missing.
+This file never invents a price.
+
+Tools, per open lot (plan names these; write accepts the raw responses):
+  get_earnings_results     one symbol: report date, am/pm, actual EPS (upcoming quarter included)
+  get_earnings_calendar    market window, 31 days; accepted if that is what was saved
+  get_option_chains        expiration_dates          argument underlying_symbol
+  get_equity_quotes        underlying last trade     argument symbols
+  get_option_instruments   contracts at the expiry   arguments chain_symbol, expiration_dates, state
+  get_option_quotes        mark_price of ATM call and put   argument instrument_ids
 
 Rule (GRASSHOPPER 2026-10-19; the SQL copy is private.equity_lot_open_risk):
   Until the report is out, open risk = max(line distance, implied-move risk).
@@ -481,28 +488,304 @@ def sweep_quietly(fetch=None) -> dict:
         return {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
 
-def _load_payloads(path: str) -> dict:
-    data = json.loads(open(path).read())
+def _reported_flag(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "t", "1")
+    return bool(value)
+
+
+def is_implied_move_gap(observation: dict | None, now: datetime) -> bool:
+    """True when this open lot has no current implied-move row.
+
+    Same predicate as public.equity_implied_move_is_gap. No row is a gap: the sweep
+    never wrote, so a report still ahead would be silent. A row whose report is still
+    ahead, with no straddle and no implied_move_missing flag, is a gap. A priced
+    straddle, a passed report, a checked calendar with nothing pending, or a missing
+    flag is current.
+    """
+    if observation is None:
+        return True
+    raw_date = observation.get("report_date")
+    report_date = raw_date if isinstance(raw_date, date) and not isinstance(raw_date, datetime) else _parse_date(raw_date)
+    if report_date is None:
+        return False
+    if _positive(observation.get("straddle_price")) is not None:
+        return False
+    if observation.get("missing_reason"):
+        return False
+    timing = str(observation.get("report_timing") or "").lower()
+    if timing not in ("am", "pm"):
+        timing = None
+    return not report_passed(report_date, timing, _reported_flag(observation.get("reported")), now)
+
+
+def _normalize_lots(lots) -> list[dict]:
+    rows = []
+    for lot in lots or []:
+        if not isinstance(lot, dict):
+            continue
+        lot_id = str(lot.get("lot_id") or "").strip()
+        symbol = str(lot.get("symbol") or "").upper().strip()
+        if not lot_id or not symbol:
+            continue
+        row = {"lot_id": lot_id, "symbol": symbol}
+        if lot.get("quantity") is not None:
+            qty = lot["quantity"]
+            row["quantity"] = format(qty, "f") if isinstance(qty, Decimal) else qty
+        rows.append(row)
+    rows.sort(key=lambda row: (row["symbol"], row["lot_id"]))
+    return rows
+
+
+def gap_lots(lots, observations: dict | None, now: datetime) -> list[dict]:
+    """Lots is_implied_move_gap still wants. observations is keyed by lot_id."""
+    observations = observations or {}
+    return _normalize_lots([
+        lot for lot in (lots or [])
+        if isinstance(lot, dict) and is_implied_move_gap(observations.get(str(lot.get("lot_id") or "").strip()), now)
+    ])
+
+
+def plan_calls(lots) -> dict:
+    """Exact Robinhood calls for these lots. `fill` is completed from the earlier response."""
+    rows = _normalize_lots(lots)
+    symbols = sorted({row["symbol"] for row in rows})
+    calls = []
+    for symbol in symbols:
+        calls.append({"tool": "get_earnings_results", "arguments": {"symbol": symbol}})
+        calls.append({"tool": "get_option_chains", "arguments": {"underlying_symbol": symbol}})
+    if symbols:
+        calls.append({"tool": "get_equity_quotes", "arguments": {"symbols": symbols}})
+    for symbol in symbols:
+        calls.append({
+            "tool": "get_option_instruments",
+            "arguments": {"chain_symbol": symbol, "state": "active"},
+            "fill": {"expiration_dates": "nearest expiration_dates value on or after report.date, one YYYY-MM-DD"},
+            "after": ["get_earnings_results", "get_option_chains"],
+        })
+        calls.append({
+            "tool": "get_option_quotes",
+            "arguments": {},
+            "fill": {
+                "instrument_ids": (
+                    "ids of the active call and the active put at that expiry whose strike is nearest "
+                    "the last trade; a tie takes the lower strike"
+                ),
+            },
+            "after": ["get_option_instruments", "get_equity_quotes"],
+        })
+    return {"lots": rows, "calls": calls}
+
+
+def fetch_gap_lots() -> list:
+    """Open lots public.v_equity_implied_move_gaps still lists. Read-only."""
+    from steward_rpc import call
+    rows = call(STEWARD, "steward_implied_move_gaps", {"steward": STEWARD}, idempotent=True) or []
+    if not isinstance(rows, list):
+        raise RuntimeError("steward_implied_move_gaps did not return a list")
+    return rows
+
+
+_RAW_KEYS = ("data", "guide", "results", "chains", "instruments")
+
+
+def _is_raw_response(value: dict) -> bool:
+    return any(key in value for key in _RAW_KEYS)
+
+
+def _filter_raw(payload: dict, symbol: str) -> dict:
+    """Keep one symbol inside a batched MCP response. A one-symbol quote may omit the symbol."""
+    data = _data(payload)
     if not isinstance(data, dict):
-        raise SystemExit("payloads must be a JSON object keyed by symbol")
-    return {str(k).upper(): v for k, v in data.items()}
+        return payload
+    filtered = dict(data)
+    results = data.get("results")
+    if isinstance(results, list) and results and isinstance(results[0], dict):
+        sample = results[0]
+        quote = sample.get("quote") if isinstance(sample.get("quote"), dict) else {}
+        if "symbol" in sample or quote.get("symbol"):
+            kept = []
+            for row in results:
+                if not isinstance(row, dict):
+                    continue
+                q = row.get("quote") if isinstance(row.get("quote"), dict) else {}
+                sym = row.get("symbol") or q.get("symbol")
+                if str(sym or "").upper() == symbol:
+                    kept.append(row)
+            if not kept and len(results) == 1 and not sample.get("symbol") and not quote.get("symbol"):
+                kept = list(results)
+            filtered["results"] = kept
+    if isinstance(data.get("chains"), list):
+        filtered["chains"] = [
+            chain for chain in data["chains"]
+            if isinstance(chain, dict) and (not chain.get("symbol") or str(chain["symbol"]).upper() == symbol)
+        ]
+    if isinstance(data.get("instruments"), list):
+        filtered["instruments"] = [
+            inst for inst in data["instruments"]
+            if isinstance(inst, dict) and (not inst.get("chain_symbol") or str(inst["chain_symbol"]).upper() == symbol)
+        ]
+    if isinstance(payload.get("data"), dict):
+        return {**payload, "data": filtered}
+    return filtered
+
+
+def _pick_named(bag: dict, keys: tuple[str, ...], symbol: str):
+    value = None
+    for key in keys:
+        if key in bag:
+            value = bag[key]
+            break
+    if not isinstance(value, dict):
+        return None
+    if not _is_raw_response(value):
+        for key, item in value.items():
+            if str(key).upper() == symbol and isinstance(item, dict):
+                return item
+        return None
+    return _filter_raw(value, symbol)
+
+
+def payloads_for(doc: dict, symbol: str) -> dict:
+    """Raw MCP responses for one symbol, in the shape build_observation reads."""
+    symbol = symbol.upper()
+    direct = doc.get(symbol)
+    if isinstance(direct, dict) and any(k in direct for k in ("earnings", "chains", "equity_quote", "instruments", "quotes")):
+        return direct
+    sources = []
+    nested = doc.get("responses")
+    if isinstance(nested, dict):
+        per = nested.get(symbol)
+        if isinstance(per, dict):
+            sources.append(per)
+    sources.append(doc)
+    results = calendar = chains = equity = instruments = quotes = None
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        results = results or _pick_named(source, ("get_earnings_results", "earnings"), symbol)
+        calendar = calendar or _pick_named(source, ("get_earnings_calendar",), symbol)
+        chains = chains or _pick_named(source, ("get_option_chains", "chains"), symbol)
+        equity = equity or _pick_named(source, ("get_equity_quotes", "equity_quote"), symbol)
+        instruments = instruments or _pick_named(source, ("get_option_instruments", "instruments"), symbol)
+        quotes = quotes or _pick_named(source, ("get_option_quotes", "quotes"), symbol)
+    earnings = results if results is not None else calendar
+    out = {}
+    if earnings is not None:
+        out["earnings"] = earnings
+    if chains is not None:
+        out["chains"] = chains
+    if equity is not None:
+        out["equity_quote"] = equity
+    if instruments is not None:
+        out["instruments"] = instruments
+    if quotes is not None:
+        out["quotes"] = quotes
+    return out
+
+
+def _jsonable(value):
+    if isinstance(value, Decimal):
+        return format(value, "f")
+    if isinstance(value, datetime):
+        text = value.isoformat()
+        return text.replace("+00:00", "Z") if text.endswith("+00:00") else text
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items() if item is not None}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    return value
+
+
+def implied_move_sql(args: dict) -> str:
+    """One statement. Dollar-quoted so the JSON is the function argument, not invented SQL."""
+    body = json.dumps(args, separators=(",", ":"), sort_keys=True)
+    tag = "im"
+    while f"${tag}$" in body:
+        tag += "x"
+    return f"select public.steward_record_equity_implied_move(${tag}${body}${tag}$::jsonb);"
+
+
+def _execute_record(args: dict):
+    from steward_rpc import call
+    return call(STEWARD, "steward_record_equity_implied_move", args)
+
+
+def write_payload(doc: dict, *, execute: bool = False, now: datetime | None = None, caller=None) -> dict:
+    """Turn saved MCP responses into one SQL statement per lot. Missing quotes become a missing row."""
+    if not isinstance(doc, dict):
+        raise ValueError("payload must be a JSON object")
+    raw_lots = doc.get("lots")
+    if not isinstance(raw_lots, list):
+        raise ValueError("payload lots must be a list of {lot_id, symbol}")
+    now_i = now or datetime.now(timezone.utc)
+    lots = _normalize_lots(raw_lots)
+    statements = []
+    results = []
+    for lot in lots:
+        symbol = lot["symbol"]
+        row = {"lot_id": lot["lot_id"], "symbol": symbol}
+        try:
+            got = build_observation(symbol, payloads_for(doc, symbol), now_i)
+            payload_args = _jsonable(record_args(lot["lot_id"], symbol, got, now_i))
+            sql = implied_move_sql(payload_args)
+        except Exception as exc:
+            row.update({"action": "error", "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+            results.append(row)
+            continue
+        statements.append(sql)
+        row["sql"] = sql
+        if payload_args.get("missing_reason"):
+            row["action"] = FLAG
+            row["missing_reason"] = payload_args["missing_reason"]
+        elif payload_args.get("reported") or (got.get("meta") or {}).get("why") == "report has passed":
+            row["action"] = "passed"
+        else:
+            row["action"] = "straddle"
+        if payload_args.get("expiry_date"):
+            row["expiry_date"] = payload_args["expiry_date"]
+        if payload_args.get("strike") is not None:
+            row["strike"] = payload_args["strike"]
+        if execute:
+            try:
+                wrote = (caller or _execute_record)(payload_args)
+                if isinstance(wrote, dict):
+                    if wrote.get("expiry_date"):
+                        row["expiry_date"] = wrote["expiry_date"]
+                    if wrote.get("missing_reason"):
+                        row["missing_reason"] = wrote["missing_reason"]
+            except Exception as exc:
+                row.update({"action": "error", "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+        results.append(row)
+    return {"lots": len(lots), "statements": statements, "results": results}
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="earnings_implied.py", description=__doc__.split("\n")[0])
-    ap.add_argument("--payloads", required=True, help="JSON object keyed by symbol of Robinhood tool payloads")
-    ap.add_argument("--dry-run", action="store_true")
-    a = ap.parse_args(argv)
-    book = _load_payloads(a.payloads)
-
-    def fetch(symbol: str) -> dict:
-        if symbol not in book:
-            raise SourceError(f"no payloads for {symbol}")
-        return book[symbol]
-
-    out = sweep(fetch, dry_run=a.dry_run)
+    sub = ap.add_subparsers(dest="command", required=True)
+    sub.add_parser("plan", help="open lots with no current implied-move row, and the Robinhood calls")
+    wr = sub.add_parser("write", help="saved Robinhood responses to steward_record_equity_implied_move SQL")
+    wr.add_argument("payload", help="JSON file: lots plus the raw MCP responses")
+    wr.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
+    wr.add_argument("--dry-run", action="store_true", help="print the SQL only")
+    args = ap.parse_args(argv)
+    if args.command == "plan":
+        try:
+            print(json.dumps(plan_calls(fetch_gap_lots()), default=str))
+        except Exception as exc:
+            print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
+            return 1
+        return 0
+    try:
+        doc = json.loads(open(args.payload).read())
+        out = write_payload(doc, execute=bool(args.execute) and not args.dry_run)
+    except (OSError, ValueError) as exc:
+        print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
+        return 1
     print(json.dumps(out, default=str))
-    return 1 if any(r.get("action") == "error" for r in out["results"]) else 0
+    return 1 if any(row.get("action") == "error" for row in out["results"]) else 0
 
 
 if __name__ == "__main__":

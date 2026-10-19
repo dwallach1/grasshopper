@@ -125,6 +125,7 @@ describe('public desk Worker API', () => {
         unscoreable_decisions: { quantanamo: 0, oddsborne: 0, bandit: 0 },
         breaches_escalated: 0,
         escalated: [],
+        equity_implied_move_gaps: 0,
       },
       learning: {
         to_review: 0,
@@ -171,6 +172,25 @@ describe('public desk Worker API', () => {
     expect(body.invalidation_breaches).toBe(0);
     expect(body.watchdog.integrity_issues).toBe(0);
     expect(body.watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 2, bandit: 0 });
+  });
+
+  test('an unwritten implied move is counted and /api/health stays ok', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        watchdog: {
+          ...emptyLedgerWatchdog(),
+          available: true,
+          equity_implied_move_gaps: 2,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok: boolean; watchdog: { equity_implied_move_gaps: number } };
+    expect(body.ok).toBe(true);
+    expect(body.watchdog.equity_implied_move_gaps).toBe(2);
   });
 
   test('market skill is on the health learning block and does not change ok', async () => {

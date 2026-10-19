@@ -22,4 +22,15 @@ Prices come from Financial Datasets (`https://api.financialdatasets.ai`, the pro
 
 `earnings_implied.py` stores, per open equity lot, the next earnings report and the ATM straddle used for open risk (`public.equity_implied_moves` via `steward_record_equity_implied_move`). Until that report is out, the lot's open risk is the max of the line distance and `(straddle / underlying) × position market value`. After the report, the line only. A missing chain or quote is stored as `implied_move_missing` and the line is used. The expiry written is the nearest listed expiration on or after the report date, including a monthly expiry weeks later.
 
-The script does not call Robinhood itself. The steward passes payloads from `get_earnings_results` or `get_earnings_calendar`, `get_option_chains`, `get_equity_quotes`, `get_option_instruments`, and `get_option_quotes`. A transport failure is retried; it is not recorded as a missing quote. `QUANTANAMO_EARNINGS_IMPLIED=0` skips the sweep.
+There is no Robinhood client in this process. Each pass:
+
+```bash
+bash /workspace/grasshopper/stewards/sync_box.sh
+python3 /workspace/quantanamo/earnings_implied.py plan
+# Call the printed Robinhood tools, save the raw responses, then:
+python3 /workspace/quantanamo/earnings_implied.py write payload.json --execute
+```
+
+`plan` prints the open lots with no current implied-move row and the calls: `get_earnings_results` (`symbol`; one held name, so the upcoming quarter is included past the 31-day market calendar), `get_option_chains` (`underlying_symbol`), `get_equity_quotes` (`symbols`), then `get_option_instruments` (`chain_symbol`, `state`, and `expiration_dates` once the nearest listed expiry on or after the report is known) and `get_option_quotes` (`instrument_ids` of the ATM call and put). `write` reads that file and prints `select public.steward_record_equity_implied_move(...)`. `--execute` runs it. `--dry-run` prints the SQL only. A missing quote is stored as `implied_move_missing`. No price is invented. From the repo the same commands are `python3 stewards/quantanamo/earnings_implied.py plan` and `write`. `QUANTANAMO_EARNINGS_IMPLIED=0` skips `sweep_quietly`.
+
+`v_ledger_watchdog.equity_implied_move_gaps` counts those lots (no row, or a report still ahead with no straddle and no missing flag), so a missed write is a number on the watchdog.
