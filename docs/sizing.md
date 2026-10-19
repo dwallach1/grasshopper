@@ -50,7 +50,7 @@ Court ruling [portfolio-exposure](rules/portfolio-exposure.md), migrations 41 an
 
 | Steward | `risk_basis` | Per lot |
 |---|---|---|
-| QUANTANAMO | `to_invalidation` | `qty × max(mark − invalidation_price, 0)`: what the lot loses if it falls to its own line. No invalidation: `qty × mark`. Unmarked: 0, flagged (`lots_unmarked`). |
+| QUANTANAMO | `to_invalidation` | Until the earnings report is out: max(line distance, implied-move risk). Line distance is `qty × max(mark − invalidation_price, 0)` (no invalidation: `qty × mark`; unmarked: 0). Implied-move risk is `(ATM straddle at the nearest expiry on or after the report / underlying) × qty × mark`. After the report: the line only. Missing straddle: the line, lot flagged `implied_move_missing`. |
 | ODDSBORNE | `full_notional` | `contracts × price` (mark, else average cost). A binary goes to 0 on one score, so the line bounds nothing. |
 | BANDIT | `full_notional` | full cost basis, `qty × average cost` (else `qty × mark`). A meme can rug in one block. |
 

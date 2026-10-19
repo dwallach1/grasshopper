@@ -27,7 +27,7 @@ SCRIPTS = {
 EXIT_SCRIPTS = {
     "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "pass_marks.py", "close_lesson.py")],
     "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "pm_session_notes.py", "pm_decision_markets.py", "close_lesson.py")],
-    "quantanamo": [HERE / "quantanamo" / "pass_marks.py"],
+    "quantanamo": [HERE / "quantanamo" / "pass_marks.py", HERE / "quantanamo" / "earnings_implied.py"],
 }
 RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
 SECRET_PATTERNS = [
@@ -109,7 +109,8 @@ class StewardScripts(unittest.TestCase):
         # Every function a script calls is in the edge allowlist for that steward, defined in the schema,
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
         sql = (ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text()
-               + FIXES_SQL.read_text() + NOTES_SQL.read_text())
+               + FIXES_SQL.read_text() + NOTES_SQL.read_text()
+               + (HERE.parent / "supabase" / "schemas" / "80_equity_implied_move_risk.sql").read_text())
         edge = EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]

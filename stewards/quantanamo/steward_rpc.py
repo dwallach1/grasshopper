@@ -183,6 +183,27 @@ def record_decision_mark(steward: str, *, decision_id: str, price=None, observed
     return call(steward, "steward_record_decision_mark", {k: v for k, v in args.items() if v is not None})
 
 
+def record_equity_implied_move(steward: str, *, lot_id: str, symbol: str, observed_at, source: str,
+                               report_date=None, report_timing=None, reported=None,
+                               straddle_price=None, underlying_price=None, call_price=None,
+                               put_price=None, expiry_date=None, strike=None,
+                               missing_reason=None, meta=None) -> object:
+    """Record one sourced earnings observation for an open QUANTANAMO equity lot.
+
+    Prices are Robinhood option marks (call mark + put mark at one strike) and the equity last trade
+    used as the underlying. `missing_reason` 'implied_move_missing' with no prices flags the lot; open
+    risk then stays the line distance. Never send a made-up price. A later call replaces the row.
+    """
+    args = {
+        "steward": steward, "lot_id": lot_id, "symbol": symbol, "observed_at": observed_at,
+        "source": source, "report_date": report_date, "report_timing": report_timing,
+        "reported": reported, "straddle_price": straddle_price, "underlying_price": underlying_price,
+        "call_price": call_price, "put_price": put_price, "expiry_date": expiry_date,
+        "strike": strike, "missing_reason": missing_reason, "meta": meta,
+    }
+    return call(steward, "steward_record_equity_implied_move", {k: v for k, v in args.items() if v is not None})
+
+
 def call(steward: str, fn: str, args: dict | None = None, *, idempotent: bool = False, timeout: float = 60.0):
     """Run public.<fn>(args::jsonb) as <steward>_worker. Reads (idempotent=True) retry network blips;
     writes never retry (a lost reply may still have committed)."""

@@ -71,6 +71,7 @@ else
     "$here/quantanamo/classify.py:$box/bookmark-ingest/classify.py"
     "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"
     "$here/quantanamo/pass_marks.py:$box/quantanamo/pass_marks.py"
+    "$here/quantanamo/earnings_implied.py:$box/quantanamo/earnings_implied.py"
     "$here/quantanamo/steward_rpc.py:$box/quantanamo/steward_rpc.py"
     "$here/quantanamo/requirements.txt:$box/quantanamo/requirements.txt"
   )

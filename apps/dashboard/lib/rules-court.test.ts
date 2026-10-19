@@ -92,6 +92,7 @@ describe('rules court', () => {
       ['64_bandit_1h_entry_cap.sql', '20261008044007_bandit_1h_entry_cap.sql'],
       ['76_theses_paper_only.sql', '20261017131644_theses_paper_only.sql'],
       ['77_theses_paper_only_lockdown.sql', '20261017131924_theses_paper_only_lockdown.sql'],
+      ['80_equity_implied_move_risk.sql', '20261019170000_equity_implied_move_risk.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -233,6 +234,26 @@ describe('rules court', () => {
     expect(sql).not.toMatch(/results_confidence = \d/);
     expect(sql).toContain('select private.rescore_all_thesis_confidence();');
     expect(sql).toContain("('quantanamo-80-gate', ");
+  });
+
+  test('80: equity open risk is the max of the line and the implied move until the report', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/80_equity_implied_move_risk.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/portfolio-exposure.md');
+    expect(sql).toContain('(p_straddle / p_underlying) * (p_quantity * p_mark)');
+    expect(sql).toContain('greatest(v_line, v_implied)');
+    expect(sql).toContain("'implied_move_missing'");
+    expect(sql).toContain("time '09:30'");
+    expect(sql).toContain("time '20:00'");
+    // Full notional on the other books, and the 10% budget, stay.
+    expect(sql).toContain("when m.lot_table = 'pm_positions' then m.quantity * coalesce(m.mark, c.average_cost, 0)");
+    expect(sql).toContain("when m.lot_table = 'meme_positions' then m.quantity * coalesce(c.average_cost, m.mark, 0)");
+    expect(sql).toContain('private.risk_budget_share()');
+    expect(sql).not.toContain('create or replace function public.steward_sizing_guidance');
+    const md = await readFile(join(rulesDir, 'portfolio-exposure.md'), 'utf8');
+    const mechanism = md.split('## Mechanism\n')[1]?.split('\n\n')[0] ?? '';
+    expect(sql.split('$mech$')[1]?.split('$mech$')[0]).toBe(mechanism);
+    expect(mechanism).toContain('implied_move_missing');
+    expect(mechanism).toContain('Budget 10% of book');
   });
 
   test('64: BANDIT 1h entry cap is registered as a provisional trial, registry only', async () => {
