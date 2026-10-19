@@ -12,6 +12,7 @@ import type {
   CloudRunRow,
   CloudTaskRow,
   CycleRow,
+  EquityEarningsRow,
   ExposureRow,
   FillRow,
   InsightRow,
@@ -708,6 +709,61 @@ export function mapThesisSymbolLinks(rows: JsonObjectRow[]): ThesisSymbolLink[] 
     symbol: row.symbol,
     role: row.role,
   }));
+}
+
+function earningsNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function earningsBool(value: unknown): boolean {
+  return value === true || value === 1 || value === 'true';
+}
+
+function earningsDate(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${value.getUTCFullYear()}-${month}-${day}`;
+  }
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  return null;
+}
+
+/** One bad earnings row is dropped. A bad price becomes null so the desk states no move. */
+export function mapEarnings(rows: JsonObjectRow[]): EquityEarningsRow[] {
+  const out: EquityEarningsRow[] = [];
+  for (const row of rows) {
+    const lot = typeof row.lot_id === 'string' ? row.lot_id.trim() : '';
+    const symbol = typeof row.symbol === 'string' ? row.symbol.trim() : '';
+    if (!lot || !symbol) continue;
+    const timing = row.report_timing === 'am' || row.report_timing === 'pm' ? row.report_timing : null;
+    const report = earningsDate(row.report_date);
+    const expiry = earningsDate(row.expiry_date);
+    const reason = typeof row.score_missing_reason === 'string' && row.score_missing_reason.trim()
+      ? row.score_missing_reason.trim()
+      : null;
+    out.push({
+      lot_id: lot,
+      symbol,
+      report_date: report,
+      report_timing: timing,
+      reported: earningsBool(row.reported),
+      straddle_price: earningsNumber(row.straddle_price),
+      underlying_price: earningsNumber(row.underlying_price),
+      expiry_date: expiry,
+      expiry_gap_days: earningsNumber(row.expiry_gap_days),
+      expiry_loose: earningsBool(row.expiry_loose),
+      realized_open_gap: earningsNumber(row.realized_open_gap),
+      realized_close_to_close: earningsNumber(row.realized_close_to_close),
+      realized_implied_ratio: earningsNumber(row.realized_implied_ratio),
+      line_jumped: row.line_jumped === null || row.line_jumped === undefined ? null : earningsBool(row.line_jumped),
+      score_missing_reason: reason,
+    });
+  }
+  return out;
 }
 
 export function groupSymbols(rows: JsonObjectRow[]): Map<string, string[]> {

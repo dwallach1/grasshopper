@@ -382,12 +382,13 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const [prediction, meme, team, scorecard, watchdog] = await Promise.all([
+    const [prediction, meme, team, scorecard, watchdog, earnings] = await Promise.all([
       loadPredictionMarkets(sql),
       loadMemeCoins(sql),
       loadTeam(sql),
       loadScorecard(sql),
       loadWatchdog(sql),
+      loadEarnings(sql),
     ]);
     return withScorecard(assembleDesk('postgres', decorateDesk(theses, symbols, {
       beliefs: mapBeliefs(beliefs),
@@ -428,9 +429,33 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }, prediction, meme, team)), scorecard, watchdog);
+    }, prediction, meme, team)), scorecard, watchdog, earnings);
   } finally {
     await sql.end({ timeout: 5 });
+  }
+}
+
+/**
+ * Score columns land in migration 20261019220000. Before that, the select
+ * fails and the Book line stays off. The rest of the desk still loads.
+ */
+async function loadEarnings(sql: Sql): Promise<JsonObjectRow[]> {
+  try {
+    return await viewRows('equity_implied_moves', sql`
+      select lot_id::text, symbol, report_date::text, report_timing, reported,
+             straddle_price, underlying_price, expiry_date::text, expiry_gap_days, expiry_loose,
+             realized_open_gap, realized_close_to_close, realized_implied_ratio,
+             line_jumped, score_missing_reason
+      from public.equity_implied_moves
+      order by symbol
+    `) as JsonObjectRow[];
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'ledger_view_skipped',
+      view: 'equity_implied_moves',
+      error: error instanceof Error ? error.message : 'unknown',
+    }));
+    return [];
   }
 }
 

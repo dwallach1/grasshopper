@@ -130,6 +130,36 @@ describe('public bundle assemble', () => {
     expect(serve.json).not.toContain('payload_json');
   });
 
+  test('an earnings row on the public bundle stays on the phone snapshot', () => {
+    const bundle = slimBundle() as Record<string, unknown>;
+    bundle.earnings = [{
+      lot_id: 'fixture-lot',
+      symbol: 'NFLX',
+      report_date: '2026-10-20',
+      report_timing: 'pm',
+      reported: false,
+      straddle_price: '9.70',
+      underlying_price: '100',
+      expiry_date: '2026-10-23',
+      expiry_gap_days: 3,
+      expiry_loose: false,
+      realized_close_to_close: null,
+      score_missing_reason: null,
+    }];
+    const serve = assemblePublicBundle(bundle);
+    const desk = serve.desk as { earnings?: Array<{ symbol: string; straddle_price: number | null }> };
+    expect(desk.earnings).toEqual([
+      expect.objectContaining({ symbol: 'NFLX', straddle_price: 9.7, underlying_price: 100 }),
+    ]);
+  });
+
+  test('the public bundle fetches earnings as an optional read', async () => {
+    const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
+    expect(fn).toContain("'equity_implied_moves'");
+    expect(fn).toContain('restGet(EARNINGS_QUERY, true)');
+    expect(fn).toContain('realized_close_to_close');
+  });
+
   test('the public cycle query selects the three small scalars and quotes cost key 10', async () => {
     const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
     const tests = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/public-tests.ts', import.meta.url)).text();
