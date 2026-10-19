@@ -110,7 +110,8 @@ class StewardScripts(unittest.TestCase):
         # SECURITY INVOKER, and granted to that worker only (plus service_role), never to anon/authenticated.
         sql = (ENTRY_SQL.read_text() + EXIT_SQL.read_text() + MARKS_SQL.read_text() + SIDES_SQL.read_text()
                + FIXES_SQL.read_text() + NOTES_SQL.read_text()
-               + (HERE.parent / "supabase" / "schemas" / "80_equity_implied_move_risk.sql").read_text())
+               + (HERE.parent / "supabase" / "schemas" / "80_equity_implied_move_risk.sql").read_text()
+               + (HERE.parent / "supabase" / "schemas" / "81_equity_implied_move_gaps.sql").read_text())
         edge = EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]

@@ -39,3 +39,6 @@ Amendment: Open risk <= 10% of book per steward, gap-prone lots (binaries, memes
 
 ## Interactions
 cash-only-no-margin, required-invalidation, edge-max-stake, starter-stake.
+
+## Sweep
+The steward runs `python3 stewards/quantanamo/earnings_implied.py plan`, saves the Robinhood responses, then `write <payload.json> --execute`. `stewards/sync_box.sh` copies the script to `/workspace/quantanamo/earnings_implied.py`. `v_ledger_watchdog.equity_implied_move_gaps` counts open equity lots with a report still ahead and no current implied-move row.

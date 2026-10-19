@@ -157,6 +157,8 @@ export type LedgerWatchdog = {
   /** Actionable breaches past the next check or the 15-minute window. */
   breaches_escalated: number;
   escalated: EscalatedBreach[];
+  /** Open equity lots with no current implied-move row. Does not change `ok` on /api/health. */
+  equity_implied_move_gaps: number;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -181,6 +183,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     unscoreable_decisions: { ...EMPTY_UNSCOREABLE_DECISIONS },
     breaches_escalated: 0,
     escalated: [],
+    equity_implied_move_gaps: 0,
     breaches: [],
     missing: [],
     issues: [],
@@ -423,6 +426,7 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     ...learningGaps(summary.learning_gaps),
     unscoreable_decisions: stewardCounts(summary.unscoreable_decisions),
     ...escalatedBreaches(summary.breaches_escalated, summary.escalated, breachLots),
+    equity_implied_move_gaps: count(summary.equity_implied_move_gaps),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -528,6 +532,8 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   breaches_escalated: number;
   /** Plain sentences, one per escalated lot. */
   escalated: string[];
+  /** Missed implied-move write. Does not change `ok` on /api/health. */
+  equity_implied_move_gaps: number;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -544,6 +550,7 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     unscoreable_decisions: { ...w.unscoreable_decisions },
     breaches_escalated: w.breaches_escalated,
     escalated: w.escalated.map((row) => row.sentence),
+    equity_implied_move_gaps: w.equity_implied_move_gaps,
   };
 }
 
