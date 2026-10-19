@@ -5,7 +5,7 @@ Ledger mints come from the Supabase connector (meme_positions JOIN meme_tokens),
 Output: /workspace/bandit/_scan_https_out.json (local file only).
 """
 from __future__ import annotations
-import json, os, statistics, time
+import json, os, re, shutil, statistics, time
 from datetime import datetime, timezone
 from decimal import Decimal, getcontext
 from zoneinfo import ZoneInfo
@@ -272,8 +272,10 @@ for r in clear: r["rank_score"] = rank(r)
 clear.sort(key=lambda r: -r["rank_score"])
 near = sorted([r for r in to_quote if r.get("all_fails")], key=lambda r: (len(r["all_fails"]), -r["liq"]))
 
+def _sym_mint(r): return f"{r.get('symbol')} ({(r.get('mint') or '')[:8]})"   # ticker collisions: mint prefix beside symbol
 out = {"scan_utc": now.isoformat(), "scan_pt": now.astimezone(PT).isoformat(), "sol_usd": SOLUSD,
        "universe": len(seen), "eligible": len(elig), "market_pass": len(mkt_pass),
+       "clear_ids": [_sym_mint(r) for r in clear], "near_ids": [(_sym_mint(r), r["all_fails"]) for r in near[:12]],
        "clear": clear, "near_misses": near[:12],
        "standing": [r for r in rows_all if r["standing_skip"]],
        "excluded_in_universe": [(r["symbol"], r["excluded"]) for r in rows_all if r["excluded"]]}
@@ -288,6 +290,24 @@ def _hot_meta(r):
     try: pc = float(pc)
     except Exception: return {}
     return {"hot_1h": pc > HOT_1H_PCT, "chg_1h": round(pc, 2)}
+# audit fields (GRASSHOPPER 2026-10-19, after the PIERRE ticker-collision question): every decision this scan logs carries
+# meta.mint, meta.liq_usd (the Jupiter tokens v2 total liquidity the $100k floor was applied to), meta.liq_src and
+# meta.age_h, so a pass can be checked against the universe filter after the snapshots are pruned. Unknown -> omitted.
+LIQ_SRC = "jupiter_tokens_v2_total"
+def _audit_meta(r):
+    """{'mint','liq_usd','liq_src','age_h'} from the scan row; a field the row lacks is left out (never guessed)."""
+    r = r or {}; m = {}
+    if r.get("mint"): m["mint"] = r["mint"]
+    try: liq = None if r.get("liq") is None else float(r["liq"])
+    except Exception: liq = None
+    if liq is not None: m["liq_usd"] = round(liq, 2); m["liq_src"] = LIQ_SRC
+    try: ah = None if r.get("age_h") is None else float(r["age_h"])
+    except Exception: ah = None
+    if ah is not None: m["age_h"] = round(ah, 2)
+    return m
+def _log_meta(r, base=None):
+    """base meta + audit fields + hot_1h/chg_1h tag (the tag wins on a key clash; base keys are kept)."""
+    return dict(base or {}, **_audit_meta(r), **_hot_meta(r))
 # thesis paused (desk 2026-10-09): paper-log every coin that clears all gates as a pass, scored at 4h.
 # Set BANDIT_THESIS_PAUSED=0 to turn off once the thesis is live again.
 PAUSE_TAG = "thesis_paused"
@@ -305,7 +325,7 @@ if os.environ.get("BANDIT_SCAN_NO_LOG") != "1" and os.environ.get("BANDIT_THESIS
                     reason=f"{r['symbol']}: cleared every gate but thesis paused (paper forward log); 1h +{r['pc1h']:.1f}%, 6h {r['pc6h']:.1f}%, liq ${r['liq']:,.0f}, impact {r.get('impact_frac')}",
                     blocked_by=PAUSE_TAG, decided_at=now.astimezone(PT).isoformat(),
                     source_id=f"scan_https_{now.astimezone(PT).strftime('%Y%m%dT%H%M')}_{r['mint'][:8]}_paused",
-                    meta=_hot_meta(r) or None)
+                    meta=_log_meta(r) or None)
                 paper_logged.append((r["symbol"], (res or {}).get("id"), "ok" if (res or {}).get("ok") else res))
             except Exception as e:
                 paper_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
@@ -315,7 +335,7 @@ out["paper_logged"] = paper_logged
 # edge2 meme_pullback_reclaim (GRASSHOPPER 2026-10-12, PAPER ONLY): check every eligible coin's last closed 5m bars
 # against the pre-registered rule in /workspace/bandit/research/edge2_prereg.md and log triggers as skips (4h horizon,
 # computed by the ledger). Never trades. Dedupe: a coin logs at most once per 4h (state file below).
-E2_TAG = "paper_only"; E2_STATE = "/workspace/bandit/_edge2_dedupe.json"; GT = "https://api.geckoterminal.com/api/v2"
+E2_TAG = "paper_only"; E2_STATE = os.environ.get("BANDIT_E2_STATE", "/workspace/bandit/_edge2_dedupe.json"); GT = "https://api.geckoterminal.com/api/v2"
 def gt_get(path, params=None):
     for i in range(4):
         try:
@@ -375,14 +395,14 @@ for r in elig:
         edge2_logged.append((r["symbol"], None, "no_price")); continue
     stamp = now.astimezone(PT).strftime('%Y%m%dT%H%M')
     if _no_log:
-        edge2_logged.append((r["symbol"], None, f"dry_run would_log px={px} {info} {_hot_meta(r)}")); continue
+        edge2_logged.append((r["symbol"], None, f"dry_run would_log px={px} {info} {_log_meta(r)}")); continue
     try:
         import steward_rpc
         res = steward_rpc.log_decision("bandit", decision="skip", instrument=r["mint"], side="long", price=px,
             thesis_id="meme_pullback_reclaim",
             reason=f"{r['symbol']}: edge2 pullback-reclaim trigger (paper only): run +{info['run_pct']}% in 6h, pullback {info['pullback_pct']}%, peak {info['peak_age_bars']} bars ago, reclaim bar, 6h vol ${info['vol6h_usd']:,}; impact {q.get('priceImpactPct')}",
             blocked_by=E2_TAG, decided_at=now.astimezone(PT).isoformat(),
-            source_id=f"scan_https_{stamp}_{r['mint'][:8]}_edge2", meta={"edge2": info, "horizon": "4h", **_hot_meta(r)})
+            source_id=f"scan_https_{stamp}_{r['mint'][:8]}_edge2", meta=_log_meta(r, {"edge2": info, "horizon": "4h"}))
         okr = (res or {}).get("ok")
         if okr: e2_state[r["mint"]] = now.timestamp()
         edge2_logged.append((r["symbol"], (res or {}).get("id"), "ok" if okr else res))
@@ -401,9 +421,9 @@ out["edge2_logged"] = edge2_logged
 # carries signal_bar_ts and prereg_entry_ts (open of the bar after the signal bar) in meta for the path scorer.
 # Dry run (BANDIT_SCAN_NO_LOG=1): nothing logged, dedupe/pending state not written; edge5 snapshots still recorded.
 PAPER_TAG = "paper_only"
-E3_STATE = "/workspace/bandit/_edge3_dedupe.json"; E4_STATE = "/workspace/bandit/_edge4_state.json"
+E3_STATE = os.environ.get("BANDIT_E3_STATE", "/workspace/bandit/_edge3_dedupe.json"); E4_STATE = os.environ.get("BANDIT_E4_STATE", "/workspace/bandit/_edge4_state.json")
 E5_STATE = os.environ.get("BANDIT_E5_STATE", "/workspace/bandit/_edge5_state.json"); LIQ_SNAP = os.environ.get("BANDIT_LIQ_SNAP", "/workspace/bandit/_liq_snapshots.json")
-LAST_SCAN = "/workspace/bandit/_edge34_last_scan.json"
+LAST_SCAN = os.environ.get("BANDIT_LAST_SCAN", "/workspace/bandit/_edge34_last_scan.json")
 _now_ts = now.timestamp(); _stamp = now.astimezone(PT).strftime('%Y%m%dT%H%M'); _dec_pt = now.astimezone(PT).isoformat()
 def _load(path, default):
     try: return json.load(open(path))
@@ -425,7 +445,7 @@ def _px_sol(r):
 def _paper_log(r, thesis, suffix, reason, meta, blocked_by=PAPER_TAG, px_fallback=None, allow_priceless=False):
     """Log one paper-only skip. allow_priceless (edge5 voids only): with no live quote and no stored signal price,
     log it with NO price (never an invented one) plus no_price_reason; the ledger stores it unscoreable."""
-    meta = dict(meta or {}, **_hot_meta(r))                 # hot_1h tag on every paper log (edge3-6, edge5 voids)
+    meta = _log_meta(r, meta)            # audit fields + hot_1h tag on every paper log (edge3-6, edge5 voids)
     px, imp, err = _px_sol(r)
     if (err or not px) and px_fallback: px, err, imp = px_fallback, None, "n/a (signal-time quote)"
     no_px = None
@@ -680,11 +700,35 @@ out["edge4_checked"] = edge4_checked; out["edge4_logged"] = edge4_logged
 out["edge5_checked"] = edge5_checked; out["edge5_logged"] = edge5_logged
 out["edge6_checked"] = edge6_checked; out["edge6_logged"] = edge6_logged
 out["liq_snapshots"] = {"coins": len(snaps), "path": LIQ_SNAP}
-with open(os.environ.get("BANDIT_SCAN_OUT", "/workspace/bandit/_scan_https_out.json"), "w") as fh:
+# archive (GRASSHOPPER 2026-10-19): a timestamped copy of every scan output under <archive>/<YYYY-MM-DD PT>/, dated dirs
+# older than 7 days pruned. Lives on the box only (default /workspace/bandit/_scan_archive, never in the repo or synced).
+ARCHIVE_DIR = os.environ.get("BANDIT_SCAN_ARCHIVE", "/workspace/bandit/_scan_archive"); ARCHIVE_KEEP_DAYS = 7
+_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+def archive_scan_out(src, root, scan_dt, keep_days=ARCHIVE_KEEP_DAYS, dry_run=False):
+    """Copy src to root/<scan date>/_scan_https_out_<HHMMSS>[_dryrun].json and remove dated dirs (YYYY-MM-DD names only)
+    more than keep_days before the scan date. Returns (archived path, [pruned dir names])."""
+    day = scan_dt.strftime("%Y-%m-%d"); d = os.path.join(root, day); os.makedirs(d, exist_ok=True)
+    dst = os.path.join(d, f"_scan_https_out_{scan_dt.strftime('%H%M%S')}{'_dryrun' if dry_run else ''}.json")
+    shutil.copy2(src, dst)
+    cutoff = scan_dt.date().toordinal() - keep_days; pruned = []
+    for name in sorted(os.listdir(root)):
+        p = os.path.join(root, name)
+        if not (_DAY_RE.match(name) and os.path.isdir(p)): continue
+        try: od = datetime.strptime(name, "%Y-%m-%d").date().toordinal()
+        except ValueError: continue
+        if od < cutoff: shutil.rmtree(p); pruned.append(name)
+    return dst, pruned
+_out_path = os.environ.get("BANDIT_SCAN_OUT", "/workspace/bandit/_scan_https_out.json")
+with open(_out_path, "w") as fh:
     json.dump(out, fh, indent=2, default=str)
+try:
+    _arch, _pruned = archive_scan_out(_out_path, ARCHIVE_DIR, now.astimezone(PT), dry_run=_no_log)
+    print("ARCHIVED", _arch, "PRUNED", _pruned)
+except Exception as e:
+    print("ARCHIVE_ERR", type(e).__name__, str(e)[:120])           # the archive never blocks the scan
 print("SCAN_PT", out["scan_pt"], "SOLUSD", SOLUSD)
-print("CLEAR", len(clear), [r["symbol"] for r in clear])
-print("NEAR", [(r["symbol"], r["all_fails"]) for r in near[:8]])
+print("CLEAR", len(clear), [_sym_mint(r) for r in clear])
+print("NEAR", [(_sym_mint(r), r["all_fails"]) for r in near[:8]])
 print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r in out["standing"]])
 print("PAPER_LOGGED", paper_logged)
 print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
