@@ -6,11 +6,14 @@
 Per-entry caps don't bound total or correlated exposure across open lots, and an invalidation line doesn't bound a lot that can gap straight through it.
 
 ## Mechanism
-`private.open_risk_lots()` (per lot, `public.v_exposure_lots`) summed by `private.steward_open_risk` (`public.v_exposure_usage`), in the book unit, `risk_basis` per book. QUANTANAMO equities `to_invalidation`: qty x max(mark - invalidation_price, 0) (no invalidation: qty x mark; unmarked: 0, flagged). ODDSBORNE binaries and BANDIT memes `full_notional`: every open binary at price x contracts (mark, else average cost) and every meme lot at its full cost basis (qty x average cost, else qty x mark). Budget 10% of book. Guidance sizes a new entry to fit: min(requested, max_stake, cash, headroom / risk fraction), where the fraction is 1 for full_notional books and (entry - invalidation) / entry for equities (1 without p_entry_price); no headroom -> `exposure_cap`. Guidance, v_exposure_usage and the v_ledger_watchdog `exposure` summary carry `risk_basis`.
+`private.open_risk_lots()` (per lot, `public.v_exposure_lots`) summed by `private.steward_open_risk` (`public.v_exposure_usage`), in the book unit, `risk_basis` per book. QUANTANAMO equities stay `to_invalidation` on the line. Until the earnings report is out, a lot's open risk is the max of that line distance and the implied-move risk (GRASSHOPPER 2026-10-19). Line distance is qty x max(mark - invalidation_price, 0) (no invalidation: qty x mark; unmarked: 0, flagged). Implied-move risk is (ATM straddle price at the nearest expiry on or after the report date / underlying price) x position market value (qty x mark). The steward stores the report date, the straddle, the underlying and the expiry it used on `public.equity_implied_moves` (Robinhood earnings calendar and option quotes; a name without weeklies keeps that later expiry, no correction). Once the report has passed (an actual EPS, or 09:30 America/New_York on an am date, 20:00 on a pm date, or the next midnight when the source gives no am/pm), open risk is the line distance only. Missing straddle or option data uses the line distance and flags the lot `implied_move_missing`. No price is fabricated. ODDSBORNE binaries and BANDIT memes `full_notional`: every open binary at price x contracts (mark, else average cost) and every meme lot at its full cost basis (qty x average cost, else qty x mark). Budget 10% of book. Guidance sizes a new entry to fit: min(requested, max_stake, cash, headroom / risk fraction), where the fraction is 1 for full_notional books and (entry - invalidation) / entry for equities (1 without p_entry_price); no headroom -> `exposure_cap`. Guidance, v_exposure_usage and the v_ledger_watchdog `exposure` summary carry `risk_basis`.
 
 Code paths:
 - `supabase/schemas/41_court_decisions.sql`
 - `supabase/schemas/44_exposure_gap_full_notional.sql`
+- `supabase/schemas/80_equity_implied_move_risk.sql`
+- `stewards/quantanamo/earnings_implied.py`
+- `stewards/quantanamo/steward_rpc.py`
 
 ## The court
 

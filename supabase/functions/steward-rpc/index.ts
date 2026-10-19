@@ -29,6 +29,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // horizon marks for logged equity passes (supabase/schemas/58_decision_marks.sql; quantanamo/pass_marks.py)
     'steward_pending_decision_marks',
     'steward_record_decision_mark',
+    // earnings straddle for open equity lots (supabase/schemas/80_equity_implied_move_risk.sql; earnings_implied.py)
+    'steward_open_equity_lots',
+    'steward_record_equity_implied_move',
     // heartbeat + desk rules (supabase/schemas/60_steward_fixes_lessons.sql)
     'quantanamo_touch_heartbeat',
     'steward_desk_rules',
