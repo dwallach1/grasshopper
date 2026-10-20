@@ -356,9 +356,25 @@ describe('scorecard gate lines', () => {
     expect(gates?.querySelector('b')?.className).toBe('up');
     expect(gates?.textContent).not.toContain('no_edge');
     expect(gates?.textContent).not.toContain('No edge');
-    const more = host.querySelector('details.score-gates-more');
-    expect(more?.querySelector('summary')?.textContent).toBe('1 more');
-    expect(more?.textContent).toContain('No edge');
+    const more = host.querySelector('.score-gates-more');
+    const toggle = more?.querySelector('button.score-gates-toggle');
+    expect(toggle?.textContent).toBe('1 more');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(more?.querySelector('[data-gates-more]')).toBeNull();
+    expect(more?.textContent).not.toContain('No edge');
+    await act(async () => {
+      toggle?.dispatchEvent(new dom.MouseEvent('click', { bubbles: true }));
+    });
+    expect(toggle?.textContent).toBe('Show less');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(more?.querySelector('[data-gates-more]')?.textContent).toContain('No edge');
+    expect(gates?.textContent).not.toContain('No edge');
+    await act(async () => {
+      toggle?.dispatchEvent(new dom.MouseEvent('click', { bubbles: true }));
+    });
+    expect(toggle?.textContent).toBe('1 more');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(more?.querySelector('[data-gates-more]')).toBeNull();
     await act(async () => {
       rootEl.unmount();
     });
