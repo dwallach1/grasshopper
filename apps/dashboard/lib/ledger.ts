@@ -84,6 +84,7 @@ export async function loadDesk(accessToken: string): Promise<DeskPayload> {
 }
 
 export { loadDeskFromRest, REST_FETCH_MS } from './ledger-live';
+import { mapLessonWaits } from './lesson-waits';
 import { withScorecard } from './ledger-live';
 import { mapStewardScorecard, type StewardScorecardPayload } from './steward-scorecard';
 import { mapLedgerWatchdog, WATCHDOG_LIST_LIMIT, type LedgerWatchdog } from './ledger-watchdog';
@@ -382,15 +383,17 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const [prediction, meme, team, scorecard, watchdog, earnings] = await Promise.all([
+    const [prediction, meme, team, scorecard, watchdog, earnings, lessonWaits] = await Promise.all([
       loadPredictionMarkets(sql),
       loadMemeCoins(sql),
       loadTeam(sql),
       loadScorecard(sql),
       loadWatchdog(sql),
       loadEarnings(sql),
+      loadLessonWaits(sql),
     ]);
-    return withScorecard(assembleDesk('postgres', decorateDesk(theses, symbols, {
+    return {
+      ...withScorecard(assembleDesk('postgres', decorateDesk(theses, symbols, {
       beliefs: mapBeliefs(beliefs),
       evidence: mapEvidence(evidence),
       scores: mapScores(scores),
@@ -429,7 +432,9 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),
       },
-    }, prediction, meme, team)), scorecard, watchdog, earnings);
+    }, prediction, meme, team)), scorecard, watchdog, earnings),
+      lesson_waits: mapLessonWaits(lessonWaits),
+    };
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -439,6 +444,14 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
  * Score columns land in migration 20261019220000. Before that, the select
  * fails and the Book line stays off. The rest of the desk still loads.
  */
+async function loadLessonWaits(sql: Sql): Promise<JsonObjectRow[]> {
+  return viewRows('v_open_lesson_tests', sql`
+    select lesson_id, thesis_id, test_id, test_status, age_days
+    from public.v_open_lesson_tests
+    order by lesson_id
+  `) as Promise<JsonObjectRow[]>;
+}
+
 async function loadEarnings(sql: Sql): Promise<JsonObjectRow[]> {
   try {
     return await viewRows('equity_implied_moves', sql`

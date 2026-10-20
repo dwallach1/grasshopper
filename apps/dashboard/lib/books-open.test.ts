@@ -607,6 +607,75 @@ describe('Books page: one section per steward', () => {
     expect(detail?.querySelector('[data-test="40"]')?.getAttribute('data-status')).toBe('survived');
     expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('hold-through beat selling before');
     expect(detail?.querySelector('.books-lessons [data-linked-test="40"]')?.textContent).toContain('passed');
+    expect(detail?.querySelector('.books-lesson-wait')).toBeNull();
+    view.unmount();
+  });
+
+  test('an open lesson says which queued test it is waiting on', async () => {
+    const queued: StrategyTestRow = {
+      id: 41,
+      external_key: 'gap-follow-v1',
+      cycle_id: 160,
+      variant_label: 'gap-follow-v1',
+      status: 'queued',
+      total_return: null,
+      max_drawdown: null,
+      deflated_sharpe: null,
+      cost_multiplier: 1,
+      stress_regime: null,
+      failure_reason: null,
+      autopsy: null,
+      tested_at: '2026-10-16T23:31:00.000Z',
+      price_source: null,
+      window_start: '2026-10-01',
+      window_end: '2026-10-15',
+      symbols: ['NFLX'],
+      params_json: null,
+    };
+    const payload = desk([], [], [
+      { ...lesson(134, 'The follow-through is preregistered as strategy_test #41.'), test_id: 41 },
+      lesson(200, 'A later check is still unnamed.'),
+    ]);
+    payload.tests = [queued];
+    payload.cycles = [{
+      id: 160,
+      external_key: 'cycle-160',
+      thesis_id: EARNINGS,
+      hypothesis: 'The gap follows through.',
+      preregistered_outcome: 'Mean return stays positive.',
+      preregistered_at: AT,
+      stage: 'preregistered',
+      status: 'open',
+      iteration: 1,
+      market_regime: null,
+    }];
+    payload.lesson_waits = [
+      {
+        lesson_id: 134,
+        thesis_id: EARNINGS,
+        test_id: 41,
+        test_status: 'queued',
+        age_days: 4,
+      },
+      {
+        lesson_id: 200,
+        thesis_id: EARNINGS,
+        test_id: 99,
+        test_status: 'queued',
+        age_days: null,
+      },
+    ];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: AT }));
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
+    });
+    const lines = [...view.host.querySelectorAll('.books-lesson-wait')].map((node) => node.textContent);
+    expect(lines).toEqual([
+      'Waiting on test 99, still queued',
+      'Waiting on test 41, queued 4 days',
+    ]);
+    expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('stale_queued');
+    expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('v_open_lesson');
     view.unmount();
   });
 

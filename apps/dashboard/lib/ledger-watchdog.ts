@@ -135,6 +135,22 @@ export const EMPTY_UNSCOREABLE_DECISIONS: UnscoreableDecisionCounts = {
   bandit: 0,
 };
 
+export type StaleQueuedThesis = {
+  thesis_id: string;
+  /** `quantanamo`, `oddsborne`, `bandit`, or `unknown` when the domain assignment is missing. */
+  steward: string;
+  n: number;
+};
+
+export type StaleQueuedTests = {
+  n: number;
+  quantanamo: number;
+  oddsborne: number;
+  bandit: number;
+  unknown: number;
+  theses: StaleQueuedThesis[];
+};
+
 export type LedgerWatchdog = {
   available: boolean;
   checked_at: string | null;
@@ -159,6 +175,17 @@ export type LedgerWatchdog = {
   escalated: EscalatedBreach[];
   /** Open equity lots with no current implied-move row. Does not change `ok` on /api/health. */
   equity_implied_move_gaps: number;
+  /**
+   * Queued strategy tests at least 7 days old, or past their window.
+   * Null when the watchdog row has no `stale_queued_tests` column.
+   * Does not change `ok` on /api/health.
+   */
+  stale_queued_tests: StaleQueuedTests | null;
+  /**
+   * Open lessons whose text names a preregistered test and whose test_id is still null.
+   * Null when the column is absent. Does not change `ok` on /api/health.
+   */
+  unlinked_named_lessons: number | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -184,6 +211,8 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     breaches_escalated: 0,
     escalated: [],
     equity_implied_move_gaps: 0,
+    stale_queued_tests: null,
+    unlinked_named_lessons: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -217,6 +246,13 @@ function num(value: unknown): number | null {
 function count(value: unknown): number {
   const parsed = num(value);
   return parsed !== null && parsed >= 0 ? Math.trunc(parsed) : 0;
+}
+
+/** A present number, or null when the column did not say. Never turns a blank into zero. */
+function optionalCount(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = num(value);
+  return parsed !== null && parsed >= 0 ? Math.trunc(parsed) : null;
 }
 
 function str(value: unknown): string | null {
@@ -427,6 +463,10 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     unscoreable_decisions: stewardCounts(summary.unscoreable_decisions),
     ...escalatedBreaches(summary.breaches_escalated, summary.escalated, breachLots),
     equity_implied_move_gaps: count(summary.equity_implied_move_gaps),
+    stale_queued_tests: staleQueuedTests(summary.stale_queued_tests),
+    unlinked_named_lessons: summary.unlinked_named_lessons === undefined
+      ? null
+      : optionalCount(summary.unlinked_named_lessons),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -513,6 +553,32 @@ function learningGaps(value: unknown): Pick<LedgerWatchdog, 'learning_gaps' | 'l
   return { learning_gaps, learning_gap_lots };
 }
 
+function staleQueuedTests(value: unknown): StaleQueuedTests | null {
+  if (value === undefined) return null;
+  const bag = record(value);
+  if (!bag) return null;
+  const n = optionalCount(bag.n);
+  const quantanamo = optionalCount(bag.quantanamo);
+  const oddsborne = optionalCount(bag.oddsborne);
+  const bandit = optionalCount(bag.bandit);
+  const unknown = optionalCount(bag.unknown);
+  if (n === null || quantanamo === null || oddsborne === null || bandit === null || unknown === null) {
+    return null;
+  }
+  const theses: StaleQueuedThesis[] = [];
+  for (const row of rows(bag.theses)) {
+    const thesisId = str(row.thesis_id);
+    const counted = optionalCount(row.n);
+    if (!thesisId || counted === null) continue;
+    theses.push({
+      thesis_id: thesisId,
+      steward: str(row.steward) ?? 'unknown',
+      n: counted,
+    });
+  }
+  return { n, quantanamo, oddsborne, bandit, unknown, theses };
+}
+
 /** Counts for /api/health and the twice-daily ledger health routine. */
 export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   watchdog_available: boolean;
@@ -534,6 +600,10 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   escalated: string[];
   /** Missed implied-move write. Does not change `ok` on /api/health. */
   equity_implied_move_gaps: number;
+  /** Stalled queued tests. Null when the column is absent. Does not change `ok`. */
+  stale_queued_tests: StaleQueuedTests | null;
+  /** Open lessons that name a test and are not linked. Null when the column is absent. Does not change `ok`. */
+  unlinked_named_lessons: number | null;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -551,6 +621,10 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
     breaches_escalated: w.breaches_escalated,
     escalated: w.escalated.map((row) => row.sentence),
     equity_implied_move_gaps: w.equity_implied_move_gaps,
+    stale_queued_tests: w.stale_queued_tests
+      ? { ...w.stale_queued_tests, theses: w.stale_queued_tests.theses.map((row) => ({ ...row })) }
+      : null,
+    unlinked_named_lessons: w.unlinked_named_lessons,
   };
 }
 

@@ -430,6 +430,7 @@ export const DESK_ARRAY_KEYS = [
   'catalysts',
   'queue',
   'lessons',
+  'lesson_waits',
   'postmortems',
   'cycles',
   'tests',

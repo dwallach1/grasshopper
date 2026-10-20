@@ -7,6 +7,7 @@ import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip
 import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
+import { lessonWaitLine, type LessonWait } from '../../lib/lesson-waits';
 import { formatAmount } from '../../lib/money-units';
 import {
   assembleStewardBooks,
@@ -155,6 +156,7 @@ export function BookPanel({
           tests={desk.tests ?? []}
           cycles={desk.cycles ?? []}
           artifacts={desk.backtest_artifacts ?? []}
+          lessonWaits={desk.lesson_waits ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -168,6 +170,7 @@ export function BookPanel({
           tests={desk.tests ?? []}
           cycles={desk.cycles ?? []}
           artifacts={desk.backtest_artifacts ?? []}
+          lessonWaits={desk.lesson_waits ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -360,6 +363,7 @@ function BooksDetail({
   tests,
   cycles,
   artifacts,
+  lessonWaits,
   onClose,
   onOpenLot,
 }: {
@@ -374,6 +378,7 @@ function BooksDetail({
   tests: StrategyTestRow[];
   cycles: { id: number; thesis_id: string; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
+  lessonWaits: LessonWait[];
   onClose: () => void;
   onOpenLot: (id: string) => void;
 }) {
@@ -463,6 +468,7 @@ function BooksDetail({
           tests={testsForThesis(thesis.id, tests, cycles, books.lessons_by_thesis.get(thesis.id) ?? [])}
           cycles={cycles}
           artifacts={artifacts}
+          lessonWaits={lessonWaits}
           onOpenLot={onOpenLot}
         />
       ) : null}
@@ -490,6 +496,7 @@ function ThesisBody({
   tests,
   cycles,
   artifacts,
+  lessonWaits,
   onOpenLot,
 }: {
   thesis: ThesisRosterRow;
@@ -502,11 +509,13 @@ function ThesisBody({
   tests: StrategyTestRow[];
   cycles: { id: number; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
+  lessonWaits: LessonWait[];
   onOpenLot: (id: string) => void;
 }) {
   const [allLessons, setAllLessons] = useState(false);
   const shown = allLessons ? lessons : lessons.slice(0, LESSONS_SHOWN);
   const byId = new Map(tests.map((row) => [row.id, row]));
+  const waits = new Map(lessonWaits.map((row) => [row.lesson_id, row]));
   return (
     <section className="books-thesis" aria-label="Thesis">
       {nested ? (
@@ -606,21 +615,25 @@ function ThesisBody({
         <>
           <p className="books-section-label">Lessons · {lessons.length}</p>
           <ul className="thesis-evidence books-lessons">
-            {shown.map((row) => (
-              <li key={row.id} data-lesson={row.id}>
-                <span>
-                  {plainWords(row.lesson_type)}
-                  {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
-                  {' · '}
-                  {row.created_at.slice(0, 10)}
-                  {row.incorporated ? ' · in the playbook' : ''}
-                </span>
-                <p>{row.summary}</p>
-                {row.test_id !== null && byId.get(row.test_id) ? (
-                  <TestOutcome test={byId.get(row.test_id)!} cycles={cycles} artifacts={artifacts} linked />
-                ) : null}
-              </li>
-            ))}
+            {shown.map((row) => {
+              const waiting = lessonWaitLine(waits.get(row.id));
+              return (
+                <li key={row.id} data-lesson={row.id}>
+                  <span>
+                    {plainWords(row.lesson_type)}
+                    {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
+                    {' · '}
+                    {row.created_at.slice(0, 10)}
+                    {row.incorporated ? ' · in the playbook' : ''}
+                  </span>
+                  <p>{row.summary}</p>
+                  {waiting ? <p className="books-lesson-wait">{waiting}</p> : null}
+                  {row.test_id !== null && byId.get(row.test_id) ? (
+                    <TestOutcome test={byId.get(row.test_id)!} cycles={cycles} artifacts={artifacts} linked />
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
           {lessons.length > LESSONS_SHOWN ? (
             <button type="button" className="books-more" onClick={() => setAllLessons((value) => !value)}>
