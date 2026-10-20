@@ -93,11 +93,15 @@ grant execute on function public.strategy_test_is_stale_queued(text, timestamptz
 
 -- Steward from the thesis's current domain assignment. Unknown when the
 -- thesis has none, so a missing roster is not reported as QUANTANAMO.
-create or replace function private.thesis_steward(p_thesis_id text)
+-- Public and security invoker. desk_public_reader already selects these
+-- tables. It does not get usage on schema private: execute is already
+-- granted there on security-definer functions, and usage would make those
+-- functions reachable.
+create or replace function public.thesis_steward(p_thesis_id text)
 returns text
 language sql
 stable
-security definer
+security invoker
 set search_path = ''
 as $$
   select coalesce((
@@ -114,13 +118,36 @@ as $$
   ), 'unknown');
 $$;
 
-comment on function private.thesis_steward(text) is
-  'quantanamo, oddsborne, or bandit from the thesis domain assignment. unknown when that assignment is missing. Read-only.';
+comment on function public.thesis_steward(text) is
+  'quantanamo, oddsborne, or bandit from the thesis domain assignment. unknown when that assignment is missing. Read-only. The caller reads the public roster tables.';
 
-revoke all on function private.thesis_steward(text) from public, anon;
-grant execute on function private.thesis_steward(text)
+revoke all on function public.thesis_steward(text) from public, anon;
+grant execute on function public.thesis_steward(text)
   to authenticated, quantanamo_worker, oddsborne_worker, bandit_worker, desk_public_reader, service_role;
-grant usage on schema private to desk_public_reader;
+
+-- The watchdog runs as the caller. These three roles select the roster in
+-- production; a replay still needs the grant. A policy is what lets row
+-- security return the assignment instead of an empty read.
+grant select on public.thesis_domains to quantanamo_worker, oddsborne_worker, bandit_worker;
+grant select on public.desk_domain_stewards to quantanamo_worker, oddsborne_worker, bandit_worker;
+grant select on public.desk_agents to quantanamo_worker, oddsborne_worker, bandit_worker;
+
+drop policy if exists quantanamo_worker_select on public.thesis_domains;
+create policy quantanamo_worker_select on public.thesis_domains
+  for select to quantanamo_worker using (true);
+drop policy if exists oddsborne_worker_select on public.thesis_domains;
+create policy oddsborne_worker_select on public.thesis_domains
+  for select to oddsborne_worker using (true);
+drop policy if exists bandit_worker_select on public.thesis_domains;
+create policy bandit_worker_select on public.thesis_domains
+  for select to bandit_worker using (true);
+
+drop policy if exists quantanamo_worker_select on public.desk_domain_stewards;
+create policy quantanamo_worker_select on public.desk_domain_stewards
+  for select to quantanamo_worker using (true);
+drop policy if exists oddsborne_worker_select on public.desk_domain_stewards;
+create policy oddsborne_worker_select on public.desk_domain_stewards
+  for select to oddsborne_worker using (true);
 
 -- ---------------------------------------------------------------- 2. the queued rows
 create or replace view public.v_stale_queued_tests
@@ -129,7 +156,7 @@ as
 select
   t.id as test_id,
   rc.thesis_id,
-  private.thesis_steward(rc.thesis_id) as steward,
+  public.thesis_steward(rc.thesis_id) as steward,
   t.status,
   t.tested_at,
   public.strategy_test_window_end(t.window_end, t.params_json) as window_end,

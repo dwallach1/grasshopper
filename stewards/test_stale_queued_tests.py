@@ -111,6 +111,22 @@ class StaleQueuedLessonTests(unittest.TestCase):
         self.assertIsNone(named_id(pattern, "Test " + "1" * 19 + " preregistered"))
         self.assertIsNone(named_id(pattern, ""))
 
+    def test_public_reader_does_not_receive_schema_private(self) -> None:
+        sql = _sql()
+        self.assertIn("public.thesis_steward(rc.thesis_id) as steward", sql)
+        self.assertNotIn("private.thesis_steward", sql)
+        header = sql.split("function public.thesis_steward(p_thesis_id text)", 1)[1].split("$$", 1)[0]
+        self.assertIn("security invoker", header)
+        self.assertNotIn("security definer", header)
+        migrations = sorted((ROOT / "supabase" / "migrations").glob("*.sql"))
+        self.assertGreater(len(migrations), 0)
+        grant = re.compile(
+            r"grant\s+usage\s+on\s+schema\s+private\s+to\s+[^;]*\bdesk_public_reader\b",
+            re.IGNORECASE,
+        )
+        offenders = [path.name for path in migrations if grant.search(path.read_text())]
+        self.assertEqual(offenders, [])
+
 
 if __name__ == "__main__":
     unittest.main()
