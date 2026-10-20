@@ -6,7 +6,11 @@ is a reason, never a filled-in price. Fixture bars below are not live quotes.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import json
+import os
 import unittest
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -235,8 +239,166 @@ class EarningsScoreMath(unittest.TestCase):
         self.assertIn("> 1.5", sql)
         self.assertIn("security invoker", sql)
         self.assertNotIn("security definer", sql.lower())
-        mig = HERE.parent / "supabase" / "migrations" / "20261019220000_equity_earnings_score.sql"
-        self.assertEqual(mig.read_text(), sql)
+        shipped = HERE.parent / "supabase" / "migrations" / "20261019220000_equity_earnings_score.sql"
+        self.assertEqual(shipped.read_text(), sql)
+        later_path = HERE.parent / "supabase" / "migrations" / "20261020150000_equity_earnings_supplied_price.sql"
+        later = later_path.read_text()
+        self.assertEqual(
+            later,
+            (HERE.parent / "supabase" / "schemas" / "84_equity_earnings_supplied_price.sql").read_text(),
+        )
+        self.assertIn("p->>'price_source'", later)
+        self.assertIn("v_open is null and v_close is null", later)
+        self.assertIn("'reference_close', im.reference_close", later)
+        self.assertIn("security invoker", later)
+        self.assertNotIn("security definer", later.lower())
+        grant_path = HERE.parent / "supabase" / "migrations" / "20261019210442_equity_report_passed_grant.sql"
+        grant = grant_path.read_text()
+        self.assertEqual(
+            grant,
+            (HERE.parent / "supabase" / "schemas" / "83_equity_report_passed_grant.sql").read_text(),
+        )
+        self.assertIn(
+            "grant execute on function private.equity_report_passed(date, text, boolean, timestamptz)",
+            grant,
+        )
+        self.assertIn("to quantanamo_worker", grant)
+        self.assertIn("grant usage on schema private to quantanamo_worker;", grant)
+
+
+def _due_lot(lot_id="11111111-1111-1111-1111-111111111111", symbol="NFLX"):
+    return {
+        "lot_id": lot_id,
+        "symbol": symbol,
+        "quantity": "2",
+        "invalidation_price": "1000",
+        "report_date": "2026-10-16",
+        "report_timing": "pm",
+        "straddle_price": "10",
+        "underlying_price": "100",
+    }
+
+
+class ScorePriceCommand(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = _load()
+
+    def _run(self, argv, pending, load=None):
+        m = self.m
+        previous_fetch = m.fetch_score_pending
+        previous_load = m.load_fd_prices
+        m.fetch_score_pending = lambda: pending
+        if load is not None:
+            m.load_fd_prices = load
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                code = m.main(argv)
+        finally:
+            m.fetch_score_pending = previous_fetch
+            m.load_fd_prices = previous_load
+        text = buf.getvalue()
+        return code, json.loads(text) if text.strip() else {}
+
+    def test_price_scores_a_due_lot_without_the_api_key(self):
+        os.environ.pop("FINANCIAL_DATASETS_API_KEY", None)
+        called = []
+
+        def load(symbol, start, end):
+            called.append(symbol)
+            raise AssertionError("financial datasets must not be fetched")
+
+        code, out = self._run(
+            ["score", "--price", "105", "--price-source", "robinhood_historicals_rth_close"],
+            [_due_lot()],
+            load,
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(called, [])
+        row = out["results"][0]
+        self.assertEqual(row["action"], "scored")
+        self.assertEqual(row["price_source"], "robinhood_historicals_rth_close")
+        self.assertIn('"price_source":"robinhood_historicals_rth_close"', row["sql"])
+        self.assertIn('"score_source":"robinhood_historicals_rth_close"', row["sql"])
+        self.assertIn('"post_close":"105"', row["sql"])
+        self.assertIn('"reference_close":"100"', row["sql"])
+        self.assertNotIn("post_open", row["sql"])
+
+        # A stored reference close wins over the straddle underlying. --lot picks one of two.
+        stored = _due_lot()
+        stored["reference_close"] = "110"
+        stored["post_open"] = "112"
+        other = _due_lot("22222222-2222-2222-2222-222222222222", "EFX")
+        code, out = self._run(
+            ["score", "--price", "105", "--price-source", "financialdatasets_mcp", "--lot", stored["lot_id"]],
+            [stored, other],
+            load,
+        )
+        self.assertEqual(code, 0, out)
+        self.assertEqual(called, [])
+        self.assertEqual(len(out["results"]), 1)
+        self.assertEqual(out["results"][0]["price_source"], "financialdatasets_mcp")
+        self.assertIn('"reference_close":"110"', out["results"][0]["sql"])
+        self.assertIn('"post_open":"112"', out["results"][0]["sql"])
+        self.assertIn('"price_source":"financialdatasets_mcp"', out["results"][0]["sql"])
+
+    def test_price_with_several_due_lots_requires_lot(self):
+        called = []
+
+        def load(symbol, start, end):
+            called.append(symbol)
+            raise AssertionError("financial datasets must not be fetched")
+
+        code, out = self._run(
+            ["score", "--price", "105", "--price-source", "financialdatasets_mcp"],
+            [_due_lot(), _due_lot("22222222-2222-2222-2222-222222222222", "EFX")],
+            load,
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("--lot", out["error"])
+        self.assertEqual(called, [])
+
+    def test_non_positive_price_is_rejected(self):
+        fetched = []
+
+        def fetch():
+            fetched.append(True)
+            return [_due_lot()]
+
+        previous = self.m.fetch_score_pending
+        self.m.fetch_score_pending = fetch
+        try:
+            for bad in ("0", "-1", "0.0", "-0.01", "nope"):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = self.m.main(["score", "--price", bad, "--price-source", "financialdatasets_mcp"])
+                out = json.loads(buf.getvalue())
+                self.assertEqual(code, 1, bad)
+                self.assertIn("positive", out["error"])
+        finally:
+            self.m.fetch_score_pending = previous
+        self.assertEqual(fetched, [])
+
+    def test_score_without_price_still_loads_bars(self):
+        called = []
+
+        def load(symbol, start, end):
+            called.append((symbol, start.isoformat(), end.isoformat()))
+            return {"prices": [
+                _bar("2026-10-16", 100, 100, ticker="NFLX"),
+                _bar("2026-10-19", 102, 105, ticker="NFLX"),
+            ]}
+
+        code, out = self._run(["score"], [_due_lot()], load)
+        self.assertEqual(code, 0, out)
+        end = datetime.now(timezone.utc).astimezone(self.m.ET).date().isoformat()
+        self.assertEqual(called, [("NFLX", "2026-10-09", end)])
+        row = out["results"][0]
+        self.assertEqual(row["action"], "scored")
+        self.assertNotIn("price_source", row)
+        self.assertNotIn("price_source", row["sql"])
+        self.assertIn('"score_source":"financialdatasets_prices_day"', row["sql"])
 
 
 if __name__ == "__main__":

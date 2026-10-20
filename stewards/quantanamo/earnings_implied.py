@@ -18,12 +18,20 @@ stored as implied_move_missing. This file never invents a price.
 
   python3 stewards/quantanamo/earnings_implied.py score
   python3 stewards/quantanamo/earnings_implied.py score --execute
+  python3 stewards/quantanamo/earnings_implied.py score --price 105.25 --price-source robinhood_historicals_rth_close
+  python3 stewards/quantanamo/earnings_implied.py score --price 105.25 --price-source financialdatasets_mcp --lot <lot_id>
 
 score reads daily bars (Financial Datasets, else Robinhood historicals in a
 payload) and emits select public.steward_record_equity_earnings_score(...).
 AM uses the prior session's close. PM uses that session's close. The post
 session is the report session for AM and the next session for PM. A missing
-bar is score_missing_reason. On the box, after sync_box.sh, the morning after
+bar is score_missing_reason. --price is that post-session close already in
+hand. It skips the Financial Datasets fetch (no FINANCIAL_DATASETS_API_KEY)
+and scores the supplied close. --price-source names where it came from
+(robinhood_historicals_rth_close, financialdatasets_mcp) and is stored with
+the score. --lot scores one due lot; with --price it is required when more
+than one lot is due. A non-positive --price is rejected. Without --price,
+scoring is unchanged. On the box, after sync_box.sh, the morning after
 NFLX (pm 2026-10-20) and EFX (am 2026-10-20) is:
 
   python3 /workspace/quantanamo/earnings_implied.py score --execute
@@ -788,6 +796,7 @@ OUTLIER_RATIO = Decimal("1.5")
 THIN_N = 5
 SCORE_SOURCE_FD = "financialdatasets_prices_day"
 SCORE_SOURCE_RH = "robinhood_equity_historicals"
+SCORE_SOURCE_SUPPLIED = "supplied_post_close"
 OPEN_ET = time(9, 30)
 
 
@@ -1057,13 +1066,15 @@ def score_earnings_move(*, report_date: date, timing: str | None, bars: list[dic
     }
 
 
-def score_record_args(lot: dict, move: dict, source: str) -> dict:
+def score_record_args(lot: dict, move: dict, source: str, price_source: str | None = None) -> dict:
     args = {
         "steward": STEWARD,
         "lot_id": str(lot.get("lot_id")),
         "symbol": str(lot.get("symbol") or "").upper(),
         "score_source": source,
     }
+    if price_source:
+        args["price_source"] = price_source
     if move.get("score_missing_reason"):
         args["score_missing_reason"] = move["score_missing_reason"]
     for key in ("reference_close", "reference_session", "post_open", "post_close", "post_session"):
@@ -1174,9 +1185,76 @@ def _lesson_args(lot: dict, move: dict, summary: str) -> dict:
     }
 
 
+def score_supplied_close(lot: dict, price: Decimal, now: datetime) -> dict:
+    """Post-session close the caller already has. Does not read bars and does not invent an open.
+
+    The reference close is the one already stored on the lot, else the underlying the straddle
+    was marked on. A missing open leaves the gap and line_jumped unknown and keeps the close.
+    """
+    report = lot.get("report_date")
+    report = report if isinstance(report, date) and not isinstance(report, datetime) else _parse_date(report)
+    timing = lot.get("report_timing") if lot.get("report_timing") in ("am", "pm") else None
+    ref_day = reference_session(report, timing) if report else None
+    post_day = post_session(report, timing) if report else None
+    stored_ref = _parse_date(lot.get("reference_session"))
+    stored_post = _parse_date(lot.get("post_session"))
+    if stored_ref is not None:
+        ref_day = stored_ref
+    if stored_post is not None:
+        post_day = stored_post
+    ref_close = _positive(lot.get("reference_close"))
+    if ref_close is None:
+        ref_close = _positive(lot.get("underlying_price"))
+    post_open = _positive(lot.get("post_open"))
+    post_close = _positive(price)
+    reason = None
+    if ref_close is None:
+        reason = "no_reference_bar"
+        post_open = None
+        post_close = None
+    elif post_close is None:
+        reason = "no_post_close"
+    realized_close = move_fraction(post_close, ref_close)
+    ratio, implied = realized_implied_ratio(
+        realized_close, lot.get("straddle_price"), lot.get("underlying_price"),
+    )
+    jumped = line_was_jumped(post_open, lot.get("invalidation_price"), lot.get("quantity"))
+    return {
+        "reference_session": ref_day,
+        "post_session": post_day,
+        "reference_close": ref_close,
+        "post_open": post_open,
+        "post_close": post_close,
+        "realized_open_gap": move_fraction(post_open, ref_close),
+        "realized_close_to_close": realized_close,
+        "implied_fraction": implied,
+        "realized_implied_ratio": ratio,
+        "line_jumped": jumped,
+        "score_missing_reason": reason,
+        "outlier": is_earnings_outlier(ratio, jumped) and (realized_close is not None or jumped is True),
+    }
+
+
+def _due_lots(lots) -> list[dict]:
+    return [lot for lot in lots or [] if isinstance(lot, dict)]
+
+
+def parse_score_price(text: str) -> Decimal:
+    """--price must be a real positive number. Zero and blanks are rejected."""
+    number = _positive(text)
+    if number is None:
+        shown = text if isinstance(text, str) else repr(text)
+        raise ValueError(f"score --price must be a positive number, got {shown}")
+    return number
+
+
 def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
-               caller_score=None, caller_lesson=None) -> dict:
-    """Score each lot from load(symbol, start, end). A transport error is a retry, not a missing bar."""
+               caller_score=None, caller_lesson=None,
+               supplied_close: Decimal | None = None, price_source: str | None = None) -> dict:
+    """Score each lot from load(symbol, start, end). A transport error is a retry, not a missing bar.
+
+    supplied_close skips load entirely: the caller already has the post-report close.
+    """
     statements = []
     results = []
     for lot in lots or []:
@@ -1184,6 +1262,8 @@ def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
             continue
         symbol = str(lot.get("symbol") or "").upper()
         row = {"lot_id": str(lot.get("lot_id") or ""), "symbol": symbol}
+        if price_source:
+            row["price_source"] = price_source
         report = lot.get("report_date")
         report = report if isinstance(report, date) and not isinstance(report, datetime) else _parse_date(report)
         if report is None:
@@ -1191,24 +1271,27 @@ def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
             results.append(row)
             continue
         timing = lot.get("report_timing") if lot.get("report_timing") in ("am", "pm") else None
-        start, end = bar_window(lot, now)
-        try:
-            raw = load(symbol, start, end)
-        except SourceError as exc:
-            row.update({"action": "retry", "error": str(exc)[:200]})
-            results.append(row)
-            continue
-        if raw is None:
-            row["action"] = "waiting"
-            results.append(row)
-            continue
-        parsed = parse_daily_bars(raw, symbol)
-        move = score_earnings_move(
-            report_date=report, timing=timing, bars=parsed, now=now,
-            invalidation=lot.get("invalidation_price"), quantity=lot.get("quantity"),
-            straddle=lot.get("straddle_price"), underlying=lot.get("underlying_price"),
-        )
-        args = _jsonable(score_record_args(lot, move, source))
+        if supplied_close is None:
+            start, end = bar_window(lot, now)
+            try:
+                raw = load(symbol, start, end)
+            except SourceError as exc:
+                row.update({"action": "retry", "error": str(exc)[:200]})
+                results.append(row)
+                continue
+            if raw is None:
+                row["action"] = "waiting"
+                results.append(row)
+                continue
+            parsed = parse_daily_bars(raw, symbol)
+            move = score_earnings_move(
+                report_date=report, timing=timing, bars=parsed, now=now,
+                invalidation=lot.get("invalidation_price"), quantity=lot.get("quantity"),
+                straddle=lot.get("straddle_price"), underlying=lot.get("underlying_price"),
+            )
+        else:
+            move = score_supplied_close(lot, supplied_close, now)
+        args = _jsonable(score_record_args(lot, move, source, price_source))
         sql = _dollar_sql("steward_record_equity_earnings_score", args)
         statements.append(sql)
         row.update({
@@ -1343,9 +1426,26 @@ def main(argv=None) -> int:
     wr.add_argument("payload", help="JSON file: lots plus the raw MCP responses")
     wr.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
     wr.add_argument("--dry-run", action="store_true", help="print the SQL only")
-    sc = sub.add_parser("score", help="score passed prints from Financial Datasets daily bars")
+    sc = sub.add_parser(
+        "score",
+        help="score passed prints from Financial Datasets daily bars, or from --price",
+        description=(
+            "Score passed prints. Without --price, read Financial Datasets daily bars "
+            "(FINANCIAL_DATASETS_API_KEY). With --price, skip that fetch and score the "
+            "supplied post-report close. --price-source names that close "
+            "(robinhood_historicals_rth_close, financialdatasets_mcp) and is stored "
+            "with the score. --lot scores one due lot; it is required with --price "
+            "when more than one lot is due. A non-positive --price is rejected."
+        ),
+    )
     sc.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
     sc.add_argument("--dry-run", action="store_true", help="print the SQL only")
+    sc.add_argument("--price", metavar="FLOAT", help="post-report close; skips the Financial Datasets fetch")
+    sc.add_argument(
+        "--price-source",
+        help="where --price came from, e.g. robinhood_historicals_rth_close or financialdatasets_mcp",
+    )
+    sc.add_argument("--lot", metavar="LOT_ID", help="score this lot only; required with --price when several lots are due")
     args = ap.parse_args(argv)
     if args.command == "plan":
         try:
@@ -1366,9 +1466,47 @@ def main(argv=None) -> int:
         return 0
     if args.command == "score":
         execute = bool(args.execute) and not args.dry_run
+        price = None
+        if args.price is not None:
+            try:
+                price = parse_score_price(args.price)
+            except ValueError as exc:
+                print(json.dumps({"error": str(exc)}))
+                return 1
+        price_source = str(args.price_source).strip() if args.price_source else None
+        if price_source == "":
+            price_source = None
         try:
             pending = fetch_score_pending()
-            out = score_from_loads(pending, execute=execute)
+        except Exception as exc:
+            print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
+            return 1
+        due = _due_lots(pending)
+        lot_id = str(args.lot).strip() if args.lot else ""
+        if price is not None and len(due) > 1 and not lot_id:
+            print(json.dumps({"error": "score --price needs --lot when more than one lot is due"}))
+            return 1
+        if lot_id:
+            due = [lot for lot in due if str(lot.get("lot_id") or "").strip() == lot_id]
+            if not due:
+                print(json.dumps({"error": f"score --lot {lot_id} is not a due lot"}))
+                return 1
+        if price is not None and not due:
+            print(json.dumps({"error": "score --price found no due lot"}))
+            return 1
+        try:
+            if price is None:
+                out = score_from_loads(due, execute=execute)
+            else:
+                out = score_lots(
+                    due,
+                    load=load_fd_prices,
+                    execute=execute,
+                    now=datetime.now(timezone.utc),
+                    source=price_source or SCORE_SOURCE_SUPPLIED,
+                    supplied_close=price,
+                    price_source=price_source,
+                )
         except Exception as exc:
             print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
             return 1
