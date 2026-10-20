@@ -6713,3 +6713,11 @@ html.is-public-desk body {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.books-detail .books-lesson-wait {
+  margin: 2px 0 0;
+  color: var(--ink-2, var(--text-2));
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}

@@ -645,6 +645,8 @@ export type DeskPayload = {
   watchdog?: import('./ledger-watchdog').LedgerWatchdog;
   /** Open-lot earnings prints. Empty until `equity_implied_moves` is readable. */
   earnings?: EquityEarningsRow[];
+  /** Open lessons and the test each one waits on. Empty until `v_open_lesson_tests` is readable. */
+  lesson_waits?: import('./lesson-waits').LessonWait[];
   theses: ThesisRow[];
   /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
   beliefs: import('./beliefs').BeliefUpdateRow[];

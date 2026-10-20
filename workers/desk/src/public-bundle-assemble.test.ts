@@ -153,11 +153,42 @@ describe('public bundle assemble', () => {
     ]);
   });
 
-  test('the public bundle fetches earnings as an optional read', async () => {
+  test('an open lesson wait survives the public bundle with its age', () => {
+    const bundle = slimBundle() as Record<string, unknown>;
+    bundle.lesson_waits = [
+      {
+        lesson_id: '134',
+        thesis_id: 'earnings_gap_structure',
+        test_id: 41,
+        test_status: 'queued',
+        age_days: '4',
+      },
+      { lesson_id: 0, thesis_id: 'earnings_gap_structure', test_id: 1 },
+    ];
+    const serve = assemblePublicBundle(bundle);
+    const desk = serve.desk as {
+      lesson_waits?: Array<{ lesson_id: number; test_id: number | null; test_status: string | null; age_days: number | null }>;
+    };
+    expect(desk.lesson_waits).toEqual([{
+      lesson_id: 134,
+      thesis_id: 'earnings_gap_structure',
+      test_id: 41,
+      test_status: 'queued',
+      age_days: 4,
+    }]);
+    expect(serve.json).toContain('"age_days":4');
+    expect(serve.json).not.toContain('tested_at');
+  });
+
+  test('the public bundle fetches earnings and lesson waits as optional reads', async () => {
     const fn = await Bun.file(new URL('../../../supabase/functions/desk-public-rest/index.ts', import.meta.url)).text();
     expect(fn).toContain("'equity_implied_moves'");
     expect(fn).toContain('restGet(EARNINGS_QUERY, true)');
     expect(fn).toContain('realized_close_to_close');
+    expect(fn).toContain("'v_open_lesson_tests'");
+    expect(fn).toContain('restGet(LESSON_WAITS_QUERY, true)');
+    expect(fn).toContain('lesson_waits: lessonWaits');
+    expect(fn).toContain('v_open_lesson_tests?select=lesson_id,thesis_id,test_id,test_status,age_days');
   });
 
   test('the public cycle query selects the three small scalars and quotes cost key 10', async () => {

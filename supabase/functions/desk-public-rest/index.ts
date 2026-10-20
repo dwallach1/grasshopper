@@ -32,6 +32,8 @@ const ALLOWED_TABLES = new Set([
   'v_ledger_watchdog', 'v_invalidation_breaches', 'v_open_lots_missing_invalidation', 'v_ledger_integrity',
   // Earnings print beside each open equity lot. Optional until migration 20261019220000.
   'equity_implied_moves', 'v_equity_earnings_scorecard',
+  // Open lessons and the test each one waits on. Optional until migration 20261020180000.
+  'v_open_lesson_tests',
 ]);
 
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;
@@ -75,6 +77,9 @@ const ACCOUNT_COLS = 'observed_at,account_label,total_value,equity_value,cash,bu
 const AGENTIC_FILTER = 'account_label=ilike.*Agentic*';
 
 /** Same columns as apps/dashboard/lib/ledger-live.ts EARNINGS_QUERY. Optional so a pre-migration 400 does not 503 the phone. */
+const LESSON_WAITS_QUERY =
+  'v_open_lesson_tests?select=lesson_id,thesis_id,test_id,test_status,age_days&order=lesson_id.asc';
+
 const EARNINGS_QUERY =
   'equity_implied_moves?select=lot_id,symbol,report_date,report_timing,reported,straddle_price,underlying_price,expiry_date,expiry_gap_days,expiry_loose,realized_open_gap,realized_close_to_close,realized_implied_ratio,line_jumped,score_missing_reason&order=symbol.asc';
 
@@ -310,7 +315,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
-    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries, earnings] = await Promise.all([
+    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries, earnings, lessonWaits] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
@@ -322,6 +327,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       objectFrom(WATCHDOG),
       mode === 'public' ? restGet(PUBLIC_SUMMARY_QUERY) : Promise.resolve([]),
       restGet(EARNINGS_QUERY, true),
+      restGet(LESSON_WAITS_QUERY, true),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
@@ -362,6 +368,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     return Response.json({
       ...body,
       earnings,
+      lesson_waits: lessonWaits,
       pm,
       meme,
       team,

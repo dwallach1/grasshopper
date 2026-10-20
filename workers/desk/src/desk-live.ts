@@ -191,6 +191,7 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
     scorecard?: unknown;
     watchdog?: unknown;
     earnings?: unknown;
+    lesson_waits?: unknown;
   };
   const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
@@ -239,6 +240,7 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
     scorecard: mapStewardScorecard(bag.scorecard),
     watchdog: mapLedgerWatchdog(bag.watchdog),
     earnings: asJsonRows(bag.earnings),
+    lessonWaits: asJsonRows(bag.lesson_waits),
   });
   const published = toPublicDeskSnapshot({
     ...live,

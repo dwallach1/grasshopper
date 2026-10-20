@@ -95,6 +95,8 @@ describe('ledger watchdog', () => {
     expect(watchdog.integrity_issues).toBe(0);
     expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
     expect(watchdogHealthSummary(watchdog).unscoreable_decisions).toEqual(watchdog.unscoreable_decisions);
+    expect(watchdog.stale_queued_tests).toBeNull();
+    expect(watchdog.unlinked_named_lessons).toBeNull();
     const gaps = mapLedgerWatchdog({ summary: [{ equity_implied_move_gaps: 2, open_lots: 3 }] });
     expect(gaps.equity_implied_move_gaps).toBe(2);
     expect(watchdogHealthSummary(gaps).equity_implied_move_gaps).toBe(2);
@@ -136,6 +138,80 @@ describe('ledger watchdog', () => {
     expect(sql).toContain('from public.v_ledger_integrity');
     expect(sql).not.toContain("'learning_loop_gap'");
     expect(sql.match(/position_episodes|pm_positions|meme_positions/g)?.length).toBeGreaterThanOrEqual(6);
+  });
+
+  test('a missing stall column stays unknown, and a present count is not a trading alert', () => {
+    const absent = mapLedgerWatchdog({ summary: [{ open_lots: 1 }] });
+    expect(absent.stale_queued_tests).toBeNull();
+    expect(absent.unlinked_named_lessons).toBeNull();
+    expect(watchdogHealthSummary(absent)).toMatchObject({
+      stale_queued_tests: null,
+      unlinked_named_lessons: null,
+    });
+
+    const blank = mapLedgerWatchdog({
+      summary: [{ open_lots: 1, stale_queued_tests: null, unlinked_named_lessons: '' }],
+    });
+    expect(blank.stale_queued_tests).toBeNull();
+    expect(blank.unlinked_named_lessons).toBeNull();
+
+    const incomplete = mapLedgerWatchdog({
+      summary: [{ stale_queued_tests: { n: 1, quantanamo: 1, oddsborne: 0, bandit: 0 } }],
+    });
+    expect(incomplete.stale_queued_tests).toBeNull();
+
+    const watchdog = mapLedgerWatchdog({
+      summary: [{
+        open_lots: 1,
+        integrity_issues: 0,
+        stale_queued_tests: {
+          n: '18',
+          quantanamo: 18,
+          oddsborne: 0,
+          bandit: 0,
+          unknown: 0,
+          theses: [
+            { thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 17 },
+            { thesis_id: 'semis_photonics', n: '1' },
+            { thesis_id: '', steward: 'quantanamo', n: 1 },
+            { n: 3 },
+          ],
+        },
+        unlinked_named_lessons: '2',
+      }],
+    });
+    expect(watchdog.stale_queued_tests).toEqual({
+      n: 18,
+      quantanamo: 18,
+      oddsborne: 0,
+      bandit: 0,
+      unknown: 0,
+      theses: [
+        { thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 17 },
+        { thesis_id: 'semis_photonics', steward: 'unknown', n: 1 },
+      ],
+    });
+    expect(watchdog.unlinked_named_lessons).toBe(2);
+    const health = watchdogHealthSummary(watchdog);
+    expect(health.stale_queued_tests).toEqual(watchdog.stale_queued_tests);
+    expect(health.stale_queued_tests).not.toBe(watchdog.stale_queued_tests);
+    expect(health.unlinked_named_lessons).toBe(2);
+    const book = assembleDeskBookHealth({ watchdog } as unknown as DeskPayload, Date.parse('2026-10-20T17:00:00Z'));
+    expect(book.alerts).toEqual([]);
+    expect(book.integrity_issues).toBe(0);
+  });
+
+  test('schema 83 matches its migration and names the stall without scoring tests', () => {
+    const sql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/83_stale_queued_lesson_tests.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261020180000_stale_queued_lesson_tests.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain('as stale_queued_tests');
+    expect(sql).toContain('as unlinked_named_lessons');
+    expect(sql).toContain("interval '7 days'");
+    expect(sql).toContain('America/New_York');
+    expect(sql).toContain('create or replace view public.v_open_lesson_tests\nwith (security_invoker = true)');
+    expect(sql).toContain('create or replace view public.v_stale_queued_tests\nwith (security_invoker = true)');
+    expect(sql).toContain('and l.test_id is null');
+    expect(sql).not.toMatch(/update\s+public\.strategy_tests/i);
   });
 });
 

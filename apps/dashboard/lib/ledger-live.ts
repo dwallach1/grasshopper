@@ -53,6 +53,7 @@ import {
   WATCHDOG_QUERIES,
   type LedgerWatchdog,
 } from './ledger-watchdog';
+import { mapLessonWaits } from './lesson-waits';
 import type { DeskPayload, DeskTeamPayload } from './ledger-types';
 import {
   emptyMemeCoins,
@@ -184,20 +185,21 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
     restRows('ontology_management_actions?select=id,actor_id,entity_type,entity_key,action,created_at&order=created_at.desc,id.desc&limit=100', auth),
   ]);
 
-  const [prediction, meme, team, scorecard, watchdog, earnings] = await Promise.all([
+  const [prediction, meme, team, scorecard, watchdog, earnings, lessonWaits] = await Promise.all([
     loadPredictionMarketsRest(auth),
     loadMemeCoinsRest(auth),
     loadTeamRest(auth),
     loadScorecardRest(auth),
     loadWatchdogRest(auth),
     restOptional(EARNINGS_QUERY, auth),
+    restOptional(LESSON_WAITS_QUERY, auth),
   ]);
   return assembleDeskFromRestBag({
     theses, symbols, beliefs, evidence, scores, relations, runs, cloudRuns, cloudTasks,
     automations, catalysts, queue, lessons, postmortems, cycles, tests, artifacts,
     scenarios, agentRuns, accountLatest, accountFirst, positions, exposures,
     intents, proposals, fills, insights, predictions, riskControls, themes,
-    ontologySymbols, candidates, actions, prediction, meme, team, scorecard, watchdog, earnings,
+    ontologySymbols, candidates, actions, prediction, meme, team, scorecard, watchdog, earnings, lessonWaits,
   });
 }
 
@@ -210,6 +212,10 @@ async function loadWatchdogRest(auth: DeskRestAuth): Promise<LedgerWatchdog> {
   ]);
   return mapLedgerWatchdog({ summary, breaches, missing, issues });
 }
+
+/** Open lessons and the test each waits on. Optional until migration 20261020180000. */
+export const LESSON_WAITS_QUERY =
+  'v_open_lesson_tests?select=lesson_id,thesis_id,test_id,test_status,age_days&order=lesson_id.asc';
 
 /** Columns the Book line reads. Optional: before migration 20261019220000 this select 400s and the desk stays up. */
 export const EARNINGS_QUERY =
@@ -267,6 +273,7 @@ export type RestDeskBag = {
   scorecard?: StewardScorecardPayload;
   watchdog?: LedgerWatchdog;
   earnings?: JsonObjectRow[];
+  lessonWaits?: JsonObjectRow[];
 };
 
 /** Read-only scorecard views. Optional: a ledger without the outcome migration serves []. */
@@ -312,6 +319,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
   | 'scorecard'
   | 'watchdog'
   | 'earnings'
+  | 'lessonWaits'
 >>): DeskPayload {
   const mappedArtifacts = mapBacktestArtifacts(bag.artifacts ?? []);
   const mappedCycles = mapCycles(bag.cycles ?? []);
@@ -363,6 +371,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       open_positions: 0,
       queued_tasks: 0,
     },
+    lesson_waits: mapLessonWaits(bag.lessonWaits ?? []),
   }, bag.prediction, bag.meme, bag.team)), bag.scorecard, bag.watchdog, bag.earnings);
 }
 
@@ -431,6 +440,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
         row.status === 'queued' || row.status === 'running',
       ).length,
     },
+    lesson_waits: mapLessonWaits(bag.lessonWaits ?? []),
   }, prediction, meme, team)), bag.scorecard, bag.watchdog, bag.earnings);
 }
 

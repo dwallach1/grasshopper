@@ -126,6 +126,8 @@ describe('public desk Worker API', () => {
         breaches_escalated: 0,
         escalated: [],
         equity_implied_move_gaps: 0,
+        stale_queued_tests: null,
+        unlinked_named_lessons: null,
       },
       learning: {
         to_review: 0,
@@ -191,6 +193,40 @@ describe('public desk Worker API', () => {
     const body = await response.json() as { ok: boolean; watchdog: { equity_implied_move_gaps: number } };
     expect(body.ok).toBe(true);
     expect(body.watchdog.equity_implied_move_gaps).toBe(2);
+  });
+
+  test('stalled queued tests are counted and /api/health stays ok', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        watchdog: {
+          ...emptyLedgerWatchdog(),
+          available: true,
+          stale_queued_tests: {
+            n: 18,
+            quantanamo: 18,
+            oddsborne: 0,
+            bandit: 0,
+            unknown: 0,
+            theses: [{ thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 17 }],
+          },
+          unlinked_named_lessons: 1,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      ok: boolean;
+      watchdog: {
+        stale_queued_tests: { n: number; quantanamo: number } | null;
+        unlinked_named_lessons: number | null;
+      };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.watchdog.stale_queued_tests).toMatchObject({ n: 18, quantanamo: 18 });
+    expect(body.watchdog.unlinked_named_lessons).toBe(1);
   });
 
   test('market skill is on the health learning block and does not change ok', async () => {

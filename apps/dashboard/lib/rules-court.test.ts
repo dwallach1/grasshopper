@@ -95,6 +95,7 @@ describe('rules court', () => {
       ['80_equity_implied_move_risk.sql', '20261019170000_equity_implied_move_risk.sql'],
       ['81_equity_implied_move_gaps.sql', '20261019193000_equity_implied_move_gaps.sql'],
       ['82_equity_earnings_score.sql', '20261019220000_equity_earnings_score.sql'],
+      ['83_stale_queued_lesson_tests.sql', '20261020180000_stale_queued_lesson_tests.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
