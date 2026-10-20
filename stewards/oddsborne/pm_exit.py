@@ -50,7 +50,7 @@ from pm_enter import (  # noqa: E402
 )
 
 EXIT_ORDER_TYPES = {k: ORDER_TYPES[k] for k in ("ioc", "fok", "gtc")}
-REASONS = ("invalidation", "take_profit", "thesis_exit", "pre_settle", "edge_gone", "manual")
+REASONS = ("invalidation", "take_profit", "thesis_exit", "pre_settle", "edge_gone", "manual", "prekickoff_fair_drift")
 EPS = Decimal("0.000001")
 
 
