@@ -37,6 +37,13 @@ python3 /workspace/quantanamo/earnings_implied.py write payload.json --execute
 
 After the report's release clock (09:30 America/New_York for a before-the-open print, 20:00 for an after-close print), `score` writes the realized move on that same row. An AM print uses the prior session's close as the reference and that session's open and close after the print. A PM print uses the report day's close and the next session's open and close. Bars come from Financial Datasets, or from Robinhood `get_equity_historicals` when `write` was given them. A missing bar is `score_missing_reason`. No bar is invented. `reported` flips when the score is stored. A close more than 1.5× the priced move, or an open through the exit, writes one `research_lessons` row and one `belief_updates` row (`kind` `earnings_print`, `new_confidence` null). Fewer than 5 scored closes stay a thin sample: the lesson says so, and `v_equity_earnings_scorecard.verdict` stays null. An expiry more than 7 days after the report is `expiry_loose` (the nearest listed expiry was already that far). That flag does not change the open-risk max.
 
+`--price` is that post-session close when it is already in hand (a Robinhood regular-session close, or a Financial Datasets read from somewhere else). The command then skips the Financial Datasets fetch, so `FINANCIAL_DATASETS_API_KEY` is not required. `--price-source` is required with `--price` and must be `robinhood_historicals_rth_close` or `financialdatasets_mcp`. That name is stored on the score statement and on `equity_implied_moves.meta`. Any other name is rejected, and a close with no open is rejected when the source is missing. The reference close is the one already stored on the lot, otherwise the underlying the straddle was marked on. A stored post open is kept; a missing open does not invent one. `--lot` scores one due lot. With `--price`, `--lot` is required when more than one lot is due. A non-positive `--price` is rejected. Without `--price`, scoring still reads Financial Datasets.
+
+```bash
+python3 /workspace/quantanamo/earnings_implied.py score --price 105.25 --price-source robinhood_historicals_rth_close
+python3 /workspace/quantanamo/earnings_implied.py score --price 105.25 --price-source financialdatasets_mcp --lot <lot_id> --execute
+```
+
 Score NFLX (after the close on 2026-10-20) and EFX (before the open on 2026-10-20) on the morning of 2026-10-21, after migration `20261019220000_equity_earnings_score.sql` is applied:
 
 ```bash
