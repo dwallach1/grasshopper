@@ -26,6 +26,7 @@ For each pass from public.steward_pending_decision_marks (scoreable, horizon pas
      error is never a reason: the pass is retried next run. Nothing is interpolated or carried forward.
 """
 from __future__ import annotations
+import math
 
 import argparse
 import os
@@ -105,7 +106,7 @@ def gecko_first_trade(mint: str, horizon: datetime, now: datetime) -> dict:
     pool = gecko_sol_pool(mint)
     if "none" in pool:
         return pool
-    h = int(horizon.timestamp())
+    h = math.ceil(horizon.timestamp())  # sub-second horizons round up, so the first candle never starts before it
     start = h if h % 60 == 0 else h - h % 60 + 60  # first candle that starts at or after the horizon
     end = min(int(now.timestamp()), start + WINDOW_MINUTES * 60)
     if end <= start:
