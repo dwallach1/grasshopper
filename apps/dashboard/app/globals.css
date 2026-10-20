@@ -3919,6 +3919,16 @@ a:focus-visible {
   align-items: center;
   gap: 12px;
   touch-action: pan-y;
+  font: inherit;
+  appearance: none;
+}
+
+.team-card.is-open {
+  align-items: flex-start;
+}
+
+.team-card-charter {
+  line-height: 1.35;
 }
 
 .thesis-card {
@@ -4183,15 +4193,19 @@ a:focus-visible {
   margin: 0;
 }
 
-.score-gates-more summary {
-  list-style: none;
-  cursor: pointer;
+.score-gates-toggle {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--ink-3, var(--text-3));
+  font: inherit;
   font-size: 11px;
-}
-
-.score-gates-more summary::-webkit-details-marker {
-  display: none;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
 }
 
 .thesis-card-meta {

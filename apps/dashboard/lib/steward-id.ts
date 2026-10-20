@@ -17,6 +17,7 @@ export type StewardIdCard = {
 
 export type TeamRosterCard = StewardIdCard & {
   heartbeat_at: string | null;
+  charter: string;
 };
 
 export function stewardDomainFace(slug: string, name = ''): StewardIdDomain | null {
@@ -81,15 +82,14 @@ function ledgerRoster(desk: Pick<DeskPayload, 'team'>): DeskTeamPayload | null {
   };
 }
 
-/** Published `desk_agents` plus heartbeat age. Empty roster → no cards. */
+/** Published `desk_agents` plus heartbeat age and charter. Empty roster → no cards. */
 export function assembleTeamRoster(desk: Pick<DeskPayload, 'team'>): TeamRosterCard[] {
   const cards = stewardIdCards(desk);
-  const heartbeats = new Map(
-    teamCards(deskTeam(desk)).map((row) => [row.slug, row.heartbeat_at]),
-  );
+  const rows = new Map(teamCards(deskTeam(desk)).map((row) => [row.slug, row]));
   return cards.map((card) => ({
     ...card,
-    heartbeat_at: heartbeats.get(card.slug) ?? null,
+    heartbeat_at: rows.get(card.slug)?.heartbeat_at ?? null,
+    charter: rows.get(card.slug)?.charter ?? '',
   }));
 }
 

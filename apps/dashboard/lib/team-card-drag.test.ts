@@ -69,7 +69,7 @@ function desk(): DeskPayload {
           slug: 'quantanamo',
           display_name: 'QUANTANAMO',
           role_title: 'Equities trader',
-          charter: 'Stocks.',
+          charter: 'Research and live trades on the equity book.',
           accent: '#5b8def',
           avatar_key: 'quant',
           status: 'active',
@@ -286,5 +286,39 @@ describe('Team stack vs circular pager', () => {
     root = null;
     document.body.innerHTML = '';
     expect(await swipe('leaderboard', 40, 280)).toEqual(['team']);
+  });
+
+  test('steward cards open that charter and do not link to this page', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(createElement(TeamPanel, {
+        desk: desk(),
+        reduceMotion: true,
+        now: Date.parse('2026-09-06T13:24:00.000Z'),
+      }));
+    });
+
+    const cards = [...document.querySelectorAll('.team-card')];
+    expect(cards.map((card) => card.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON']);
+    expect(document.querySelector('.team-roster a')).toBeNull();
+    expect(cards.every((card) => card.getAttribute('href') === null)).toBe(true);
+    expect(cards.every((card) => card.getAttribute('aria-expanded') === 'false')).toBe(true);
+
+    const quant = document.querySelector('.team-card[data-steward="quantanamo"]');
+    if (!(quant instanceof HTMLButtonElement)) throw new Error('missing quantanamo card');
+    expect(quant.querySelector('.team-card-charter')).toBeNull();
+    await act(async () => {
+      quant.dispatchEvent(new dom.MouseEvent('click', { bubbles: true }));
+    });
+    expect(quant.getAttribute('aria-expanded')).toBe('true');
+    expect(quant.querySelector('.team-card-charter')?.textContent).toBe('Research and live trades on the equity book.');
+    expect(document.querySelector('.team-card[data-steward="bandit"]')?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      quant.dispatchEvent(new dom.MouseEvent('click', { bubbles: true }));
+    });
+    expect(quant.getAttribute('aria-expanded')).toBe('false');
+    expect(quant.querySelector('.team-card-charter')).toBeNull();
   });
 });

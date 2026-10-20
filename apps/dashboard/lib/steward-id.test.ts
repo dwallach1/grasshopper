@@ -161,6 +161,7 @@ describe('steward ID card face', () => {
       display_name: 'QUANTANAMO',
       domain: 'Stocks',
       heartbeat_at: '2026-09-06T12:00:00.000Z',
+      charter: 'Research and live trades on the equity book.',
     });
     expect(roster.find((row) => row.slug === 'grasshopper')).toMatchObject({
       domain: 'Ledger',

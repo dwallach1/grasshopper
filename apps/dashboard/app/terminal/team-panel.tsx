@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import { scrollTeamStageToSteward } from '../../lib/desk-team-scroll';
@@ -26,6 +26,16 @@ export function TeamPanel({
   const cards = assembleTeamRoster(desk);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const stageRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+
+  function toggleCard(slug: string) {
+    setOpen((current) => {
+      const next = new Set(current);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -50,22 +60,42 @@ export function TeamPanel({
           {cards.map((card) => {
             const face = faces.get(card.slug) ?? QUIET_STEWARD_FACE;
             const score = assembleStewardScorecard(desk.scorecard, card.slug);
+            const detail = card.charter.trim();
+            const expanded = detail.length > 0 && open.has(card.slug);
+            const copy = (
+              <>
+                <StewardAvatar
+                  slug={card.slug}
+                  name={card.display_name}
+                  size="board"
+                  accent={card.accent}
+                  {...face}
+                />
+                <div className="team-card-copy">
+                  <b>{card.display_name}</b>
+                  <i>{card.domain}</i>
+                  <span>pulse {card.heartbeat_at ? age(card.heartbeat_at, now) : 'no heartbeat'}</span>
+                  {expanded ? <span className="team-card-charter">{detail}</span> : null}
+                </div>
+              </>
+            );
             return (
               <li key={card.slug} className="team-li">
-                <article className="team-card" data-steward={card.slug}>
-                  <StewardAvatar
-                    slug={card.slug}
-                    name={card.display_name}
-                    size="board"
-                    accent={card.accent}
-                    {...face}
-                  />
-                  <div className="team-card-copy">
-                    <b>{card.display_name}</b>
-                    <i>{card.domain}</i>
-                    <span>pulse {card.heartbeat_at ? age(card.heartbeat_at, now) : 'no heartbeat'}</span>
-                  </div>
-                </article>
+                {detail ? (
+                  <button
+                    type="button"
+                    className={expanded ? 'team-card is-open' : 'team-card'}
+                    data-steward={card.slug}
+                    aria-expanded={expanded}
+                    onClick={() => toggleCard(card.slug)}
+                  >
+                    {copy}
+                  </button>
+                ) : (
+                  <article className="team-card" data-steward={card.slug}>
+                    {copy}
+                  </article>
+                )}
                 {score && <StewardScorecard card={score} name={card.display_name} />}
               </li>
             );

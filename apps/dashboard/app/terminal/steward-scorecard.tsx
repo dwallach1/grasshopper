@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { GATE_REPORT_OPEN, gateReportParts, type GateReportRow } from '../../lib/gate-report';
 import type { MoneyUnit } from '../../lib/money-units';
 import { formatUsd, signedAmount } from '../../lib/money-units';
@@ -40,6 +42,34 @@ function GateLine({ row }: { row: GateReportRow }) {
       {parts.pctText && <b className={pnlClass(parts.pct)}>{parts.pctText}</b>}
       {parts.after}
     </li>
+  );
+}
+
+function gateMoreLabel(hidden: number, open: boolean): string {
+  if (open) return 'Show less';
+  return `${hidden} more`;
+}
+
+function GateMore({ rows }: { rows: GateReportRow[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="score-gates-more">
+      <button
+        type="button"
+        className="score-gates-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {gateMoreLabel(rows.length, open)}
+      </button>
+      {open ? (
+        <ul className="score-gates" data-gates-more>
+          {rows.map((row) => (
+            <GateLine key={row.gate} row={row} />
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -171,14 +201,7 @@ export function StewardScorecard({
             ))}
           </ul>
           {card.gates.length > GATE_REPORT_OPEN && (
-            <details className="score-gates-more">
-              <summary>{card.gates.length - GATE_REPORT_OPEN} more</summary>
-              <ul className="score-gates">
-                {card.gates.slice(GATE_REPORT_OPEN).map((row) => (
-                  <GateLine key={row.gate} row={row} />
-                ))}
-              </ul>
-            </details>
+            <GateMore rows={card.gates.slice(GATE_REPORT_OPEN)} />
           )}
         </>
       )}
