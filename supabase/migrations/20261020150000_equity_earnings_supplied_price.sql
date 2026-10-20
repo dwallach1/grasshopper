@@ -1,8 +1,9 @@
 -- Supplied post-report close.
 --
 -- earnings_implied.py score --price skips Financial Datasets and sends that
--- close. A close without an open is kept; the open gap stays null. price_source
--- is written on equity_implied_moves.meta beside the score. Pending lots also
+-- close. A close without an open is kept only when price_source is
+-- robinhood_historicals_rth_close or financialdatasets_mcp; null, blank, or
+-- any other source raises, and meta is not left unchanged. Pending lots also
 -- return the prices already stored, so a later --price keeps a real reference
 -- close instead of the straddle underlying.
 --
@@ -104,6 +105,21 @@ begin
   if v_post_session is not null and v_ref_session is not null and v_post_session < v_ref_session then
     raise exception 'refusal:earnings_score: post session is before the reference session' using errcode = 'P0001';
   end if;
+  -- Blank price_source is null. A named source must be one of the two closes
+  -- the steward is allowed to pass in. Anything else raises before a write.
+  if v_price_source is not null and v_price_source not in (
+    'robinhood_historicals_rth_close',
+    'financialdatasets_mcp'
+  ) then
+    raise exception 'refusal:earnings_score: price_source % is not allowed', v_price_source
+      using errcode = 'P0001';
+  end if;
+  -- A close with no open is the supplied post-report price. Null or empty
+  -- price_source raises here; it does not store the close and leave meta as it was.
+  if v_close is not null and v_open is null and v_price_source is null then
+    raise exception 'refusal:earnings_score: a supplied close with no open needs price_source'
+      using errcode = 'P0001';
+  end if;
 
   -- A later empty read must not erase a close that was already scored.
   if v_old_cc is not null and v_close is null then
@@ -143,8 +159,10 @@ begin
     v_reason := 'no_post_open';
   elsif v_close is null then
     v_reason := 'no_post_close';
+  elsif v_open is null then
+    -- price_source is set: the check above already raised when it was null or blank.
+    v_reason := null;
   else
-    -- A close without an open is the supplied post-report price. The gap stays unknown.
     v_reason := null;
   end if;
 
@@ -210,7 +228,7 @@ end;
 $$;
 
 comment on function public.steward_record_equity_earnings_score(jsonb) is
-  'Record the realized earnings move on an existing equity_implied_moves row and set reported. Percents are recomputed from the bar prices. A missing bar stores score_missing_reason and no price. A later empty read does not erase a stored close. A close sent without an open is kept (the gap stays null). price_source, when named, is written on meta. Does not change open risk.';
+  'Record the realized earnings move on an existing equity_implied_moves row and set reported. Percents are recomputed from the bar prices. A missing bar stores score_missing_reason and no price. A later empty read does not erase a stored close. A close sent without an open is kept only when price_source is robinhood_historicals_rth_close or financialdatasets_mcp; null, blank, or any other source raises and meta is not skipped. Does not change open risk.';
 
 revoke all on function public.steward_record_equity_earnings_score(jsonb) from public, anon, authenticated;
 grant execute on function public.steward_record_equity_earnings_score(jsonb) to quantanamo_worker, service_role;

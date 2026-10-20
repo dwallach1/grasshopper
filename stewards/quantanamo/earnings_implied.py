@@ -27,9 +27,9 @@ AM uses the prior session's close. PM uses that session's close. The post
 session is the report session for AM and the next session for PM. A missing
 bar is score_missing_reason. --price is that post-session close already in
 hand. It skips the Financial Datasets fetch (no FINANCIAL_DATASETS_API_KEY)
-and scores the supplied close. --price-source names where it came from
-(robinhood_historicals_rth_close, financialdatasets_mcp) and is stored with
-the score. --lot scores one due lot; with --price it is required when more
+and scores the supplied close. --price-source is required with --price and
+must be robinhood_historicals_rth_close or financialdatasets_mcp. It is stored
+with the score. --lot scores one due lot; with --price it is required when more
 than one lot is due. A non-positive --price is rejected. Without --price,
 scoring is unchanged. On the box, after sync_box.sh, the morning after
 NFLX (pm 2026-10-20) and EFX (am 2026-10-20) is:
@@ -796,7 +796,10 @@ OUTLIER_RATIO = Decimal("1.5")
 THIN_N = 5
 SCORE_SOURCE_FD = "financialdatasets_prices_day"
 SCORE_SOURCE_RH = "robinhood_equity_historicals"
-SCORE_SOURCE_SUPPLIED = "supplied_post_close"
+PRICE_SOURCES = (
+    "robinhood_historicals_rth_close",
+    "financialdatasets_mcp",
+)
 OPEN_ET = time(9, 30)
 
 
@@ -1248,6 +1251,17 @@ def parse_score_price(text: str) -> Decimal:
     return number
 
 
+def parse_price_source(text: str | None) -> str:
+    """--price requires one of PRICE_SOURCES. Blank and any other name are refused."""
+    source = "" if text is None else str(text).strip()
+    if not source:
+        raise ValueError("score --price requires --price-source")
+    if source not in PRICE_SOURCES:
+        allowed = " or ".join(PRICE_SOURCES)
+        raise ValueError(f"score --price-source must be {allowed}, got {source}")
+    return source
+
+
 def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
                caller_score=None, caller_lesson=None,
                supplied_close: Decimal | None = None, price_source: str | None = None) -> dict:
@@ -1432,10 +1446,10 @@ def main(argv=None) -> int:
         description=(
             "Score passed prints. Without --price, read Financial Datasets daily bars "
             "(FINANCIAL_DATASETS_API_KEY). With --price, skip that fetch and score the "
-            "supplied post-report close. --price-source names that close "
-            "(robinhood_historicals_rth_close, financialdatasets_mcp) and is stored "
-            "with the score. --lot scores one due lot; it is required with --price "
-            "when more than one lot is due. A non-positive --price is rejected."
+            "supplied post-report close. --price-source is required with --price and "
+            "must be robinhood_historicals_rth_close or financialdatasets_mcp. "
+            "--lot scores one due lot; it is required with --price when more than "
+            "one lot is due. A non-positive --price is rejected."
         ),
     )
     sc.add_argument("--execute", action="store_true", help="call the ledger as well as printing the SQL")
@@ -1443,7 +1457,7 @@ def main(argv=None) -> int:
     sc.add_argument("--price", metavar="FLOAT", help="post-report close; skips the Financial Datasets fetch")
     sc.add_argument(
         "--price-source",
-        help="where --price came from, e.g. robinhood_historicals_rth_close or financialdatasets_mcp",
+        help="required with --price: robinhood_historicals_rth_close or financialdatasets_mcp",
     )
     sc.add_argument("--lot", metavar="LOT_ID", help="score this lot only; required with --price when several lots are due")
     args = ap.parse_args(argv)
@@ -1467,15 +1481,16 @@ def main(argv=None) -> int:
     if args.command == "score":
         execute = bool(args.execute) and not args.dry_run
         price = None
+        price_source = None
         if args.price is not None:
             try:
                 price = parse_score_price(args.price)
+                if args.price_source is None:
+                    raise ValueError("score --price requires --price-source")
+                price_source = parse_price_source(args.price_source)
             except ValueError as exc:
                 print(json.dumps({"error": str(exc)}))
                 return 1
-        price_source = str(args.price_source).strip() if args.price_source else None
-        if price_source == "":
-            price_source = None
         try:
             pending = fetch_score_pending()
         except Exception as exc:
@@ -1503,7 +1518,7 @@ def main(argv=None) -> int:
                     load=load_fd_prices,
                     execute=execute,
                     now=datetime.now(timezone.utc),
-                    source=price_source or SCORE_SOURCE_SUPPLIED,
+                    source=price_source,
                     supplied_close=price,
                     price_source=price_source,
                 )

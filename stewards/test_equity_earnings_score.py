@@ -248,6 +248,15 @@ class EarningsScoreMath(unittest.TestCase):
             (HERE.parent / "supabase" / "schemas" / "84_equity_earnings_supplied_price.sql").read_text(),
         )
         self.assertIn("p->>'price_source'", later)
+        self.assertIn("v_close is not null and v_open is null and v_price_source is null", later)
+        self.assertIn("a supplied close with no open needs price_source", later)
+        self.assertIn("'robinhood_historicals_rth_close'", later)
+        self.assertIn("'financialdatasets_mcp'", later)
+        self.assertIn("price_source % is not allowed", later)
+        self.assertLess(
+            later.index("a supplied close with no open needs price_source"),
+            later.index("meta = case"),
+        )
         self.assertIn("v_open is null and v_close is null", later)
         self.assertIn("'reference_close', im.reference_close", later)
         self.assertIn("security invoker", later)
@@ -378,6 +387,85 @@ class ScorePriceCommand(unittest.TestCase):
                 self.assertIn("positive", out["error"])
         finally:
             self.m.fetch_score_pending = previous
+        self.assertEqual(fetched, [])
+
+    def test_null_or_empty_price_source_is_refused(self):
+        fetched = []
+
+        def fetch():
+            fetched.append(True)
+            return [_due_lot()]
+
+        previous = self.m.fetch_score_pending
+        self.m.fetch_score_pending = fetch
+        try:
+            for blank in ("", "   "):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = self.m.main(["score", "--price", "105", "--price-source", blank])
+                out = json.loads(buf.getvalue())
+                self.assertEqual(code, 1, blank)
+                self.assertIn("price-source", out["error"])
+            with self.assertRaises(ValueError):
+                self.m.parse_price_source(None)
+            with self.assertRaises(ValueError):
+                self.m.parse_price_source("")
+        finally:
+            self.m.fetch_score_pending = previous
+        self.assertEqual(fetched, [])
+        sql = (HERE.parent / "supabase" / "migrations" / "20261020150000_equity_earnings_supplied_price.sql").read_text()
+        self.assertIn("nullif(btrim(coalesce(p->>'price_source', '')), '')", sql)
+        self.assertIn("v_close is not null and v_open is null and v_price_source is null", sql)
+        self.assertIn("a supplied close with no open needs price_source", sql)
+        self.assertLess(
+            sql.index("a supplied close with no open needs price_source"),
+            sql.index("meta = case"),
+        )
+
+    def test_price_source_outside_the_allowlist_is_refused(self):
+        fetched = []
+
+        def fetch():
+            fetched.append(True)
+            return [_due_lot()]
+
+        previous = self.m.fetch_score_pending
+        self.m.fetch_score_pending = fetch
+        try:
+            for source in ("supplied_post_close", "robinhood", "FINANCIALDATASETS_MCP"):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = self.m.main(["score", "--price", "105", "--price-source", source])
+                out = json.loads(buf.getvalue())
+                self.assertEqual(code, 1, source)
+                self.assertIn("robinhood_historicals_rth_close", out["error"])
+                self.assertIn("financialdatasets_mcp", out["error"])
+        finally:
+            self.m.fetch_score_pending = previous
+        self.assertEqual(fetched, [])
+        sql = (HERE.parent / "supabase" / "migrations" / "20261020150000_equity_earnings_supplied_price.sql").read_text()
+        self.assertIn("'robinhood_historicals_rth_close'", sql)
+        self.assertIn("'financialdatasets_mcp'", sql)
+        self.assertIn("price_source % is not allowed", sql)
+
+    def test_price_without_price_source_is_refused(self):
+        fetched = []
+
+        def fetch():
+            fetched.append(True)
+            return [_due_lot()]
+
+        previous = self.m.fetch_score_pending
+        self.m.fetch_score_pending = fetch
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = self.m.main(["score", "--price", "105"])
+            out = json.loads(buf.getvalue())
+        finally:
+            self.m.fetch_score_pending = previous
+        self.assertEqual(code, 1)
+        self.assertIn("requires --price-source", out["error"])
         self.assertEqual(fetched, [])
 
     def test_score_without_price_still_loads_bars(self):
