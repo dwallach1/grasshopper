@@ -671,8 +671,11 @@ def edge6_signal(b, t):
     if not (0.50 <= d <= 0.70 and vol >= 50000): return None
     if _e2_bar(b, t): return None
     return dict(flush_pct=round((1 - d) * 100, 2), h6_high=H, vol6h_usd=round(vol))
+# RETIRED 2026-10-21 (GRASSHOPPER-approved): edge6 is off by default. With BANDIT_E6_ENABLED unset the loop below
+# never runs: no signal check, no paper log, no dedupe-state change. Set BANDIT_E6_ENABLED=1 only to re-run it on purpose.
+E6_ENABLED = os.environ.get("BANDIT_E6_ENABLED", "0") == "1"
 edge6_logged = []; edge6_checked = 0; e6_state = _load(E6_STATE, {})
-for r in universe345:
+for r in (universe345 if E6_ENABLED else []):
     pb = GT_BARS.get(r["mint"])
     if not pb or len(pb[1]) < 73: continue
     pool, b = pb; edge6_checked += 1
@@ -698,7 +701,7 @@ if not _no_log:
 out["edge3_checked"] = edge3_checked; out["edge3_logged"] = edge3_logged
 out["edge4_checked"] = edge4_checked; out["edge4_logged"] = edge4_logged
 out["edge5_checked"] = edge5_checked; out["edge5_logged"] = edge5_logged
-out["edge6_checked"] = edge6_checked; out["edge6_logged"] = edge6_logged
+out["edge6_enabled"] = E6_ENABLED; out["edge6_checked"] = edge6_checked; out["edge6_logged"] = edge6_logged
 out["liq_snapshots"] = {"coins": len(snaps), "path": LIQ_SNAP}
 # archive (GRASSHOPPER 2026-10-19): a timestamped copy of every scan output under <archive>/<YYYY-MM-DD PT>/, dated dirs
 # older than 7 days pruned. Lives on the box only (default /workspace/bandit/_scan_archive, never in the repo or synced).
