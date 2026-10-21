@@ -98,6 +98,23 @@ class Edge6(unittest.TestCase):
             self.assertGreaterEqual(b_["signal_ts"], a["exit_ts"])
         self.assertTrue(all(abs(t["net"] - (t["gross"] - 0.02)) < 1e-12 for t in tr))
 
+    def test_edge6_retired_default_off(self):
+        s = SCAN.read_text()
+        self.assertIn('E6_ENABLED = os.environ.get("BANDIT_E6_ENABLED", "0") == "1"', s)
+        self.assertIn("for r in (universe345 if E6_ENABLED else []):", s)
+        self.assertIn('out["edge6_enabled"] = E6_ENABLED', s)
+        e6 = s[s.index("# ---- edge6"):s.index('out["edge3_checked"]')]
+        # the only edge6 work outside the gated loop is loading state; the paper log sits inside the gated loop
+        self.assertLess(e6.index("for r in (universe345 if E6_ENABLED else []):"), e6.index('_paper_log(r, "meme_flush_rebound"'))
+        ns = {"os": __import__("os")}
+        line = 'E6_ENABLED = os.environ.get("BANDIT_E6_ENABLED", "0") == "1"'
+        import os as _os
+        old = _os.environ.pop("BANDIT_E6_ENABLED", None)
+        try:
+            exec(line, ns); self.assertFalse(ns["E6_ENABLED"])
+        finally:
+            if old is not None: _os.environ["BANDIT_E6_ENABLED"] = old
+
     def test_scan_wiring(self):
         s = SCAN.read_text()
         for needle in ('_paper_log(r, "meme_flush_rebound", "edge6",', 'E6_STATE = os.environ.get("BANDIT_E6_STATE", "/workspace/bandit/_edge6_dedupe.json")',
