@@ -467,6 +467,7 @@ const EMPTY_COUNTS = {
   open_research: 0,
   tests_killed: 0,
   tests_survived: 0,
+  tests_retired: 0,
   scenario_cells: 0,
   open_positions: 0,
   queued_tasks: 0,
@@ -557,7 +558,7 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
 }
 
 const STRATEGY_TEST_HIDDEN = new Set(['placeholder', 'lookahead_invalid']);
-const PUBLIC_TEST_KEYS = ['id', 'cycle_id', 'variant_label', 'status', 'result', 'per_trade', 'book'] as const;
+const PUBLIC_TEST_KEYS = ['id', 'cycle_id', 'variant_label', 'status', 'failure_reason', 'result', 'per_trade', 'book'] as const;
 const PUBLIC_PER_TRADE_KEYS = ['n', 'unit', 'mean', 'ci90', 'hit', 'hit_other'] as const;
 /** Cycle hypothesis and preregistered outcome on the phone. */
 export const PUBLIC_CYCLE_NOTE_CHARS = 160;
@@ -653,16 +654,19 @@ export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
     if (isSnapshotRecord(slim.counts)) {
       let tests_survived = 0;
       let tests_killed = 0;
+      let tests_retired = 0;
       let tests_queued = 0;
       for (const row of tests) {
         if (row.status === 'survived') tests_survived += 1;
         else if (row.status === 'killed') tests_killed += 1;
+        else if (row.status === 'retired') tests_retired += 1;
         else if (row.status === 'queued') tests_queued += 1;
       }
       slim.counts = {
         ...slim.counts,
         tests_survived,
         tests_killed,
+        tests_retired,
         tests_queued,
         scenario_cells: scenarios.length,
       };

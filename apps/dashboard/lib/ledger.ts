@@ -131,6 +131,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       openResearch,
       testsKilled,
       testsSurvived,
+      testsRetired,
       scenarioCells,
       openPositions,
       queuedTasks,
@@ -372,6 +373,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       sql`select count(*)::int as n from public.research_queue where status = 'open'`,
       sql`select count(*)::int as n from public.strategy_tests where status = 'killed'`,
       sql`select count(*)::int as n from public.strategy_tests where status = 'survived'`,
+      sql`select count(*)::int as n from public.strategy_tests where status = 'retired'`,
       sql`select count(*)::int as n from public.test_scenarios`,
       optionalRows(
         'open_positions',
@@ -428,6 +430,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         open_research: mapCount(openResearch),
         tests_killed: mapCount(testsKilled),
         tests_survived: mapCount(testsSurvived),
+        tests_retired: mapCount(testsRetired),
         scenario_cells: mapCount(scenarioCells),
         open_positions: mapCount(openPositions),
         queued_tasks: mapCount(queuedTasks),

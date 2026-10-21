@@ -366,6 +366,7 @@ export function assemblePublicDeskFromRestBag(bag: Pick<
       open_research: 0,
       tests_killed: testCounts.tests_killed,
       tests_survived: testCounts.tests_survived,
+      tests_retired: testCounts.tests_retired,
       tests_queued: testCounts.tests_queued,
       scenario_cells: mappedScenarios.length,
       open_positions: 0,
@@ -434,6 +435,7 @@ export function assembleDeskFromRestBag(bag: RestDeskBag): DeskPayload {
       open_research: mapQueue(queue).filter((row) => row.status === 'open').length,
       tests_killed: mappedTests.filter((row) => row.status === 'killed').length,
       tests_survived: mappedTests.filter((row) => row.status === 'survived').length,
+      tests_retired: mappedTests.filter((row) => row.status === 'retired').length,
       scenario_cells: mapScenarios(scenarios).length,
       open_positions: mapPositions(positions).length,
       queued_tasks: mapCloudTasks(cloudTasks).filter((row) =>

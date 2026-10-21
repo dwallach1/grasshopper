@@ -79,7 +79,7 @@ def _require_runtime(steward: str, modules: tuple[str, ...]) -> None:
 
 STEWARD = "oddsborne"
 ACCOUNT = "polymarket-us-primary"
-THETA = 0.0695  # desk fee parameter: fee = THETA * C * p * (1 - p)
+THETA = 0.0695  # same constant as maker_fee.THETA: fee = THETA * p * (1 - p) per contract
 CALL_SLEEP = 0.8
 OUT_DIR = Path(os.environ.get("ODDSBORNE_OUT_DIR") or os.path.join(_HERE, "deepdive_raw"))
 

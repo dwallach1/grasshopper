@@ -5,10 +5,12 @@ Purpose: test the pattern "the favorite bucket keeps missing when the NWS foreca
 (meta.pattern = 'fav_vs_forecast'). Every row is a `skip` on the favorite bucket's market slug, YES and NO.
 
 Modes
-  --live [--dates D1 D2 ...]   Fetch live BBOs for every bucket now (Polymarket US) and the NWS daytime
-                               forecast high now (api.weather.gov). Default dates: today + tomorrow (PT).
-                               YES is logged at the YES ask, NO at the NO ask (1 - YES bid); a side whose
-                               book has no such quote is not logged. observed_at / decided_at = now.
+  --live [--dates D1 D2 ...]   Fetch live BBOs for every bucket now (Polymarket US), the NWS daytime
+                               forecast high now (api.weather.gov), and the latest station observation.
+                               Default dates: today + tomorrow (PT). YES is logged at the YES ask, NO at
+                               the NO ask (1 - YES bid); a side whose book has no such quote is not logged
+                               (that side's skip reason would be book_missing_side). observed_at /
+                               decided_at = now. meta.obs is the live reading used for the decision.
   --session RESULT.json [--sweep P2.json]
                                Backfill from a session's recorded weather block (session_raw_*_result.json).
                                If an entry carries a per-bucket `buckets` list (slug/bid/ask/mid) it is used
@@ -16,6 +18,8 @@ Modes
                                logged at the recorded mid (YES mid, NO mid = 1 - YES mid) with
                                meta.price_basis='session_recorded_mid' and the asks marked missing. Nothing is
                                re-fetched in this mode: values the session did not record stay missing.
+                               meta.obs is copied only when the session entry stored it. Otherwise
+                               meta.obs is null and meta.obs_missing_reason is not_recorded_in_session.
   --log                        Actually write (default is a dry run that prints the rows).
 
 Probability: no session computes a per-bucket model probability (decide_city is a rule, not a model), and
@@ -23,7 +27,10 @@ steward_log_decision refuses a prediction pass without one. So probability = the
 (YES mid / 1 - YES mid), flagged meta.probability_source='market_mid'. Such a row carries no claimed edge;
 it is scored on outcome (counterfactual_pnl vs the logged price). Brier on these rows is the market's, not ours.
 
-Observed highs are never written at log time (recorded only after settlement). Prices are never invented.
+The settled high is never written at log time (recorded only after settlement). meta.obs is the
+live intraday station reading used for the decision, not that settled outcome. Prices are never invented.
+Every row's meta carries skip_reason (forecast_below_favorite, forecast_above_favorite,
+station_grid_disagree, obs_unavailable, no_edge_at_market_mid) and the human mismatch_reason.
 Dedup: source_id 'wx_<date>_<city>_fav:<side>' (steward_log_decision does ON CONFLICT DO NOTHING), so the
 first logged pass per city-day per side wins and re-runs replay.
 
@@ -51,12 +58,14 @@ THESIS = "weather_same_day_high"
 UA = {"User-Agent": "ODDSBORNE/1.0 (research; contact: oddsborne)", "Accept": "application/geo+json,application/json"}
 # city label (as sessions write it) -> station + event prefix. Settled by the NWS CLI for the station.
 CITIES = {
-    "NYC": {"station": "KNYC", "prefix": "temp-nychigh"},
-    "Midway": {"station": "KMDW", "prefix": "temp-mdwhigh"},
-    "Miami": {"station": "KMIA", "prefix": "temp-miahigh"},
-    "LAX": {"station": "KLAX", "prefix": "temp-laxhigh"},
-    "SFO": {"station": "KSFO", "prefix": "temp-sfohigh"},
+    "NYC": {"station": "KNYC", "prefix": "temp-nychigh", "tz": "America/New_York"},
+    "Midway": {"station": "KMDW", "prefix": "temp-mdwhigh", "tz": "America/Chicago"},
+    "Miami": {"station": "KMIA", "prefix": "temp-miahigh", "tz": "America/New_York"},
+    "LAX": {"station": "KLAX", "prefix": "temp-laxhigh", "tz": "America/Los_Angeles"},
+    "SFO": {"station": "KSFO", "prefix": "temp-sfohigh", "tz": "America/Los_Angeles"},
 }
+OBS_SOURCE = "api.weather.gov/stations/{id}/observations/latest"
+OBS_LIST_LIMIT = 100
 NWS_SOURCE = "api.weather.gov daytime forecast period (gridpoint at station coords)"
 # station_mismatch heuristic: forecast >= this many buckets from the favorite, or NWS day high vs NWS hourly
 # max for the same grid >= this many °F apart (the grid point and the settlement station disagree).
@@ -126,8 +135,183 @@ def mismatch(buckets_apart, nws, hmax):
     return bool(reasons), ("; ".join(reasons) or None)
 
 
+def skip_reason_for(*, apart, nws, hmax, obs, quoted):
+    """One machine reason for this skip. A side with no quote is not logged; its reason is book_missing_side."""
+    if not quoted:
+        return "book_missing_side"
+    if apart is not None and apart >= MISMATCH_BUCKETS:
+        return "forecast_below_favorite"
+    if apart is not None and apart <= -MISMATCH_BUCKETS:
+        return "forecast_above_favorite"
+    if nws is not None and hmax is not None and abs(float(nws) - float(hmax)) >= MISMATCH_NWS_HOURLY_F:
+        return "station_grid_disagree"
+    if obs is None:
+        return "obs_unavailable"
+    return "no_edge_at_market_mid"
+
+
+def _parse_utc(iso):
+    if not isinstance(iso, str) or not iso.strip():
+        return None
+    try:
+        dt = datetime.fromisoformat(iso.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def hhmmz(iso):
+    dt = _parse_utc(iso)
+    return None if dt is None else dt.strftime("%H:%MZ")
+
+
+def fmt_temp_f(temp):
+    try:
+        rounded = round(float(temp), 1)
+    except (TypeError, ValueError):
+        return None
+    if abs(rounded - round(rounded)) < 1e-9:
+        return f"{int(round(rounded))}F"
+    return f"{rounded:.1f}F"
+
+
+def temp_f_from_props(props):
+    """°F from an NWS observation properties object. Unknown units stay missing. No interpolation."""
+    block = (props or {}).get("temperature") if isinstance(props, dict) else None
+    if not isinstance(block, dict) or block.get("value") is None:
+        return None
+    try:
+        value = float(block["value"])
+    except (TypeError, ValueError):
+        return None
+    unit = str(block.get("unitCode") or "")
+    if "degF" in unit:
+        return round(value, 1)
+    if unit and "degC" not in unit:
+        return None
+    return round(value * 9.0 / 5.0 + 32.0, 1)
+
+
+def local_date(iso, tz_name):
+    dt = _parse_utc(iso)
+    if dt is None:
+        return None
+    return dt.astimezone(ZoneInfo(tz_name)).date().isoformat()
+
+
+def obs_clause(obs):
+    if not isinstance(obs, dict) or obs.get("temp_f") is None:
+        return "obs missing"
+    clock = hhmmz(obs.get("observed_at")) or "time missing"
+    temp = fmt_temp_f(obs.get("temp_f")) or "temp missing"
+    return f"obs {obs.get('station')} {clock} {temp}"
+
+
+def _observation_record(station, props, source):
+    temp = temp_f_from_props(props)
+    observed_at = props.get("timestamp") if isinstance(props, dict) else None
+    if temp is None or not isinstance(observed_at, str) or not observed_at.strip():
+        return None
+    raw = props.get("rawMessage") if isinstance(props, dict) else None
+    return {
+        "station": station,
+        "observed_at": observed_at,
+        "temp_f": temp,
+        "raw_metar": raw if isinstance(raw, str) and raw.strip() else None,
+        "source": source,
+    }
+
+
+def _max_so_far(features, date, tz_name, limit_hit):
+    """Running max °F on the local calendar date. A truncated page is not a max."""
+    temps = []
+    oldest = None
+    for feat in features or []:
+        props = (feat or {}).get("properties") if isinstance(feat, dict) else None
+        if not isinstance(props, dict):
+            continue
+        day = local_date(props.get("timestamp"), tz_name)
+        if day is not None and (oldest is None or day < oldest):
+            oldest = day
+        if day == date:
+            temp = temp_f_from_props(props)
+            if temp is not None:
+                temps.append(temp)
+    if limit_hit and (oldest is None or oldest >= date):
+        return None, "observations_page_truncated"
+    if not temps:
+        return None, "no_observations_on_local_date"
+    return max(temps), None
+
+
+def nws_observation(station, date, tz_name):
+    """Latest METAR for the settlement station, plus the local-day max when the list covers that day.
+
+    Returns (obs or None, missing_reason or None). Never invents a temperature.
+    """
+    try:
+        latest = http_json(f"https://api.weather.gov/stations/{station}/observations/latest")
+    except Exception as e:
+        return None, f"latest_fetch_failed:{type(e).__name__}"
+    props = latest.get("properties") if isinstance(latest, dict) else None
+    obs = _observation_record(station, props if isinstance(props, dict) else {}, OBS_SOURCE)
+    if obs is None:
+        return None, "latest_missing_temperature"
+    try:
+        page = http_json(f"https://api.weather.gov/stations/{station}/observations?limit={OBS_LIST_LIMIT}")
+        feats = page.get("features") if isinstance(page, dict) else None
+    except Exception:
+        feats = None
+    if not isinstance(feats, list):
+        obs["max_so_far"] = None
+        obs["max_so_far_missing_reason"] = "observations_list_unavailable"
+        return obs, None
+    mx, why = _max_so_far(feats, date, tz_name, len(feats) >= OBS_LIST_LIMIT)
+    if why != "observations_page_truncated" and local_date(obs["observed_at"], tz_name) == date:
+        mx = obs["temp_f"] if mx is None else max(mx, obs["temp_f"])
+        why = None
+    if mx is None:
+        obs["max_so_far"] = None
+        obs["max_so_far_missing_reason"] = why or "no_observations_on_local_date"
+    else:
+        obs["max_so_far"] = mx
+    return obs, None
+
+
+def recorded_obs(entry):
+    """Session mode: copy obs only from the session JSON. Never fetches."""
+    raw = entry.get("obs") if isinstance(entry, dict) else None
+    if not isinstance(raw, dict):
+        return None, "not_recorded_in_session"
+    station, observed_at, temp = raw.get("station"), raw.get("observed_at"), raw.get("temp_f")
+    if not station or not isinstance(observed_at, str) or not observed_at.strip() or temp is None:
+        return None, "not_recorded_in_session"
+    try:
+        temp_f = round(float(temp), 1)
+    except (TypeError, ValueError):
+        return None, "not_recorded_in_session"
+    metar = raw.get("raw_metar")
+    source = raw.get("source")
+    obs = {
+        "station": station,
+        "observed_at": observed_at,
+        "temp_f": temp_f,
+        "raw_metar": metar if isinstance(metar, str) and metar.strip() else None,
+        "source": source if isinstance(source, str) and source.strip() else "session_file",
+    }
+    if raw.get("max_so_far") is not None:
+        try:
+            obs["max_so_far"] = round(float(raw["max_so_far"]), 1)
+        except (TypeError, ValueError):
+            obs["max_so_far"] = None
+            obs["max_so_far_missing_reason"] = "session_max_not_a_number"
+    return obs, None
+
+
 # ---------- row building ----------
-def build_rows(date, city, slugs, favorite, nws, hmax, observed_at, basis, book=None):
+def build_rows(date, city, slugs, favorite, nws, hmax, observed_at, basis, book=None, obs=None, obs_missing_reason=None):
     """favorite: {slug, bid, ask, mid}. book: per-bucket list (optional, for meta). Returns 0-2 rows."""
     buckets = sorted({s: parse_bucket(s) for s in slugs}.items(), key=lambda kv: sort_key(kv[1]))
     order = [b for _, b in buckets]
@@ -138,6 +322,7 @@ def build_rows(date, city, slugs, favorite, nws, hmax, observed_at, basis, book=
     apart = None if fc_idx is None else fav_idx - fc_idx  # >0: forecast sits below the favorite
     mm, mm_reason = mismatch(apart, nws, hmax)
     bid, ask, mid = favorite.get("bid"), favorite.get("ask"), favorite.get("mid")
+    reason_enum = skip_reason_for(apart=apart, nws=nws, hmax=hmax, obs=obs, quoted=True)
     base = {
         "forecast_high": nws, "forecast_bucket": None if fc_idx is None else label(order[fc_idx]),
         "nws_hourly_max": hmax, "favorite_bucket": label(fb), "favorite_price": mid,
@@ -146,7 +331,10 @@ def build_rows(date, city, slugs, favorite, nws, hmax, observed_at, basis, book=
         "city": city, "target_date": date, "event_slug": f"{CITIES[city]['prefix']}-{date}",
         "station_mismatch": mm, "mismatch_reason": mm_reason, "observed_at": observed_at,
         "probability_source": "market_mid", "price_basis": basis,
+        "skip_reason": reason_enum, "obs": obs,
     }
+    if obs is None:
+        base["obs_missing_reason"] = obs_missing_reason or "obs_unavailable"
     if book:
         base["book"] = book
     rows = []
@@ -172,9 +360,9 @@ def build_rows(date, city, slugs, favorite, nws, hmax, observed_at, basis, book=
             "source_id": f"wx_{date}_{city}_fav:{side}", "instrument": fslug, "side": side,
             "price": round(price, 4), "probability": round(prob, 4), "decided_at": observed_at,
             "reason": (f"wx pass {city} {date}: fav '{label(fb)}' mid {mid} vs NWS {nws} "
-                       f"(bucket {base['forecast_bucket']}, {apart} apart); {side.upper()} @{round(price, 4)} "
-                       f"[{basis}]; prob=market mid (no model)"),
-            "meta": {k: v for k, v in meta.items() if v is not None or k in ("forecast_high", "buckets_apart")},
+                       f"(bucket {base['forecast_bucket']}, {apart} apart); {obs_clause(obs)}; "
+                       f"{side.upper()} @{round(price, 4)} [{basis}]; prob=market mid (no model)"),
+            "meta": {k: v for k, v in meta.items() if v is not None or k in ("forecast_high", "buckets_apart", "obs")},
         })
     return rows
 
@@ -186,7 +374,7 @@ def http_json(url):
 
 
 def nws_forecast(station, dates):
-    """Daytime-period high and hourly max per date. No observations (obs never logged)."""
+    """Daytime-period high and hourly max per date. The live observation is nws_observation, not this."""
     st = http_json(f"https://api.weather.gov/stations/{station}")
     lon, lat = st["geometry"]["coordinates"][:2]
     props = http_json(f"https://api.weather.gov/points/{lat},{lon}")["properties"]
@@ -254,8 +442,14 @@ def live_rows(dates):
                 problems.append(f"{eslug}: no two-sided bucket")
                 continue
             fav = max(quoted, key=lambda b: b["mid"])
+            try:
+                obs, obs_missing = nws_observation(info["station"], d, info["tz"])
+            except Exception as e:
+                problems.append(f"obs {city} {d}: {type(e).__name__}")
+                obs, obs_missing = None, f"latest_fetch_failed:{type(e).__name__}"
             rows += build_rows(d, city, slugs, fav, fc[d]["nws"], fc[d]["hmax"], now, "live_bbo",
-                               book=[{k: b[k] for k in ("slug", "bid", "ask")} for b in book])
+                               book=[{k: b[k] for k in ("slug", "bid", "ask")} for b in book],
+                               obs=obs, obs_missing_reason=obs_missing)
     return rows, problems, snap
 
 
@@ -281,8 +475,10 @@ def session_rows(result_path, sweep_path):
                 problems.append(f"{eslug}: no recorded two-sided bucket")
                 continue
             fav = max(quoted, key=lambda b: b["mid"])
+            obs, obs_missing = recorded_obs(w)
             rows += build_rows(d, city, slugs, fav, w.get("nws"), w.get("hmax"), observed_at, "session_recorded_bbo",
-                               book=[{k: b.get(k) for k in ("slug", "bid", "ask")} for b in book])
+                               book=[{k: b.get(k) for k in ("slug", "bid", "ask")} for b in book],
+                               obs=obs, obs_missing_reason=obs_missing)
             continue
         slugs = (events.get(eslug) or {}).get("market_slugs") or []
         if not slugs:
@@ -295,7 +491,9 @@ def session_rows(result_path, sweep_path):
             continue
         fav = {"slug": fslug, "bid": w.get("mode_bid"), "ask": w.get("mode_ask"), "mid": w.get("mode_mid")}
         basis = "session_recorded_bbo" if fav["bid"] is not None and fav["ask"] is not None else "session_recorded_mid"
-        rows += build_rows(d, city, slugs, fav, w.get("nws"), w.get("hmax"), observed_at, basis)
+        obs, obs_missing = recorded_obs(w)
+        rows += build_rows(d, city, slugs, fav, w.get("nws"), w.get("hmax"), observed_at, basis,
+                           obs=obs, obs_missing_reason=obs_missing)
     return rows, problems
 
 

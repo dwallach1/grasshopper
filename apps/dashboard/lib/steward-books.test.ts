@@ -191,6 +191,8 @@ describe('Books plain words', () => {
     expect(statusText('hardening')).toBe('active');
     expect(statusText('forming')).toBe('early');
     expect(statusText('rejected')).toBe('set aside');
+    expect(statusText('killed')).toBe('dropped');
+    expect(statusText('retired')).toBe('retired');
     expect(beliefKindText('playbook_rule')).toBe('rule');
     expect(beliefKindText('outcome_rescore')).toBe('re-scored on results');
     expect(beliefKindText('trade_close_lesson')).toBe('lesson from a close');

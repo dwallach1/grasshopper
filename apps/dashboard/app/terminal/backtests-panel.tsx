@@ -13,7 +13,7 @@ import {
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
 import type { DeskPayload } from '../../lib/ledger-types';
 import { plainWords } from '../../lib/steward-books';
-import { measuredForTest, perTradeText, strategyTestCounts, type MeasuredTest } from '../../lib/strategy-tests-public';
+import { measuredForTest, perTradeText, strategyTestCounts, testStatusText, type MeasuredTest } from '../../lib/strategy-tests-public';
 import {
   ledgerCount,
   ledgerPct,
@@ -60,6 +60,7 @@ export function BacktestsPanel({
     : {
         tests_survived: desk.counts.tests_survived,
         tests_killed: desk.counts.tests_killed,
+        tests_retired: desk.counts.tests_retired ?? 0,
         tests_queued: desk.counts.tests_queued ?? 0,
       };
 
@@ -68,7 +69,7 @@ export function BacktestsPanel({
       <section className="term-panel">
         <header>
           <b>STRATEGY TESTS</b>
-          <span>{tally.tests_survived} survived / {tally.tests_killed} killed / {tally.tests_queued} queued</span>
+          <span>{tally.tests_survived} survived / {tally.tests_killed} killed / {tally.tests_retired} retired / {tally.tests_queued} queued</span>
         </header>
         <div className="term-scroll term-tests-table">
         <table>
@@ -94,7 +95,12 @@ export function BacktestsPanel({
               >
                 <td>{plainWords(row.test.variant_label)}</td>
                 <td>{ledgerOrMissing(row.thesis_id)}</td>
-                <td className={toneForStatus(row.test.status)}>{row.test.status}</td>
+                <td className={toneForStatus(row.test.status)}>
+                  {testStatusText(row.test.status)}
+                  {row.test.status === 'retired' && row.test.failure_reason
+                    ? <span className="dim">{` · ${row.test.failure_reason}`}</span>
+                    : null}
+                </td>
                 <td>{formatWindow(row.window_start, row.window_end)}</td>
                 <td>{formatSymbols(row.symbols)}</td>
                 <td>{formatPriceSourceLabel(row)}</td>
@@ -123,13 +129,16 @@ export function BacktestsPanel({
             >
               <div className="term-test-card-head">
                 <b>{plainWords(row.test.variant_label)}</b>
-                <i className={toneForStatus(row.test.status)}>{row.test.status}</i>
+                <i className={toneForStatus(row.test.status)}>{testStatusText(row.test.status)}</i>
               </div>
               {measuredById.get(row.test.id)?.result ? (
                 <p className="term-test-measured">{measuredById.get(row.test.id)?.result}</p>
               ) : null}
               {measuredById.get(row.test.id)?.book ? (
                 <p className="term-test-book">{measuredById.get(row.test.id)?.book}</p>
+              ) : null}
+              {row.test.status === 'retired' && row.test.failure_reason ? (
+                <p>{row.test.failure_reason}</p>
               ) : null}
               {row.thesis_id ? <p>{row.thesis_id}</p> : null}
             </button>
@@ -187,7 +196,7 @@ function BacktestDetail({
       <header>
         <b>{plainWords(view.test.variant_label)}</b>
         <span className={toneForStatus(view.test.status)}>
-          {view.test.status} · {ledgerOrMissing(view.thesis_id)}
+          {testStatusText(view.test.status)} · {ledgerOrMissing(view.thesis_id)}
         </span>
       </header>
       {measured.result ? <p className="term-test-measured">{measured.result}</p> : null}

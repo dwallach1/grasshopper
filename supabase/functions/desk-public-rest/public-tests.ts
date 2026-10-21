@@ -17,7 +17,7 @@ export const PUBLIC_NOTE_CHARS = 160;
  * Columns the public bundle selects. Scalar summary paths only — never the
  * whole `payload_json` (that document is the events blotter, ~500 KB).
  */
-export const PUBLIC_TEST_COLUMNS = 'id,external_key,cycle_id,variant_label,status,tested_at,window_start,window_end';
+export const PUBLIC_TEST_COLUMNS = 'id,external_key,cycle_id,variant_label,status,failure_reason,tested_at,window_start,window_end';
 
 export const PUBLIC_SUMMARY_COLUMNS = [
   'id',
@@ -57,7 +57,7 @@ export const PUBLIC_SUMMARY_COLUMNS = [
 export const PUBLIC_TEST_QUERY = `strategy_tests?select=${PUBLIC_TEST_COLUMNS}&order=tested_at.desc.nullslast,id.desc`;
 export const PUBLIC_SUMMARY_QUERY = `backtest_artifacts?select=${PUBLIC_SUMMARY_COLUMNS}&artifact_kind=eq.summary_json&order=id.desc`;
 
-const STATUS_RANK: Record<string, number> = { survived: 0, killed: 1, queued: 2 };
+const STATUS_RANK: Record<string, number> = { survived: 0, killed: 1, retired: 2, queued: 3 };
 
 export type PerTradeStats = {
   n: number | null;
@@ -85,17 +85,20 @@ export type MeasureContext = {
 export function strategyTestCounts(rows: readonly { status?: unknown }[]): {
   tests_survived: number;
   tests_killed: number;
+  tests_retired: number;
   tests_queued: number;
 } {
   let tests_survived = 0;
   let tests_killed = 0;
+  let tests_retired = 0;
   let tests_queued = 0;
   for (const row of rows) {
     if (row.status === 'survived') tests_survived += 1;
     else if (row.status === 'killed') tests_killed += 1;
+    else if (row.status === 'retired') tests_retired += 1;
     else if (row.status === 'queued') tests_queued += 1;
   }
-  return { tests_survived, tests_killed, tests_queued };
+  return { tests_survived, tests_killed, tests_retired, tests_queued };
 }
 
 export function isPublicStrategyTest(row: { status?: unknown }): boolean {
@@ -105,6 +108,7 @@ export function isPublicStrategyTest(row: { status?: unknown }): boolean {
 export function testStatusText(status: string): string {
   if (status === 'survived') return 'passed';
   if (status === 'killed') return 'failed';
+  if (status === 'retired') return 'retired';
   if (status === 'queued') return 'still queued';
   return status.replaceAll('_', ' ');
 }
@@ -441,7 +445,7 @@ export function projectPublicTests(tests: readonly unknown[], summaries: readonl
       deflated_sharpe: null,
       cost_multiplier: num(record.cost_multiplier) ?? 1,
       stress_regime: null,
-      failure_reason: null,
+      failure_reason: clipPublicNote(record.failure_reason, 400),
       autopsy: null,
       tested_at: typeof record.tested_at === 'string' ? record.tested_at : '',
       price_source: null,

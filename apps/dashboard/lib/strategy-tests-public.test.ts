@@ -15,6 +15,7 @@ import {
   slimPublicArtifacts,
   slimPublicTests,
   strategyTestCounts,
+  testStatusText,
   testsForThesis,
 } from './strategy-tests-public';
 
@@ -79,6 +80,7 @@ describe('public strategy test projection', () => {
     expect(strategyTestCounts(rows)).toEqual({
       tests_survived: 1,
       tests_killed: 8,
+      tests_retired: 0,
       tests_queued: 16,
     });
     expect(strategyTestCounts(rows).tests_survived).not.toBe(0);
@@ -90,6 +92,27 @@ describe('public strategy test projection', () => {
       'survived',
     ].sort());
     expect(published.some((row) => row.status === 'placeholder' || row.status === 'lookahead_invalid')).toBe(false);
+    expect(testStatusText('retired')).toBe('retired');
+    expect(strategyTestCounts([{ status: 'retired' }, { status: 'killed' }])).toEqual({
+      tests_survived: 0,
+      tests_killed: 1,
+      tests_retired: 1,
+      tests_queued: 0,
+    });
+    const retired = projectPublicTests(
+      [{
+        id: 5,
+        external_key: 'seed',
+        cycle_id: 1,
+        variant_label: 'seed',
+        status: 'retired',
+        failure_reason: 'retired 2026-10-20: seeded row',
+        tested_at: AT,
+      }],
+      [],
+    );
+    expect(retired[0]?.status).toBe('retired');
+    expect(retired[0]?.failure_reason).toBe('retired 2026-10-20: seeded row');
     expect(published.some((row) => 'params_json' in row)).toBe(false);
   });
 
@@ -205,7 +228,7 @@ describe('public strategy test projection', () => {
     expect(PUBLIC_SUMMARY_QUERY).not.toContain('price_source');
     expect(PUBLIC_SUMMARY_COLUMNS).not.toMatch(/(^|,)payload_json(,|&|$)/);
     expect(PUBLIC_TEST_QUERY).not.toContain('params_json');
-    expect(PUBLIC_TEST_QUERY).not.toContain('failure_reason');
+    expect(PUBLIC_TEST_QUERY).toContain('failure_reason');
     expect(PUBLIC_TEST_QUERY).not.toContain('autopsy');
   });
 

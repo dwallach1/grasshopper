@@ -6,11 +6,12 @@
 A falsified or rejected idea (or a typo'd id) can't size an entry.
 
 ## Mechanism
-Guidance: unknown_thesis, thesis_rejected, thesis_killed; sized_notional = 0.
+Guidance: unknown_thesis, thesis_rejected, thesis_killed; sized_notional = 0. A retired thesis blocks the same way (entry_blocked_reason thesis_killed, sized_notional 0). Retired is its own status. It is not a kill.
 
 Code paths:
 - `supabase/schemas/21_unknown_thesis_gate.sql`
 - `supabase/schemas/22_edge_scaled_stake.sql`
+- `supabase/schemas/85_retired_strategy_tests_theses.sql`
 
 ## The court
 

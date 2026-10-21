@@ -121,6 +121,22 @@ class DevigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MF.conservative_fair("maybe", 0.5, 0.5, 0.5)
 
+    def test_taker_fee_is_theta_times_p_times_one_minus_p(self):
+        self.assertEqual(MF.THETA, 0.0695)
+        self.assertNotIn("0.025", MF.TAKER_FEE_TEXT)
+        self.assertIn("0.0695", MF.TAKER_FEE_TEXT)
+        self.assertIn("1.7c", MF.TAKER_FEE_TEXT)
+        # The most the curve reaches is THETA/4, at a 50c contract.
+        self.assertAlmostEqual(MF.taker_fee(0.5), 0.0695 * 0.5 * 0.5, places=9)
+        self.assertAlmostEqual(MF.taker_fee(0.5), 0.017375, places=9)
+        self.assertAlmostEqual(MF.taker_fee(0.2), 0.0695 * 0.2 * 0.8, places=9)
+        self.assertEqual(MF.maker_rebate(0.5), 0.0125 * 0.5 * 0.5)
+        pm = importlib.util.spec_from_file_location("pm_enter", Path(__file__).resolve().parent / "oddsborne" / "pm_enter.py")
+        enter = importlib.util.module_from_spec(pm)
+        pm.loader.exec_module(enter)
+        self.assertEqual(enter.THETA, MF.THETA)
+        self.assertAlmostEqual(enter.fee_per_contract(0.5), MF.taker_fee(0.5), places=9)
+
 
 if __name__ == "__main__":
     unittest.main()
