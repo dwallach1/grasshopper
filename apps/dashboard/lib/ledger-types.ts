@@ -551,6 +551,8 @@ export type DeskCounts = {
   open_research: number;
   tests_killed: number;
   tests_survived: number;
+  /** Strategy tests set aside with status `retired`. Not a kill and not a survival. */
+  tests_retired?: number;
   /** Strategy tests still `queued`. Placeholder and lookahead rows are not counted. */
   tests_queued?: number;
   scenario_cells: number;

@@ -171,6 +171,12 @@ describe('public desk snapshot contract', () => {
         autopsy: 'x'.repeat(400),
         total_return: 0.932264,
       }, {
+        id: 5,
+        cycle_id: 144,
+        status: 'retired',
+        variant_label: 'seed',
+        failure_reason: 'retired 2026-10-20: seeded row',
+      }, {
         id: 15,
         cycle_id: 3,
         status: 'lookahead_invalid',
@@ -209,6 +215,13 @@ describe('public desk snapshot contract', () => {
         result: 'hold-through beat selling before by +1.96 pts/trade (90% CI +0.52 to +3.41), hit 70% vs 50%, n=50',
         book: '1-yr compounded book +93.2% (SPY +9.7%)',
       },
+      {
+        id: 5,
+        cycle_id: 144,
+        status: 'retired',
+        variant_label: 'seed',
+        failure_reason: 'retired 2026-10-20: seeded row',
+      },
     ]);
     expect(published.backtest_artifacts).toEqual([]);
     expect(published.cycles).toEqual([
@@ -226,7 +239,7 @@ describe('public desk snapshot contract', () => {
     expect(JSON.stringify(published)).not.toContain('do not publish');
     expect(JSON.stringify(published)).not.toContain('secret/path');
     expect(JSON.stringify(published)).not.toContain('lookahead');
-    expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 0, tests_queued: 0 });
+    expect(published.counts).toMatchObject({ tests_survived: 1, tests_killed: 0, tests_retired: 1, tests_queued: 0 });
     expect(published.evidence).toEqual([]);
     expect(published.runs).toEqual([]);
   });

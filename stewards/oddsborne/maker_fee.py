@@ -19,6 +19,8 @@ import json
 from pathlib import Path
 
 THETA = 0.0695
+# Plain wording for any desk or session line. Not a flat fee: the most it reaches is THETA/4 at 50c.
+TAKER_FEE_TEXT = "taker fee = 0.0695 x price x (1 - price) per contract, at most about 1.7c at 50c"
 MAKER_REBATE = 0.0125
 HAIRCUT_FLOOR_PRE30 = 0.0059  # 0.59c, guardrail until maker_score has >= 30 games
 HAIRCUT_MIN_GAMES = 30

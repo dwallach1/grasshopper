@@ -1,4 +1,4 @@
-export const THESIS_STATUSES = ['forming', 'hardening', 'rejected', 'killed'] as const;
+export const THESIS_STATUSES = ['forming', 'hardening', 'rejected', 'killed', 'retired'] as const;
 export type ThesisStatus = (typeof THESIS_STATUSES)[number];
 
 export const LIVE_THESIS_STATUSES = ['forming', 'hardening'] as const;
@@ -22,7 +22,7 @@ export function isLiveThesis(row: { status: string }): boolean {
 export function parseThesisStatus(value: string): ThesisStatus {
   if (!isThesisStatus(value)) {
     throw new Error(
-      `Invalid thesis status '${value}'. Expected forming, hardening, rejected, or killed.`,
+      `Invalid thesis status '${value}'. Expected forming, hardening, rejected, killed, or retired.`,
     );
   }
   return value;

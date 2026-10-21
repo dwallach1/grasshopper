@@ -519,6 +519,7 @@ export function statusText(status: string): string {
   if (value === 'forming') return 'early';
   if (value === 'rejected') return 'set aside';
   if (value === 'killed') return 'dropped';
+  if (value === 'retired') return 'retired';
   return plainWords(value);
 }
 

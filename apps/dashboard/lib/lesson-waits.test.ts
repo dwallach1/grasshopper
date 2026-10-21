@@ -51,6 +51,7 @@ describe('open lesson waits', () => {
       .toBe('Waiting on test 42');
     expect(lessonWaitLine({ test_id: 40, test_status: 'survived', age_days: 4 })).toBeNull();
     expect(lessonWaitLine({ test_id: 36, test_status: 'killed', age_days: 20 })).toBeNull();
+    expect(lessonWaitLine({ test_id: 5, test_status: 'retired', age_days: 30 })).toBeNull();
     expect(lessonWaitLine({ test_id: null, test_status: 'queued', age_days: 4 })).toBeNull();
     expect(lessonWaitLine(null)).toBeNull();
   });

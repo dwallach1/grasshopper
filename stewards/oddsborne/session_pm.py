@@ -2,7 +2,7 @@
 """ODDSBORNE AFTERNOON full-book Polymarket US pass (date = --date / ODDS_DATE / today America/New_York) PT (same gate as session_daily.py) (HTTPS ledger; date-checked sports matcher).
 Fresh venue snap, exits, weather (belief-not-ban Midway), sports de-vig fix,
 Fed + lean full-book BBO, enter via pm_enter if post-fee edge > 0.
-Never invent prices/fills/P/L. Taker Θ=0.0695; maker edge = fair - px + 0.0125*p*(1-p) (rebate);
+Never invent prices/fills/P/L. Taker fee = 0.0695 x price x (1 - price) per contract (at most about 1.7c at 50c); maker edge = fair - px + 0.0125*p*(1-p) (rebate);
 maker GATE = that - adverse-selection haircut (maker_fee.HAIRCUT, >=0.59c until 30 scored games); 1c bar on gate. No 8¢ bar.
 """
 from __future__ import annotations
@@ -1220,7 +1220,7 @@ def main():
     lines.append("")
     lines.append("## Playbook")
     lines.append(f"- weather_same_day_high; Midway/LAX-SFO cool = learned beliefs (weigh, note override); sports_devig_maker_edge post-fee > 0.")
-    lines.append(f"- Fees LIVE: taker Θ=**{THETA}**; maker rebate **{MAKER_REBATE}**·p(1−p) credited; maker gate = raw − adverse-selection haircut **{MAKER_HAIRCUT}** ({MAKER_HAIRCUT_INFO.get('rule')}). Prefer maker. Probe: `{fee_info}`.")
+    lines.append(f"- Fees LIVE: {MF.TAKER_FEE_TEXT}. Maker rebate **{MAKER_REBATE}**·p(1−p) credited; maker gate = raw − adverse-selection haircut **{MAKER_HAIRCUT}** ({MAKER_HAIRCUT_INFO.get('rule')}). Prefer maker. Probe: `{fee_info}`.")
     lines.append("")
     lines.append("## Actions")
     lines.append("")

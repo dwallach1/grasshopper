@@ -93,7 +93,7 @@ export function toneForStatus(status: string): 'up' | 'down' | 'warn' | 'muted' 
   }
   if (['killed', 'rejected', 'failed', 'blocked', 'challenging'].includes(value)) return 'down';
   if (['forming', 'queued', 'running', 'watching', 'skipped'].includes(value)) return 'warn';
-  if (['idle', 'away'].includes(value)) return 'muted';
+  if (['idle', 'away', 'retired'].includes(value)) return 'muted';
   return 'muted';
 }
 
