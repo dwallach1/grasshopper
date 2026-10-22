@@ -17,6 +17,7 @@ import {
   compatMouseUntil,
   followPagerScroll,
   horizontalPageSwipeSuppressed,
+  instantPagerLeft,
   isCompatMouseSuppressed,
   isSwipeSurface,
   isSwipeWrap,
@@ -26,6 +27,7 @@ import {
   pageSwipeFromDrag,
   pagerScrollToBehavior,
   pagerSlotKey,
+  settledPagerSlot,
   shouldCapturePagerPointer,
   swipeHitFromEvent,
   swipeTabLabel,
@@ -69,9 +71,7 @@ export function DeskPager({
     const behavior = pagerScrollToBehavior(firstPaint.current, wrap, reduceMotion);
     firstPaint.current = false;
     if (jump) {
-      root.style.scrollSnapType = 'none';
-      root.scrollLeft = pane.offsetLeft;
-      root.style.scrollSnapType = '';
+      instantPagerLeft(root, pane.offsetLeft);
     } else {
       root.scrollTo({ left: pane.offsetLeft, top: 0, behavior });
     }
@@ -87,11 +87,15 @@ export function DeskPager({
     const panes = [...root.querySelectorAll<HTMLElement>('[data-desk-page]')];
     const io = new IntersectionObserver((entries) => {
       if (programmatic.current || holding.current) return;
+      const width = root.clientWidth;
+      const slot = settledPagerSlot(root.scrollLeft, width, DESK_PAGER_SLOTS.length);
+      const resting = slot === null ? null : DESK_PAGER_SLOTS[slot];
+      if (!resting || resting.clone) return;
       const hit = entries
         .filter((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.55)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
       const id = hit?.target.getAttribute('data-desk-page');
-      if (id && isSwipeSurface(id) && id !== surfaceRef.current) onSnap(id);
+      if (id && isSwipeSurface(id) && id === resting.id && id !== surfaceRef.current) onSnap(id);
     }, { root, threshold: [0.55, 0.9] });
     for (const pane of panes) io.observe(pane);
     return () => io.disconnect();
@@ -240,10 +244,7 @@ function bindPagerSwipe(
     const left = pane.offsetLeft;
     if (Math.abs(pager.scrollLeft - left) < 1) return;
     pinning = true;
-    const snap = pager.style.scrollSnapType;
-    pager.style.scrollSnapType = 'none';
-    pager.scrollLeft = left;
-    pager.style.scrollSnapType = snap;
+    instantPagerLeft(pager, left);
     pinning = false;
   }
 
@@ -451,9 +452,17 @@ function bindPagerSwipe(
     if (programmatic.current || holding.current) return;
     const width = pager.clientWidth;
     if (width <= 0) return;
-    const slot = Math.round(pager.scrollLeft / width);
+    const slot = settledPagerSlot(pager.scrollLeft, width, DESK_PAGER_SLOTS.length);
+    if (slot === null) return;
     const spec = DESK_PAGER_SLOTS[slot];
-    if (spec && spec.id !== currentSurface()) snapTo(spec.id);
+    if (!spec) return;
+    // A clone is the wrap neighbor. Rebase to its canonical pane in place —
+    // a smooth scroll from this end back across the strip stops on Book.
+    if (spec.clone) {
+      const pane = canonicalPane(pager, spec.id);
+      if (pane) instantPagerLeft(pager, pane.offsetLeft);
+    }
+    if (spec.id !== currentSurface()) snapTo(spec.id);
   }
 
   function onLostCapture(event: PointerEvent) {

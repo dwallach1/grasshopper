@@ -16,9 +16,11 @@ import {
   lockSwipeAxis,
   pageSwipeConsumesTarget,
   pageSwipeFromDrag,
+  instantPagerLeft,
   pagerScrollBehavior,
   pagerScrollToBehavior,
   pagerSlotKey,
+  settledPagerSlot,
   shouldCapturePagerPointer,
   swipeAxis,
   swipeHitFromEvent,
@@ -100,6 +102,54 @@ describe('desk swipe deck', () => {
     expect(isSwipeWrap('leaderboard', 'book')).toBe(false);
     expect(isSwipeWrap('book', 'team')).toBe(false);
     expect(isSwipeWrap('team', 'book')).toBe(false);
+  });
+
+  test('wrap edges settle on the circular neighbor, not the Book they used to cross', () => {
+    const width = 390;
+    expect(pageSwipeFromDrag('team', -80, 4)).toBe('leaderboard');
+    expect(pageSwipeFromDrag('leaderboard', 80, 4)).toBe('team');
+    expect(pageSwipeFromDrag('team', 80, 4)).toBe('book');
+    expect(pageSwipeFromDrag('leaderboard', -80, 4)).toBe('book');
+    // Samples from a smooth Board↔Team assignment while it was still crossing Book.
+    for (const left of [625, 680, 752, 850, 968]) {
+      expect(settledPagerSlot(left, width, DESK_PAGER_SLOTS.length)).toBeNull();
+    }
+    expect(settledPagerSlot(width, width, DESK_PAGER_SLOTS.length)).toBe(1);
+    expect(DESK_PAGER_SLOTS[1]).toEqual({ id: 'leaderboard', clone: false });
+    expect(settledPagerSlot(width * 3, width, DESK_PAGER_SLOTS.length)).toBe(3);
+    expect(DESK_PAGER_SLOTS[3]).toEqual({ id: 'team', clone: false });
+    expect(DESK_PAGER_SLOTS[settledPagerSlot(0, width, DESK_PAGER_SLOTS.length) ?? -1]).toEqual({
+      id: 'team', clone: true,
+    });
+    expect(DESK_PAGER_SLOTS[settledPagerSlot(width * 4, width, DESK_PAGER_SLOTS.length) ?? -1]).toEqual({
+      id: 'leaderboard', clone: true,
+    });
+    expect(DESK_PAGER_SLOTS[settledPagerSlot(width * 2, width, DESK_PAGER_SLOTS.length) ?? -1]).toEqual({
+      id: 'book', clone: false,
+    });
+    expect(settledPagerSlot(width + 40, width, DESK_PAGER_SLOTS.length)).toBeNull();
+    expect(settledPagerSlot(0, 0, DESK_PAGER_SLOTS.length)).toBeNull();
+    expect(settledPagerSlot(Number.NaN, width, DESK_PAGER_SLOTS.length)).toBeNull();
+
+    let behaviorAtWrite = '';
+    const node = {
+      style: { scrollBehavior: 'smooth', scrollSnapType: 'x mandatory' },
+      left: width * 3,
+      get scrollLeft() {
+        return this.left;
+      },
+      set scrollLeft(value: number) {
+        behaviorAtWrite = this.style.scrollBehavior;
+        this.left = value;
+      },
+    };
+    instantPagerLeft(node, width);
+    expect(behaviorAtWrite).toBe('auto');
+    expect(node.scrollLeft).toBe(width);
+    expect(node.style.scrollBehavior).toBe('smooth');
+    expect(node.style.scrollSnapType).toBe('x mandatory');
+    instantPagerLeft(node, width);
+    expect(node.scrollLeft).toBe(width);
   });
 
   test('wrap jumps without travel; adjacent keeps the motion preference', () => {
