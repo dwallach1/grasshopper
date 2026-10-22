@@ -55,7 +55,8 @@ class StewardScripts(unittest.TestCase):
         # The scripts call public.steward_entry_guidance, a jsonb wrapper that passes all six through.
         sql = ENTRY_SQL.read_text()
         self.assertIn("from public.steward_sizing_guidance(\n    v_steward,\n    p->>'thesis_id',\n    p->>'instrument',\n"
-                      "    (p->>'requested')::numeric,\n    (p->>'invalidation_price')::numeric,\n    (p->>'entry_price')::numeric\n", sql)
+                      "    (p->>'requested')::numeric,\n    (p->>'invalidation_price')::numeric,\n    (p->>'entry_price')::numeric,\n"
+                      "    (p->>'expected_move')::numeric\n", sql)
         bandit = SCRIPTS["bandit"].read_text()
         self.assertIn('row = ledger("steward_entry_guidance", {', bandit)
         self.assertIn('"invalidation_price": str(PLANNED_INVALIDATION),', bandit)

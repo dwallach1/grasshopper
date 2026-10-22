@@ -332,14 +332,29 @@ class EquityImpliedMove(unittest.TestCase):
         self.assertEqual(migs[0].read_text(), sql)
         md = (ROOT / "docs" / "rules" / "portfolio-exposure.md").read_text()
         mechanism = md.split("## Mechanism\n", 1)[1].split("\n\n", 1)[0]
-        self.assertEqual(sql.split("$mech$", 1)[1].split("$mech$", 1)[0], mechanism)
+        # Schema 80 keeps the mechanism it shipped. The live paragraph is schema 86.
+        self.assertIn("implied_move_missing", sql.split("$mech$", 1)[1].split("$mech$", 1)[0])
+        self.assertNotIn("p_expected_move", sql)
+        latest = (ROOT / "supabase" / "schemas" / "86_equity_expected_move_sizing.sql").read_text()
+        self.assertEqual(latest.split("$mech$", 1)[1].split("$mech$", 1)[0], mechanism)
         rules = (ROOT / "tools" / "court" / "rules_data.py").read_text()
         start = rules.index('mechanism="', rules.index('id="portfolio-exposure"')) + len('mechanism="')
         self.assertEqual(rules[start:rules.index('",\n', start)], mechanism)
+        self.assertIn("p_expected_move", mechanism)
         # Schema 44 keeps the old equity formula. This migration replaces the live function.
         old = (ROOT / "supabase" / "schemas" / "44_exposure_gap_full_notional.sql").read_text()
         self.assertIn("else m.quantity * greatest(m.mark - m.invalidation_price, 0)", old)
         self.assertNotIn("implied_move_missing", old)
+
+    def test_implied_move_fraction_is_straddle_over_underlying(self) -> None:
+        # ROL: straddle implied 9.4%. A missing leg is not a made-up move.
+        self.assertEqual(self.m.implied_move_fraction(Decimal("3.1067"), Decimal("33.05")), Decimal("3.1067") / Decimal("33.05"))
+        self.assertIsNone(self.m.implied_move_fraction(None, Decimal("33.05")))
+        self.assertIsNone(self.m.implied_move_fraction(Decimal("1"), Decimal("0")))
+        # 16 shares at the line, then scaled by 6.021% / 9.4%.
+        line = (Decimal("33.05") - Decimal("31.06")) / Decimal("33.05")
+        move = Decimal("0.094")
+        self.assertEqual(round(Decimal(16) * line / move, 4), Decimal("10.2488"))
 
     def test_plan_lists_the_missing_lot_and_the_robinhood_calls(self) -> None:
         m = self.m

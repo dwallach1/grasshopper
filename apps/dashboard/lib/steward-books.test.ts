@@ -7,6 +7,8 @@ import {
   beliefKindText,
   changeText,
   earningsBookLine,
+  earningsSizingSentence,
+  sharesAfterExpectedMove,
   earningsPrintPassed,
   exitLine,
   headerAmount,
@@ -231,7 +233,7 @@ describe('Book earnings line', () => {
   test('before the print, the live mark prices the gap against the exit', () => {
     const line = earningsBookLine(fixturePrint(), FIXTURE_QUOTE, FIXTURE_NOW_BEFORE);
     expect(line).toBe(
-      'Reports Tue after close. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line.',
+      'Reports Tue after close. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line. Sized for a 9.7% earnings move, not the 6.4% line.',
     );
     expect(line).not.toMatch(/straddle|ATM|implied move/i);
     expect(lotLine({ why: 'Streaming demand', exit: 'exits below $45.35', lesson_waiting: false, earnings: line }))
@@ -247,8 +249,35 @@ describe('Book earnings line', () => {
       expiry_loose: true,
     }), FIXTURE_QUOTE, FIXTURE_NOW_BEFORE);
     expect(line).toBe(
-      'Reports Tue before the open. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line. That figure is a loose upper bound; the options expire well after the report.',
+      'Reports Tue before the open. Options price about a 9.7% move, so a gap could cost about $47, more than the $31 to the exit line. Sized for a 9.7% earnings move, not the 6.4% line. That figure is a loose upper bound; the options expire well after the report.',
     );
+  });
+
+  test('a move no wider than the line does not change the sentence, and the entry price is the one paid', () => {
+    const narrower = earningsBookLine(fixturePrint({
+      straddle_price: 4,
+      underlying_price: 100,
+    }), FIXTURE_QUOTE, FIXTURE_NOW_BEFORE);
+    expect(narrower).toBe(
+      'Reports Tue after close. Options price about a 4.0% move, so a gap could cost about $19, less than the $31 to the exit line.',
+    );
+    expect(narrower).not.toContain('Sized for');
+    const atCost = earningsBookLine(fixturePrint(), { ...FIXTURE_QUOTE, cost: 33.05, invalidation: 31.06 }, FIXTURE_NOW_BEFORE);
+    expect(atCost).toContain('Sized for a 9.7% earnings move, not the 6.0% line.');
+  });
+
+  test('ROL would have been about 6.0/9.4 of the old share count; a tighter move is unchanged', () => {
+    const rol = sharesAfterExpectedMove(16, 33.05, 31.06, 0.094);
+    expect(rol).toBeCloseTo(16 * ((33.05 - 31.06) / 33.05) / 0.094, 8);
+    expect(rol).toBeCloseTo(10.2488, 3);
+    expect(rol / 16).toBeCloseTo(0.0602118 / 0.094, 6);
+    expect(sharesAfterExpectedMove(16, 33.05, 31.06, null)).toBe(16);
+    expect(sharesAfterExpectedMove(16, 33.05, 31.06, 0.05)).toBe(16);
+    expect(sharesAfterExpectedMove(3.148489, 168.9699, 156.16, 8.95 / 168.69)).toBe(3.148489);
+    expect(earningsSizingSentence((33.05 - 31.06) / 33.05, 0.094)).toBe(
+      'Sized for a 9.4% earnings move, not the 6.0% line.',
+    );
+    expect(earningsSizingSentence(0.076, 0.053)).toBeNull();
   });
 
   test('after the print, the realized close sits next to the priced move', () => {
