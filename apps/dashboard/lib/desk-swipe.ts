@@ -17,6 +17,8 @@ import {
 export const PAGE_SWIPE_PX = 56;
 export const PAGE_SWIPE_WRAP_PX = 56;
 export const PAGE_SWIPE_LOCK_PX = 12;
+/** A resting page, not a coordinate the smooth wrap used to pass through. */
+export const PAGER_SETTLE_PX = 8;
 /** |dx| must beat |dy| by this factor. 1.2 ≈ 40° from the horizontal — not a diagonal. */
 export const PAGE_SWIPE_DOMINANCE = 1.2;
 export const CARD_DRAGGER_ATTR = 'data-card-dragger';
@@ -161,6 +163,40 @@ export function followPagerScroll(startLeft: number, dx: number, maxLeft: number
   if (next < 0) return 0;
   if (next > maxLeft) return maxLeft;
   return next;
+}
+
+/**
+ * Slot index when the scroller is actually resting on a page.
+ * A Board↔Team jump that is still crossing Book is not a commit.
+ */
+export function settledPagerSlot(scrollLeft: number, width: number, slotCount: number): number | null {
+  if (width <= 0 || slotCount <= 0) return null;
+  if (!Number.isFinite(scrollLeft)) return null;
+  const slot = Math.round(scrollLeft / width);
+  if (slot < 0 || slot >= slotCount) return null;
+  if (Math.abs(scrollLeft - slot * width) > PAGER_SETTLE_PX) return null;
+  return slot;
+}
+
+export type PagerScrollNode = {
+  style: { scrollBehavior: string; scrollSnapType: string };
+  scrollLeft: number;
+};
+
+/**
+ * `scrollLeft` follows the element's scroll-behavior. The pager used to leave
+ * that on smooth, so the Board↔Team "jump" animated through Book and snap-stop
+ * could arrest there. Force auto for the assignment, then restore.
+ */
+export function instantPagerLeft(node: PagerScrollNode, left: number): void {
+  if (node.scrollLeft === left) return;
+  const behavior = node.style.scrollBehavior;
+  const snap = node.style.scrollSnapType;
+  node.style.scrollBehavior = 'auto';
+  node.style.scrollSnapType = 'none';
+  node.scrollLeft = left;
+  node.style.scrollSnapType = snap;
+  node.style.scrollBehavior = behavior;
 }
 
 export type SwipeHitTarget = {
