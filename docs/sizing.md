@@ -42,7 +42,7 @@ The level v = 3% was decided on 2026-09-26 (migration 41; the court's options ar
 - **Invalidation.** Pass the planned `invalidation_price` as the 5th guidance argument (and the entry price as the optional 6th, `p_entry_price`, in the same unit): USD per share, outcome price, or SOL per token. Without it, guidance returns `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'missing_invalidation'`. The database enforces the same rule: `private.require_lot_invalidation` rejects any insert (or re-open, or clear) of an `open` row in `position_episodes`, `pm_positions` or `meme_positions` whose `invalidation_price` is null (SQLSTATE 23514, message `missing_invalidation`). Lots that existed before this change are grandfathered.
 - **Fresh book.** Guidance sizes only from a book and cash observation no older than 6 hours (`book_age_minutes`). Otherwise it returns `entry_blocked_reason = 'stale_book'` with size 0. QUANTANAMO: record a fresh `account_snapshots` row before sizing. ODDSBORNE and BANDIT: refresh `pm_pnl` / `meme_pnl` first.
 
-Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quantanamo_requires_thesis` > `quantanamo_unscored` > `quantanamo_confidence_gate` > `missing_invalidation` > `stale_book` > `exposure_cap` (ODDSBORNE and BANDIT skip the three `quantanamo_*` reasons).
+Reason priority: `unknown_thesis` > `thesis_rejected` > `thesis_killed` > `quantanamo_requires_thesis` > `quantanamo_unscored` > `quantanamo_confidence_gate` > `missing_invalidation` > `stale_book` > `exposure_cap` > `below_minimum` (ODDSBORNE and BANDIT skip the three `quantanamo_*` reasons). `below_minimum` is only the shrunk print size coming out under $1.
 
 ## Portfolio exposure: 10% of book at risk
 
@@ -56,7 +56,7 @@ Court ruling [portfolio-exposure](rules/portfolio-exposure.md), migrations 41 an
 
 The budget is `private.risk_budget_share()` = 10% of book. `public.v_exposure_lots` lists each lot's risk.
 
-- Guidance sizes a new entry to fit the headroom: `exposure fit = headroom / risk fraction`. The fraction is 1 on the `full_notional` books; for equities it is `(entry − invalidation) / entry` when you pass the entry price as the 6th argument (`p_entry_price`), else 1. BANDIT's budget (0.180 SOL on 2026-09-26) against its 0.119 SOL starter makes it effectively one clip at a time (one open clip leaves 0.061 SOL of headroom); ODDSBORNE's $27.69 budget holds about 13 of today's $2.12 tickets.
+- Guidance sizes a new entry to fit the headroom: `exposure fit = headroom / risk fraction`. The fraction is 1 on the `full_notional` books; for equities it is `(entry − invalidation) / entry` when you pass the entry price as the 6th argument (`p_entry_price`), else 1. When the lot will be held through a scheduled print, pass `p_expected_move` (7th argument, a fraction of price: ATM straddle / underlying, the same fraction open risk uses). Risk per share is then the larger of the line distance and that move, and the notional shrinks so the expected-move loss equals the starter risk the line-sized size would have taken. `risk_distance` is `line` or `expected_move`. The move does not block the trade. A result under $1 returns `sized_notional` 0, `entry_blocked_reason` `below_minimum`, and a plain `size_note`. No move, or a move no wider than the line, sizes exactly as before. BANDIT's budget (0.180 SOL on 2026-09-26) against its 0.119 SOL starter makes it effectively one clip at a time (one open clip leaves 0.061 SOL of headroom); ODDSBORNE's $27.69 budget holds about 13 of today's $2.12 tickets.
 - No headroom left: `entry_allowed = false`, `sized_notional = 0`, `entry_blocked_reason = 'exposure_cap'`. Sells never apply. Risk comes down by exiting, or by raising a lot's invalidation toward its mark.
 - Guidance also returns `open_risk`, `risk_budget`, `risk_headroom`, `entry_risk_fraction` and `risk_basis`.
 - `public.v_exposure_usage` (or `private.steward_open_risk(steward)`) lists usage per steward. `v_ledger_watchdog` has `exposure_over_budget` and an `exposure` summary.
@@ -127,7 +127,7 @@ Before any **buy/add**, call:
 select * from public.steward_sizing_guidance('bandit', 'meme_4h_momentum_clip', '<mint>', 0.45, <invalidation SOL/token>);
 -- ODDSBORNE: instrument = pm_markets.slug or id; unit is USD
 select * from public.steward_sizing_guidance('oddsborne', '<thesis_id>', '<market slug>', <requested usd>, <invalidation outcome price>);
--- QUANTANAMO: select * from public.steward_sizing_guidance('quantanamo', '<thesis_id>', '<SYMBOL>', <requested usd>, <invalidation usd/share>);
+-- QUANTANAMO: select * from public.steward_sizing_guidance('quantanamo', '<thesis_id>', '<SYMBOL>', <requested usd>, <invalidation usd/share>, <entry usd/share>, <expected move or null>);
 ```
 
 The call returns `book_equity`, `spendable_cash`, `current_position_value`, `requested`, sample stats (`sample_trades`, `sample_wins`, `hit_rate`, `avg_win`, `avg_loss`), `sized_notional = min(requested, max_stake, spendable_cash)`, `max_stake` / `max_stake_reason`, and the thesis's `thesis_confidence` / `stated_confidence` / `thesis_status`. Leave out `requested` to get just the caps and gates. Only the worker roles (`quantanamo_worker`, `oddsborne_worker`, `bandit_worker`) and `service_role` can execute it. `public.thesis_sizing()` returns one row per thesis.
@@ -140,7 +140,7 @@ Entry fields:
 | `autonomous_buy_gate_pass` | `hardening` and `results_confidence` ≥ 80 (null with no thesis) | `true` unless the thesis is rejected or killed |
 | `thesis_rejected` / `thesis_killed` | `theses.status` = `'rejected'` / `'killed'` | same |
 | `entry_allowed` | the gate passes, an invalidation is given, the book is fresh, and there is exposure headroom | the thesis is known and not rejected or killed, an invalidation is given, the book is fresh, and there is exposure headroom |
-| `entry_blocked_reason` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `quantanamo_requires_thesis`, `quantanamo_unscored`, `quantanamo_confidence_gate`, `missing_invalidation`, `stale_book`, `exposure_cap` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation`, `stale_book`, `exposure_cap` or null |
+| `entry_blocked_reason` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `quantanamo_requires_thesis`, `quantanamo_unscored`, `quantanamo_confidence_gate`, `missing_invalidation`, `stale_book`, `exposure_cap`, `below_minimum` | `unknown_thesis`, `thesis_rejected`, `thesis_killed`, `missing_invalidation`, `stale_book`, `exposure_cap`, `below_minimum` or null |
 
 **Before a buy, read `entry_allowed`, then size to `sized_notional`.** A rejected or killed thesis returns `sized_notional = 0`. Sells and exits never go through this call.
 

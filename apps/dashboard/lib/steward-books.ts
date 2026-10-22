@@ -191,6 +191,8 @@ export type EarningsQuote = {
   mark: number | null;
   size: number | null;
   invalidation: number | null;
+  /** Price paid per share. The sizing sentence uses this as the entry when it is set. */
+  cost?: number | null;
 };
 
 function calendarDate(value: string | null): string | null {
@@ -276,6 +278,41 @@ function lineDollars(quote: EarningsQuote): number | null {
   return quote.size * Math.max(quote.mark - quote.invalidation, 0);
 }
 
+/** Exit distance as a fraction of the price it was written against. Null when the line is not below that price. */
+export function lineFraction(price: number | null | undefined, invalidation: number | null | undefined): number | null {
+  if (price == null || invalidation == null) return null;
+  if (!(price > 0) || !(invalidation > 0) || !(invalidation < price)) return null;
+  if (!Number.isFinite(price) || !Number.isFinite(invalidation)) return null;
+  return (price - invalidation) / price;
+}
+
+/**
+ * Share count after sizing on the wider distance.
+ * A missing move, or a move no wider than the line, returns the old share count.
+ * ROL: 16 shares, entry 33.05, line 31.06, move 0.094 → 10.25 shares.
+ */
+export function sharesAfterExpectedMove(
+  shares: number,
+  entry: number,
+  invalidation: number,
+  moveFraction: number | null,
+): number {
+  const line = lineFraction(entry, invalidation);
+  if (line === null || moveFraction === null || !(moveFraction > line)) return shares;
+  if (!Number.isFinite(shares) || !Number.isFinite(moveFraction)) return shares;
+  return shares * line / moveFraction;
+}
+
+/** Plain sentence when the earnings move, not the exit line, is the wider distance. */
+export function earningsSizingSentence(line: number | null, move: number | null): string | null {
+  if (line === null || move === null || !(move > line)) return null;
+  if (!Number.isFinite(line) || !Number.isFinite(move)) return null;
+  const moveLabel = movePct(move);
+  const lineLabel = movePct(line);
+  if (moveLabel === lineLabel) return null;
+  return `Sized for a ${moveLabel} earnings move, not the ${lineLabel} line.`;
+}
+
 function versusLine(gap: number, line: number): string {
   const shown = aboutDollars(line);
   const band = Math.max(1, 0.05 * Math.max(Math.abs(line), Math.abs(gap)));
@@ -313,6 +350,11 @@ export function earningsBookLine(row: EquityEarningsRow, quote: EarningsQuote, n
       sentence += `, so a gap could cost about ${aboutDollars(gap)}`;
     }
     sentence += '.';
+    const sizedFor = earningsSizingSentence(
+      lineFraction(quote.cost ?? quote.mark, quote.invalidation),
+      implied,
+    );
+    if (sizedFor) sentence += ` ${sizedFor}`;
     if (row.expiry_loose) {
       sentence += ' That figure is a loose upper bound; the options expire well after the report.';
     }
@@ -338,6 +380,7 @@ function earningsForHolding(desk: DeskPayload, holding: BookHolding, nowMs: numb
     mark: holding.mark,
     size: holding.size,
     invalidation: holding.invalidation?.price ?? null,
+    cost: holding.cost,
   }, nowMs);
 }
 

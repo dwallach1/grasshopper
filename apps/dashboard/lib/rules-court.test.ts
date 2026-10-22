@@ -99,6 +99,7 @@ describe('rules court', () => {
       ['83_stale_queued_lesson_tests.sql', '20261020180000_stale_queued_lesson_tests.sql'],
       ['84_equity_earnings_supplied_price.sql', '20261020150000_equity_earnings_supplied_price.sql'],
       ['85_retired_strategy_tests_theses.sql', '20261021180000_retired_strategy_tests_theses.sql'],
+      ['86_equity_expected_move_sizing.sql', '20261022193000_equity_expected_move_sizing.sql'],
     ];
     for (const [schema, migration] of pairs) {
       expect(await readFile(join(root, 'supabase/migrations', migration), 'utf8'))
@@ -255,11 +256,35 @@ describe('rules court', () => {
     expect(sql).toContain("when m.lot_table = 'meme_positions' then m.quantity * coalesce(c.average_cost, m.mark, 0)");
     expect(sql).toContain('private.risk_budget_share()');
     expect(sql).not.toContain('create or replace function public.steward_sizing_guidance');
+    expect(sql).not.toContain('p_expected_move');
+    const historical = sql.split('$mech$')[1]?.split('$mech$')[0] ?? '';
+    expect(historical).toContain('implied_move_missing');
+    expect(historical).toContain('Budget 10% of book');
+    expect(historical).not.toContain('p_expected_move');
+  });
+
+  test('86: a print-held starter is sized on the wider of the line and the expected move', async () => {
+    const sql = await readFile(join(root, 'supabase/schemas/86_equity_expected_move_sizing.sql'), 'utf8');
+    expect(sql).toContain('-- court-ruling: docs/rules/portfolio-exposure.md');
+    expect(sql).toContain('p_expected_move numeric default null');
+    expect(sql).toContain('when v_govern = \'expected_move\' then v_old * v_line_frac / v_move');
+    expect(sql).toContain('round(v_old, 6) >= 1 and round(v_sized, 6) < 1');
+    expect(sql).toContain("'below_minimum'");
+    expect(sql).toContain('The earnings move leaves less than $1. That is below the minimum, so the size is zero.');
+    expect(sql).toContain('risk_distance text');
+    expect(sql).toContain("then 'expected_move'");
+    expect(sql).toContain("then 'line'");
+    // The 80 gate and the no-cap starter stay.
+    expect(sql).toContain("coalesce((th.results_basis ->> 'gate_score')::int, 0) >= 80");
+    expect(sql).not.toContain('percent of book');
     const md = await readFile(join(rulesDir, 'portfolio-exposure.md'), 'utf8');
     const mechanism = md.split('## Mechanism\n')[1]?.split('\n\n')[0] ?? '';
     expect(sql.split('$mech$')[1]?.split('$mech$')[0]).toBe(mechanism);
-    expect(mechanism).toContain('implied_move_missing');
-    expect(mechanism).toContain('Budget 10% of book');
+    expect(mechanism).toContain('p_expected_move');
+    expect(mechanism).toContain('below_minimum');
+    const rules = await readFile(join(root, 'tools/court/rules_data.py'), 'utf8');
+    const start = rules.indexOf('mechanism="', rules.indexOf('id="portfolio-exposure"')) + 'mechanism="'.length;
+    expect(rules.slice(start, rules.indexOf('",\n', start))).toBe(mechanism);
   });
 
   test('64: BANDIT 1h entry cap is registered as a provisional trial, registry only', async () => {

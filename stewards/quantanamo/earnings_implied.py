@@ -147,6 +147,13 @@ def report_passed(report_date: date | None, timing: str | None, reported: bool, 
     return now >= release_at(report_date, timing)
 
 
+def implied_move_fraction(straddle: Decimal | None, underlying: Decimal | None) -> Decimal | None:
+    """straddle / underlying. The fraction sizing guidance takes as p_expected_move. None when either price is missing."""
+    if straddle is None or underlying is None or straddle <= 0 or underlying <= 0:
+        return None
+    return straddle / underlying
+
+
 def line_risk(quantity: Decimal, mark: Decimal | None, invalidation: Decimal | None) -> Decimal:
     """qty x max(mark - invalidation, 0). No invalidation: qty x mark. Unmarked: 0."""
     if mark is None or quantity is None:

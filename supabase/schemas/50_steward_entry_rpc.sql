@@ -33,7 +33,8 @@ begin
     p->>'instrument',
     (p->>'requested')::numeric,
     (p->>'invalidation_price')::numeric,
-    (p->>'entry_price')::numeric
+    (p->>'entry_price')::numeric,
+    (p->>'expected_move')::numeric
   ) g
   limit 1;
   return r;  -- null when guidance returns no row (the scripts refuse)
@@ -41,7 +42,7 @@ end;
 $$;
 
 comment on function public.steward_entry_guidance(jsonb) is
-  'jsonb wrapper over steward_sizing_guidance(steward, thesis_id, instrument, requested, invalidation_price, entry_price) for the HTTPS steward path. Same gates; a worker can only ask for its own steward.';
+  'jsonb wrapper over steward_sizing_guidance(steward, thesis_id, instrument, requested, invalidation_price, entry_price, expected_move). expected_move is optional: a fraction of price when the lot will be held through a print. Same gates; a worker can only ask for its own steward.';
 
 -- ------------------------------------------------------------------ ODDSBORNE (pm_enter.py)
 create or replace function public.oddsborne_entry_upsert_market(p jsonb)
