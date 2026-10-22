@@ -318,8 +318,19 @@ class ScorePriceCommand(unittest.TestCase):
             called.append(symbol)
             raise AssertionError("financial datasets must not be fetched")
 
+        # No stored reference and no --reference-close: refused, never the mark-time underlying.
         code, out = self._run(
             ["score", "--price", "105", "--price-source", "robinhood_historicals_rth_close"],
+            [_due_lot()],
+            load,
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("--reference-close", out["error"])
+        self.assertNotIn("results", out)
+
+        code, out = self._run(
+            ["score", "--price", "105", "--price-source", "robinhood_historicals_rth_close",
+             "--reference-close", "98.5"],
             [_due_lot()],
             load,
         )
@@ -331,7 +342,8 @@ class ScorePriceCommand(unittest.TestCase):
         self.assertIn('"price_source":"robinhood_historicals_rth_close"', row["sql"])
         self.assertIn('"score_source":"robinhood_historicals_rth_close"', row["sql"])
         self.assertIn('"post_close":"105"', row["sql"])
-        self.assertIn('"reference_close":"100"', row["sql"])
+        self.assertIn('"reference_close":"98.5"', row["sql"])
+        self.assertNotIn('"reference_close":"100"', row["sql"])
         self.assertNotIn("post_open", row["sql"])
 
         # A stored reference close wins over the straddle underlying. --lot picks one of two.
@@ -351,6 +363,24 @@ class ScorePriceCommand(unittest.TestCase):
         self.assertIn('"reference_close":"110"', out["results"][0]["sql"])
         self.assertIn('"post_open":"112"', out["results"][0]["sql"])
         self.assertIn('"price_source":"financialdatasets_mcp"', out["results"][0]["sql"])
+
+    def test_supplied_close_never_uses_the_mark_time_underlying(self):
+        m = self.m
+        now = datetime(2026, 10, 22, 14, 0, tzinfo=timezone.utc)
+        # NFLX 2026-10-20 PM: marked at 69.475 mid-session, RTH close 68.69, next close 65.04.
+        lot = dict(_due_lot(), report_date="2026-10-20", straddle_price="6.725", underlying_price="69.475")
+        move = m.score_supplied_close(lot, Decimal("65.04"), now, Decimal("68.69"))
+        self.assertEqual(move["reference_close"], Decimal("68.69"))
+        self.assertEqual(move["reference_session"], date(2026, 10, 20))
+        self.assertEqual(round(move["realized_close_to_close"], 6), Decimal("-0.053137"))
+        self.assertEqual(round(move["realized_implied_ratio"], 6), Decimal("0.548951"))
+        bare = m.score_supplied_close(lot, Decimal("65.04"), now)
+        self.assertIsNone(bare["reference_close"])
+        self.assertEqual(bare["score_missing_reason"], "no_reference_bar")
+        # AM: the reference session is the prior day.
+        am = dict(lot, report_date="2026-10-20", report_timing="am")
+        self.assertEqual(m.score_supplied_close(am, Decimal("176.54"), now, Decimal("158.57"))["reference_session"],
+                         date(2026, 10, 19))
 
     def test_price_with_several_due_lots_requires_lot(self):
         called = []

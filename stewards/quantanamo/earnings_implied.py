@@ -1188,11 +1188,15 @@ def _lesson_args(lot: dict, move: dict, summary: str) -> dict:
     }
 
 
-def score_supplied_close(lot: dict, price: Decimal, now: datetime) -> dict:
+def score_supplied_close(lot: dict, price: Decimal, now: datetime,
+                         reference_close: Decimal | None = None) -> dict:
     """Post-session close the caller already has. Does not read bars and does not invent an open.
 
-    The reference close is the one already stored on the lot, else the underlying the straddle
-    was marked on. A missing open leaves the gap and line_jumped unknown and keeps the close.
+    The reference is the regular-session close immediately before the print (AM: prior
+    session close; PM: the report day's close): the one already stored on the lot, else
+    the supplied reference_close. The underlying the straddle was marked on is never used
+    as the reference; with neither, the score is no_reference_bar. A missing open leaves
+    the gap and line_jumped unknown and keeps the close.
     """
     report = lot.get("report_date")
     report = report if isinstance(report, date) and not isinstance(report, datetime) else _parse_date(report)
@@ -1207,7 +1211,7 @@ def score_supplied_close(lot: dict, price: Decimal, now: datetime) -> dict:
         post_day = stored_post
     ref_close = _positive(lot.get("reference_close"))
     if ref_close is None:
-        ref_close = _positive(lot.get("underlying_price"))
+        ref_close = _positive(reference_close)
     post_open = _positive(lot.get("post_open"))
     post_close = _positive(price)
     reason = None
@@ -1264,7 +1268,8 @@ def parse_price_source(text: str | None) -> str:
 
 def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
                caller_score=None, caller_lesson=None,
-               supplied_close: Decimal | None = None, price_source: str | None = None) -> dict:
+               supplied_close: Decimal | None = None, price_source: str | None = None,
+               supplied_reference: Decimal | None = None) -> dict:
     """Score each lot from load(symbol, start, end). A transport error is a retry, not a missing bar.
 
     supplied_close skips load entirely: the caller already has the post-report close.
@@ -1304,7 +1309,7 @@ def score_lots(lots, *, load, execute: bool, now: datetime, source: str,
                 straddle=lot.get("straddle_price"), underlying=lot.get("underlying_price"),
             )
         else:
-            move = score_supplied_close(lot, supplied_close, now)
+            move = score_supplied_close(lot, supplied_close, now, supplied_reference)
         args = _jsonable(score_record_args(lot, move, source, price_source))
         sql = _dollar_sql("steward_record_equity_earnings_score", args)
         statements.append(sql)
@@ -1459,6 +1464,12 @@ def main(argv=None) -> int:
         "--price-source",
         help="required with --price: robinhood_historicals_rth_close or financialdatasets_mcp",
     )
+    sc.add_argument(
+        "--reference-close", metavar="FLOAT",
+        help="with --price: the RTH close immediately before the print (AM: prior session; "
+             "PM: report day). Required when the lot has no stored reference_close; the "
+             "straddle mark-time underlying is never used as the reference",
+    )
     sc.add_argument("--lot", metavar="LOT_ID", help="score this lot only; required with --price when several lots are due")
     args = ap.parse_args(argv)
     if args.command == "plan":
@@ -1482,9 +1493,15 @@ def main(argv=None) -> int:
         execute = bool(args.execute) and not args.dry_run
         price = None
         price_source = None
+        reference = None
+        if args.reference_close is not None and args.price is None:
+            print(json.dumps({"error": "score --reference-close requires --price"}))
+            return 1
         if args.price is not None:
             try:
                 price = parse_score_price(args.price)
+                if args.reference_close is not None:
+                    reference = parse_score_price(args.reference_close)
                 if args.price_source is None:
                     raise ValueError("score --price requires --price-source")
                 price_source = parse_price_source(args.price_source)
@@ -1509,6 +1526,13 @@ def main(argv=None) -> int:
         if price is not None and not due:
             print(json.dumps({"error": "score --price found no due lot"}))
             return 1
+        if price is not None and reference is None:
+            bare = [str(lot.get("lot_id")) for lot in due if _positive(lot.get("reference_close")) is None]
+            if bare:
+                print(json.dumps({"error": "score --price needs --reference-close (the RTH close before "
+                                           "the print) for lots with no stored reference_close: "
+                                           + ", ".join(bare)}))
+                return 1
         try:
             if price is None:
                 out = score_from_loads(due, execute=execute)
@@ -1521,6 +1545,7 @@ def main(argv=None) -> int:
                     source=price_source,
                     supplied_close=price,
                     price_source=price_source,
+                    supplied_reference=reference,
                 )
         except Exception as exc:
             print(json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:300]}"}))
