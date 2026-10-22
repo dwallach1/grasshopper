@@ -15,7 +15,7 @@ name: Deploy public desk
 
 on:
   push:
-    branches: [main, cursor/ship-public-desk-live-a3d2, cursor/earnings-move-sizing-b8d3]
+    branches: [main, cursor/ship-public-desk-live-a3d2]
   workflow_dispatch:
 
 jobs:
