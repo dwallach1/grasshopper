@@ -649,6 +649,8 @@ export type DeskPayload = {
   earnings?: EquityEarningsRow[];
   /** Open lessons and the test each one waits on. Empty until `v_open_lesson_tests` is readable. */
   lesson_waits?: import('./lesson-waits').LessonWait[];
+  /** Shadow candidates and their running tally. Empty until `v_shadow_candidates` is readable. */
+  shadows?: import('./shadow-tally').ShadowCandidate[];
   theses: ThesisRow[];
   /** Lean belief_updates. Public snapshot keeps this (playbook rules + trail). */
   beliefs: import('./beliefs').BeliefUpdateRow[];

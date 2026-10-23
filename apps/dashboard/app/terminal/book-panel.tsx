@@ -8,6 +8,7 @@ import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 import { lessonWaitLine, type LessonWait } from '../../lib/lesson-waits';
+import { shadowTallyLine, type ShadowCandidate } from '../../lib/shadow-tally';
 import { formatAmount } from '../../lib/money-units';
 import {
   assembleStewardBooks,
@@ -130,6 +131,7 @@ export function BookPanel({
           <StewardSection
             key={section.slug}
             section={section}
+            shadows={desk.shadows}
             onOpenLot={(id) => openReading({ kind: 'lot', id })}
             onOpenIdea={(id) => openReading({ kind: 'idea', id })}
           />
@@ -181,10 +183,12 @@ export function BookPanel({
 
 function StewardSection({
   section,
+  shadows,
   onOpenLot,
   onOpenIdea,
 }: {
   section: BooksSection;
+  shadows?: ShadowCandidate[];
   onOpenLot: (id: string) => void;
   onOpenIdea: (id: string) => void;
 }) {
@@ -228,6 +232,13 @@ function StewardSection({
           <p className="books-line" data-forecast="">{section.forecast}</p>
         ) : null}
       </header>
+      {(shadows ?? []).filter((row) => row.steward === section.slug).map((row) => {
+        const text = shadowTallyLine(row);
+        if (!text) return null;
+        return (
+          <p key={row.candidate_key} className="books-line" data-shadow={row.candidate_key}>{text}</p>
+        );
+      })}
       {section.open.length ? (
         <ul className="books-lots" aria-label={`${section.name} open positions`}>
           {section.open.map((lot) => (

@@ -225,6 +225,8 @@ Numbers may be JSON numbers or numeric strings.
 
 The views only measure. Promoting a rule is a steward decision, recorded as a playbook rule.
 
+QUANTANAMO scores one equity shadow, `ah_open_holds_prior_close`, by calling `quantanamo_score_ah_open_shadow` (or by the print and lot triggers). It uses the lot fill, the prior close, and the day-0 open already stored. A missing open is skipped. `quantanamo_record_cohort_flag` stores the cohort-down check beside test 41 on the pre-print lot or decision. It does not block the entry. Before sizing a pre-print name, read `earnings_sheet_slot`. SCORE-ONLY is a label: that entry session's week already has the starter count stored on the lots (`meta.starter.of`). The label does not change that count.
+
 ## Box environment (venvs)
 
 Each steward runs its scripts with its own venv: `/workspace/bandit/.venv` and `/workspace/oddsborne/.venv`. The pinned dependencies are in `bandit/requirements.txt` and `oddsborne/requirements.txt` (full `pip freeze` of the working envs). QUANTANAMO doesn't use Python.
