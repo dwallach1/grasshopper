@@ -15,7 +15,7 @@ name: Deploy public desk
 
 on:
   push:
-    branches: [main, cursor/ship-public-desk-live-a3d2, cursor/shadow-lesson-loop-e0d1]
+    branches: [main, cursor/ship-public-desk-live-a3d2]
   workflow_dispatch:
 
 jobs:
