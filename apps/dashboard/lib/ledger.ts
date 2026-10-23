@@ -85,6 +85,7 @@ export async function loadDesk(accessToken: string): Promise<DeskPayload> {
 
 export { loadDeskFromRest, REST_FETCH_MS } from './ledger-live';
 import { mapLessonWaits } from './lesson-waits';
+import { mapShadowCandidates } from './shadow-tally';
 import { withScorecard } from './ledger-live';
 import { mapStewardScorecard, type StewardScorecardPayload } from './steward-scorecard';
 import { mapLedgerWatchdog, WATCHDOG_LIST_LIMIT, type LedgerWatchdog } from './ledger-watchdog';
@@ -385,7 +386,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       ),
     ]);
 
-    const [prediction, meme, team, scorecard, watchdog, earnings, lessonWaits] = await Promise.all([
+    const [prediction, meme, team, scorecard, watchdog, earnings, lessonWaits, shadows] = await Promise.all([
       loadPredictionMarkets(sql),
       loadMemeCoins(sql),
       loadTeam(sql),
@@ -393,6 +394,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       loadWatchdog(sql),
       loadEarnings(sql),
       loadLessonWaits(sql),
+      loadShadows(sql),
     ]);
     return {
       ...withScorecard(assembleDesk('postgres', decorateDesk(theses, symbols, {
@@ -437,6 +439,7 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
       },
     }, prediction, meme, team)), scorecard, watchdog, earnings),
       lesson_waits: mapLessonWaits(lessonWaits),
+      shadows: mapShadowCandidates(shadows),
     };
   } finally {
     await sql.end({ timeout: 5 });
@@ -447,6 +450,15 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
  * Score columns land in migration 20261019220000. Before that, the select
  * fails and the Book line stays off. The rest of the desk still loads.
  */
+async function loadShadows(sql: Sql): Promise<JsonObjectRow[]> {
+  return viewRows('v_shadow_candidates', sql`
+    select candidate_key, lesson_id, test_id, thesis_id, steward, kind,
+           checked, flagged, n, mean_delta_pct, lcb_delta_pct, clips_to_decide, promotable
+    from public.v_shadow_candidates
+    order by lesson_id
+  `) as Promise<JsonObjectRow[]>;
+}
+
 async function loadLessonWaits(sql: Sql): Promise<JsonObjectRow[]> {
   return viewRows('v_open_lesson_tests', sql`
     select lesson_id, thesis_id, test_id, test_status, age_days

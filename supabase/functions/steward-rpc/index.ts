@@ -48,6 +48,10 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // close lessons on equity lots (position_episodes), ledger delta + loss clamp
     // (supabase/schemas/65_quantanamo_close_lesson.sql)
     'steward_close_lesson',
+    // shadow lesson loop (supabase/schemas/87_shadow_lesson_loop.sql). Measurement and a sheet label. Not a gate.
+    'quantanamo_score_ah_open_shadow',
+    'quantanamo_record_cohort_flag',
+    'earnings_sheet_slot',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',

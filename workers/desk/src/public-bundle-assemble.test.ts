@@ -189,6 +189,10 @@ describe('public bundle assemble', () => {
     expect(fn).toContain('restGet(LESSON_WAITS_QUERY, true)');
     expect(fn).toContain('lesson_waits: lessonWaits');
     expect(fn).toContain('v_open_lesson_tests?select=lesson_id,thesis_id,test_id,test_status,age_days');
+    expect(fn).toContain("'v_shadow_candidates'");
+    expect(fn).toContain('restGet(SHADOWS_QUERY, true)');
+    expect(fn).toContain('shadows,');
+    expect(fn).toContain('v_shadow_candidates?select=candidate_key,lesson_id,test_id,thesis_id,steward,kind,checked,flagged,n,mean_delta_pct,lcb_delta_pct,clips_to_decide,promotable');
   });
 
   test('the public cycle query selects the three small scalars and quotes cost key 10', async () => {

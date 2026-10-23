@@ -979,6 +979,71 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
+  test('shadow tallies sit on quantanamo and leave the value line first', async () => {
+    const view = await mount(createElement(BookPanel, {
+      desk: {
+        ...desk(),
+        shadows: [
+          {
+            candidate_key: 'ah_open_holds_prior_close',
+            lesson_id: 152,
+            test_id: 44,
+            thesis_id: EARNINGS,
+            steward: 'quantanamo',
+            kind: 'exit',
+            checked: 2,
+            flagged: 2,
+            n: 2,
+            mean_delta_pct: 0,
+            lcb_delta_pct: 0,
+            clips_to_decide: 8,
+            promotable: false,
+          },
+          {
+            candidate_key: 'cohort_down_3pct',
+            lesson_id: 151,
+            test_id: 41,
+            thesis_id: EARNINGS,
+            steward: 'quantanamo',
+            kind: 'entry_flag',
+            checked: 4,
+            flagged: 0,
+            n: 0,
+            mean_delta_pct: null,
+            lcb_delta_pct: null,
+            clips_to_decide: null,
+            promotable: false,
+          },
+          {
+            candidate_key: 'mystery_rule',
+            lesson_id: 9,
+            test_id: null,
+            thesis_id: EARNINGS,
+            steward: 'quantanamo',
+            kind: 'exit',
+            checked: 1,
+            flagged: 1,
+            n: 1,
+            mean_delta_pct: 1,
+            lcb_delta_pct: 1,
+            clips_to_decide: 9,
+            promotable: false,
+          },
+        ],
+      },
+      nowIso: AT,
+    }));
+    const q = view.host.querySelector('[data-steward="quantanamo"]');
+    expect(q?.querySelector('.books-line')?.textContent).toBe('$5,157 · +3.1% since start · risk $351 of $550');
+    expect(q?.querySelector('[data-shadow="ah_open_holds_prior_close"]')?.textContent)
+      .toContain('flat versus the real sale');
+    expect(q?.querySelector('[data-shadow="cohort_down_3pct"]')?.textContent)
+      .toContain('nothing was skipped');
+    expect(q?.querySelector('[data-shadow="mystery_rule"]')).toBeNull();
+    expect(view.host.querySelector('[data-steward="oddsborne"] [data-shadow]')).toBeNull();
+    view.unmount();
+  });
+
   test('operator desk keeps the review fold; the public desk never renders it', async () => {
     const view = await mount(createElement(BookPanel, {
       desk: desk([], [], [lesson(1, 'Do not chase a printed gap.')]),
