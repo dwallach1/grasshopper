@@ -367,6 +367,11 @@ def edge2_check(mint):
     ok = run >= 0.40 and 0.6 * P <= c <= 0.8 * P and c > b[t - 1][2] and vol >= 50000
     return ok, info
 GT_POOLS = {}; GT_BARS = {}; E2_HITS = set()  # shared with edge3/4/5 below
+# REJECTED 2026-10-25 (GRASSHOPPER, ledger): edge2 meme_pullback_reclaim is off by default. The loop below still runs
+# edge2_check() because it fetches the top-reserve pools/bars (GT_POOLS/GT_BARS) that edge3/4/5 reuse, but with
+# BANDIT_E2_ENABLED unset it never logs a pass, never adds to E2_HITS (no edge2 precedence for edge3/4/5/6) and
+# never writes the edge2 dedupe state. Existing ledger rows are kept as history. Set BANDIT_E2_ENABLED=1 only on purpose.
+E2_ENABLED = os.environ.get("BANDIT_E2_ENABLED", "0") == "1"
 E345_HITS = set()  # coins edge3/4/5 signalled this scan: precedence over edge6
 edge2_logged = []; edge2_checked = 0
 try: e2_state = json.load(open(E2_STATE))
@@ -377,7 +382,7 @@ for r in elig:
     edge2_checked += 1
     try: ok, info = edge2_check(r["mint"])
     except Exception as e: ok, info = False, f"err {type(e).__name__}"
-    if not ok: continue
+    if not ok or not E2_ENABLED: continue
     E2_HITS.add(r["mint"])  # edge2 precedence for edge3/4/5 (counts even if deduped/unlogged)
     last = e2_state.get(r["mint"])
     if last and now.timestamp() - last < 4 * 3600:
@@ -408,9 +413,9 @@ for r in elig:
         edge2_logged.append((r["symbol"], (res or {}).get("id"), "ok" if okr else res))
     except Exception as e:
         edge2_logged.append((r["symbol"], None, f"err {type(e).__name__}: {str(e)[:120]}"))
-if not _no_log:
+if not _no_log and E2_ENABLED:
     with open(E2_STATE, "w") as fh: json.dump(e2_state, fh)
-out["edge2_checked"] = edge2_checked
+out["edge2_enabled"] = E2_ENABLED; out["edge2_checked"] = edge2_checked
 out["edge2_logged"] = edge2_logged
 # ---------------------------------------------------------------------------------------------------------------
 # edge3 meme_range_breakout / edge4 meme_grad_pullback / edge5 meme_liq_accum: PAPER ONLY, never trade.
@@ -545,7 +550,7 @@ for r in universe345:
     state = {"G": G, "mig_pool": mig, "consumed": True, "signal_bar_ts": b[t][0]}
     if b[t][0] + 300 <= _since: outcome = "first_pullback_before_this_scan_window"
     elif t < 12: outcome = "first_pullback_before_12_bars"
-    elif _e2_bar(b, t): outcome = "edge2_precedence"                     # prereg rule 7: same bar, same pool
+    elif E2_ENABLED and _e2_bar(b, t): outcome = "edge2_precedence"      # prereg rule 7; moot since edge2 rejected 2026-10-25
     else: outcome = None
     if not outcome: E345_HITS.add(r["mint"])
     if outcome:
@@ -734,7 +739,7 @@ print("CLEAR", len(clear), [_sym_mint(r) for r in clear])
 print("NEAR", [(_sym_mint(r), r["all_fails"]) for r in near[:8]])
 print("STANDING", [(r["symbol"], r["market_fails"], r.get("quote_fails")) for r in out["standing"]])
 print("PAPER_LOGGED", paper_logged)
-print("EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
+print("EDGE2_ENABLED", E2_ENABLED, "EDGE2_CHECKED", edge2_checked, "EDGE2_LOGGED", edge2_logged)
 print("EDGE3_CHECKED", edge3_checked, "EDGE3_LOGGED", edge3_logged)
 print("EDGE4_CHECKED", edge4_checked, "EDGE4_LOGGED", edge4_logged)
 print("EDGE5_CHECKED", edge5_checked, "EDGE5_LOGGED", edge5_logged)
