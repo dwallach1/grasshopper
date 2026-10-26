@@ -159,7 +159,9 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--out-dir", default="research")
     ap.add_argument("--thesis", nargs="*", choices=list(THESES)); a = ap.parse_args()
     now = datetime.now(timezone.utc); summ, allp = [], []
-    for th in (a.thesis or list(THESES)):
+    # edge2 (meme_pullback_reclaim) REJECTED 2026-10-25 (GRASSHOPPER): not scored by default (its scorer hung >3 min in
+    # the 2026-10-26 standup). Pass --thesis meme_pullback_reclaim to re-score its history on purpose.
+    for th in (a.thesis or [t for t in THESES if t != "meme_pullback_reclaim"]):
         try: s, out = run_thesis(th, THESES[th], now)
         except Exception as ex:
             print(f"{th}: ledger read failed: {type(ex).__name__}: {str(ex)[:200]}"); sys.exit(2)
