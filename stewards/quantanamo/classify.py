@@ -285,6 +285,8 @@ ON CONFLICT (id) DO NOTHING
 RETURNING id
 )
 SELECT id FROM ins;
+
+select public.propose_ontology_candidates();
 """
     # symbols/urls inserted in a second statement using only returned ids
     # we emit a follow-up SQL that joins against bookmarks that exist
@@ -350,6 +352,8 @@ def emit_sweep_sql(rows: list[dict]) -> str | None:
 FROM jsonb_array_elements({blob}::jsonb) r
 WHERE b.id = r->>'id' AND b.classified_at IS NULL
 RETURNING b.id, b.classification_output->>'bucket' AS bucket;
+
+select public.propose_ontology_candidates();
 """
 
 

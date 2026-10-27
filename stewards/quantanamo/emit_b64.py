@@ -77,5 +77,7 @@ ins AS (
   RETURNING id
 )
 SELECT id FROM ins;
+
+select public.propose_ontology_candidates();
 """
     return sql, symbol_rows, url_rows, summary

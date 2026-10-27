@@ -11,6 +11,7 @@ import {
   type ReviewAction,
 } from '../../lib/candidate-review';
 import type { DeskPayload, OntologyCandidateRow } from '../../lib/ledger-types';
+import { ontologyFreshnessLine } from '../../lib/ledger-watchdog';
 
 export function CandidateReviewQueue({
   desk,
@@ -26,6 +27,7 @@ export function CandidateReviewQueue({
     [desk.ontology_candidates],
   );
   const theses = useMemo(() => liveThesesForLink(desk.theses ?? []), [desk.theses]);
+  const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
 
   return (
     <section className="review-queue" aria-label="Ontology candidates to review">
@@ -38,6 +40,7 @@ export function CandidateReviewQueue({
           {canReview
             ? ' Promote, reject, or merge writes the ledger.'
             : ' Public phone is read-only.'}
+          {ontologyLine ? ` ${ontologyLine}` : ''}
         </p>
       </header>
       {queue.length ? (

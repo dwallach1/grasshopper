@@ -128,6 +128,7 @@ describe('public desk Worker API', () => {
         equity_implied_move_gaps: 0,
         stale_queued_tests: null,
         unlinked_named_lessons: null,
+        ontology_freshness: null,
       },
       learning: {
         to_review: 0,
