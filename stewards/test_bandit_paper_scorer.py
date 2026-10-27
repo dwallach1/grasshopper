@@ -256,5 +256,59 @@ class Scorer(unittest.TestCase):
         self.assertTrue(e2["promotion_bar_met"]); self.assertLess(e2["mean_minus_se_pct"], 0)
 
 
+class RunBudget(unittest.TestCase):
+    """The scorer never hangs: per-run OHLCV cache and a wall-clock budget that defers the rest (2026-10-27)."""
+    NOW = datetime.fromtimestamp(T0 + 30 * 86400, timezone.utc)
+
+    def _rows(self, n, pool="P6", spacing=5 * 3600):
+        es = [T0 + 2 * 86400 + i * spacing for i in range(n)]
+        rows = [row(i + 1, "meme_flush_rebound", "M", e + 1800, {"edge6": {"prereg_entry_ts": e, "pool": pool}})
+                for i, e in enumerate(es)]
+        return rows, {pool: flat(es[0], (es[-1] - es[0]) // BAR + 48, close=1.0)}
+
+    def test_one_ohlcv_fetch_covers_every_pass_on_a_pool(self):
+        rows, bars = self._rows(5)
+        fx = Fixture(bars)
+        with mock.patch.object(PS, "gt", fx), mock.patch.object(PS, "call", lambda *a, **k: rows), \
+                mock.patch("builtins.print"):
+            s, out = PS.run_thesis("meme_flush_rebound", PS.THESES["meme_flush_rebound"], self.NOW, PS.Run(60))
+        self.assertEqual(s["n_scored"], 5); self.assertEqual(len(fx.calls), 1)
+        with mock.patch.object(PS, "gt", Fixture(bars)), mock.patch.object(PS, "call", lambda *a, **k: rows):
+            s2, out2 = PS.run_thesis("meme_flush_rebound", PS.THESES["meme_flush_rebound"], self.NOW)
+        self.assertEqual([r["net_pct"] for r in out], [r["net_pct"] for r in out2])     # cache changes nothing
+
+    def test_spent_budget_defers_and_still_writes_partial_files(self):
+        rows, bars = self._rows(3)
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(PS, "gt", Fixture(bars)), \
+                mock.patch.object(PS, "call", lambda *a, **k: rows if k.get("idempotent") and a[2]["thesis_id"] == "meme_flush_rebound" else []), \
+                mock.patch.object(sys, "argv", ["x", "--out-dir", d, "--budget-s", "0"]), mock.patch("builtins.print") as pr:
+            PS.main()
+            data = json.loads((Path(d) / "paper_scores.json").read_text())
+        e6 = next(s for s in data["summary"] if s["thesis_id"] == "meme_flush_rebound")
+        self.assertEqual((e6["n_deferred"], e6["n_scored"], e6["partial"]), (3, 0, True))
+        self.assertTrue(any("PARTIAL" in str(c) for c in pr.call_args_list))
+
+    def test_rerun_reuses_prior_scored_rows_without_api_calls(self):
+        rows, bars = self._rows(3)
+        rpc = lambda *a, **k: rows if a[2]["thesis_id"] == "meme_flush_rebound" else []
+        with tempfile.TemporaryDirectory() as d:
+            for budget, expect_calls in (("60", 1), ("0", 0)):
+                fx = Fixture(bars)
+                with mock.patch.object(PS, "gt", fx), mock.patch.object(PS, "call", rpc), mock.patch("builtins.print"), \
+                        mock.patch.object(sys, "argv", ["x", "--out-dir", d, "--budget-s", budget]):
+                    PS.main()
+                self.assertEqual(len(fx.calls), expect_calls)
+                e6 = next(s for s in json.loads((Path(d) / "paper_scores.json").read_text())["summary"]
+                          if s["thesis_id"] == "meme_flush_rebound")
+                self.assertEqual((e6["n_scored"], e6["n_deferred"]), (3, 0))   # 2nd run: budget 0, all reused
+
+    def test_gt_gives_up_at_the_deadline_instead_of_retrying(self):
+        r429 = types.SimpleNamespace(status_code=429, ok=False)
+        with mock.patch.object(PS.requests, "get", lambda *a, **k: r429), mock.patch.object(PS, "_ACTIVE", PS.Run(1)), \
+                mock.patch.object(PS.time, "sleep", lambda s: None):
+            with self.assertRaises(PS.Budget): PS.gt("x")
+        self.assertIsInstance(PS.HTTP_TIMEOUT, tuple)
+
+
 if __name__ == "__main__":
     unittest.main()
