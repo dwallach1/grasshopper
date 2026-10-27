@@ -11,6 +11,7 @@ import {
   exposureLine,
   learningGapHoldingId,
   mapLedgerWatchdog,
+  ontologyFreshnessLine,
   replayActionableBreachChecks,
   watchdogHealthSummary,
 } from './ledger-watchdog';
@@ -212,6 +213,61 @@ describe('ledger watchdog', () => {
     expect(sql).toContain('create or replace view public.v_stale_queued_tests\nwith (security_invoker = true)');
     expect(sql).toContain('and l.test_id is null');
     expect(sql).not.toMatch(/update\s+public\.strategy_tests/i);
+  });
+
+  test('ontology freshness is a learning-loop count, not a breach', () => {
+    const absent = mapLedgerWatchdog({ summary: [{ open_lots: 1 }] });
+    expect(absent.ontology_freshness).toBeNull();
+    expect(ontologyFreshnessLine(absent.ontology_freshness)).toBeNull();
+    expect(watchdogHealthSummary(absent).ontology_freshness).toBeNull();
+
+    const starved = mapLedgerWatchdog({
+      summary: [{
+        open_lots: 1,
+        ontology_freshness: {
+          last_first_seen_at: '2026-09-13 18:11:08.615362+00',
+          created_7d: 0,
+          pending: 0,
+          starved: true,
+        },
+      }],
+    });
+    expect(starved.ontology_freshness).toEqual({
+      last_first_seen_at: '2026-09-13 18:11:08.615362+00',
+      created_7d: 0,
+      pending: 0,
+      starved: true,
+    });
+    expect(ontologyFreshnessLine(starved.ontology_freshness)).toBe(
+      'Ontology last recorded a candidate on 13 Sep 2026.',
+    );
+    expect(watchdogHealthSummary(starved).ontology_freshness).toEqual(starved.ontology_freshness);
+    expect(watchdogHealthSummary(starved).ontology_freshness).not.toBe(starved.ontology_freshness);
+
+    const fresh = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: '2026-10-27T15:05:13.888Z',
+          created_7d: '1',
+          pending: 4,
+          starved: false,
+        },
+      }],
+    });
+    expect(ontologyFreshnessLine(fresh.ontology_freshness)).toBe(
+      'Ontology recorded 1 candidate in the last 7 days.',
+    );
+    expect(assembleDeskBookHealth({ watchdog: fresh } as unknown as DeskPayload, Date.parse('2026-10-27T17:25:00Z')).alerts).toEqual([]);
+
+    const sql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/88_ontology_candidate_freshness.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261027180000_ontology_candidate_freshness.sql'), 'utf8')).toBe(sql);
+    expect(sql).toContain('as ontology_freshness');
+    expect(sql).toContain('private.propose_ontology_candidates');
+    expect(sql).toContain('private.reject_junk_ontology_candidates');
+    expect(sql).toContain("timestamptz '2026-09-13 00:00:00+00'");
+    expect(sql).toContain('security invoker');
+    expect(sql).toContain('security definer');
+    expect(sql).not.toMatch(/grant execute on function public\.propose_ontology_candidates[\s\S]*to anon/);
   });
 });
 

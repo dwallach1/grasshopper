@@ -34,9 +34,14 @@ This is **not** a new score. `power`, `demand`, `energy`, `photonics`, `nuclear`
 Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`):
 
 ```sql
+select public.propose_ontology_candidates();
+-- memberships from market bookmarks classified since 2026-09-13 and from
+-- research lessons that name a thesis symbol. Then the junk sweep.
 select public.reject_junk_ontology_candidates();
 -- { ok: true, rejected: N, note: 'junk_deny_list' }
 ```
+
+`propose_ontology_candidates` is also the statement trigger on `bookmarks`, `bookmark_symbols`, and `research_lessons`, so a scan that only classifies still proposes. The grind still calls it: pending = 0 is not healthy when `v_ledger_watchdog.ontology_freshness.starved` is true (no candidate `first_seen_at` in the last 7 days).
 
 Re-runnable. Idempotent. The migration applies it once. GRASSHOPPER can call the same RPC after ingest.
 

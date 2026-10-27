@@ -151,6 +151,44 @@ export type StaleQueuedTests = {
   theses: StaleQueuedThesis[];
 };
 
+export type OntologyFreshness = {
+  last_first_seen_at: string | null;
+  created_7d: number;
+  pending: number;
+  starved: boolean;
+};
+
+const ONTOLOGY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Ledger date, UTC. Null when the timestamp is missing or not a date. */
+export function ontologyFreshnessDay(value: string | null): string | null {
+  if (!value) return null;
+  let text = value.trim();
+  if (!text.includes('T')) text = text.replace(' ', 'T');
+  // Postgres prints a short offset (`+00`). Date.parse wants `+00:00`.
+  text = text.replace(/([+-]\d{2})$/, '$1:00').replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  const parsed = Date.parse(text);
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  return `${date.getUTCDate()} ${ONTOLOGY_MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+/**
+ * One parchment sentence from `v_ledger_watchdog.ontology_freshness`.
+ * Absent when the column was not on the row. Does not invent a count.
+ */
+export function ontologyFreshnessLine(row: OntologyFreshness | null): string | null {
+  if (!row) return null;
+  const day = ontologyFreshnessDay(row.last_first_seen_at);
+  if (row.starved || row.created_7d === 0) {
+    return day
+      ? `Ontology last recorded a candidate on ${day}.`
+      : 'Ontology has not recorded a candidate.';
+  }
+  const word = row.created_7d === 1 ? 'candidate' : 'candidates';
+  return `Ontology recorded ${row.created_7d} ${word} in the last 7 days.`;
+}
+
 export type LedgerWatchdog = {
   available: boolean;
   checked_at: string | null;
@@ -186,6 +224,12 @@ export type LedgerWatchdog = {
    * Null when the column is absent. Does not change `ok` on /api/health.
    */
   unlinked_named_lessons: number | null;
+  /**
+   * Last ontology candidate `first_seen_at`, how many were first seen in 7 days,
+   * pending, and whether that first-seen is older than 7 days.
+   * Null when the column is absent. Does not change `ok` on /api/health.
+   */
+  ontology_freshness: OntologyFreshness | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -213,6 +257,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     equity_implied_move_gaps: 0,
     stale_queued_tests: null,
     unlinked_named_lessons: null,
+    ontology_freshness: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -467,6 +512,9 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     unlinked_named_lessons: summary.unlinked_named_lessons === undefined
       ? null
       : optionalCount(summary.unlinked_named_lessons),
+    ontology_freshness: summary.ontology_freshness === undefined
+      ? null
+      : ontologyFreshness(summary.ontology_freshness),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -604,6 +652,8 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   stale_queued_tests: StaleQueuedTests | null;
   /** Open lessons that name a test and are not linked. Null when the column is absent. Does not change `ok`. */
   unlinked_named_lessons: number | null;
+  /** Ontology candidate freshness. Null when the column is absent. Does not change `ok`. */
+  ontology_freshness: OntologyFreshness | null;
 } {
   const w = watchdog ?? emptyLedgerWatchdog();
   return {
@@ -625,7 +675,25 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
       ? { ...w.stale_queued_tests, theses: w.stale_queued_tests.theses.map((row) => ({ ...row })) }
       : null,
     unlinked_named_lessons: w.unlinked_named_lessons,
+    ontology_freshness: w.ontology_freshness
+      ? { ...w.ontology_freshness }
+      : null,
   };
+}
+
+function ontologyFreshness(value: unknown): OntologyFreshness | null {
+  const bag = record(value);
+  if (!bag || typeof bag.starved !== 'boolean') return null;
+  const created = optionalCount(bag.created_7d);
+  const pending = optionalCount(bag.pending);
+  if (created === null || pending === null) return null;
+  const raw = bag.last_first_seen_at;
+  if (raw === null || raw === undefined || raw === '') {
+    return { last_first_seen_at: null, created_7d: created, pending, starved: bag.starved };
+  }
+  const last = str(raw);
+  if (!last) return null;
+  return { last_first_seen_at: last, created_7d: created, pending, starved: bag.starved };
 }
 
 function wholeAmount(value: number, unit: MoneyUnit): string {

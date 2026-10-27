@@ -7,6 +7,7 @@ import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip
 import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
+import { ontologyFreshnessLine } from '../../lib/ledger-watchdog';
 import { lessonWaitLine, type LessonWait } from '../../lib/lesson-waits';
 import { shadowTallyLine, type ShadowCandidate } from '../../lib/shadow-tally';
 import { formatAmount } from '../../lib/money-units';
@@ -73,6 +74,7 @@ export function BookPanel({
   onReviewed?: () => void;
 }) {
   const nowMs = Date.parse(nowIso ?? desk.generated_at);
+  const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
   const books = useMemo(() => assembleStewardBooks(desk, nowMs), [desk, nowMs]);
   const tickets = useMemo(() => assembleBookOpen(desk).rows.flatMap((row) => row.tickets), [desk]);
   const [reading, setReading] = useState<Reading | null>(null);
@@ -126,6 +128,11 @@ export function BookPanel({
         <h1 className="visually-hidden">Book</h1>
         <header className="books-mast">
           <p className="paper-title">Book</p>
+          {ontologyLine ? (
+            <p className="thesis-lede" data-ontology-freshness={desk.watchdog?.ontology_freshness?.starved ? 'stale' : 'fresh'}>
+              {ontologyLine}
+            </p>
+          ) : null}
         </header>
         {books.sections.map((section) => (
           <StewardSection
