@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { MARK_NOT_IN_LEDGER } from './book-performance';
 import { assembleDeskBookHealth } from './desk-book-health';
+import { fallbackTeam } from './desk-team';
+import { emptyLedgerWatchdog } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
 
 const NOW = Date.parse('2026-09-10T01:10:00.000Z');
@@ -167,6 +169,71 @@ describe('assembleDeskBookHealth', () => {
     expect(health.stale_catalog).toBe(1);
     expect(health.stale_opens).toBe(0);
     expect(health.alerts.map((row) => row.kind).sort()).toEqual(['resolved_still_open', 'stale_catalog']);
+  });
+
+  test('a retired steward keeps the ticket and drops the alarm', () => {
+    const team = fallbackTeam();
+    const health = assembleDeskBookHealth(desk({
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+      prediction_markets: {
+        desk: 'ODDSBORNE',
+        venue: 'prediction',
+        markets: [{
+          id: 'midway',
+          venue: 'polymarket',
+          slug: 'northwestern',
+          question: 'Northwestern',
+          status: 'open',
+          close_time: '2026-09-09T00:00:00.000Z',
+          last_yes: 0.4,
+          last_no: 0.6,
+          last_marked_at: '2026-09-01T00:00:00.000Z',
+          thesis_id: null,
+          rules_summary: null,
+        }],
+        positions: [{
+          id: 'nw',
+          market_id: 'midway',
+          account_key: 'oddsborne',
+          thesis_id: null,
+          outcome: 'yes',
+          status: 'open',
+          quantity: 1,
+          average_cost: 0.5,
+          mark: 0.4,
+          mark_at: '2026-09-01T00:00:00.000Z',
+          thesis_text: null,
+        }],
+        orders: [],
+        fills: [],
+        pnl: [],
+        notes: [],
+      },
+      watchdog: {
+        ...emptyLedgerWatchdog(),
+        available: true,
+        learning_gaps: { quantanamo: 0, oddsborne: 2, bandit: 1 },
+        unscoreable_decisions: { quantanamo: 0, oddsborne: 1, bandit: 0 },
+        invalidation_breaches: 1,
+        breaches_actionable: 1,
+        breaches: [{
+          steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'nw', instrument: 'Northwestern',
+          unit: 'USD', action_hint: 'exit_full_lot', invalidation_price: 0.45, mark: 0.4,
+          mark_at: '2026-09-01T00:00:00.000Z',
+        }],
+        missing: [],
+        issues: [],
+      },
+    }), NOW);
+    expect(health.alerts).toEqual([]);
+    expect(health.stale_opens).toBe(0);
+    expect(health.resolved_still_open).toBe(0);
+    expect(health.invalidation_breaches).toBe(0);
   });
 
   test('fresh open marks are quiet', () => {

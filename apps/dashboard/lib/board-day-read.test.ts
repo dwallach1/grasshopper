@@ -208,6 +208,32 @@ describe('assembleBoardDayRead', () => {
     expect(read.lead).not.toContain('steward');
   });
 
+  test('a retired steward is not a posture and not the newest mark', () => {
+    const roster = team();
+    const read = assembleBoardDayRead(desk({
+      team: {
+        ...roster,
+        agents: roster.agents.map((row) => (
+          row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+      prediction_markets: {
+        desk: 'ODDSBORNE',
+        venue: 'prediction',
+        markets: [],
+        positions: [],
+        orders: [],
+        fills: [],
+        pnl: [{ as_of: NEWER, equity: 10 }],
+        notes: [],
+      },
+    }), NOW);
+    expect(read.lead).toBe('0 books open · 0 beliefs in force · 1 steward idle');
+    expect(read.stamp.startsWith('QUANTANAMO marked')).toBe(true);
+    expect(read.stamp).not.toContain('ODDSBORNE');
+    expect(read.stamp).not.toContain('BANDIT');
+  });
+
   test('age buckets match the header freshness chip', () => {
     const stamps = [
       '2026-09-07T21:59:30.000Z',

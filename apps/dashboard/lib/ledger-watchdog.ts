@@ -627,8 +627,100 @@ function staleQueuedTests(value: unknown): StaleQueuedTests | null {
   return { n, quantanamo, oddsborne, bandit, unknown, theses };
 }
 
+const STEWARD_KEYS = ['quantanamo', 'oddsborne', 'bandit'] as const;
+
+/**
+ * Actionable health projection. Retired stewards keep their keys (as 0) and
+ * drop out of the counts an operator would act on. The source watchdog object
+ * is left as the ledger wrote it.
+ */
+export function quietRetiredWatchdog(
+  watchdog: LedgerWatchdog,
+  retired: ReadonlySet<string>,
+): LedgerWatchdog {
+  if (retired.size === 0) return watchdog;
+  const gone = (slug: string) => retired.has(slug);
+  const learning_gaps = { ...watchdog.learning_gaps };
+  const unscoreable_decisions = { ...watchdog.unscoreable_decisions };
+  for (const slug of STEWARD_KEYS) {
+    if (!gone(slug)) continue;
+    learning_gaps[slug] = 0;
+    unscoreable_decisions[slug] = 0;
+  }
+  const breaches = watchdog.breaches.filter((row) => !gone(row.steward));
+  const missing = watchdog.missing.filter((row) => !gone(row.steward));
+  const issues = watchdog.issues.filter((row) => !gone(row.steward));
+  const escalated = watchdog.escalated.filter((row) => !gone(row.steward));
+  const exposure = watchdog.exposure.filter((row) => !gone(row.steward));
+  const learning_gap_lots = watchdog.learning_gap_lots.filter((row) => !gone(row.steward));
+  const droppedBreach = watchdog.breaches.length - breaches.length;
+  const droppedActionable = watchdog.breaches.filter((row) => gone(row.steward) && row.action_hint === 'exit_full_lot').length;
+  const droppedReview = watchdog.breaches.filter((row) => gone(row.steward) && row.action_hint === 'review_at_open').length;
+  const droppedMissing = watchdog.missing.length - missing.length;
+  const droppedIssues = watchdog.issues.length - issues.length;
+  const droppedErrors = watchdog.issues.filter((row) => gone(row.steward) && row.severity === 'error').length;
+  const droppedEscalated = watchdog.escalated.length - escalated.length;
+  const integrity = { ...watchdog.integrity };
+  for (const row of watchdog.issues) {
+    if (!gone(row.steward)) continue;
+    const next = (integrity[row.check_name] ?? 0) - 1;
+    if (next <= 0) delete integrity[row.check_name];
+    else integrity[row.check_name] = next;
+  }
+  return {
+    ...watchdog,
+    invalidation_breaches: Math.max(0, watchdog.invalidation_breaches - droppedBreach),
+    breaches_actionable: Math.max(0, watchdog.breaches_actionable - droppedActionable),
+    breaches_review_at_open: Math.max(0, watchdog.breaches_review_at_open - droppedReview),
+    lots_missing_invalidation: Math.max(0, watchdog.lots_missing_invalidation - droppedMissing),
+    integrity_issues: Math.max(0, watchdog.integrity_issues - droppedIssues),
+    integrity_errors: Math.max(0, watchdog.integrity_errors - droppedErrors),
+    integrity,
+    exposure_over_budget: watchdog.exposure.length > 0
+      ? exposure.filter((row) => row.over).length
+      : watchdog.exposure_over_budget,
+    exposure,
+    learning_gaps,
+    learning_gap_lots,
+    unscoreable_decisions,
+    breaches_escalated: Math.max(0, watchdog.breaches_escalated - droppedEscalated),
+    escalated,
+    stale_queued_tests: quietStaleTests(watchdog.stale_queued_tests, gone),
+    breaches,
+    missing,
+    issues,
+  };
+}
+
+function quietStaleTests(
+  tests: StaleQueuedTests | null,
+  gone: (slug: string) => boolean,
+): StaleQueuedTests | null {
+  if (!tests) return null;
+  let dropped = 0;
+  for (const slug of STEWARD_KEYS) {
+    if (gone(slug)) dropped += tests[slug];
+  }
+  for (const row of tests.theses) {
+    if (!gone(row.steward)) continue;
+    if (row.steward === 'quantanamo' || row.steward === 'oddsborne' || row.steward === 'bandit') continue;
+    dropped += row.n;
+  }
+  return {
+    n: Math.max(0, tests.n - dropped),
+    quantanamo: gone('quantanamo') ? 0 : tests.quantanamo,
+    oddsborne: gone('oddsborne') ? 0 : tests.oddsborne,
+    bandit: gone('bandit') ? 0 : tests.bandit,
+    unknown: tests.unknown,
+    theses: tests.theses.filter((row) => !gone(row.steward)),
+  };
+}
+
 /** Counts for /api/health and the twice-daily ledger health routine. */
-export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
+export function watchdogHealthSummary(
+  watchdog: LedgerWatchdog | undefined,
+  retired?: ReadonlySet<string>,
+): {
   watchdog_available: boolean;
   invalidation_breaches: number;
   breaches_actionable: number;
@@ -655,7 +747,7 @@ export function watchdogHealthSummary(watchdog: LedgerWatchdog | undefined): {
   /** Ontology candidate freshness. Null when the column is absent. Does not change `ok`. */
   ontology_freshness: OntologyFreshness | null;
 } {
-  const w = watchdog ?? emptyLedgerWatchdog();
+  const w = quietRetiredWatchdog(watchdog ?? emptyLedgerWatchdog(), retired ?? new Set());
   return {
     watchdog_available: w.available,
     invalidation_breaches: w.invalidation_breaches,

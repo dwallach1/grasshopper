@@ -21,7 +21,7 @@
 import { assembleBeliefsInForce } from './learning-inspect';
 import { assembleBookHoldings } from './book-holdings';
 import { assembleDeskFreshness, assembleStewardFreshness, type StewardFreshnessId } from './desk-freshness';
-import { deskTeam, teamCards } from './desk-team';
+import { deskTeam, retiredStewardSlugs, teamCards } from './desk-team';
 import type { DeskPayload } from './ledger-types';
 import { stewardPresences, type StewardPresence } from './steward-presence';
 
@@ -82,17 +82,19 @@ function beliefsClause(count: number): string {
   return count === 1 ? '1 belief in force' : `${count} beliefs in force`;
 }
 
+function liveBookSlugs(desk: DeskPayload): readonly StewardFreshnessId[] {
+  const retired = retiredStewardSlugs(desk);
+  return BOOK_SLUGS.filter((slug) => !retired.has(slug));
+}
+
 function postureClauses(desk: DeskPayload, nowMs: number): string[] {
   const faces = stewardPresences(desk, nowMs);
-  let seen = 0;
-  for (const slug of BOOK_SLUGS) {
-    if (faces.get(slug)) seen += 1;
-  }
-  if (seen === 0) return [];
+  const slugs = liveBookSlugs(desk);
+  if (slugs.length === 0) return [];
   const clauses: string[] = [];
   for (const posture of POSTURE_ORDER) {
     let count = 0;
-    for (const slug of BOOK_SLUGS) {
+    for (const slug of slugs) {
       if (faces.get(slug)?.presence === posture) count += 1;
     }
     if (count <= 0) continue;
@@ -121,10 +123,11 @@ function readClause(desk: DeskPayload, nowMs: number): string {
 
 function newestStewardMarks(desk: DeskPayload): NewestMarks | null {
   const rows = assembleStewardFreshness(desk);
+  const live = new Set<string>(liveBookSlugs(desk));
   let bestMs = Number.NEGATIVE_INFINITY;
   let bestAt: string | null = null;
   for (const row of rows) {
-    if (!row.mark_at) continue;
+    if (!live.has(row.id) || !row.mark_at) continue;
     const ms = Date.parse(row.mark_at);
     if (!Number.isFinite(ms) || ms < bestMs) continue;
     bestMs = ms;
@@ -132,6 +135,7 @@ function newestStewardMarks(desk: DeskPayload): NewestMarks | null {
   }
   if (!bestAt) return null;
   const ids = BOOK_SLUGS.filter((id) => {
+    if (!live.has(id)) return false;
     const at = rows.find((row) => row.id === id)?.mark_at;
     if (!at) return false;
     return Date.parse(at) === bestMs;

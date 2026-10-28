@@ -8,6 +8,7 @@ import {
   assembleLeaderboard,
   freshLead,
   NOT_RANKED,
+  standingShowsReturn,
 } from '../../lib/desk-leaderboard';
 import {
   assembleLiveline,
@@ -32,20 +33,22 @@ export function LeaderboardPanel({
   onOpenTeam?: (slug: string) => void;
 }) {
   const board = useMemo(() => assembleLeaderboard(desk), [desk]);
+  const activeRows = useMemo(() => board.rows.filter((row) => !row.retired), [board.rows]);
+  const retiredRows = useMemo(() => board.rows.filter((row) => row.retired), [board.rows]);
   const faces = useMemo(() => stewardDeskFaces(desk, now ?? Date.now()), [desk, now]);
   const line = useMemo(() => assembleLiveline(desk), [desk]);
   const hero = useMemo(() => boardHeroLiveline(line), [line]);
   const clock = now ?? Date.now();
-  const lead = freshLead(board.rows, clock);
+  const lead = freshLead(activeRows, clock);
   const stale = boardHeroIdle(line, clock, isMarkStale);
-  const [order, setOrder] = useState<string[]>(() => board.rows.map((row) => row.id));
+  const [order, setOrder] = useState<string[]>(() => activeRows.map((row) => row.id));
   const drag = useRef<{ id: string; pointerId: number; startY: number; origin: string[] } | null>(null);
   const orderRef = useRef(order);
   orderRef.current = order;
 
   useEffect(() => {
-    setOrder((prev) => applyStandingOrder(board.rows, prev).map((row) => row.id));
-  }, [board.rows]);
+    setOrder((prev) => applyStandingOrder(activeRows, prev).map((row) => row.id));
+  }, [activeRows]);
 
   useEffect(() => {
     function onMove(event: PointerEvent) {
@@ -69,7 +72,10 @@ export function LeaderboardPanel({
     };
   }, []);
 
-  const rows = useMemo(() => applyStandingOrder(board.rows, order), [board.rows, order]);
+  const rows = useMemo(
+    () => [...applyStandingOrder(activeRows, order), ...retiredRows],
+    [activeRows, retiredRows, order],
+  );
 
   function onPlaceDown(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
     event.stopPropagation();
@@ -120,23 +126,29 @@ export function LeaderboardPanel({
       </p>
 
       <ol className="line-standings">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const signed = standingShowsReturn(row);
+          return (
           <li
             key={row.id}
-            className={`line-row${row.ranked ? '' : ' is-empty'}${lead && row.id === lead.id ? ' is-lead' : ''}${row.ranked && isMarkStale(row.last_marked, clock) ? ' is-stale-marks' : ''}`}
+            className={`line-row${row.ranked ? '' : ' is-empty'}${row.retired ? ' is-retired' : ''}${lead && row.id === lead.id ? ' is-lead' : ''}${row.ranked && isMarkStale(row.last_marked, clock) ? ' is-stale-marks' : ''}`}
             // SAFETY: CSS custom property for the shared steward accent token.
             style={{ '--team-accent': row.accent } as CSSProperties}
           >
             <div className="line-row-hit">
-              <button
-                type="button"
-                className="line-place"
-                data-card-dragger="1"
-                aria-label={`Reorder ${row.steward}`}
-                onPointerDown={(event) => onPlaceDown(event, row.id)}
-              >
-                {row.place ?? '—'}
-              </button>
+              {row.retired ? (
+                <span className="line-place">—</span>
+              ) : (
+                <button
+                  type="button"
+                  className="line-place"
+                  data-card-dragger="1"
+                  aria-label={`Reorder ${row.steward}`}
+                  onPointerDown={(event) => onPlaceDown(event, row.id)}
+                >
+                  {row.place ?? '—'}
+                </button>
+              )}
               <StewardAvatar
                 slug={row.slug}
                 name={row.steward}
@@ -146,10 +158,10 @@ export function LeaderboardPanel({
               />
               <span className="line-who">
                 <b>{row.steward}</b>
-                <i>{row.venue_label} · {row.unit ?? '—'}</i>
+                <i>{row.retired ? 'retired' : `${row.venue_label} · ${row.unit ?? '—'}`}</i>
               </span>
-              <span className={`line-pct ${row.ranked ? pnlClass(row.return_pct) : 'muted'}`}>
-                {row.ranked ? pct(row.return_pct, 2) : NOT_RANKED}
+              <span className={`line-pct ${signed ? pnlClass(row.return_pct) : 'muted'}`}>
+                {signed ? pct(row.return_pct, 2) : NOT_RANKED}
               </span>
             </div>
             <p className="line-meta">
@@ -165,7 +177,8 @@ export function LeaderboardPanel({
                 : ''}
             </p>
           </li>
-        ))}
+          );
+        })}
       </ol>
       <p className="line-rules">{board.rules}</p>
     </div>

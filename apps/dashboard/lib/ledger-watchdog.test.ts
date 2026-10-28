@@ -522,4 +522,98 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(sql).toContain('public.note_actionable_breaches');
     expect(sql).not.toContain('SECURITY DEFINER');
   });
+
+  test('retired stewards drop out of actionable health counts and keep their keys', () => {
+    const watchdog = mapLedgerWatchdog({
+      summary: [{
+        checked_at: '2026-10-28T17:00:00Z',
+        invalidation_breaches: 2,
+        breaches_actionable: 2,
+        breaches_review_at_open: 0,
+        lots_missing_invalidation: 1,
+        integrity_issues: 2,
+        integrity_errors: 0,
+        integrity: { fill_without_position: 1, open_lot_without_thesis: 1 },
+        open_lots: 4,
+        exposure_over_budget: 1,
+        exposure: {
+          quantanamo: { unit: 'USD', open_risk: 10, risk_budget: 100, used_share: 0.01, headroom: 90 },
+          oddsborne: { unit: 'USD', open_risk: 40, risk_budget: 20, used_share: 2, headroom: -20 },
+          bandit: { unit: 'SOL', open_risk: 0, risk_budget: 1, used_share: 0, headroom: 1 },
+        },
+        learning_gaps: {
+          quantanamo: 1,
+          oddsborne: 2,
+          bandit: 3,
+          lots: [
+            { steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'pm-1' },
+            { steward: 'quantanamo', lot_table: 'position_episodes', lot_id: 'eq-1' },
+          ],
+        },
+        unscoreable_decisions: { quantanamo: 0, oddsborne: 1, bandit: 4 },
+        breaches_escalated: 1,
+        escalated: [{
+          steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'pm-9', instrument: 'NW',
+          first_seen_at: '2026-10-28T12:00:00Z', breach_age_minutes: 40, escalation: 'window',
+          sentence: 'NW has been under its exit line for 40m — sell now',
+        }],
+        stale_queued_tests: {
+          n: 5,
+          quantanamo: 2,
+          oddsborne: 3,
+          bandit: 0,
+          unknown: 0,
+          theses: [
+            { thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 2 },
+            { thesis_id: 'sports_devig', steward: 'oddsborne', n: 3 },
+          ],
+        },
+      }],
+      breaches: [
+        {
+          steward: 'quantanamo', lot_table: 'position_episodes', lot_id: 'eq', instrument: 'CIFR',
+          unit: 'USD', action_hint: 'exit_full_lot', invalidation_price: 1, mark: 1,
+        },
+        {
+          steward: 'oddsborne', lot_table: 'pm_positions', lot_id: 'pm-9', instrument: 'NW',
+          unit: 'USD', action_hint: 'exit_full_lot', invalidation_price: 0.4, mark: 0.2,
+        },
+      ],
+      missing: [{ steward: 'bandit', lot_table: 'meme_positions', lot_id: 'm', instrument: 'YAP', unit: 'SOL' }],
+      issues: [
+        {
+          check_name: 'fill_without_position', severity: 'warn', steward: 'oddsborne',
+          ref_table: 'pm_fills', ref_id: 'f', instrument: 'x', detail: 'pm fill has no position_id',
+        },
+        {
+          check_name: 'open_lot_without_thesis', severity: 'warn', steward: 'quantanamo',
+          ref_table: 'position_episodes', ref_id: 'eq', instrument: 'CIFR', detail: 'open lot has no thesis_id',
+        },
+      ],
+    });
+    const retired = new Set(['oddsborne', 'bandit']);
+    const health = watchdogHealthSummary(watchdog, retired);
+    expect(health.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 0, bandit: 0 });
+    expect(health.unscoreable_decisions).toEqual({ quantanamo: 0, oddsborne: 0, bandit: 0 });
+    expect(health.stale_queued_tests).toEqual({
+      n: 2,
+      quantanamo: 2,
+      oddsborne: 0,
+      bandit: 0,
+      unknown: 0,
+      theses: [{ thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 2 }],
+    });
+    expect(health.escalated).toEqual([]);
+    expect(health.breaches_escalated).toBe(0);
+    expect(health.invalidation_breaches).toBe(1);
+    expect(health.breaches_actionable).toBe(1);
+    expect(health.lots_missing_invalidation).toBe(0);
+    expect(health.integrity_issues).toBe(1);
+    expect(health.integrity).toEqual({ open_lot_without_thesis: 1 });
+    expect(health.exposure_over_budget).toBe(0);
+    expect(watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 2, bandit: 3 });
+    expect(watchdog.unscoreable_decisions.oddsborne).toBe(1);
+    expect(watchdog.learning_gap_lots).toHaveLength(2);
+    expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
+  });
 });

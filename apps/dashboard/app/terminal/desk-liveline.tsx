@@ -138,7 +138,7 @@ export function DeskLiveline({
         scrub={!quiet && !compact && !motion.coarse}
         exaggerate
         showValue={showHeroValue}
-        valueMomentumColor={showValue && !freeze}
+        valueMomentumColor={!parchment && showValue && !freeze}
         degen={allowDegen ? { scale: 0.7, downMomentum: true } : false}
         loading={loading}
         paused={freeze}

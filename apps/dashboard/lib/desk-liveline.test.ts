@@ -272,6 +272,42 @@ describe('assembleLiveline', () => {
     expect(personal.books[0]?.empty_text).toContain(LIVELINE_EMPTY);
   });
 
+  test('retired seats keep their curve and stay off the Board overlay', () => {
+    const team = fallbackTeam();
+    const retired = assembleLiveline({
+      ...liveDesk(),
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+    });
+    expect(retired.books.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+    expect(retired.books.find((row) => row.id === 'oddsborne')?.pct.length).toBeGreaterThan(0);
+    expect(retired.books.find((row) => row.id === 'bandit')?.pct.length).toBeGreaterThan(0);
+    expect(retired.all_pct.map((row) => row.id)).toEqual(['quantanamo']);
+    expect(retired.all_pct[0]?.data.every((point) => Number.isFinite(point.value))).toBe(true);
+    const hero = boardHeroLiveline(retired);
+    expect(hero.series.map((row) => row.id)).toEqual(['quantanamo']);
+    expect(hero.showValue).toBe(true);
+    expect(hero.unit).toBe('PCT');
+    expect(hero.series[0]?.data.length).toBeGreaterThan(0);
+    expect(hero.series[0]?.value).toBeCloseTo(20.401264);
+    expect(boardHeroIdle(retired, Date.parse('2026-09-06T15:58:03.496Z'), (iso) => iso !== '2026-09-04T20:06:00.000Z')).toBe(false);
+
+    const revived = assembleLiveline({
+      ...liveDesk(),
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+    });
+    expect(revived.all_pct.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne']);
+  });
+
   test('windows cover history-to-now; degen only on big native % swings', () => {
     const first = isoToLivelineTime('2026-08-23T20:26:25.000Z');
     const last = isoToLivelineTime('2026-09-04T20:06:00.000Z');

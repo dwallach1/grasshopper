@@ -12,6 +12,7 @@
 import { assemblePlaybookRules } from './beliefs';
 import { assembleBookHoldings, type BookHolding } from './book-holdings';
 import { leanPendingCandidates } from './candidate-review';
+import { retiredStewardSlugs } from './desk-team';
 import type { DeskPayload } from './ledger-types';
 import { forecastVsMarketLines } from './steward-scorecard';
 
@@ -47,7 +48,7 @@ export function assembleLearningPulse(desk: DeskPayload): LearningPulse {
   const lessons = desk.lessons ?? [];
   const live = assembleBookHoldings(desk).rows.filter((row) => row.life === 'live');
   const gates = live.map(liveBookGate);
-  const forecast = forecastVsMarketLines(desk.scorecard?.forecast ?? []);
+  const forecast = forecastVsMarketLines(desk.scorecard?.forecast ?? [], retiredStewardSlugs(desk));
   return {
     to_review: leanPendingCandidates(desk.ontology_candidates ?? []).length,
     lessons_open: lessons.filter((row) => !row.incorporated).length,

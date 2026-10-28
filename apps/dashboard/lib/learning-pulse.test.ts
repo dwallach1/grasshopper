@@ -333,6 +333,46 @@ describe('assembleLearningPulse', () => {
     expect(learningPulseSummary(pulse).forecast).toBe(pulse.forecast);
   });
 
+  test('forecast names an active steward and omits a retired one', () => {
+    const forecast = [
+      {
+        steward: 'oddsborne', decision: 'all', thesis_id: null, all_theses: true,
+        n: 75, brier: 0.209, market_brier: 0.215, brier_gap: -0.006, skill: 0.03,
+        thin: false, excluded_no_book: 0,
+      },
+      {
+        steward: 'quantanamo', decision: 'all', thesis_id: null, all_theses: true,
+        n: 12, brier: 0.2, market_brier: 0.25, brier_gap: -0.05, skill: 0.2,
+        thin: false, excluded_no_book: 0,
+      },
+    ];
+    const team = fallbackTeam();
+    const pulse = assembleLearningPulse(desk({
+      scorecard: { stewards: [], weekly: [], trend: [], theses: [], forecast, gates: [] },
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+    }));
+    expect(pulse.forecast).toContain("QUANTANAMO's odds vs the market's");
+    expect(pulse.forecast).not.toContain('ODDSBORNE');
+    const onlyRetired = assembleLearningPulse(desk({
+      scorecard: {
+        stewards: [], weekly: [], trend: [], theses: [], gates: [],
+        forecast: forecast.filter((row) => row.steward === 'oddsborne'),
+      },
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'oddsborne' ? { ...row, status: 'retired' } : row
+        )),
+      },
+    }));
+    expect(onlyRetired.forecast).toBeUndefined();
+  });
+
   test('kill and negative_result lessons do not retire other playbook beliefs', () => {
     const pulse = assembleLearningPulse(desk({
       beliefs: [

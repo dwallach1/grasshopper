@@ -13,13 +13,15 @@
  * - Fill clocks: last-known ledger equity/cash stamped at `fill_log.at`
  *   (LOCF of a real mark — not fill price, not invented P/L)
  *
- * Board hero is every live steward’s return curve on a shared % axis
- * (`all_pct`). Each book is % vs that book’s own start — never FX, never a
- * summed USD+SOL “desk NAV”. Standings still rank the same %. Book ALL does
- * not overlay raw dollars.
+ * Board hero is every active steward’s return curve on a shared % axis
+ * (`all_pct`). A steward with `desk_agents.status = retired` keeps its curve
+ * on `books` (the history is still there) and stays off the overlay. Each
+ * book is % vs that book’s own start — never FX, never a summed USD+SOL
+ * “desk NAV”. Standings still rank the same %. Book ALL does not overlay
+ * raw dollars.
  */
 import { agenticSnapshots } from './book-performance';
-import { AVATAR_COLORS } from './desk-team';
+import { AVATAR_COLORS, retiredStewardSlugs } from './desk-team';
 import { rowVenue } from './desk-venue';
 import type { AccountRow, DeskPayload, FillLogRow } from './ledger-types';
 import {
@@ -283,8 +285,10 @@ export function assembleLiveline(desk: DeskPayload): DeskLiveline {
     oddsborneCurve(desk),
     banditCurve(desk),
   ];
+  const retired = retiredStewardSlugs(desk);
   const all_pct: LivelineOverlay[] = [];
   for (const book of books) {
+    if (retired.has(book.id)) continue;
     const last = book.pct[book.pct.length - 1];
     if (!last) continue;
     all_pct.push({
@@ -349,11 +353,12 @@ export function lastMarkPerBucket(
 }
 
 /**
- * Board hero mapping: one parchment Liveline of every live steward’s % curve.
- * `showValue` only when a single book is plotted — that number is that book’s
- * %, never QUANTANAMO dollars as a desk-wide NAV. No equal-weight composite
- * line: the shared view is the overlay itself. Path is last mark / 4h;
- * `value` stays the true latest %.
+ * Board hero mapping: one parchment Liveline of every active steward’s % curve.
+ * Retired seats are already off `all_pct`. `showValue` only when a single book
+ * is plotted — that number is that book’s signed %, in parchment ink, never
+ * QUANTANAMO dollars as a desk-wide NAV. No equal-weight composite line: the
+ * shared view is the overlay itself. Path is last mark / 4h; `value` stays
+ * the true latest %. Empty series are not drawn and no mark is invented.
  */
 export function boardHeroLiveline(line: DeskLiveline): BoardHeroLiveline {
   const series = line.all_pct.map((row) => ({
@@ -376,8 +381,9 @@ export function boardHeroIdle(
   nowMs: number,
   stale: (at: string | null, now: number) => boolean,
 ): boolean {
+  const plotted = new Set(line.all_pct.map((row) => row.id));
   const stamps = line.books
-    .filter((book) => book.pct.length > 0)
+    .filter((book) => plotted.has(book.id) && book.pct.length > 0)
     .map((book) => livelineStampIso(book.equity));
   if (stamps.length === 0) return true;
   return stamps.every((iso) => stale(iso, nowMs));
