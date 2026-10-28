@@ -318,6 +318,20 @@ describe('steward presence', () => {
     expect(stewardPresence(desk({ positions: [equityOpen()] }), 'quantanamo', NOW).presence).toBe('waiting');
   });
 
+  test('a retired steward with an old heartbeat stays idle, not blocked', () => {
+    const retired = desk({
+      team: assembleTeam({
+        ...team({ oddsborne: 'retired', bandit: 'retired' }),
+        agents: team({ oddsborne: 'retired', bandit: 'retired' }).agents.map((row) => (
+          row.slug === 'quantanamo' ? row : { ...row, heartbeat_at: '2026-09-01T13:00:00.000Z' }
+        )),
+      }),
+    });
+    expect(stewardPresence(retired, 'oddsborne', NOW).presence).toBe('idle');
+    expect(stewardPresence(retired, 'bandit', NOW).presence).toBe('idle');
+    expect(stewardPresence(retired, 'grasshopper', NOW).presence).toBe('blocked');
+  });
+
   test('Board and Team read the same map', () => {
     const open = desk({ positions: [equityOpen()] });
     const map = stewardPresences(open, NOW);

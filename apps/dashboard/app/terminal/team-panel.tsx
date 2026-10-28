@@ -3,6 +3,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { NOT_IN_LEDGER } from '../../lib/book-performance';
+import { isRetiredStatus } from '../../lib/desk-team';
 import { scrollTeamStageToSteward } from '../../lib/desk-team-scroll';
 import { QUIET_STEWARD_FACE, stewardDeskFaces } from '../../lib/steward-face';
 import { assembleTeamRoster } from '../../lib/steward-id';
@@ -74,7 +75,9 @@ export function TeamPanel({
                 <div className="team-card-copy">
                   <b>{card.display_name}</b>
                   <i>{card.domain}</i>
-                  <span>pulse {card.heartbeat_at ? age(card.heartbeat_at, now) : 'no heartbeat'}</span>
+                  <span>{isRetiredStatus(card.status)
+                    ? 'retired'
+                    : `pulse ${card.heartbeat_at ? age(card.heartbeat_at, now) : 'no heartbeat'}`}</span>
                   {expanded ? <span className="team-card-charter">{detail}</span> : null}
                 </div>
               </>

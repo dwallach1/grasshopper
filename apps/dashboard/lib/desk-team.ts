@@ -243,6 +243,16 @@ export function teamCards(team: DeskTeamPayload): DeskTeamCard[] {
     });
 }
 
+/** A retired steward keeps its roster row and history but no longer writes heartbeats or marks. */
+export function isRetiredStatus(status: string | null | undefined): boolean {
+  return (status ?? '').trim().toLowerCase() === 'retired';
+}
+
+/** Slugs of retired stewards on the roster. */
+export function retiredStewardSlugs(desk: Pick<DeskPayload, 'team'>): Set<string> {
+  return new Set(teamCards(deskTeam(desk)).filter((card) => isRetiredStatus(card.status)).map((card) => card.slug));
+}
+
 export function isHeartbeatFresh(heartbeatAt: string | null | undefined, nowMs: number): boolean {
   if (!heartbeatAt) return false;
   const at = Date.parse(heartbeatAt);
