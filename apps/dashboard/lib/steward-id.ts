@@ -17,6 +17,7 @@ export type StewardIdCard = {
 
 export type TeamRosterCard = StewardIdCard & {
   heartbeat_at: string | null;
+  status: string;
   charter: string;
 };
 
@@ -89,6 +90,7 @@ export function assembleTeamRoster(desk: Pick<DeskPayload, 'team'>): TeamRosterC
   return cards.map((card) => ({
     ...card,
     heartbeat_at: rows.get(card.slug)?.heartbeat_at ?? null,
+    status: rows.get(card.slug)?.status ?? 'active',
     charter: rows.get(card.slug)?.charter ?? '',
   }));
 }
