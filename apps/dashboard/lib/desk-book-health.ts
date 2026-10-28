@@ -5,6 +5,7 @@
  */
 import { OPEN_POSITION } from './book-open-strip';
 import { isMarkStale } from './desk-freshness';
+import { retiredStewardSlugs } from './desk-team';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk } from './meme-book';
 import { formatAmount } from './money-units';
@@ -219,6 +220,16 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
       at: lot.mark_at,
       detail: 'open lot has no invalidation',
     });
+  }
+
+  // A retired steward no longer marks its book: a stale mark there is expected, not an alarm.
+  // resolved_still_open still shows, since a resolved ticket needs a human either way.
+  const retired = retiredStewardSlugs(desk);
+  if (retired.size) {
+    for (let i = alerts.length - 1; i >= 0; i -= 1) {
+      const row = alerts[i];
+      if ((row.kind === 'stale_open' || row.kind === 'stale_catalog') && retired.has(row.steward)) alerts.splice(i, 1);
+    }
   }
 
   const stale_opens = alerts.filter((row) => row.kind === 'stale_open').length;

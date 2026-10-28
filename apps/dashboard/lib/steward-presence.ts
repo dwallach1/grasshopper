@@ -14,7 +14,7 @@ import { assembleBookHoldings, isClosedPositionStatus } from './book-holdings';
 import { stewardThinking } from './desk-avatar';
 import { assembleDeskBookHealth } from './desk-book-health';
 import { isMarkFresh } from './desk-freshness';
-import { HEARTBEAT_FRESH_MS, deskTeam, teamCards } from './desk-team';
+import { HEARTBEAT_FRESH_MS, deskTeam, isRetiredStatus, teamCards } from './desk-team';
 import type { DeskPayload } from './ledger-types';
 import { memeDesk } from './meme-book';
 import { predictionDesk } from './prediction-book';
@@ -138,6 +138,11 @@ export function stewardPresences(desk: DeskPayload, nowMs: number): Map<string, 
   const slugs = new Set<string>([...statusBySlug.keys(), ...BOOK_SLUGS]);
   const faces = new Map<string, StewardPresenceState>();
   for (const slug of slugs) {
+    if (isRetiredStatus(statusBySlug.get(slug))) {
+      // Retired: no heartbeat is expected, so it never reads as blocked.
+      faces.set(slug, { presence: 'idle', settle: 0 });
+      continue;
+    }
     const book = isBookSlug(slug) ? books.get(slug) ?? QUIET_BOOK : QUIET_BOOK;
     faces.set(slug, resolvePresence(
       stewardThinking(statusBySlug.get(slug) ?? ''),
