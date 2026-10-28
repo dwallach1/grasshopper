@@ -6,7 +6,7 @@
 import { agenticSnapshots } from './book-performance';
 import { assembleDeskBookRollup } from './desk-book-rollup';
 import { isMarkFresh } from './desk-freshness';
-import { deskTeam, teamCards, type AvatarShape, type DeskTeamCard } from './desk-team';
+import { deskTeam, isRetiredStatus, teamCards, type AvatarShape, type DeskTeamCard } from './desk-team';
 import type { DeskVenue } from './desk-venue';
 import { venueShort } from './desk-venue';
 import type { DeskPayload } from './ledger-types';
@@ -51,6 +51,8 @@ export type LeaderboardRow = {
   open_lots: number;
   risk_note: string;
   ranked: boolean;
+  /** `desk_agents.status` is retired. Kept below the active seats with a final %. */
+  retired: boolean;
   rank_note: string;
 };
 
@@ -115,6 +117,16 @@ export function riskNote(row: Pick<LeaderboardRow, 'max_drawdown_pct' | 'days_li
   return 'open risk not in ledger';
 }
 
+/**
+ * Signed % on the Board row. Active seats show it when ranked. A retired seat
+ * shows its final % (sign only, no place) when the ledger still has a start.
+ */
+export function standingShowsReturn(
+  row: Pick<LeaderboardRow, 'ranked' | 'retired' | 'return_pct'>,
+): boolean {
+  return row.ranked || (row.retired && row.return_pct !== null);
+}
+
 /** First ranked book whose marks are still inside the live window. Stale % is not a lead. */
 export function freshLead(
   rows: readonly LeaderboardStanding[],
@@ -134,10 +146,12 @@ export function assembleLeaderboard(desk: DeskPayload): DeskLeaderboard {
   const deskRow = grasshopperRow(desk, bySlug.get('grasshopper'));
   if (deskRow) competitors.push(deskRow);
 
-  const ranked = competitors.filter((row) => row.ranked);
-  const waiting = competitors.filter((row) => !row.ranked);
+  const active = competitors.filter((row) => !row.retired);
+  const retired = competitors.filter((row) => row.retired);
+  const ranked = active.filter((row) => row.ranked);
+  const waiting = active.filter((row) => !row.ranked);
   ranked.sort(compareRanked);
-  const ordered = [...ranked, ...waiting];
+  const ordered = [...ranked, ...waiting, ...retired];
   const rows: LeaderboardStanding[] = ordered.map((row, index) => ({
     ...row,
     place: row.ranked ? index + 1 : null,
@@ -175,7 +189,7 @@ function stocksRow(desk: DeskPayload, card: DeskTeamCard | undefined): Leaderboa
   const open_lots = assembleDeskBookRollup(desk).lots_by_venue.equity;
   const ranked = return_pct !== null;
   const identity = stewardIdentity(card, 'quantanamo', 'QUANTANAMO', 'Equities trader');
-  return finishRow({
+  return withSeat(card, finishRow({
     ...identity,
     id: 'quantanamo',
     venue: 'equity',
@@ -191,7 +205,7 @@ function stocksRow(desk: DeskPayload, card: DeskTeamCard | undefined): Leaderboa
     open_lots,
     ranked,
     rank_note: ranked ? `vs book start ${start}` : NOT_RANKED,
-  });
+  }));
 }
 
 function predictionsRow(desk: DeskPayload, card: DeskTeamCard | undefined): LeaderboardRow {
@@ -209,7 +223,7 @@ function predictionsRow(desk: DeskPayload, card: DeskTeamCard | undefined): Lead
   const open_lots = assembleDeskBookRollup(desk).lots_by_venue.prediction;
   const ranked = return_pct !== null;
   const identity = stewardIdentity(card, 'oddsborne', 'ODDSBORNE', 'Prediction markets trader');
-  return finishRow({
+  return withSeat(card, finishRow({
     ...identity,
     id: 'oddsborne',
     venue: 'prediction',
@@ -225,7 +239,7 @@ function predictionsRow(desk: DeskPayload, card: DeskTeamCard | undefined): Lead
     open_lots,
     ranked,
     rank_note: ranked ? `vs ${startMark?.source ?? 'pnl'} start` : NOT_RANKED,
-  });
+  }));
 }
 
 function coinsRow(desk: DeskPayload, card: DeskTeamCard | undefined): LeaderboardRow {
@@ -243,7 +257,7 @@ function coinsRow(desk: DeskPayload, card: DeskTeamCard | undefined): Leaderboar
   const open_lots = assembleDeskBookRollup(desk).lots_by_venue.meme;
   const ranked = return_pct !== null;
   const identity = stewardIdentity(card, 'bandit', 'BANDIT', 'Meme-coin trader');
-  return finishRow({
+  return withSeat(card, finishRow({
     ...identity,
     id: 'bandit',
     venue: 'meme',
@@ -259,7 +273,7 @@ function coinsRow(desk: DeskPayload, card: DeskTeamCard | undefined): Leaderboar
     open_lots,
     ranked,
     rank_note: ranked ? `vs ${startMark?.source ?? 'bankroll'} start` : NOT_RANKED,
-  });
+  }));
 }
 
 /**
@@ -274,7 +288,7 @@ export function hasDeskLevelBook(_desk: DeskPayload): boolean {
 function grasshopperRow(desk: DeskPayload, card: DeskTeamCard | undefined): LeaderboardRow | null {
   if (!hasDeskLevelBook(desk)) return null;
   const identity = stewardIdentity(card, 'grasshopper', 'GRASSHOPPER', 'Ledger steward');
-  return finishRow({
+  return withSeat(card, finishRow({
     ...identity,
     id: 'grasshopper',
     venue: null,
@@ -290,11 +304,17 @@ function grasshopperRow(desk: DeskPayload, card: DeskTeamCard | undefined): Lead
     open_lots: 0,
     ranked: false,
     rank_note: NOT_RANKED,
-  });
+  }));
 }
 
-function finishRow(row: Omit<LeaderboardRow, 'risk_note'>): LeaderboardRow {
-  return { ...row, risk_note: riskNote(row) };
+function withSeat(card: DeskTeamCard | undefined, row: LeaderboardRow): LeaderboardRow {
+  if (!isRetiredStatus(card?.status)) return row;
+  return { ...row, retired: true, ranked: false };
+}
+
+function finishRow(row: Omit<LeaderboardRow, 'risk_note' | 'retired'>): LeaderboardRow {
+  const seated = { ...row, retired: false };
+  return { ...seated, risk_note: riskNote(seated) };
 }
 
 function stewardIdentity(

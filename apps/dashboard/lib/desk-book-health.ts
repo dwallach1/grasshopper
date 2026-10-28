@@ -222,20 +222,20 @@ export function assembleDeskBookHealth(desk: DeskPayload, nowMs: number): DeskBo
     });
   }
 
-  // A retired steward no longer marks its book: a stale mark there is expected, not an alarm.
-  // resolved_still_open still shows, since a resolved ticket needs a human either way.
+  // A retired steward no longer trades. Marks, breaches, and a resolved ticket
+  // on that book stay in the ledger and stay off the alarm list.
   const retired = retiredStewardSlugs(desk);
   if (retired.size) {
     for (let i = alerts.length - 1; i >= 0; i -= 1) {
       const row = alerts[i];
-      if ((row.kind === 'stale_open' || row.kind === 'stale_catalog') && retired.has(row.steward)) alerts.splice(i, 1);
+      if (row && retired.has(row.steward)) alerts.splice(i, 1);
     }
   }
 
   const stale_opens = alerts.filter((row) => row.kind === 'stale_open').length;
   const resolved_still_open = alerts.filter((row) => row.kind === 'resolved_still_open').length;
   const stale_catalog = alerts.filter((row) => row.kind === 'stale_catalog').length;
-  const counts = watchdogHealthSummary(watchdog);
+  const counts = watchdogHealthSummary(watchdog, retired);
   return {
     marks_lagging: stale_opens > 0 || resolved_still_open > 0 || stale_catalog > 0,
     stale_opens,

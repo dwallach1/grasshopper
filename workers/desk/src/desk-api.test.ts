@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 
+import { fallbackTeam } from '../../../apps/dashboard/lib/desk-team';
 import { emptyLedgerWatchdog } from '../../../apps/dashboard/lib/ledger-watchdog';
 
 import { handleDeskApi, isWriteMethod, redirectFor } from './desk-api';
@@ -267,6 +268,62 @@ describe('public desk Worker API', () => {
     expect(body.learning.forecast).toContain("ODDSBORNE's odds vs the market's: better than the market (75 settled)");
     expect(body.learning.forecast).toContain('Worse than the market on bets it passed up (69)');
     expect(body.learning.forecast).toContain('too few to trust');
+  });
+
+  test('retired stewards are 0 on /api/health and the forecast names an active seat', async () => {
+    const team = fallbackTeam();
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        team: {
+          ...team,
+          agents: team.agents.map((row) => (
+            row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+          )),
+        },
+        scorecard: {
+          stewards: [],
+          weekly: [],
+          trend: [],
+          theses: [],
+          gates: [],
+          forecast: [
+            {
+              steward: 'oddsborne', decision: 'all', thesis_id: null, all_theses: true,
+              n: 75, brier: 0.209, market_brier: 0.215, brier_gap: -0.006, skill: 0.03,
+              thin: false, excluded_no_book: 0,
+            },
+            {
+              steward: 'quantanamo', decision: 'all', thesis_id: null, all_theses: true,
+              n: 8, brier: 0.18, market_brier: 0.22, brier_gap: -0.04, skill: 0.18,
+              thin: false, excluded_no_book: 0,
+            },
+          ],
+        },
+        watchdog: {
+          ...emptyLedgerWatchdog(),
+          available: true,
+          learning_gaps: { quantanamo: 1, oddsborne: 2, bandit: 4 },
+          unscoreable_decisions: { quantanamo: 0, oddsborne: 1, bandit: 3 },
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      ok: boolean;
+      learning: { forecast?: string };
+      watchdog: {
+        learning_gaps: { quantanamo: number; oddsborne: number; bandit: number };
+        unscoreable_decisions: { quantanamo: number; oddsborne: number; bandit: number };
+      };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.watchdog.learning_gaps).toEqual({ quantanamo: 1, oddsborne: 0, bandit: 0 });
+    expect(body.watchdog.unscoreable_decisions).toEqual({ quantanamo: 0, oddsborne: 0, bandit: 0 });
+    expect(body.learning.forecast).toContain("QUANTANAMO's odds vs the market's");
+    expect(body.learning.forecast).not.toContain('ODDSBORNE');
   });
 
   test('publish ingest is gone', async () => {

@@ -11,6 +11,7 @@ import {
   maxDrawdownPct,
   NOT_RANKED,
   percentReturn,
+  standingShowsReturn,
 } from './desk-leaderboard';
 import { fallbackTeam } from './desk-team';
 import type { BookNameLine, DeskPayload } from './ledger-types';
@@ -544,6 +545,48 @@ describe('desk leaderboard', () => {
     expect(predictionEquitySeries(desk.prediction_markets!).some((point) => point.as_of.startsWith('2026-09-06'))).toBe(false);
     expect(predictionEquitySeries(desk.prediction_markets!)).toHaveLength(28);
     expect(board.rows.find((row) => row.id === 'quantanamo')?.return_pct).toBeCloseTo(20.401264);
+  });
+
+  test('retired seats sit below active ones with a final signed return and no place', () => {
+    const team = fallbackTeam();
+    const board = assembleLeaderboard(liveDesk({
+      team: {
+        ...team,
+        agents: team.agents.map((row) => (
+          row.slug === 'oddsborne' || row.slug === 'bandit' ? { ...row, status: 'retired' } : row
+        )),
+      },
+    }));
+    expect(board.rows.map((row) => row.id)).toEqual(['quantanamo', 'oddsborne', 'bandit']);
+    expect(board.rows.map((row) => row.place)).toEqual([1, null, null]);
+    expect(board.rows.map((row) => row.retired)).toEqual([false, true, true]);
+    expect(board.rows[0]?.ranked).toBe(true);
+    const coins = board.rows.find((row) => row.id === 'bandit');
+    const predictions = board.rows.find((row) => row.id === 'oddsborne');
+    expect(coins?.ranked).toBe(false);
+    expect(predictions?.ranked).toBe(false);
+    expect(coins?.return_pct).toBeCloseTo(1.779892135559625);
+    expect(predictions?.return_pct).toBeCloseTo(((424.07 - 426) / 426) * 100);
+    expect(standingShowsReturn(board.rows[0]!)).toBe(true);
+    expect(standingShowsReturn(coins!)).toBe(true);
+    expect(standingShowsReturn(predictions!)).toBe(true);
+    expect(freshLead(board.rows, Date.parse('2026-09-06T15:58:03.496Z'))?.id).not.toBe('bandit');
+
+    const revived = assembleLeaderboard(liveDesk({
+      team: {
+        ...team,
+        agents: team.agents.map((row) => {
+          if (row.slug === 'oddsborne') return { ...row, status: 'retired' };
+          if (row.slug === 'bandit') return { ...row, status: 'active' };
+          return row;
+        }),
+      },
+    }));
+    expect(revived.rows.map((row) => row.id)).toEqual(['quantanamo', 'bandit', 'oddsborne']);
+    expect(revived.rows.find((row) => row.id === 'bandit')?.retired).toBe(false);
+    expect(revived.rows.find((row) => row.id === 'bandit')?.ranked).toBe(true);
+    expect(revived.rows.find((row) => row.id === 'oddsborne')?.retired).toBe(true);
+    expect(revived.rows.find((row) => row.id === 'oddsborne')?.place).toBeNull();
   });
 
   test('freshLead skips a stale first-place book', () => {

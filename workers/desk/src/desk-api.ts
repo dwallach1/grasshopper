@@ -7,6 +7,7 @@ import {
 } from '@quantanamo/contracts/desk-snapshot';
 
 import { assembleDeskBookHealth, deskHealthSummary } from '../../../apps/dashboard/lib/desk-book-health';
+import { retiredStewardSlugs } from '../../../apps/dashboard/lib/desk-team';
 import { watchdogHealthSummary } from '../../../apps/dashboard/lib/ledger-watchdog';
 import {
   assembleLearningPulse,
@@ -137,9 +138,10 @@ async function handleHealth(
       return publicError(503);
     }
     const payload = served.desk as DeskPayload;
+    const retired = retiredStewardSlugs(payload);
     const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
     const learning = learningPulseSummary(assembleLearningPulse(payload));
-    const watchdog = watchdogHealthSummary(payload.watchdog);
+    const watchdog = watchdogHealthSummary(payload.watchdog, retired);
     return jsonResponse(200, {
       ok: true,
       generated_at: served.generated_at,

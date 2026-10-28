@@ -5996,6 +5996,7 @@ html.is-public-desk body {
   font-size: clamp(28px, 8vw, 36px) !important;
   font-weight: 400 !important;
   letter-spacing: -0.03em !important;
+  color: var(--ink) !important;
 }
 
 .term.is-line .line-key {
@@ -6045,6 +6046,18 @@ html.is-public-desk body {
 
 .term.is-line .line-row.is-lead {
   border-color: rgba(184, 137, 45, 0.28);
+}
+
+.term.is-line .line-row.is-retired {
+  box-shadow: none;
+  background: transparent;
+  border-color: transparent;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.term.is-line .line-row.is-retired .line-who b {
+  color: var(--ink-3);
 }
 
 .term.is-line .line-place {

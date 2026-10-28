@@ -619,9 +619,16 @@ export function forecastVsMarketLine(
 
 const FORECAST_ORDER = ['oddsborne', 'quantanamo', 'bandit'];
 
-/** Steward rollups, ODDSBORNE first. Thesis rows stay on the scorecard and out of this sentence. */
-export function forecastVsMarketLines(rows: readonly ForecastSkillRow[]): string | null {
-  const present = [...new Set(rows.map((row) => row.steward))];
+/**
+ * Steward rollups, ODDSBORNE first among seats that are still active.
+ * `skip` is `desk_agents.status = retired`. Thesis rows stay on the scorecard
+ * and out of this sentence. Null when every remaining seat has nothing settled.
+ */
+export function forecastVsMarketLines(
+  rows: readonly ForecastSkillRow[],
+  skip?: ReadonlySet<string>,
+): string | null {
+  const present = [...new Set(rows.map((row) => row.steward))].filter((slug) => !skip?.has(slug));
   const ordered = [
     ...FORECAST_ORDER.filter((slug) => present.includes(slug)),
     ...present.filter((slug) => !FORECAST_ORDER.includes(slug)).sort(),
