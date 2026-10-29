@@ -14,7 +14,7 @@ immutable
 security invoker
 set search_path = ''
 as $$
-  select coalesce(
+  select
     (
       nullif(pg_catalog.btrim(coalesce(p_meta->>'withdrawn', '')), '') is not null
       and pg_catalog.lower(pg_catalog.btrim(p_meta->>'withdrawn')) not in ('false', 'f', '0', 'no')
@@ -29,11 +29,11 @@ as $$
     )
     or pg_catalog.lower(pg_catalog.btrim(coalesce(p_meta->>'status', ''))) in ('withdrawn', 'retired', 'superseded')
     or (
-      coalesce(pg_catalog.jsonb_typeof(p_meta->'rule_status') = 'string', false)
-      and pg_catalog.lower(pg_catalog.btrim(coalesce(p_meta->>'rule_status', ''))) in ('withdrawn', 'retired', 'superseded')
+      pg_catalog.jsonb_typeof(p_meta->'rule_status') = 'string'
+      and pg_catalog.lower(pg_catalog.btrim(p_meta->>'rule_status')) in ('withdrawn', 'retired', 'superseded')
     )
     or (
-      coalesce(pg_catalog.jsonb_typeof(p_meta->'rule_status') = 'object', false)
+      pg_catalog.jsonb_typeof(p_meta->'rule_status') = 'object'
       and exists (
         select 1
         from pg_catalog.jsonb_each_text(p_meta->'rule_status') status(slug, value)
@@ -41,9 +41,7 @@ as $$
       )
     )
     or nullif(pg_catalog.btrim(coalesce(p_meta->>'superseded_by', '')), '') is not null
-    or nullif(pg_catalog.btrim(coalesce(p_meta->>'withdrawn_by', '')), '') is not null,
-    false
-  );
+    or nullif(pg_catalog.btrim(coalesce(p_meta->>'withdrawn_by', '')), '') is not null;
 $$;
 
 comment on function public.playbook_rule_is_withdrawn(jsonb) is
@@ -56,14 +54,12 @@ immutable
 security invoker
 set search_path = ''
 as $$
-  select coalesce(
+  select
     p_meta->>'supersedes' = p_id::text
     or (
-      coalesce(pg_catalog.jsonb_typeof(p_meta->'supersedes') = 'array', false)
+      pg_catalog.jsonb_typeof(p_meta->'supersedes') = 'array'
       and (p_meta->'supersedes') ? p_id::text
-    ),
-    false
-  );
+    );
 $$;
 
 comment on function public.playbook_rule_supersedes(jsonb, uuid) is
