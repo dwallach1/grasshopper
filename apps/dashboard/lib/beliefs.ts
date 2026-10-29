@@ -1,8 +1,9 @@
 /**
  * Lean belief_updates on the desk. Playbook rules are meta.kind = playbook_rule.
- * A slug stays in force on the newest belief that lists it for that thesis and
- * domain. A later kill or negative_result lesson does not retire older process
- * slugs. Never invent a rule or a close lesson.
+ * Rules accumulate. A later row hides an older one only when it names that row
+ * in meta.supersedes, or the older row marks itself withdrawn, retired, or
+ * superseded. A repeated slug is another lesson, not a replacement.
+ * Never invent a rule or a close lesson.
  */
 import * as z from 'zod';
 
@@ -35,6 +36,10 @@ export type BeliefUpdateRow = {
   rules: string[];
   steward: string | null;
   research_lesson_id: string | null;
+  /** Older playbook row ids this row replaces. Empty when the lesson is additive. */
+  supersedes?: readonly string[];
+  /** The row marks itself withdrawn, retired, or superseded. */
+  withdrawn?: boolean;
 };
 
 export type PlaybookRule = {
@@ -117,34 +122,68 @@ export function mapBeliefs(rows: JsonObjectRow[]): BeliefUpdateRow[] {
       rules: stringList(meta.rules),
       steward: textField(meta.steward),
       research_lesson_id: lessonId(meta.research_lesson_id),
+      supersedes: supersedeIds(meta.supersedes),
+      withdrawn: playbookMetaWithdrawn(meta),
     };
   });
 }
 
 /**
- * Playbook beliefs that still own a slug. Each slug is kept on the newest
- * playbook_rule for that thesis + domain that lists it. A newer row wins only
- * the slugs it repeats.
+ * Playbook rows still in force, newest first. A repeated slug stays.
+ * Drop a row that marks itself withdrawn, or whose id a playbook row names
+ * in meta.supersedes.
  */
 export function assemblePlaybookRules(beliefs: readonly BeliefUpdateRow[]): PlaybookRule[] {
-  const newestBySlug = new Map<string, BeliefUpdateRow>();
-  for (const row of beliefs) {
-    if (!isPlaybookRule(row)) continue;
-    for (const slug of row.rules) {
-      const key = slugKey(row, slug);
-      const current = newestBySlug.get(key);
-      if (!current || newerBelief(row, current)) newestBySlug.set(key, row);
+  const playbook = beliefs.filter(isPlaybookRule);
+  const replaced = new Set<string>();
+  for (const row of playbook) {
+    for (const id of row.supersedes ?? []) {
+      if (id && id !== row.id) replaced.add(id);
     }
   }
-
-  const byId = new Map<string, BeliefUpdateRow>();
-  for (const row of newestBySlug.values()) {
-    if (!byId.has(row.id)) byId.set(row.id, row);
-  }
-
-  return [...byId.values()]
+  return playbook
+    .filter((row) => !row.withdrawn && !replaced.has(row.id))
     .sort(compareBeliefs)
-    .map((row) => toPlaybookRule(row, ownedSlugs(row, newestBySlug)));
+    .map((row) => toPlaybookRule(row, uniqueSlugs(row.rules)));
+}
+
+export type RulesInForceGroup = {
+  key: string;
+  /** Desk book name (Stocks, Predictions, Meme coins). Plain words, not a slug. */
+  label: string;
+  rules: PlaybookRule[];
+};
+
+const NO_BOOK_KEY = 'no-book';
+
+/**
+ * In-force playbook rows for one thesis, grouped by the book they belong to.
+ * Newest first inside each group. A row with no book is last.
+ */
+export function rulesInForceByDomain(input: {
+  thesisId: string;
+  beliefs: readonly BeliefUpdateRow[];
+  domains?: readonly { id: string; name: string; sort_order?: number | null }[];
+}): RulesInForceGroup[] {
+  const rules = assemblePlaybookRules(input.beliefs)
+    .filter((row) => row.thesis_id === input.thesisId);
+  const domains = input.domains ?? [];
+  const byId = new Map(domains.map((row) => [row.id, row]));
+  const groups = new Map<string, RulesInForceGroup>();
+  for (const rule of rules) {
+    const domain = rule.domain_id ? byId.get(rule.domain_id) : undefined;
+    const key = domain?.id ?? (rule.domain_id ? `book:${rule.domain_id}` : NO_BOOK_KEY);
+    const label = domain?.name.trim() || (rule.domain_id ? 'Another book' : 'Not on a book');
+    const group = groups.get(key) ?? { key, label, rules: [] };
+    group.rules.push(rule);
+    groups.set(key, group);
+  }
+  const order = new Map(domains.map((row, index) => [row.id, row.sort_order ?? index]));
+  return [...groups.values()].sort((a, b) => {
+    const left = a.key === NO_BOOK_KEY ? 10_000 : (order.get(a.key) ?? 9_000);
+    const right = b.key === NO_BOOK_KEY ? 10_000 : (order.get(b.key) ?? 9_000);
+    return left - right || a.label.localeCompare(b.label);
+  });
 }
 
 export function beliefTrailFor(
@@ -269,15 +308,46 @@ export function beliefsFromDesk(desk: Pick<DeskPayload, 'beliefs'>): BeliefUpdat
   return desk.beliefs ?? [];
 }
 
+/** View columns the phone and the operator desk both read. Newest first, cap above today's book. */
+export const ACTIVE_PLAYBOOK_RULES_QUERY =
+  'active_playbook_rules?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,rules,steward,research_lesson_id&order=observed_at.desc,id.desc&limit=1000';
+
+/** Shape a view row like belief_updates so mapBeliefs keeps one parser. */
+export function playbookViewAsBeliefRows(rows: readonly JsonObjectRow[]): JsonObjectRow[] {
+  return rows.map((row) => ({
+    id: row.id,
+    thesis_id: row.thesis_id,
+    domain_id: row.domain_id ?? null,
+    agent_id: row.agent_id ?? null,
+    prior_confidence: row.prior_confidence ?? null,
+    new_confidence: row.new_confidence ?? null,
+    rationale: row.rationale ?? '',
+    observed_at: row.observed_at,
+    meta: {
+      kind: PLAYBOOK_RULE_KIND,
+      rules: row.rules ?? [],
+      steward: row.steward ?? null,
+      research_lesson_id: row.research_lesson_id ?? null,
+    },
+  }));
+}
+
+/** In-force playbook rows plus other beliefs. Newest first. */
+export function mergeBeliefSources(
+  other: readonly JsonObjectRow[],
+  playbook: readonly JsonObjectRow[],
+): JsonObjectRow[] {
+  return [...other, ...playbookViewAsBeliefRows(playbook)].sort((a, b) => {
+    const at = String(b.observed_at ?? '').localeCompare(String(a.observed_at ?? ''));
+    if (at !== 0) return at;
+    return String(a.id ?? '').localeCompare(String(b.id ?? ''));
+  });
+}
+
 function clipBelief(row: BeliefUpdateRow): ClipBeliefNote | null {
   const summary = truncateRationale(row.rationale);
   if (!summary) return null;
   return { key: `belief:${row.id}`, summary };
-}
-
-function newerBelief(next: BeliefUpdateRow, current: BeliefUpdateRow): boolean {
-  return next.observed_at.localeCompare(current.observed_at) > 0
-    || (next.observed_at === current.observed_at && next.id.localeCompare(current.id) > 0);
 }
 
 function compareBeliefs(a: BeliefUpdateRow, b: BeliefUpdateRow): number {
@@ -286,23 +356,54 @@ function compareBeliefs(a: BeliefUpdateRow, b: BeliefUpdateRow): number {
     || a.id.localeCompare(b.id);
 }
 
-function slugKey(row: Pick<BeliefUpdateRow, 'thesis_id' | 'domain_id'>, slug: string): string {
-  return `${row.thesis_id}\0${row.domain_id ?? ''}\0${slug}`;
-}
-
-function ownedSlugs(
-  row: BeliefUpdateRow,
-  newestBySlug: ReadonlyMap<string, BeliefUpdateRow>,
-): string[] {
+function uniqueSlugs(rules: readonly string[]): string[] {
   const slugs: string[] = [];
   const seen = new Set<string>();
-  for (const slug of row.rules) {
+  for (const slug of rules) {
     if (!slug || seen.has(slug)) continue;
-    if (newestBySlug.get(slugKey(row, slug))?.id !== row.id) continue;
     seen.add(slug);
     slugs.push(slug);
   }
   return slugs;
+}
+
+const FALSE_FLAGS = new Set(['false', 'f', '0', 'no']);
+const RETIRED_WORDS = new Set(['withdrawn', 'retired', 'superseded']);
+
+/** Mirrors public.playbook_rule_is_withdrawn. A status like unproven_evidence_lost stays. */
+export function playbookMetaWithdrawn(meta: Record<string, unknown>): boolean {
+  if (affirmativeFlag(meta.withdrawn) || affirmativeFlag(meta.retired) || affirmativeFlag(meta.superseded)) {
+    return true;
+  }
+  if (textField(meta.superseded_by) || textField(meta.withdrawn_by)) return true;
+  const status = flagText(meta.status);
+  if (status && RETIRED_WORDS.has(status)) return true;
+  const ruleStatus = meta.rule_status;
+  if (typeof ruleStatus === 'string' && RETIRED_WORDS.has(ruleStatus.trim().toLowerCase())) return true;
+  if (ruleStatus && typeof ruleStatus === 'object' && !Array.isArray(ruleStatus)) {
+    for (const value of Object.values(ruleStatus as Record<string, unknown>)) {
+      const text = flagText(value);
+      if (text && RETIRED_WORDS.has(text)) return true;
+    }
+  }
+  return false;
+}
+
+function affirmativeFlag(value: unknown): boolean {
+  const text = flagText(value);
+  if (!text || FALSE_FLAGS.has(text)) return false;
+  return true;
+}
+
+function flagText(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed || null;
+}
+
+function supersedeIds(value: unknown): string[] {
+  if (typeof value === 'string') return uniqueSlugs([value]);
+  return uniqueSlugs(stringList(value));
 }
 
 function toPlaybookRule(row: BeliefUpdateRow, rules: string[]): PlaybookRule {

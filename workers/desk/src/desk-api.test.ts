@@ -427,6 +427,8 @@ describe('public desk reader credentials', () => {
     expect(fn).toContain("req.method !== 'GET'");
     expect(fn).toContain("status: 405");
     expect(fn).toContain("'belief_updates'");
+    expect(fn).toContain("'active_playbook_rules'");
+    expect(fn).toContain('loadBeliefRows');
     expect(fn).toContain("'beliefs'");
     expect(fn).toContain("'lessons'");
     expect(fn).toContain('position_episodes?select=');

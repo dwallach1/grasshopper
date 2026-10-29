@@ -5332,10 +5332,32 @@ a:focus-visible {
   list-style: none;
 }
 
+.book-rules-domain {
+  margin: 10px 0 2px;
+  color: var(--ink-3, var(--text-3));
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .book-rules li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--ink-2, var(--text-2));
   font-size: 12px;
   line-height: 1.35;
+}
+
+.book-rules li b {
+  color: var(--ink, var(--text));
+  font-weight: 600;
+}
+
+.book-rules li p {
+  margin: 0;
+  color: var(--ink-2, var(--text-2));
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .book-clip {

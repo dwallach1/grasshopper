@@ -9,6 +9,7 @@ import {
   isPlaybookRule,
   mapBeliefs,
   PLAYBOOK_RULE_KIND,
+  rulesInForceByDomain,
   rulesInForceFor,
   thesisForHolding,
   truncateRationale,
@@ -78,7 +79,7 @@ describe('belief mapping', () => {
     expect(row?.rationale).toContain('FEIM leftover');
   });
 
-  test('newest belief keeps a repeated slug; a distinct older slug stays', () => {
+  test('a repeated slug stays; only an explicit supersede or withdrawal drops a row', () => {
     const olderDistinct = belief({
       id: '8e941fc9-62e1-4ddf-80cc-1dc153dfe046',
       observed_at: '2026-09-10T20:30:06.932Z',
@@ -116,21 +117,61 @@ describe('belief mapping', () => {
     const rules = assemblePlaybookRules(mapBeliefs([olderDistinct, sameSlugOlder, belief(), weather]));
     const gap = rules.filter((row) => row.thesis_id === 'earnings_gap_structure');
     expect(gap.map((row) => row.id)).toEqual([
+      sameSlugOlder.id,
       '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
       olderDistinct.id,
     ]);
-    expect(gap[0]?.rules).toEqual([
+    expect(gap[1]?.rules).toEqual([
       'no_chase_already_printed_leftovers',
       'ignored_mcap_floor_50_100m',
       'never_pltr',
       'extra_rule',
     ]);
-    expect(gap[0]?.new_confidence).toBe(84);
-    expect(gap[0]?.research_lesson_id).toBe('36');
-    expect(gap[1]?.rules).toEqual(['soft_rth_confirmation_sector_conditional']);
-    expect(rules.find((row) => row.id === sameSlugOlder.id)).toBeUndefined();
+    expect(gap[1]?.new_confidence).toBe(84);
+    expect(gap[1]?.research_lesson_id).toBe('36');
+    expect(gap[2]?.rules).toEqual([
+      'soft_rth_confirmation_sector_conditional',
+      'no_chase_already_printed_leftovers',
+    ]);
+    expect(gap[0]?.rules).toEqual(['no_chase_already_printed_leftovers']);
     expect(rules.find((row) => row.thesis_id === 'weather_same_day_high')?.rules).toEqual([
       'mid_ge_0.70_half_or_trail',
+    ]);
+
+    const superseded = mapBeliefs([
+      belief({
+        id: 'newer-qd',
+        observed_at: '2026-10-27T23:34:07.637Z',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['quality_drawdown_into_print'],
+          supersedes: olderDistinct.id,
+          rule_status: { quality_drawdown_into_print: 'unproven_evidence_lost' },
+        },
+      }),
+      olderDistinct,
+      belief({
+        id: 'withdrawn-cohort',
+        observed_at: '2026-10-28T00:00:00.000Z',
+        meta: {
+          kind: PLAYBOOK_RULE_KIND,
+          rules: ['ai_hardware_sells_the_beat'],
+          withdrawn: 'AI hardware cohort',
+        },
+      }),
+    ]);
+    const kept = assemblePlaybookRules(superseded);
+    expect(kept.map((row) => row.id)).toEqual(['newer-qd']);
+    expect(kept[0]?.rules).toEqual(['quality_drawdown_into_print']);
+    expect(rulesInForceByDomain({
+      thesisId: 'earnings_gap_structure',
+      beliefs: superseded,
+      domains: [{ id: '271d5741-8058-4273-a28f-aa0961c0152d', name: 'Stocks', sort_order: 10 }],
+    })).toEqual([
+      expect.objectContaining({
+        label: 'Stocks',
+        rules: [expect.objectContaining({ id: 'newer-qd' })],
+      }),
     ]);
   });
 
@@ -250,13 +291,14 @@ describe('belief mapping', () => {
     expect(assembled.map((row) => row.id)).toEqual([
       'b-80',
       'b-79',
+      'b-78',
       'b-quality',
       'b-recycle',
       'b-residual',
       'b-missed',
       '645c3ea2-eb0d-4b4b-b329-7ac69b302ff1',
     ]);
-    expect(assembled.find((row) => row.id === 'b-78')).toBeUndefined();
+    expect(assembled.find((row) => row.id === 'b-78')?.rules).toEqual(['negative_result']);
     expect(rulesInForceFor({
       thesisId: 'earnings_gap_structure',
       domainId: null,

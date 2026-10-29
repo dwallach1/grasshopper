@@ -543,8 +543,9 @@ describe('desk IA smoke', () => {
     expect(openStrip).toContain('referenceLine');
     expect(openStrip).toContain('compact');
     expect(openStrip).toContain('pnlClass(pnl.sign)');
-    expect(openStrip).toContain('rules_in_force');
+    expect(openStrip).toContain('rulesInForceByDomain');
     expect(openStrip).toContain('Rules in force');
+    expect(openStrip).toContain('book-rules-domain');
     expect(openStrip).toContain('clip_note');
     expect(openStrip).toContain('clip_note.belief');
     expect(openStrip).toContain('No lesson written on close.');

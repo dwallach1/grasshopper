@@ -240,6 +240,7 @@ describe('assembleBeliefsInForce', () => {
     expect(gap.map((row) => row.id)).toEqual([
       'b-80',
       'b-79',
+      'b-78',
       'b-quality',
       'b-recycle',
       'b-gap',
@@ -248,6 +249,7 @@ describe('assembleBeliefsInForce', () => {
     ]);
     expect(gap.flatMap((row) => row.rules)).toEqual([
       'kill',
+      'negative_result',
       'negative_result',
       'quality_drawdown_into_print',
       'recycle_over_exact_tp',

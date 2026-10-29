@@ -23,7 +23,7 @@ const ALLOWED_TABLES = new Set([
   'pm_markets', 'pm_positions', 'pm_orders', 'pm_fills', 'pm_pnl', 'pm_notes',
   'meme_tokens', 'meme_positions', 'meme_orders', 'meme_fills', 'meme_pnl', 'meme_notes',
   'desk_agents', 'desk_domains', 'desk_domain_stewards', 'desk_accounts',
-  'belief_updates', 'thesis_domains',
+  'belief_updates', 'active_playbook_rules', 'thesis_domains',
   // Outcome ledger scorecard (security_invoker views; read-only).
   'v_steward_scorecard', 'v_steward_scorecard_weekly', 'v_steward_trend', 'v_thesis_scorecard',
   'v_decision_brier_vs_market',
@@ -88,10 +88,15 @@ const SHADOWS_QUERY =
 const EARNINGS_QUERY =
   'equity_implied_moves?select=lot_id,symbol,report_date,report_timing,reported,straddle_price,underlying_price,expiry_date,expiry_gap_days,expiry_loose,realized_open_gap,realized_close_to_close,realized_implied_ratio,line_jumped,score_missing_reason&order=symbol.asc';
 
+const ACTIVE_PLAYBOOK_RULES_QUERY =
+  'active_playbook_rules?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,rules,steward,research_lesson_id&order=observed_at.desc,id.desc&limit=1000';
+const OTHER_BELIEFS_QUERY =
+  'belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&or=(meta->>kind.is.null,meta->>kind.neq.playbook_rule)&order=observed_at.desc,id.desc&limit=80';
+
 const REQUIRED: Array<[string, string]> = [
   ['theses', 'theses?select=id,name,summary,status,confidence,stated_confidence,results_confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc'],
   ['symbols', 'thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc'],
-  ['beliefs', 'belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&order=observed_at.desc,id.desc&limit=80'],
+  ['beliefs', OTHER_BELIEFS_QUERY],
   ['evidence', 'thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200'],
   ['scores', 'thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400'],
   ['relations', 'thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale'],
@@ -209,6 +214,43 @@ async function objectFrom(pairs: Array<[string, string]>, optional = true): Prom
   return Object.fromEntries(entries);
 }
 
+function playbookViewAsBelief(row: unknown): unknown {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+  const record = row as Record<string, unknown>;
+  return {
+    id: record.id,
+    thesis_id: record.thesis_id,
+    domain_id: record.domain_id ?? null,
+    agent_id: record.agent_id ?? null,
+    prior_confidence: record.prior_confidence ?? null,
+    new_confidence: record.new_confidence ?? null,
+    rationale: record.rationale ?? '',
+    observed_at: record.observed_at,
+    meta: {
+      kind: 'playbook_rule',
+      rules: record.rules ?? [],
+      steward: record.steward ?? null,
+      research_lesson_id: record.research_lesson_id ?? null,
+    },
+  };
+}
+
+/** In-force playbook rules (the view) plus the newest other beliefs. Newest first. */
+async function loadBeliefRows(otherQuery: string): Promise<unknown[]> {
+  const [playbook, other] = await Promise.all([
+    restGet(ACTIVE_PLAYBOOK_RULES_QUERY),
+    restGet(otherQuery),
+  ]);
+  const shaped = playbook.map(playbookViewAsBelief);
+  return [...shaped, ...other].sort((a, b) => {
+    const left = a && typeof a === 'object' && !Array.isArray(a) ? a as Record<string, unknown> : {};
+    const right = b && typeof b === 'object' && !Array.isArray(b) ? b as Record<string, unknown> : {};
+    const at = String(right.observed_at ?? '').localeCompare(String(left.observed_at ?? ''));
+    if (at !== 0) return at;
+    return String(left.id ?? '').localeCompare(String(right.id ?? ''));
+  });
+}
+
 function asRows(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -305,7 +347,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
         && key !== 'scenarios'
         && key !== 'artifacts')
       : REQUIRED
-    ).map(([key, query]) => {
+    ).filter(([key]) => key !== 'beliefs').map(([key, query]) => {
       if (mode !== 'public') return [key, query] as const;
       if (key === 'candidates') return [key, publicCandidateQuery()] as const;
       if (key === 'tests') return [key, PUBLIC_TEST_QUERY] as const;
@@ -320,8 +362,9 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pnlLimit = mode === 'public' ? PUBLIC_PNL_LIMIT : PNL_TAIL_LIMIT;
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
-    const [required, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries, earnings, lessonWaits, shadows] = await Promise.all([
+    const [required, beliefRows, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries, earnings, lessonWaits, shadows] = await Promise.all([
       Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
+      loadBeliefRows(OTHER_BELIEFS_QUERY),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
       objectFrom(TEAM),
@@ -336,6 +379,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       restGet(SHADOWS_QUERY, true),
     ]);
     const body: Record<string, unknown> = Object.fromEntries(required);
+    body.beliefs = beliefRows;
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
     let meme: Record<string, unknown> = { ...memeRaw, pnl: memePnl.pnl, pnl_start: memePnl.pnl_start };
     if (accounts) {

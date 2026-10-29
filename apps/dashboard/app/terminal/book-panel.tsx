@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 
+import { rulesInForceByDomain, type BeliefUpdateRow, type RulesInForceGroup } from '../../lib/beliefs';
 import { holdingTicket } from '../../lib/book-holdings';
 import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip';
 import { blurFocusWithin } from '../../lib/desk-focus';
@@ -166,6 +167,8 @@ export function BookPanel({
           cycles={desk.cycles ?? []}
           artifacts={desk.backtest_artifacts ?? []}
           lessonWaits={desk.lesson_waits ?? []}
+          beliefs={desk.beliefs ?? []}
+          domains={desk.team?.domains ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -180,6 +183,8 @@ export function BookPanel({
           cycles={desk.cycles ?? []}
           artifacts={desk.backtest_artifacts ?? []}
           lessonWaits={desk.lesson_waits ?? []}
+          beliefs={desk.beliefs ?? []}
+          domains={desk.team?.domains ?? []}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -382,6 +387,8 @@ function BooksDetail({
   cycles,
   artifacts,
   lessonWaits,
+  beliefs,
+  domains,
   onClose,
   onOpenLot,
 }: {
@@ -397,6 +404,8 @@ function BooksDetail({
   cycles: { id: number; thesis_id: string; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
   lessonWaits: LessonWait[];
+  beliefs: readonly BeliefUpdateRow[];
+  domains: readonly { id: string; name: string; sort_order?: number | null }[];
   onClose: () => void;
   onOpenLot: (id: string) => void;
 }) {
@@ -450,9 +459,6 @@ function BooksDetail({
             <p className="books-note"><b>Exit plan</b> {h.invalidation.note}</p>
           ) : null}
           {h.note ? <p className="books-note">{h.note}</p> : null}
-          {h.rules_in_force.length ? (
-            <p className="books-note"><b>Rules in force</b> {h.rules_in_force.map(plainWords).join(' · ')}</p>
-          ) : null}
           {h.life === 'closed' && lot?.lesson_waiting ? (
             <p className="books-note is-muted">No lesson written yet.</p>
           ) : null}
@@ -482,6 +488,8 @@ function BooksDetail({
           backtest={lot?.track.backtest ?? backtestFor(books, thesis.id)}
           wins={scoreWins(books, thesis.id)}
           lots={lotsForThesis(books, thesis.id).filter((row) => row.holding.id !== h?.id)}
+          beliefs={beliefs}
+          domains={domains}
           lessons={books.lessons_by_thesis.get(thesis.id) ?? []}
           tests={testsForThesis(thesis.id, tests, cycles, books.lessons_by_thesis.get(thesis.id) ?? [])}
           cycles={cycles}
@@ -491,6 +499,35 @@ function BooksDetail({
         />
       ) : null}
     </article>
+  );
+}
+
+function RulesInForce({ groups }: { groups: readonly RulesInForceGroup[] }) {
+  return (
+    <div className="book-rules-in-force">
+      <p className="books-section-label">Rules in force</p>
+      {groups.map((group) => (
+        <section key={group.key} className="book-rules-group" aria-label={group.label}>
+          <p className="book-rules-domain">{group.label}</p>
+          <ul className="book-rules">
+            {group.rules.map((rule) => {
+              const name = rule.rules.map(plainWords).filter(Boolean).join(' · ');
+              const moved = rule.prior_confidence !== null || rule.new_confidence !== null;
+              return (
+                <li key={rule.id} data-rule={rule.id}>
+                  {name ? <b>{name}</b> : null}
+                  <span>
+                    {rule.observed_at.slice(0, 10)}
+                    {moved ? ` · confidence ${rule.prior_confidence ?? '—'} → ${rule.new_confidence ?? '—'}` : ''}
+                  </span>
+                  {rule.rationale ? <p>{rule.rationale}</p> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -510,6 +547,8 @@ function ThesisBody({
   backtest,
   wins,
   lots,
+  beliefs,
+  domains,
   lessons,
   tests,
   cycles,
@@ -523,6 +562,8 @@ function ThesisBody({
   backtest: string | null;
   wins: number | null;
   lots: BooksLot[];
+  beliefs: readonly BeliefUpdateRow[];
+  domains: readonly { id: string; name: string; sort_order?: number | null }[];
   lessons: LessonRow[];
   tests: StrategyTestRow[];
   cycles: { id: number; preregistered_outcome?: string | null }[];
@@ -531,6 +572,8 @@ function ThesisBody({
   onOpenLot: (id: string) => void;
 }) {
   const [allLessons, setAllLessons] = useState(false);
+  const ruleGroups = rulesInForceByDomain({ thesisId: thesis.id, beliefs, domains });
+  const trail = thesis.beliefs.filter((note) => note.kind !== 'playbook_rule');
   const shown = allLessons ? lessons : lessons.slice(0, LESSONS_SHOWN);
   const byId = new Map(tests.map((row) => [row.id, row]));
   const waits = new Map(lessonWaits.map((row) => [row.lesson_id, row]));
@@ -555,11 +598,14 @@ function ThesisBody({
         {` · steward's own confidence ${Math.round(thesis.stated_confidence)}`}
       </p>
       {backtest ? <p className="books-track books-backtest">{backtest}</p> : null}
-      {thesis.beliefs.length ? (
+      {ruleGroups.length ? (
+        <RulesInForce groups={ruleGroups} />
+      ) : null}
+      {trail.length ? (
         <>
           <p className="books-section-label">Beliefs</p>
           <ul className="thesis-beliefs" aria-label="Beliefs">
-            {thesis.beliefs.map((note) => (
+            {trail.map((note) => (
               <li key={note.id}>
                 <b>
                   {note.prior_confidence === null && note.new_confidence === null
