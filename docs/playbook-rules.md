@@ -1,6 +1,6 @@
 # Playbook rules — load before size
 
-Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book page shows the rules still in force in the position detail, behind the tap — process and structure first, up to eight, then any `kill` or `negative_result` — plus the thesis's confidence trail and playbook rows in force (not a count). The collapsed row does not list those names. This file is the write + read contract. Do not invent marks, P/L, or close rows.
+Desk autopsies already write high-quality `belief_updates` with `meta.kind = 'playbook_rule'`. Those rows are the rules in force. Stewards must read them **before** sizing a new clip. The phone Book page shows the rules still in force in the position detail, behind the tap, grouped by book and newest first — plus the thesis's confidence trail. The collapsed row does not list those names. This file is the write + read contract. Do not invent marks, P/L, or close rows.
 
 ## Open with thesis_id
 
@@ -53,12 +53,15 @@ Conservative backfill (do not extend): `CODA` → `earnings_gap_structure`; `tc-
 
 ## Read before size
 
-Newest playbook rule per thesis + domain:
+Every playbook rule still in force (newest first is the caller's order; the function already sorts that way):
 
 ```sql
 select thesis_id, domain_slug, steward, rules, prior_confidence, new_confidence, observed_at
-from public.active_playbook_rules;
+from public.active_playbook_rules
+order by observed_at desc, id desc;
 ```
+
+A row stays until a newer `playbook_rule` names its id in `meta.supersedes`, or the row marks itself withdrawn, retired, or superseded. A repeated slug is another lesson, not a replacement. `rule_status` values such as `unproven_evidence_lost` stay in force.
 
 One thesis or domain (slug or uuid):
 
@@ -72,17 +75,23 @@ Same filter as an RPC: `POST /rest/v1/rpc/active_playbook_rules` with `{ "p_doma
 Documented select if the view is not applied yet:
 
 ```sql
-select distinct on (thesis_id, domain_id)
-  id, thesis_id, domain_id, prior_confidence, new_confidence, rationale, observed_at,
+select id, thesis_id, domain_id, prior_confidence, new_confidence, rationale, observed_at,
   meta->'rules' as rules, meta->>'steward' as steward
-from public.belief_updates
+from public.belief_updates b
 where meta->>'kind' = 'playbook_rule'
-order by thesis_id, domain_id, observed_at desc, created_at desc, id desc;
+  and not public.playbook_rule_is_withdrawn(b.meta)
+  and not exists (
+    select 1 from public.belief_updates newer
+    where coalesce(newer.meta->>'kind', '') = 'playbook_rule'
+      and newer.id <> b.id
+      and public.playbook_rule_supersedes(newer.meta, b.id)
+  )
+order by observed_at desc, id desc;
 ```
 
-`/api/desk` includes a lean `beliefs[]` (id, thesis, domain, confidences, rationale, observed_at, kind, rules, steward). Newest-first, cap 80. Public snapshot keeps this field. Do not size from BIDNESS chat.
+`/api/desk` includes a lean `beliefs[]` (id, thesis, domain, confidences, rationale, observed_at, kind, rules, steward). Every in-force playbook rule is on that array, newest first, plus the newest other beliefs. Public snapshot keeps this field. Do not size from BIDNESS chat.
 
-The operator desk does not collapse that array to one belief per thesis. Each distinct rule slug stays, carried by the newest `playbook_rule` for that thesis and domain that lists it. Incorporating a `kill` or `negative_result` lesson adds that outcome; it does not hide older process slugs (`quality_drawdown_into_print`, `recycle_over_exact_tp`, and the rest) on the Book row or the learning-pulse beliefs list. A repeated slug still resolves to the newer belief only. The steward view above remains newest-row-per-thesis; this paragraph is the desk binding.
+The operator desk and the steward view both keep every playbook row that is still in force. Incorporating a `kill` or `negative_result` lesson adds that outcome; it does not hide older process rows. A repeated slug stays. The Book detail groups those rows by book (Stocks, Predictions, Meme coins), newest first, in plain words.
 
 ## Close with belief / lesson
 

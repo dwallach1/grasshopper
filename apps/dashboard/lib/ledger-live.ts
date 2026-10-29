@@ -72,7 +72,7 @@ import {
   type PredictionMarketsPayload,
 } from './prediction-book';
 import { assembleRoutines } from './routines';
-import { mapBeliefs } from './beliefs';
+import { ACTIVE_PLAYBOOK_RULES_QUERY, mapBeliefs, mergeBeliefSources } from './beliefs';
 import { assembleFillLog, attachThesisLots } from './thesis-book';
 import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception';
 
@@ -100,6 +100,25 @@ async function restRows(path: string, auth: DeskRestAuth) {
     throw new Error(`Supabase REST ${path} failed: ${response.status}`);
   }
   return JsonArraySchema.parse(await response.json());
+}
+
+const BELIEF_COLUMNS = 'id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta';
+const BELIEF_UPDATES_LIMITED =
+  `belief_updates?select=${BELIEF_COLUMNS}&order=observed_at.desc,id.desc&limit=80`;
+const BELIEF_UPDATES_OTHER =
+  `belief_updates?select=${BELIEF_COLUMNS}&or=(meta->>kind.is.null,meta->>kind.neq.playbook_rule)&order=observed_at.desc,id.desc&limit=80`;
+
+/**
+ * Every in-force playbook rule, plus the newest other beliefs for the trail.
+ * If the view is not applied yet, keep the previous capped belief_updates read.
+ */
+async function loadBeliefRows(auth: DeskRestAuth): Promise<JsonObjectRow[]> {
+  const [limited, playbook, other] = await Promise.all([
+    restOptional(BELIEF_UPDATES_LIMITED, auth),
+    restOptional(ACTIVE_PLAYBOOK_RULES_QUERY, auth),
+    restOptional(BELIEF_UPDATES_OTHER, auth),
+  ]);
+  return playbook.length ? mergeBeliefSources(other, playbook) : limited;
 }
 
 async function restOptional(path: string, auth: DeskRestAuth): Promise<JsonObjectRow[]> {
@@ -153,7 +172,7 @@ export async function loadDeskFromRest(auth: DeskRestAuth): Promise<DeskPayload>
   ] = await Promise.all([
     restRows('theses?select=id,name,summary,status,confidence,stated_confidence,results_confidence,time_horizon,stance,variant_perception,falsifier,created_at,updated_at&order=confidence.desc,name.asc', auth),
     restRows('thesis_symbols?select=thesis_id,symbol,role&order=weight_hint.desc,symbol.asc', auth),
-    restOptional('belief_updates?select=id,thesis_id,domain_id,agent_id,prior_confidence,new_confidence,rationale,observed_at,meta&order=observed_at.desc,id.desc&limit=80', auth),
+    loadBeliefRows(auth),
     restRows('thesis_evidence?select=id,thesis_id,evidence_type,direction,summary,source_url,confidence,created_at&order=created_at.desc,id.desc&limit=200', auth),
     restRows('thesis_scores?select=id,thesis_id,scored_at,confidence,momentum,evidence_quality,catalyst_strength,portfolio_fit,risk,notes&order=scored_at.desc,id.desc&limit=400', auth),
     restRows('thesis_relations?select=src_thesis_id,dst_thesis_id,relation_type,strength,rationale', auth),

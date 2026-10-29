@@ -152,10 +152,24 @@ export async function loadDeskFromPostgres(): Promise<DeskPayload> {
         'belief_updates',
         sql`
         select id, thesis_id, domain_id, agent_id, prior_confidence, new_confidence,
-               rationale, observed_at, meta
-        from public.belief_updates
+               rationale, observed_at,
+               jsonb_strip_nulls(jsonb_build_object(
+                 'kind', 'playbook_rule',
+                 'rules', coalesce(rules, '[]'::jsonb),
+                 'steward', steward,
+                 'research_lesson_id', research_lesson_id
+               )) as meta
+        from public.active_playbook_rules
+        union all
+        (
+          select id, thesis_id, domain_id, agent_id, prior_confidence, new_confidence,
+                 rationale, observed_at, meta
+          from public.belief_updates
+          where coalesce(meta->>'kind', '') is distinct from 'playbook_rule'
+          order by observed_at desc, id desc
+          limit 80
+        )
         order by observed_at desc, id desc
-        limit 80
       `,
       ),
       sql`

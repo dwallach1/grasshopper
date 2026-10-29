@@ -420,7 +420,7 @@ describe('assembleLearningPulse', () => {
         belief(),
       ],
     }));
-    expect(pulse.beliefs_in_force).toBe(7);
+    expect(pulse.beliefs_in_force).toBe(8);
   });
 
   test('To-review matches the ranked queue cap and drops junk, not the grind backlog', () => {

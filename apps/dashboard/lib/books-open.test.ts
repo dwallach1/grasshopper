@@ -433,13 +433,17 @@ describe('Books page: one section per steward', () => {
     await act(async () => {
       button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
     });
-    const notes = [...view.host.querySelectorAll('.books-detail .books-note')].map((node) => node.textContent ?? '');
-    expect(notes.find((note) => note.startsWith('Rules in force'))).toBe(
-      'Rules in force quality drawdown into print · recycle over exact tp · no chase already printed leftovers · kill · negative result',
-    );
-    const detail = view.host.querySelector('.books-detail')?.textContent ?? '';
-    expect(detail).toContain('Walk-forward autopsy: kill.');
-    expect(detail).toContain('Drawdown into the print can still be the structure.');
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.querySelector('.book-rules-domain')?.textContent).toBe('Stocks');
+    const rules = [...(detail?.querySelectorAll('.book-rules li') ?? [])].map((node) => node.textContent ?? '');
+    expect(rules.some((line) => line.includes('quality drawdown into print'))).toBe(true);
+    expect(rules.some((line) => line.includes('recycle over exact tp'))).toBe(true);
+    expect(rules.some((line) => line.includes('no chase already printed leftovers'))).toBe(true);
+    expect(rules.some((line) => line.includes('kill'))).toBe(true);
+    expect(rules.filter((line) => line.includes('negative result'))).toHaveLength(2);
+    expect(detail?.textContent).not.toMatch(/Rules in force quality drawdown/);
+    expect(detail?.textContent).toContain('Walk-forward autopsy: kill.');
+    expect(detail?.textContent).toContain('Drawdown into the print can still be the structure.');
     view.unmount();
   });
 
