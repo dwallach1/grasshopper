@@ -234,6 +234,10 @@ describe('ledger watchdog', () => {
     });
     expect(starved.ontology_freshness).toEqual({
       last_first_seen_at: '2026-09-13 18:11:08.615362+00',
+      last_seen_at: null,
+      newest_evidence_at: null,
+      lag_hours: null,
+      lagging: false,
       created_7d: 0,
       pending: 0,
       starved: true,
@@ -259,6 +263,50 @@ describe('ledger watchdog', () => {
     );
     expect(assembleDeskBookHealth({ watchdog: fresh } as unknown as DeskPayload, Date.parse('2026-10-27T17:25:00Z')).alerts).toEqual([]);
 
+    const lagging = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: '2026-10-27 15:05:13+00',
+          last_seen_at: '2026-10-27 15:05:13+00',
+          newest_evidence_at: '2026-10-30 15:48:59+00',
+          lag_hours: '72.7',
+          lagging: true,
+          created_7d: 1,
+          pending: 0,
+          starved: false,
+        },
+      }],
+    });
+    expect(lagging.ontology_freshness).toMatchObject({
+      last_seen_at: '2026-10-27 15:05:13+00',
+      newest_evidence_at: '2026-10-30 15:48:59+00',
+      lag_hours: 72.7,
+      lagging: true,
+      pending: 0,
+    });
+    expect(ontologyFreshnessLine(lagging.ontology_freshness)).toBe(
+      'Ontology candidates are 73 hours behind the newest bookmark or lesson.',
+    );
+    expect(watchdogHealthSummary(lagging).ontology_freshness?.lagging).toBe(true);
+
+    const caughtUp = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: '2026-10-30 13:39:04+00',
+          last_seen_at: '2026-10-30 13:39:04+00',
+          newest_evidence_at: '2026-10-30 15:48:59+00',
+          lag_hours: 2.2,
+          lagging: false,
+          created_7d: 12,
+          pending: 12,
+          starved: false,
+        },
+      }],
+    });
+    expect(ontologyFreshnessLine(caughtUp.ontology_freshness)).toBe(
+      'Ontology recorded 12 candidates in the last 7 days.',
+    );
+
     const sql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/88_ontology_candidate_freshness.sql'), 'utf8');
     expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261027180000_ontology_candidate_freshness.sql'), 'utf8')).toBe(sql);
     expect(sql).toContain('as ontology_freshness');
@@ -268,6 +316,20 @@ describe('ledger watchdog', () => {
     expect(sql).toContain('security invoker');
     expect(sql).toContain('security definer');
     expect(sql).not.toMatch(/grant execute on function public\.propose_ontology_candidates[\s\S]*to anon/);
+
+    const refresh = readFileSync(join(import.meta.dir, '../../../supabase/schemas/89_ontology_candidate_refresh.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261030180000_ontology_candidate_refresh.sql'), 'utf8')).toBe(refresh);
+    expect(refresh).toContain("interval '36 hours'");
+    expect(refresh).toContain("interval '14 days'");
+    expect(refresh).toContain('s.n_src >= 2');
+    expect(refresh).toContain("'unscoped:' || bookmark_themed.symbol");
+    expect(refresh).toContain('lesson_prose');
+    expect(refresh).toContain("('TP')");
+    expect(refresh).toContain("cron.schedule(");
+    expect(refresh).toContain("'propose_ontology_candidates'");
+    expect(refresh).toContain("'15 */6 * * *'");
+    expect(refresh).not.toMatch(/where c\.id = any\(v_ids\)\s+and c\.status = 'pending'/);
+    expect(refresh).not.toMatch(/grant execute on function public\.propose_ontology_candidates[\s\S]*to anon/);
   });
 });
 

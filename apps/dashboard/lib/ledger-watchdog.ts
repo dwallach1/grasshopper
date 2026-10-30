@@ -153,6 +153,14 @@ export type StaleQueuedTests = {
 
 export type OntologyFreshness = {
   last_first_seen_at: string | null;
+  /** max(ontology_candidates.last_seen_at). Null when the view has not said. */
+  last_seen_at: string | null;
+  /** Newest bookmark timestamp or research lesson created_at. */
+  newest_evidence_at: string | null;
+  /** Hours from last_seen_at to newest_evidence_at. Negative when candidates are ahead. */
+  lag_hours: number | null;
+  /** True when last_seen_at is more than 36 hours behind the newest bookmark or lesson. */
+  lagging: boolean;
   created_7d: number;
   pending: number;
   starved: boolean;
@@ -179,6 +187,15 @@ export function ontologyFreshnessDay(value: string | null): string | null {
  */
 export function ontologyFreshnessLine(row: OntologyFreshness | null): string | null {
   if (!row) return null;
+  if (row.lagging) {
+    const hours = row.lag_hours;
+    if (hours !== null && hours > 36) {
+      const rounded = Math.round(hours);
+      const unit = rounded === 1 ? 'hour' : 'hours';
+      return `Ontology candidates are ${rounded} ${unit} behind the newest bookmark or lesson.`;
+    }
+    return 'Ontology candidates are more than 36 hours behind the newest bookmark or lesson.';
+  }
   const day = ontologyFreshnessDay(row.last_first_seen_at);
   if (row.starved || row.created_7d === 0) {
     return day
@@ -225,8 +242,9 @@ export type LedgerWatchdog = {
    */
   unlinked_named_lessons: number | null;
   /**
-   * Last ontology candidate `first_seen_at`, how many were first seen in 7 days,
-   * pending, and whether that first-seen is older than 7 days.
+   * Ontology candidate freshness: first seen, last seen, lag against the newest
+   * bookmark or lesson, pending, and whether that first-seen is older than 7 days.
+   * `lagging` is the stall flag (last_seen_at more than 36 hours behind).
    * Null when the column is absent. Does not change `ok` on /api/health.
    */
   ontology_freshness: OntologyFreshness | null;
@@ -773,19 +791,37 @@ export function watchdogHealthSummary(
   };
 }
 
+function freshnessStamp(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return str(value);
+}
+
 function ontologyFreshness(value: unknown): OntologyFreshness | null {
   const bag = record(value);
   if (!bag || typeof bag.starved !== 'boolean') return null;
   const created = optionalCount(bag.created_7d);
   const pending = optionalCount(bag.pending);
   if (created === null || pending === null) return null;
-  const raw = bag.last_first_seen_at;
-  if (raw === null || raw === undefined || raw === '') {
-    return { last_first_seen_at: null, created_7d: created, pending, starved: bag.starved };
+  const lastFirst = freshnessStamp(bag.last_first_seen_at);
+  if (bag.last_first_seen_at !== null && bag.last_first_seen_at !== undefined && bag.last_first_seen_at !== '' && !lastFirst) {
+    return null;
   }
-  const last = str(raw);
-  if (!last) return null;
-  return { last_first_seen_at: last, created_7d: created, pending, starved: bag.starved };
+  const lagHours = bag.lag_hours === null || bag.lag_hours === undefined || bag.lag_hours === ''
+    ? null
+    : num(bag.lag_hours);
+  if (bag.lag_hours !== null && bag.lag_hours !== undefined && bag.lag_hours !== '' && lagHours === null) {
+    return null;
+  }
+  return {
+    last_first_seen_at: lastFirst,
+    last_seen_at: freshnessStamp(bag.last_seen_at),
+    newest_evidence_at: freshnessStamp(bag.newest_evidence_at),
+    lag_hours: lagHours,
+    lagging: bag.lagging === true,
+    created_7d: created,
+    pending,
+    starved: bag.starved,
+  };
 }
 
 function wholeAmount(value: number, unit: MoneyUnit): string {

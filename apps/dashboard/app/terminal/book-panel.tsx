@@ -130,7 +130,7 @@ export function BookPanel({
         <header className="books-mast">
           <p className="paper-title">Book</p>
           {ontologyLine ? (
-            <p className="thesis-lede" data-ontology-freshness={desk.watchdog?.ontology_freshness?.starved ? 'stale' : 'fresh'}>
+            <p className="thesis-lede" data-ontology-freshness={desk.watchdog?.ontology_freshness?.starved || desk.watchdog?.ontology_freshness?.lagging ? 'stale' : 'fresh'}>
               {ontologyLine}
             </p>
           ) : null}
