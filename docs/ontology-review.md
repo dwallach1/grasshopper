@@ -37,12 +37,14 @@ Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`)
 select public.propose_ontology_candidates();
 -- memberships from market bookmarks classified since 2026-09-13 and from
 -- research lessons that name a ticker (or a thesis symbol). Then the junk sweep.
--- Existing keys get last_seen_at and evidence_count refreshed. Status stays.
+-- A pending key is refreshed. A promoted row is left alone. A rejected key
+-- returns to pending only when evidence_count would rise by at least 2
+-- since the reject action.
 select public.reject_junk_ontology_candidates();
 -- { ok: true, rejected: N, note: 'junk_deny_list' }
 ```
 
-`propose_ontology_candidates` is the statement trigger on `bookmarks`, `bookmark_symbols`, and `research_lessons`, and a `pg_cron` job (`propose_ontology_candidates`, minute 15 of every sixth hour) so a missed write still proposes. A lesson ticker is a colon, a signed percent, a slash list, or a parenthetical list — not session prose (`AH`, `AM`, `PM`, `QD`, `early-TP`). A new lesson key needs two lessons or a mention in the last 14 days. A new unscoped bookmark key is only the first membership for that symbol, at the bookmark's market score. The grind still calls it: pending = 0 is not healthy when `v_ledger_watchdog.ontology_freshness.starved` is true, and `lagging` is true when `last_seen_at` is more than 36 hours behind the newest bookmark or lesson. `lagging` does not make `/api/health` not-ok. It is the stall flag.
+`propose_ontology_candidates` is the statement trigger on `bookmarks`, `bookmark_symbols`, and `research_lessons`, and a `pg_cron` job (`propose_ontology_candidates`, minute 15 of every sixth hour) so a missed write still proposes. A lesson ticker is a colon, a signed percent, a slash list, or a parenthetical list — not session prose (`AH`, `AM`, `PM`, `QD`, `early-TP`). A new lesson key on any theme other than `earnings_events` needs two lessons or a mention in the last 14 days. An `earnings_events` lesson key needs two distinct lessons that name the ticker as an earnings subject (reported, print, beat, miss, gap, or report within 80 characters, and not a hold or chase note), or one lesson in the last 14 days where that ticker is the subject (a colon name, or one of at most four tickers). A listicle co-mention does not qualify. Index and sector ETFs (`QQQ`, `SPY`, `SMH`, `IWM`, `XLK`, and the rest of that list) are skipped. An open position mentioned only as a hold or chase note is skipped. A new unscoped bookmark key is only the first membership for that symbol, at the bookmark's market score. The grind still calls it: pending = 0 is not healthy when `v_ledger_watchdog.ontology_freshness.starved` is true, and `lagging` is true when `last_seen_at` is more than 36 hours behind the newest bookmark or lesson. `lagging` does not make `/api/health` not-ok. It is the stall flag.
 
 Re-runnable. Idempotent. The migration applies it once. GRASSHOPPER can call the same RPC after ingest.
 

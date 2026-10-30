@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { assembleDeskBookHealth, deskHealthSummary } from './desk-book-health';
@@ -330,6 +330,30 @@ describe('ledger watchdog', () => {
     expect(refresh).toContain("'15 */6 * * *'");
     expect(refresh).not.toMatch(/where c\.id = any\(v_ids\)\s+and c\.status = 'pending'/);
     expect(refresh).not.toMatch(/grant execute on function public\.propose_ontology_candidates[\s\S]*to anon/);
+
+    const quietDir = join(import.meta.dir, '../../../supabase/migrations');
+    const quietNames = readdirSync(quietDir).filter((name) => name.endsWith('_ontology_candidate_quiet.sql'));
+    expect(quietNames).toEqual([quietNames[0]]);
+    const quiet = readFileSync(join(import.meta.dir, '../../../supabase/schemas/90_ontology_candidate_quiet.sql'), 'utf8');
+    expect(readFileSync(join(quietDir, quietNames[0]!), 'utf8')).toBe(quiet);
+    expect(quiet).toContain('n_earn >= 2 or s.recent_themed');
+    expect(quiet).toContain("theme_id = 'earnings_events'");
+    expect(quiet).toContain('reported|prints?|beats?|miss(?:ed)?|gaps?|reports?');
+    expect(quiet).toContain('\\m(hold|holding|held|chase|chasing)\\M');
+    expect(quiet).toContain("'QQQ'");
+    expect(quiet).toContain("'SPY'");
+    expect(quiet).toContain("'SMH'");
+    expect(quiet).toContain("'IWM'");
+    expect(quiet).toContain("'XLK'");
+    expect(quiet).toContain('open_equity');
+    expect(quiet).toContain(') + 2');
+    expect(quiet).toContain("when public.ontology_candidates.status = 'rejected' then 'pending'");
+    expect(quiet).toContain("status in ('pending', 'rejected')");
+    expect(quiet).not.toContain('cron.schedule');
+    expect(quiet).not.toContain('desk_public_reader');
+    expect(quiet).not.toContain('grant execute');
+    expect(quiet).not.toMatch(/to oddsborne_worker/);
+    expect(quiet).not.toMatch(/to bandit_worker/);
   });
 });
 
