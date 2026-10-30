@@ -36,12 +36,13 @@ Steward sweep (operator JWT, `service_role`, `postgres`, or `quantanamo_worker`)
 ```sql
 select public.propose_ontology_candidates();
 -- memberships from market bookmarks classified since 2026-09-13 and from
--- research lessons that name a thesis symbol. Then the junk sweep.
+-- research lessons that name a ticker (or a thesis symbol). Then the junk sweep.
+-- Existing keys get last_seen_at and evidence_count refreshed. Status stays.
 select public.reject_junk_ontology_candidates();
 -- { ok: true, rejected: N, note: 'junk_deny_list' }
 ```
 
-`propose_ontology_candidates` is also the statement trigger on `bookmarks`, `bookmark_symbols`, and `research_lessons`, so a scan that only classifies still proposes. The grind still calls it: pending = 0 is not healthy when `v_ledger_watchdog.ontology_freshness.starved` is true (no candidate `first_seen_at` in the last 7 days).
+`propose_ontology_candidates` is the statement trigger on `bookmarks`, `bookmark_symbols`, and `research_lessons`, and a `pg_cron` job (`propose_ontology_candidates`, minute 15 of every sixth hour) so a missed write still proposes. A lesson ticker is a colon, a signed percent, a slash list, or a parenthetical list — not session prose (`AH`, `AM`, `PM`, `QD`, `early-TP`). A new lesson key needs two lessons or a mention in the last 14 days. A new unscoped bookmark key is only the first membership for that symbol, at the bookmark's market score. The grind still calls it: pending = 0 is not healthy when `v_ledger_watchdog.ontology_freshness.starved` is true, and `lagging` is true when `last_seen_at` is more than 36 hours behind the newest bookmark or lesson. `lagging` does not make `/api/health` not-ok. It is the stall flag.
 
 Re-runnable. Idempotent. The migration applies it once. GRASSHOPPER can call the same RPC after ingest.
 
