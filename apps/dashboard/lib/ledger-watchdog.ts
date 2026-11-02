@@ -159,14 +159,33 @@ export type OntologyFreshness = {
   newest_evidence_at: string | null;
   /** Hours from last_seen_at to newest_evidence_at. Negative when candidates are ahead. */
   lag_hours: number | null;
-  /** True when last_seen_at is more than 36 hours behind the newest bookmark or lesson. */
+  /**
+   * True when the proposer has not run, or newer notes arrived after the last
+   * run that considered them. Older rows used candidate last_seen_at instead.
+   */
   lagging: boolean;
   created_7d: number;
   pending: number;
   starved: boolean;
+  /** Last successful proposer run. Absent on a watchdog row from before the run log. */
+  last_run_at?: string | null;
+  /** Newest note the last run had in front of it. */
+  evidence_through?: string | null;
+  considered?: number | null;
+  proposed?: number | null;
+  skipped?: number | null;
 };
 
 const ONTOLOGY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function stampMs(value: string | null | undefined): number | null {
+  if (!value) return null;
+  let text = value.trim();
+  if (!text.includes('T')) text = text.replace(' ', 'T');
+  text = text.replace(/([+-]\d{2})$/, '$1:00').replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 /** Ledger date, UTC. Null when the timestamp is missing or not a date. */
 export function ontologyFreshnessDay(value: string | null): string | null {
@@ -187,6 +206,21 @@ export function ontologyFreshnessDay(value: string | null): string | null {
  */
 export function ontologyFreshnessLine(row: OntologyFreshness | null): string | null {
   if (!row) return null;
+  if ('last_run_at' in row || 'proposed' in row) {
+    if (row.lagging) {
+      const newest = stampMs(row.newest_evidence_at);
+      const through = stampMs(row.evidence_through);
+      const unreviewed = newest !== null && (through === null || through < newest);
+      if (!row.last_run_at) return 'The ontology proposer has not run.';
+      if (unreviewed) return 'The ontology proposer has not reviewed the newest notes.';
+      return 'The ontology proposer has not run recently.';
+    }
+    if (row.proposed === 0) return 'The ontology proposer ran, and nothing new qualified.';
+    if (typeof row.proposed === 'number' && row.proposed > 0) {
+      const word = row.proposed === 1 ? 'candidate' : 'candidates';
+      return `The ontology proposer ran and recorded ${row.proposed} ${word}.`;
+    }
+  }
   if (row.lagging) {
     const hours = row.lag_hours;
     if (hours !== null && hours > 36) {
@@ -248,6 +282,12 @@ export type LedgerWatchdog = {
    * Null when the column is absent. Does not change `ok` on /api/health.
    */
   ontology_freshness: OntologyFreshness | null;
+  /**
+   * Plain sentences for queued tests that have waited at least five trading days.
+   * Retired stewards are already left out. Null when the column is absent.
+   * Does not change `ok` on /api/health. Heartbeat returns the same list.
+   */
+  learning_stalls: string[] | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -276,6 +316,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     stale_queued_tests: null,
     unlinked_named_lessons: null,
     ontology_freshness: null,
+    learning_stalls: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -533,6 +574,9 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     ontology_freshness: summary.ontology_freshness === undefined
       ? null
       : ontologyFreshness(summary.ontology_freshness),
+    learning_stalls: summary.learning_stalls === undefined
+      ? null
+      : learningStallSentences(summary.learning_stalls),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -764,6 +808,13 @@ export function watchdogHealthSummary(
   unlinked_named_lessons: number | null;
   /** Ontology candidate freshness. Null when the column is absent. Does not change `ok`. */
   ontology_freshness: OntologyFreshness | null;
+  /**
+   * Learning-loop stalls: queued tests older than about five trading days.
+   * Empty when the column is absent. Does not change `ok`.
+   */
+  learning_stalls: string[];
+  /** True when `learning_stalls` names at least one test. Does not change `ok`. */
+  learning_loop_stalled: boolean;
 } {
   const w = quietRetiredWatchdog(watchdog ?? emptyLedgerWatchdog(), retired ?? new Set());
   return {
@@ -788,7 +839,20 @@ export function watchdogHealthSummary(
     ontology_freshness: w.ontology_freshness
       ? { ...w.ontology_freshness }
       : null,
+    learning_stalls: w.learning_stalls ? [...w.learning_stalls] : [],
+    learning_loop_stalled: (w.learning_stalls?.length ?? 0) > 0,
   };
+}
+
+function learningStallSentences(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const text = item.trim();
+    if (text) out.push(text);
+  }
+  return out;
 }
 
 function freshnessStamp(value: unknown): string | null {
@@ -812,7 +876,7 @@ function ontologyFreshness(value: unknown): OntologyFreshness | null {
   if (bag.lag_hours !== null && bag.lag_hours !== undefined && bag.lag_hours !== '' && lagHours === null) {
     return null;
   }
-  return {
+  const freshness: OntologyFreshness = {
     last_first_seen_at: lastFirst,
     last_seen_at: freshnessStamp(bag.last_seen_at),
     newest_evidence_at: freshnessStamp(bag.newest_evidence_at),
@@ -822,6 +886,12 @@ function ontologyFreshness(value: unknown): OntologyFreshness | null {
     pending,
     starved: bag.starved,
   };
+  if ('last_run_at' in bag) freshness.last_run_at = freshnessStamp(bag.last_run_at);
+  if ('evidence_through' in bag) freshness.evidence_through = freshnessStamp(bag.evidence_through);
+  if ('considered' in bag) freshness.considered = bag.considered === null ? null : optionalCount(bag.considered);
+  if ('proposed' in bag) freshness.proposed = bag.proposed === null ? null : optionalCount(bag.proposed);
+  if ('skipped' in bag) freshness.skipped = bag.skipped === null ? null : optionalCount(bag.skipped);
+  return freshness;
 }
 
 function wholeAmount(value: number, unit: MoneyUnit): string {

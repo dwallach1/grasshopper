@@ -41,6 +41,7 @@ import {
   testStatusText,
   testsForThesis,
 } from '../../lib/strategy-tests-public';
+import { waitingBlurb, waitingTestsForThesis, type WaitingTest } from '../../lib/waiting-tests';
 import { CandidateReviewQueue } from './candidate-review';
 import { DeskLiveline } from './desk-liveline';
 import { age, pnlClass } from './format';
@@ -77,6 +78,28 @@ export function BookPanel({
   const nowMs = Date.parse(nowIso ?? desk.generated_at);
   const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
   const books = useMemo(() => assembleStewardBooks(desk, nowMs), [desk, nowMs]);
+  const waitingByThesis = useMemo(() => {
+    const ids = new Set<string>();
+    for (const section of books.sections) {
+      for (const idea of [...section.watching, ...section.set_aside]) ids.add(idea.thesis.id);
+      for (const lot of [...section.open, ...section.closed]) {
+        if (lot.holding.thesis_id) ids.add(lot.holding.thesis_id);
+      }
+    }
+    const map = new Map<string, string>();
+    for (const id of ids) {
+      const line = waitingBlurb(waitingTestsForThesis({
+        thesisId: id,
+        tests: desk.tests ?? [],
+        cycles: desk.cycles ?? [],
+        lessons: books.lessons_by_thesis.get(id) ?? [],
+        lessonWaits: desk.lesson_waits ?? [],
+        nowMs,
+      }));
+      if (line) map.set(id, line);
+    }
+    return map;
+  }, [books, desk.cycles, desk.lesson_waits, desk.tests, nowMs]);
   const tickets = useMemo(() => assembleBookOpen(desk).rows.flatMap((row) => row.tickets), [desk]);
   const [reading, setReading] = useState<Reading | null>(null);
   const detailRef = useRef<HTMLElement>(null);
@@ -140,6 +163,7 @@ export function BookPanel({
             key={section.slug}
             section={section}
             shadows={desk.shadows}
+            waitingByThesis={waitingByThesis}
             onOpenLot={(id) => openReading({ kind: 'lot', id })}
             onOpenIdea={(id) => openReading({ kind: 'idea', id })}
           />
@@ -196,11 +220,13 @@ export function BookPanel({
 function StewardSection({
   section,
   shadows,
+  waitingByThesis,
   onOpenLot,
   onOpenIdea,
 }: {
   section: BooksSection;
   shadows?: ShadowCandidate[];
+  waitingByThesis: ReadonlyMap<string, string>;
   onOpenLot: (id: string) => void;
   onOpenIdea: (id: string) => void;
 }) {
@@ -271,13 +297,13 @@ function StewardSection({
       ) : null}
       {watched ? (
         <ul className="books-ideas">
-          <li><IdeaRow idea={watched} onOpen={onOpenIdea} watch /></li>
+          <li><IdeaRow idea={watched} onOpen={onOpenIdea} watch waiting={waitingByThesis.get(watched.thesis.id)} /></li>
         </ul>
       ) : section.watching.length > 1 ? (
         <Fold label={`Watching · ${section.watching.length} ideas`}>
           <ul className="books-ideas">
             {section.watching.map((idea) => (
-              <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} /></li>
+              <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} waiting={waitingByThesis.get(idea.thesis.id)} /></li>
             ))}
           </ul>
         </Fold>
@@ -286,7 +312,7 @@ function StewardSection({
         <Fold label={`Not watching · ${section.set_aside.length} ${section.set_aside.length === 1 ? 'idea' : 'ideas'}`}>
           <ul className="books-ideas is-aside">
             {section.set_aside.map((idea) => (
-              <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} /></li>
+              <li key={idea.thesis.id}><IdeaRow idea={idea} onOpen={onOpenIdea} waiting={waitingByThesis.get(idea.thesis.id)} /></li>
             ))}
           </ul>
         </Fold>
@@ -356,10 +382,12 @@ function IdeaRow({
   idea,
   onOpen,
   watch = false,
+  waiting,
 }: {
   idea: BooksIdea;
   onOpen: (id: string) => void;
   watch?: boolean;
+  waiting?: string;
 }) {
   return (
     <button
@@ -370,6 +398,7 @@ function IdeaRow({
       onClick={() => onOpen(idea.thesis.id)}
     >
       <b>{watch ? `Watching · ${idea.name}` : idea.name}</b>
+      {waiting ? <span className="books-idea-wait">{waiting}</span> : null}
     </button>
   );
 }
@@ -401,7 +430,7 @@ function BooksDetail({
   markedAt?: string | null;
   now: number;
   tests: StrategyTestRow[];
-  cycles: { id: number; thesis_id: string; preregistered_outcome?: string | null }[];
+  cycles: { id: number; thesis_id?: string | null; hypothesis?: string | null; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
   lessonWaits: LessonWait[];
   beliefs: readonly BeliefUpdateRow[];
@@ -491,10 +520,11 @@ function BooksDetail({
           beliefs={beliefs}
           domains={domains}
           lessons={books.lessons_by_thesis.get(thesis.id) ?? []}
-          tests={testsForThesis(thesis.id, tests, cycles, books.lessons_by_thesis.get(thesis.id) ?? [])}
+          tests={tests}
           cycles={cycles}
           artifacts={artifacts}
           lessonWaits={lessonWaits}
+          now={now}
           onOpenLot={onOpenLot}
         />
       ) : null}
@@ -554,6 +584,7 @@ function ThesisBody({
   cycles,
   artifacts,
   lessonWaits,
+  now,
   onOpenLot,
 }: {
   thesis: ThesisRosterRow;
@@ -566,16 +597,29 @@ function ThesisBody({
   domains: readonly { id: string; name: string; sort_order?: number | null }[];
   lessons: LessonRow[];
   tests: StrategyTestRow[];
-  cycles: { id: number; preregistered_outcome?: string | null }[];
+  cycles: { id: number; thesis_id?: string | null; hypothesis?: string | null; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
   lessonWaits: LessonWait[];
+  now: number;
   onOpenLot: (id: string) => void;
 }) {
   const [allLessons, setAllLessons] = useState(false);
   const ruleGroups = rulesInForceByDomain({ thesisId: thesis.id, beliefs, domains });
   const trail = thesis.beliefs.filter((note) => note.kind !== 'playbook_rule');
   const shown = allLessons ? lessons : lessons.slice(0, LESSONS_SHOWN);
-  const byId = new Map(tests.map((row) => [row.id, row]));
+  const linkedCycles = cycles.filter((row): row is { id: number; thesis_id: string; hypothesis?: string | null; preregistered_outcome?: string | null } =>
+    typeof row.thesis_id === 'string');
+  const scoped = testsForThesis(thesis.id, tests, linkedCycles, lessons);
+  const finished = scoped.filter((row) => row.status !== 'queued');
+  const waiting = waitingTestsForThesis({
+    thesisId: thesis.id,
+    tests,
+    cycles: linkedCycles,
+    lessons,
+    lessonWaits,
+    nowMs: now,
+  });
+  const byId = new Map(scoped.map((row) => [row.id, row]));
   const waits = new Map(lessonWaits.map((row) => [row.lesson_id, row]));
   return (
     <section className="books-thesis" aria-label="Thesis">
@@ -663,11 +707,21 @@ function ThesisBody({
       ) : (
         <p className="books-note is-muted">{nested ? 'No other positions on this idea.' : 'No positions on this idea yet.'}</p>
       )}
-      {tests.length ? (
+      {waiting.length ? (
         <>
-          <p className="books-section-label">Tests · {tests.length}</p>
+          <p className="books-section-label">Still waiting</p>
+          <ul className="books-waiting" aria-label="Tests still waiting">
+            {waiting.map((row) => (
+              <WaitingTestLine key={row.id} row={row} />
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {finished.length ? (
+        <>
+          <p className="books-section-label">Tests · {finished.length}</p>
           <ul className="thesis-evidence books-tests" aria-label="Strategy tests">
-            {tests.map((row) => (
+            {finished.map((row) => (
               <li key={row.id} data-test={row.id} data-status={row.status}>
                 <TestOutcome test={row} cycles={cycles} artifacts={artifacts} />
               </li>
@@ -707,6 +761,19 @@ function ThesisBody({
         </>
       ) : null}
     </section>
+  );
+}
+
+function WaitingTestLine({ row }: { row: WaitingTest }) {
+  return (
+    <li data-waiting-test={row.id}>
+      {row.check ? <p className="books-waiting-check">{row.check}</p> : null}
+      <p className="books-note">
+        {row.daysLine}
+        {row.why ? ` ${row.why}` : ''}
+      </p>
+      {row.lessonsLine ? <p className="books-note">{row.lessonsLine}</p> : null}
+    </li>
   );
 }
 

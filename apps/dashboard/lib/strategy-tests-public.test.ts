@@ -395,7 +395,14 @@ describe('public strategy test projection', () => {
     expect(slice.length).toBeLessThan(25_000);
     expect(published.backtest_artifacts).toEqual([]);
     expect(slice).not.toContain('s3://private');
-    const hypothesis = (published.cycles as { hypothesis?: string }[])[0]?.hypothesis ?? '';
-    expect(hypothesis.length).toBeLessThanOrEqual(160);
+    const queuedIds = new Set(
+      (published.tests as { status?: string; cycle_id?: number }[])
+        .filter((row) => row.status === 'queued')
+        .map((row) => row.cycle_id),
+    );
+    for (const cycle of published.cycles as { id: number; hypothesis?: string }[]) {
+      const max = queuedIds.has(cycle.id) ? 320 : 160;
+      expect((cycle.hypothesis ?? '').length).toBeLessThanOrEqual(max);
+    }
   });
 });
