@@ -428,6 +428,10 @@ describe('ledger watchdog', () => {
     expect(stall).toContain("'learning_stalls', coalesce(v_stalls, '[]'::jsonb)");
     expect(stall).not.toContain("p_tested_at <= p_at - interval '7 days'");
     expect(stall).not.toContain('placeholder will be replaced');
+    const narrow = readFileSync(join(import.meta.dir, '../../../supabase/schemas/92_ontology_proposer_narrow.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261102191934_ontology_proposer_narrow.sql'), 'utf8')).toBe(narrow);
+    expect(narrow).toContain('from public, anon, desk_public_reader, oddsborne_worker, bandit_worker;');
+    expect(narrow).not.toMatch(/\bgrant\b/i);
     expect(stall).not.toMatch(/update\s+public\.strategy_tests/i);
     expect(stall).not.toMatch(/update\s+public\.research_lessons/i);
     expect(stall).not.toContain('select private.propose_ontology_candidates()');
