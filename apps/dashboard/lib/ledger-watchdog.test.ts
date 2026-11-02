@@ -307,6 +307,69 @@ describe('ledger watchdog', () => {
       'Ontology recorded 12 candidates in the last 7 days.',
     );
 
+    const quiet = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: '2026-10-30T00:32:29.675258+00:00',
+          last_seen_at: '2026-10-30T23:26:33.782284+00:00',
+          newest_evidence_at: '2026-11-02T16:45:49.773973+00:00',
+          last_run_at: '2026-11-02T18:15:01.96345+00:00',
+          evidence_through: '2026-11-02T16:45:49.773973+00:00',
+          considered: 40,
+          proposed: 0,
+          skipped: 40,
+          lag_hours: 0.2,
+          lagging: false,
+          created_7d: 28,
+          pending: 24,
+          starved: false,
+        },
+        learning_stalls: [
+          'A test of earnings gap structure has been waiting 12 trading days. Lessons that depend on it still have no verdict.',
+          '',
+          4,
+        ],
+      }],
+    });
+    expect(quiet.ontology_freshness).toMatchObject({
+      last_run_at: '2026-11-02T18:15:01.96345+00:00',
+      proposed: 0,
+      skipped: 40,
+      lagging: false,
+    });
+    expect(ontologyFreshnessLine(quiet.ontology_freshness)).toBe(
+      'The ontology proposer ran, and nothing new qualified.',
+    );
+    expect(quiet.learning_stalls).toEqual([
+      'A test of earnings gap structure has been waiting 12 trading days. Lessons that depend on it still have no verdict.',
+    ]);
+    expect(watchdogHealthSummary(quiet)).toMatchObject({
+      learning_stalls: quiet.learning_stalls,
+      learning_loop_stalled: true,
+    });
+    const missed = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: null,
+          last_seen_at: null,
+          newest_evidence_at: '2026-11-02T16:45:49.773973+00:00',
+          last_run_at: null,
+          evidence_through: null,
+          considered: null,
+          proposed: null,
+          skipped: null,
+          lag_hours: null,
+          lagging: true,
+          created_7d: 0,
+          pending: 0,
+          starved: true,
+        },
+      }],
+    });
+    expect(ontologyFreshnessLine(missed.ontology_freshness)).toBe(
+      'The ontology proposer has not run.',
+    );
+
     const sql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/88_ontology_candidate_freshness.sql'), 'utf8');
     expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261027180000_ontology_candidate_freshness.sql'), 'utf8')).toBe(sql);
     expect(sql).toContain('as ontology_freshness');
@@ -334,26 +397,44 @@ describe('ledger watchdog', () => {
     const quietDir = join(import.meta.dir, '../../../supabase/migrations');
     const quietNames = readdirSync(quietDir).filter((name) => name.endsWith('_ontology_candidate_quiet.sql'));
     expect(quietNames).toEqual([quietNames[0]]);
-    const quiet = readFileSync(join(import.meta.dir, '../../../supabase/schemas/90_ontology_candidate_quiet.sql'), 'utf8');
-    expect(readFileSync(join(quietDir, quietNames[0]!), 'utf8')).toBe(quiet);
-    expect(quiet).toContain('n_earn >= 2 or s.recent_themed');
-    expect(quiet).toContain("theme_id = 'earnings_events'");
-    expect(quiet).toContain('reported|prints?|beats?|miss(?:ed)?|gaps?|reports?');
-    expect(quiet).toContain('\\m(hold|holding|held|chase|chasing)\\M');
-    expect(quiet).toContain("'QQQ'");
-    expect(quiet).toContain("'SPY'");
-    expect(quiet).toContain("'SMH'");
-    expect(quiet).toContain("'IWM'");
-    expect(quiet).toContain("'XLK'");
-    expect(quiet).toContain('open_equity');
-    expect(quiet).toContain(') + 2');
-    expect(quiet).toContain("when public.ontology_candidates.status = 'rejected' then 'pending'");
-    expect(quiet).toContain("status in ('pending', 'rejected')");
-    expect(quiet).not.toContain('cron.schedule');
-    expect(quiet).not.toContain('desk_public_reader');
-    expect(quiet).not.toContain('grant execute');
-    expect(quiet).not.toMatch(/to oddsborne_worker/);
-    expect(quiet).not.toMatch(/to bandit_worker/);
+    const quietSql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/90_ontology_candidate_quiet.sql'), 'utf8');
+    expect(readFileSync(join(quietDir, quietNames[0]!), 'utf8')).toBe(quietSql);
+    expect(quietSql).toContain('n_earn >= 2 or s.recent_themed');
+    expect(quietSql).toContain("theme_id = 'earnings_events'");
+    expect(quietSql).toContain('reported|prints?|beats?|miss(?:ed)?|gaps?|reports?');
+    expect(quietSql).toContain('\\m(hold|holding|held|chase|chasing)\\M');
+    expect(quietSql).toContain("'QQQ'");
+    expect(quietSql).toContain("'SPY'");
+    expect(quietSql).toContain("'SMH'");
+    expect(quietSql).toContain("'IWM'");
+    expect(quietSql).toContain("'XLK'");
+    expect(quietSql).toContain('open_equity');
+    expect(quietSql).toContain(') + 2');
+    expect(quietSql).toContain("when public.ontology_candidates.status = 'rejected' then 'pending'");
+    expect(quietSql).toContain("status in ('pending', 'rejected')");
+    expect(quietSql).not.toContain('cron.schedule');
+    expect(quietSql).not.toContain('desk_public_reader');
+    expect(quietSql).not.toContain('grant execute');
+    expect(quietSql).not.toMatch(/to oddsborne_worker/);
+    expect(quietSql).not.toMatch(/to bandit_worker/);
+
+    const stall = readFileSync(join(import.meta.dir, '../../../supabase/schemas/91_learning_loop_stall.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261102184327_learning_loop_stall.sql'), 'utf8')).toBe(stall);
+    expect(stall).toContain(') >= 5');
+    expect(stall).toContain('us_equity_market_calendar');
+    expect(stall).toContain('as learning_stalls');
+    expect(stall).toContain('ontology_proposer_runs');
+    expect(stall).toContain("interval '8 hours'");
+    expect(stall).toContain("'learning_stalls', coalesce(v_stalls, '[]'::jsonb)");
+    expect(stall).not.toContain("p_tested_at <= p_at - interval '7 days'");
+    expect(stall).not.toContain('placeholder will be replaced');
+    const narrow = readFileSync(join(import.meta.dir, '../../../supabase/schemas/92_ontology_proposer_narrow.sql'), 'utf8');
+    expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261102191934_ontology_proposer_narrow.sql'), 'utf8')).toBe(narrow);
+    expect(narrow).toContain('from public, anon, desk_public_reader, oddsborne_worker, bandit_worker;');
+    expect(narrow).not.toMatch(/\bgrant\b/i);
+    expect(stall).not.toMatch(/update\s+public\.strategy_tests/i);
+    expect(stall).not.toMatch(/update\s+public\.research_lessons/i);
+    expect(stall).not.toContain('select private.propose_ontology_candidates()');
   });
 });
 

@@ -559,10 +559,13 @@ export function hydratePublicDesk(desk: DeskWire): DeskWire {
 }
 
 const STRATEGY_TEST_HIDDEN = new Set(['placeholder', 'lookahead_invalid']);
-const PUBLIC_TEST_KEYS = ['id', 'cycle_id', 'variant_label', 'status', 'failure_reason', 'result', 'per_trade', 'book'] as const;
+const PUBLIC_TEST_KEYS = ['id', 'cycle_id', 'variant_label', 'status', 'failure_reason', 'tested_at', 'result', 'per_trade', 'book'] as const;
+/** Queued rows keep tested_at so the Book can say how long a test has been waiting. */
 const PUBLIC_PER_TRADE_KEYS = ['n', 'unit', 'mean', 'ci90', 'hit', 'hit_other'] as const;
 /** Cycle hypothesis and preregistered outcome on the phone. */
 export const PUBLIC_CYCLE_NOTE_CHARS = 160;
+/** A queued test's hypothesis has to keep the sentence that says what it checks. */
+export const QUEUED_CYCLE_NOTE_CHARS = 320;
 
 function isSnapshotRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -591,6 +594,7 @@ function publishTests(rows: unknown): Record<string, unknown>[] {
     if (!isSnapshotRecord(row) || STRATEGY_TEST_HIDDEN.has(String(row.status ?? ''))) continue;
     const next: Record<string, unknown> = {};
     for (const key of PUBLIC_TEST_KEYS) {
+      if (key === 'tested_at' && row.status !== 'queued') continue;
       const value = key === 'per_trade' ? publishPerTrade(row[key]) : row[key];
       if (value === undefined || value === null || value === '') continue;
       next[key] = value;
@@ -601,18 +605,19 @@ function publishTests(rows: unknown): Record<string, unknown>[] {
   return out;
 }
 
-function publishCycles(rows: unknown, cycleIds: Set<number>): Record<string, unknown>[] {
+function publishCycles(rows: unknown, cycleIds: Set<number>, queuedCycleIds: ReadonlySet<number>): Record<string, unknown>[] {
   if (!Array.isArray(rows)) return [];
   const out: Record<string, unknown>[] = [];
   for (const row of rows) {
     if (!isSnapshotRecord(row) || !cycleIds.has(Number(row.id))) continue;
+    const hypothesisMax = queuedCycleIds.has(Number(row.id)) ? QUEUED_CYCLE_NOTE_CHARS : PUBLIC_CYCLE_NOTE_CHARS;
     out.push({
       id: row.id,
       thesis_id: row.thesis_id,
       stage: row.stage,
       status: row.status,
       market_regime: row.market_regime ?? null,
-      hypothesis: clipSnapshotNote(row.hypothesis) ?? '',
+      hypothesis: clipSnapshotNote(row.hypothesis, hypothesisMax) ?? '',
       preregistered_outcome: clipSnapshotNote(row.preregistered_outcome) ?? '',
     });
   }
@@ -647,9 +652,12 @@ export function toPublicDeskSnapshot(desk: DeskWire): DeskWire {
     const tests = publishTests(source.tests);
     const testIds = new Set(tests.map((row) => Number(row.id)));
     const cycleIds = new Set(tests.map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id)));
+    const queuedCycleIds = new Set(
+      tests.filter((row) => row.status === 'queued').map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id)),
+    );
     const scenarios = publishScenarios(source.scenarios, testIds);
     slim.tests = tests;
-    slim.cycles = publishCycles(source.cycles, cycleIds);
+    slim.cycles = publishCycles(source.cycles, cycleIds, queuedCycleIds);
     slim.scenarios = scenarios;
     slim.backtest_artifacts = [];
     if (isSnapshotRecord(slim.counts)) {

@@ -130,6 +130,8 @@ describe('public desk Worker API', () => {
         stale_queued_tests: null,
         unlinked_named_lessons: null,
         ontology_freshness: null,
+        learning_stalls: [],
+        learning_loop_stalled: false,
       },
       learning: {
         to_review: 0,
@@ -224,11 +226,68 @@ describe('public desk Worker API', () => {
       watchdog: {
         stale_queued_tests: { n: number; quantanamo: number } | null;
         unlinked_named_lessons: number | null;
+        learning_loop_stalled: boolean;
       };
     };
     expect(body.ok).toBe(true);
     expect(body.watchdog.stale_queued_tests).toMatchObject({ n: 18, quantanamo: 18 });
     expect(body.watchdog.unlinked_named_lessons).toBe(1);
+    expect(body.watchdog.learning_loop_stalled).toBe(false);
+  });
+
+  test('a queued test past five trading days is a learning-loop stall and /api/health stays ok', async () => {
+    const sentence = 'A test of earnings gap structure has been waiting 12 trading days. Lessons that depend on it still have no verdict.';
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        watchdog: {
+          ...emptyLedgerWatchdog(),
+          available: true,
+          stale_queued_tests: {
+            n: 4,
+            quantanamo: 4,
+            oddsborne: 1,
+            bandit: 0,
+            unknown: 0,
+            theses: [
+              { thesis_id: 'earnings_gap_structure', steward: 'quantanamo', n: 4 },
+              { thesis_id: 'old_book', steward: 'oddsborne', n: 1 },
+            ],
+          },
+          learning_stalls: [sentence],
+          ontology_freshness: {
+            last_first_seen_at: '2026-10-30T00:32:29.675258+00:00',
+            last_seen_at: '2026-10-30T23:26:33.782284+00:00',
+            newest_evidence_at: '2026-11-02T16:45:49.773973+00:00',
+            last_run_at: '2026-11-02T18:15:01.96345+00:00',
+            evidence_through: '2026-11-02T16:45:49.773973+00:00',
+            considered: 12,
+            proposed: 0,
+            skipped: 12,
+            lag_hours: 0.2,
+            lagging: false,
+            created_7d: 28,
+            pending: 24,
+            starved: false,
+          },
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      ok: boolean;
+      watchdog: {
+        learning_stalls: string[];
+        learning_loop_stalled: boolean;
+        ontology_freshness: { lagging: boolean; proposed: number } | null;
+      };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.watchdog.learning_loop_stalled).toBe(true);
+    expect(body.watchdog.learning_stalls).toEqual([sentence]);
+    expect(body.watchdog.ontology_freshness).toMatchObject({ lagging: false, proposed: 0 });
   });
 
   test('market skill is on the health learning block and does not change ok', async () => {

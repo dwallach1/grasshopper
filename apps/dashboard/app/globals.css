@@ -6749,6 +6749,29 @@ html.is-public-desk body {
   text-underline-offset: 3px;
 }
 
+.books-idea-wait {
+  color: var(--ink-3, var(--text-3));
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.books-waiting {
+  margin: 2px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.books-waiting li + li {
+  margin-top: 12px;
+}
+
+.books-waiting-check {
+  margin: 0 0 4px;
+  color: var(--ink, var(--text));
+  font-size: 15px;
+  line-height: 1.4;
+}
+
 .books-detail .books-lesson-wait {
   margin: 2px 0 0;
   color: var(--ink-2, var(--text-2));
