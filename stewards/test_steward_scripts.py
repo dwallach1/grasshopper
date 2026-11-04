@@ -353,6 +353,24 @@ class StewardScripts(unittest.TestCase):
         self.assertEqual(mig[0].read_text(), sql)
         self.assertIn('"quantanamo"', (HERE / "bandit" / "close_lesson.py").read_text())
 
+    def test_trade_close_lesson_links_the_research_lesson(self) -> None:
+        sql = (HERE.parent / "supabase" / "schemas" / "93_link_trade_close_lessons.sql").read_text()
+        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_link_trade_close_lessons.sql"))
+        self.assertEqual(len(mig), 1)
+        self.assertEqual(mig[0].read_text(), sql)
+        fn = sql[sql.index("create or replace function public.steward_close_lesson(p jsonb)"):]
+        fn = fn[:fn.index("$$;")]
+        self.assertLess(fn.index("if v_dry then"), fn.index("insert into public.belief_updates"))
+        self.assertLess(fn.index("if v_dry then"), fn.index("insert into public.research_lessons"))
+        self.assertIn("v_prior := private.thesis_ledger_confidence(v_thesis);", fn)
+        self.assertIn("v_pnl < 0 and v_new > v_prior", fn)
+        self.assertIn("'research_lesson_id', v_lesson", fn)
+        self.assertIn("<= 600", sql)
+        self.assertIn("security definer", sql[sql.index("create or replace function private.link_trade_close_lesson"):])
+        self.assertIn("revoke all on function private.link_trade_close_lesson() from public, anon, authenticated;", sql)
+        self.assertNotIn("grant execute on function private.link_trade_close_lesson()", sql)
+        self.assertIn("pass --research-lesson-id or --lesson-summary, not both", (HERE / "bandit" / "close_lesson.py").read_text())
+
     def test_clv_leaves_out_provisional_close_marks(self) -> None:
         # 66: v_decision_clv and its summary read only closing marks; provisional ones are counted, not dropped.
         sql = CLV_SQL.read_text()

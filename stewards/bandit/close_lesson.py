@@ -13,7 +13,10 @@ public.steward_close_lesson (over HTTPS as <steward>_worker) refuses unless the 
 and the thesis is the lot's; confidence is on the 1-100 scale; the rationale must say something (>= 20 chars).
 The prior is always the ledger's current value (results_confidence, else stated; set in the database,
 not here); --confidence-delta moves from it, and a losing close can never raise it (clamped, meta.clamped).
---dry-run runs the same checks and arithmetic in the database (dry_run: true) and prints the result; no write.
+--research-lesson-id stamps that lesson on the belief. --lesson-summary with --lesson-type and --cycle-id
+writes the research lesson in the same call. Omit both and the ledger links the one lesson for this close
+when it is unambiguous. --dry-run runs the same checks and arithmetic in the database (dry_run: true) and
+prints the result; no write.
 Keep this file identical in stewards/bandit and stewards/oddsborne (test_steward_scripts checks).
 """
 from __future__ import annotations
@@ -48,6 +51,18 @@ def lesson_args(steward: str, a) -> dict:
         if not isinstance(meta, dict):
             raise SystemExit("--meta-json must be a JSON object")
         args["meta"] = meta
+    lesson_id = getattr(a, "research_lesson_id", None)
+    if lesson_id is not None:
+        args["research_lesson_id"] = lesson_id
+    summary = getattr(a, "lesson_summary", None)
+    if summary:
+        args["lesson_summary"] = summary
+    lesson_type = getattr(a, "lesson_type", None)
+    if lesson_type:
+        args["lesson_type"] = lesson_type
+    cycle_id = getattr(a, "cycle_id", None)
+    if cycle_id is not None:
+        args["cycle_id"] = cycle_id
     return args
 
 
@@ -61,6 +76,10 @@ def main(argv=None) -> int:
     ap.add_argument("--confidence-delta", type=float, default=None,
                     help="move confidence by this much from the ledger's current value (e.g. -5)")
     ap.add_argument("--meta-json", default=None)
+    ap.add_argument("--research-lesson-id", type=int, default=None)
+    ap.add_argument("--lesson-summary", default=None)
+    ap.add_argument("--lesson-type", default=None)
+    ap.add_argument("--cycle-id", type=int, default=None)
     ap.add_argument("--steward", default=steward_from_path(), choices=STEWARDS)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
@@ -68,6 +87,10 @@ def main(argv=None) -> int:
         ap.error("--steward is required outside /workspace/{bandit,oddsborne} (QUANTANAMO: --steward quantanamo)")
     if a.new_confidence is not None and a.confidence_delta is not None:
         ap.error("pass --new-confidence or --confidence-delta, not both")
+    if a.research_lesson_id is not None and a.lesson_summary:
+        ap.error("pass --research-lesson-id or --lesson-summary, not both")
+    if a.lesson_summary and (not a.lesson_type or a.cycle_id is None):
+        ap.error("--lesson-summary needs --lesson-type and --cycle-id")
     if a.new_confidence is not None and not (1 <= a.new_confidence <= 100):
         ap.error("--new-confidence is on the 1-100 scale")
     from steward_rpc import RpcError, call, dumps

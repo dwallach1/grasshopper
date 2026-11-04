@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { lessonWaitLine, mapLessonWaits } from './lesson-waits';
+import { lessonAgeLine, lessonWaitLine, mapLessonWaits, OPEN_LESSON_STALE_DAYS } from './lesson-waits';
 
 describe('open lesson waits', () => {
   test('a blank age stays unknown, and a bad row is dropped', () => {
@@ -49,10 +49,25 @@ describe('open lesson waits', () => {
       .toBe('Waiting on test 99, still queued');
     expect(lessonWaitLine({ test_id: 42, test_status: null, age_days: null }))
       .toBe('Waiting on test 42');
-    expect(lessonWaitLine({ test_id: 40, test_status: 'survived', age_days: 4 })).toBeNull();
-    expect(lessonWaitLine({ test_id: 36, test_status: 'killed', age_days: 20 })).toBeNull();
-    expect(lessonWaitLine({ test_id: 5, test_status: 'retired', age_days: 30 })).toBeNull();
+    expect(lessonWaitLine({ test_id: 40, test_status: 'survived', age_days: 4 }))
+      .toBe('Test finished, ready to decide');
+    expect(lessonWaitLine({ test_id: 36, test_status: 'killed', age_days: 20 }))
+      .toBe('Test finished, ready to decide');
+    expect(lessonWaitLine({ test_id: 5, test_status: 'retired', age_days: 30 }))
+      .toBe('Test finished, ready to decide');
+    expect(lessonWaitLine({ test_id: 51, test_status: 'lookahead_invalid', age_days: 2 }))
+      .toBe('Test finished, ready to decide');
+    expect(lessonWaitLine({ test_id: 7, test_status: 'passed', age_days: 3 })).toBeNull();
     expect(lessonWaitLine({ test_id: null, test_status: 'queued', age_days: 4 })).toBeNull();
     expect(lessonWaitLine(null)).toBeNull();
+  });
+
+  test('an open lesson says how long it has been open', () => {
+    const now = Date.parse('2026-11-04T18:00:00.000Z');
+    expect(lessonAgeLine('2026-11-04T16:07:31.000Z', now)).toBe('Opened today');
+    expect(lessonAgeLine('2026-11-03T16:07:31.000Z', now)).toBe('Open 1 day');
+    expect(lessonAgeLine('2026-10-20T16:07:31.000Z', now)).toBe('Open 15 days');
+    expect(lessonAgeLine('not-a-time', now)).toBeNull();
+    expect(OPEN_LESSON_STALE_DAYS).toBe(7);
   });
 });

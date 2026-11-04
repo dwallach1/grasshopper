@@ -12,6 +12,7 @@ import type { DeskPayload, DeskTeamPayload, LessonRow, ThesisRow } from './ledge
 import type { JsonObjectRow } from './ledger-map';
 
 export const PLAYBOOK_RULE_KIND = 'playbook_rule';
+export const TRADE_CLOSE_LESSON_KIND = 'trade_close_lesson';
 export const BELIEF_RATIONALE_CAP = 180;
 /**
  * Process and structure slugs on a lot. `kill` and `negative_result` append
@@ -36,6 +37,10 @@ export type BeliefUpdateRow = {
   rules: string[];
   steward: string | null;
   research_lesson_id: string | null;
+  /** Lot this close lesson belongs to. Null on playbook rows and unmatched beliefs. */
+  lot_id?: string | null;
+  /** Sign of the lot's realized P/L. The amount stays off the desk. */
+  pnl_sign?: -1 | 0 | 1 | null;
   /** Older playbook row ids this row replaces. Empty when the lesson is additive. */
   supersedes?: readonly string[];
   /** The row marks itself withdrawn, retired, or superseded. */
@@ -66,6 +71,8 @@ export type ClipNote = {
   kind: 'lesson' | 'belief';
   summary: string;
   belief: ClipBeliefNote | null;
+  /** Confidence move for a close that already wrote a belief. Sign only, no amount. */
+  move?: string | null;
 };
 
 const OptionalText = z.union([z.string(), z.null()]).transform((value) => {
@@ -122,6 +129,8 @@ export function mapBeliefs(rows: JsonObjectRow[]): BeliefUpdateRow[] {
       rules: stringList(meta.rules),
       steward: textField(meta.steward),
       research_lesson_id: lessonId(meta.research_lesson_id),
+      lot_id: textField(meta.lot_id),
+      pnl_sign: pnlSign(meta.lot_realized_pnl),
       supersedes: supersedeIds(meta.supersedes),
       withdrawn: playbookMetaWithdrawn(meta),
     };
@@ -226,23 +235,123 @@ export function rulesInForceFor(input: {
   return [...process.slice(0, Math.max(0, cap)), ...outcomes];
 }
 
+export function isTradeCloseLesson(row: Pick<BeliefUpdateRow, 'kind'>): boolean {
+  return row.kind.trim().toLowerCase() === TRADE_CLOSE_LESSON_KIND;
+}
+
+/** Lesson ids whose close already wrote a trade_close_lesson belief. */
+export function scoredCloseLessonIds(
+  beliefs: readonly Pick<BeliefUpdateRow, 'kind' | 'research_lesson_id'>[],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of beliefs) {
+    if (!isTradeCloseLesson(row) || !row.research_lesson_id) continue;
+    ids.add(row.research_lesson_id);
+  }
+  return ids;
+}
+
+export function closeBeliefForLesson(
+  lessonId: number,
+  beliefs: readonly BeliefUpdateRow[],
+): BeliefUpdateRow | null {
+  const key = String(lessonId);
+  return beliefs.find((row) => isTradeCloseLesson(row) && row.research_lesson_id === key) ?? null;
+}
+
+export function closeBeliefForLot(
+  lotId: string,
+  beliefs: readonly BeliefUpdateRow[],
+): BeliefUpdateRow | null {
+  return beliefs.find((row) => isTradeCloseLesson(row) && row.lot_id === lotId) ?? null;
+}
+
+/** Case-sensitive token match. Same rule as private.lesson_mentions_symbol. */
+export function lessonMentionsSymbol(summary: string, symbol: string): boolean {
+  const token = symbol.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{1,63}$/.test(token)) return false;
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`).test(summary);
+}
+
+/**
+ * The close belief for this lot. Prefer meta.lot_id. If the published row
+ * has only the lesson link, use the one lesson that names the symbol.
+ */
+export function closeBeliefForSymbol(
+  symbol: string | null | undefined,
+  thesisId: string,
+  beliefs: readonly BeliefUpdateRow[],
+  lessons: readonly LessonRow[],
+): BeliefUpdateRow | null {
+  const token = symbol?.trim();
+  if (!token) return null;
+  const matches = beliefs.filter((row) => {
+    if (!isTradeCloseLesson(row) || row.thesis_id !== thesisId || !row.research_lesson_id) return false;
+    const lesson = lessons.find((item) => String(item.id) === row.research_lesson_id);
+    return Boolean(lesson && lessonMentionsSymbol(lesson.summary, token));
+  });
+  return matches.length === 1 ? matches[0] ?? null : null;
+}
+
+/**
+ * Confidence move in plain words, plus gain / loss / flat.
+ * The dollar amount is not shown. Missing sides stay a dash. Null when
+ * neither the move nor the sign is on the row.
+ */
+export function closeMoveLine(row: {
+  prior_confidence: number | null;
+  new_confidence: number | null;
+  pnl_sign?: -1 | 0 | 1 | null;
+}): string | null {
+  const prior = row.prior_confidence;
+  const next = row.new_confidence;
+  const move = prior === null && next === null
+    ? null
+    : `confidence ${prior === null ? '—' : prior} → ${next === null ? '—' : next}`;
+  const sign = row.pnl_sign === 1 ? 'gain' : row.pnl_sign === -1 ? 'loss' : row.pnl_sign === 0 ? 'flat' : null;
+  if (move && sign) return `${move} · ${sign}`;
+  return move ?? sign;
+}
+
 export function clipNoteFor(input: {
   thesisId: string | null;
+  lotId?: string | null;
+  symbol?: string | null;
   beliefs?: readonly BeliefUpdateRow[];
   lessons?: readonly LessonRow[];
 }): ClipNote | null {
   const thesisId = input.thesisId;
   if (!thesisId) return null;
+  const beliefs = input.beliefs ?? [];
+  const lessons = input.lessons ?? [];
+  const close = (input.lotId ? closeBeliefForLot(input.lotId, beliefs) : null)
+    ?? closeBeliefForSymbol(input.symbol, thesisId, beliefs, lessons);
+  if (close && close.thesis_id === thesisId) {
+    const linked = close.research_lesson_id
+      ? (input.lessons ?? []).find((row) => String(row.id) === close.research_lesson_id && row.thesis_id === thesisId) ?? null
+      : null;
+    const summary = truncateRationale(linked?.summary ?? close.rationale);
+    const move = closeMoveLine(close);
+    if (!summary && !move) return null;
+    return {
+      key: linked ? `lesson:${linked.id}` : `belief:${close.id}`,
+      kind: linked ? 'lesson' : 'belief',
+      summary: summary || move || '',
+      belief: null,
+      move,
+    };
+  }
   const lesson = (input.lessons ?? [])
     .filter((row) => row.thesis_id === thesisId)
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)[0];
-  const beliefs = (input.beliefs ?? [])
+  const ranked = beliefs
     .filter((row) => row.thesis_id === thesisId)
     .slice()
     .sort((a, b) => b.observed_at.localeCompare(a.observed_at) || b.id.localeCompare(a.id));
   if (!lesson) {
-    const belief = beliefs[0];
+    const belief = ranked[0];
     const summary = belief ? truncateRationale(belief.rationale) : '';
     if (!belief || !summary) return null;
     return {
@@ -253,7 +362,7 @@ export function clipNoteFor(input: {
     };
   }
   const summary = truncateRationale(lesson.summary);
-  const playbook = beliefs.filter(isPlaybookRule);
+  const playbook = ranked.filter(isPlaybookRule);
   const lessonKey = String(lesson.id);
   const linked = playbook.find((row) => row.research_lesson_id === lessonKey) ?? null;
   // Link wins. When it is missing, the newest playbook rule still sits beside the lesson.
@@ -437,8 +546,17 @@ function textField(value: unknown): string | null {
 }
 
 function lessonId(value: unknown): string | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.trunc(value));
   return textField(value);
+}
+
+function pnlSign(value: unknown): -1 | 0 | 1 | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed > 0) return 1;
+  if (parsed < 0) return -1;
+  return 0;
 }
 
 function stringList(value: unknown): string[] {

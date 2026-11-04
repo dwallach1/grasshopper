@@ -9,7 +9,7 @@
  * sync_missing_thesis, …) is legacy, not a write-habit miss; only neither
  * is a missing gate.
  */
-import { assemblePlaybookRules } from './beliefs';
+import { assemblePlaybookRules, scoredCloseLessonIds } from './beliefs';
 import { assembleBookHoldings, type BookHolding } from './book-holdings';
 import { leanPendingCandidates } from './candidate-review';
 import { retiredStewardSlugs } from './desk-team';
@@ -46,12 +46,13 @@ function liveBookGate(row: Pick<BookHolding, 'thesis_id' | 'untagged'>) {
 
 export function assembleLearningPulse(desk: DeskPayload): LearningPulse {
   const lessons = desk.lessons ?? [];
+  const scored = scoredCloseLessonIds(desk.beliefs ?? []);
   const live = assembleBookHoldings(desk).rows.filter((row) => row.life === 'live');
   const gates = live.map(liveBookGate);
   const forecast = forecastVsMarketLines(desk.scorecard?.forecast ?? [], retiredStewardSlugs(desk));
   return {
     to_review: leanPendingCandidates(desk.ontology_candidates ?? []).length,
-    lessons_open: lessons.filter((row) => !row.incorporated).length,
+    lessons_open: lessons.filter((row) => !row.incorporated && !scored.has(String(row.id))).length,
     lessons_incorporated: lessons.filter((row) => row.incorporated).length,
     beliefs_in_force: assemblePlaybookRules(desk.beliefs ?? []).length,
     open_books: live.length,

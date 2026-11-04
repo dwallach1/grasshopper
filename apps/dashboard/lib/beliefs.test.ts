@@ -4,6 +4,7 @@ import {
   assemblePlaybookRules,
   beliefTrailFor,
   clipNoteFor,
+  closeMoveLine,
   domainIdForSteward,
   humanizeRule,
   isPlaybookRule,
@@ -77,6 +78,62 @@ describe('belief mapping', () => {
     ]);
     expect(isPlaybookRule(row!)).toBe(true);
     expect(row?.rationale).toContain('FEIM leftover');
+  });
+
+  test('a close lesson keeps the lot and the sign, not the dollar amount', () => {
+    const [row] = mapBeliefs([belief({
+      meta: {
+        kind: 'trade_close_lesson',
+        steward: 'quantanamo',
+        research_lesson_id: 212,
+        lot_id: 'eca48b14-22e9-48b6-a7f2-e49cdfce5312',
+        lot_realized_pnl: -18.84,
+      },
+      prior_confidence: 32,
+      new_confidence: 30,
+      rationale: 'RMBS paid the line.',
+    })]);
+    expect(row).toMatchObject({
+      kind: 'trade_close_lesson',
+      research_lesson_id: '212',
+      lot_id: 'eca48b14-22e9-48b6-a7f2-e49cdfce5312',
+      pnl_sign: -1,
+    });
+    expect(closeMoveLine(row!)).toBe('confidence 32 → 30 · loss');
+    expect(closeMoveLine(row!)).not.toContain('18');
+    expect(closeMoveLine({ prior_confidence: 35, new_confidence: 36, pnl_sign: 1 }))
+      .toBe('confidence 35 → 36 · gain');
+    expect(closeMoveLine({ prior_confidence: null, new_confidence: null, pnl_sign: null })).toBeNull();
+    const lessons = [{
+      id: 212,
+      cycle_id: 1,
+      test_id: null,
+      thesis_id: 'earnings_gap_structure',
+      lesson_type: 'invalidation',
+      summary: 'RMBS: the line was paid in full.',
+      market_regime: null,
+      incorporated: false,
+      created_at: AT,
+    }];
+    const linked = mapBeliefs([belief({
+      id: 'b-rmbs',
+      meta: { kind: 'trade_close_lesson', research_lesson_id: 212, lot_realized_pnl: '-18.84' },
+      prior_confidence: 32,
+      new_confidence: 30,
+      rationale: 'RMBS paid the line.',
+    })])[0]!;
+    const note = clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      symbol: 'RMBS',
+      beliefs: [linked],
+      lessons,
+    });
+    expect(note).toMatchObject({
+      kind: 'lesson',
+      summary: 'RMBS: the line was paid in full.',
+      move: 'confidence 32 → 30 · loss',
+    });
+    expect(note?.move).not.toContain('18');
   });
 
   test('a repeated slug stays; only an explicit supersede or withdrawal drops a row', () => {
