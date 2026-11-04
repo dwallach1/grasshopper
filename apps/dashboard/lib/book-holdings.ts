@@ -176,6 +176,7 @@ function equityHoldings(desk: DeskPayload): BookHolding[] {
         thesisId: row.thesis_id,
         untagged: leanUntagged(row),
         life: 'closed',
+        lotId: row.id,
       }),
     }));
   }
@@ -213,6 +214,7 @@ function predictionHoldings(desk: DeskPayload): BookHolding[] {
         untagged: leanUntagged(row),
         life: closed ? 'closed' : 'live',
         steward: 'oddsborne',
+        lotId: closed ? row.id : null,
       }),
       invalidation: lotInvalidation(row),
     }));
@@ -252,6 +254,7 @@ function memeHoldings(desk: DeskPayload): BookHolding[] {
         untagged: leanUntagged(row),
         life: closed ? 'closed' : 'live',
         steward: 'bandit',
+        lotId: closed ? row.id : null,
       }),
       invalidation: lotInvalidation(row),
     }));
@@ -267,6 +270,7 @@ function bindHolding(
     untagged?: string | null;
     life: BookHoldingLife;
     steward?: BookHoldingStewardSlug;
+    lotId?: string | null;
   },
 ): Pick<BookHolding, 'thesis_id' | 'thesis_name' | 'untagged' | 'rules_in_force' | 'clip_note'> {
   const thesis = input.thesisId
@@ -291,6 +295,8 @@ function bindHolding(
     clip_note: input.life === 'closed'
       ? clipNoteFor({
         thesisId: thesis?.id ?? null,
+        lotId: input.lotId ?? null,
+        symbol: input.symbol,
         beliefs: desk.beliefs ?? [],
         lessons: desk.lessons ?? [],
       })

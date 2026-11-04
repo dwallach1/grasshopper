@@ -4,6 +4,7 @@
  * stays null — the desk does not invent a day count.
  */
 import type { JsonObjectRow } from './ledger-map';
+import { nyCalendarDaysSince } from './waiting-tests';
 
 export type LessonWait = {
   lesson_id: number;
@@ -27,6 +28,24 @@ function int(value: unknown): number | null {
 
 function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/** Open lessons older than this are marked so a stale one is visible in the list. */
+export const OPEN_LESSON_STALE_DAYS = 7;
+
+const TEST_FINISHED = new Set(['killed', 'retired', 'survived', 'lookahead_invalid']);
+
+/** New York calendar days since the lesson was written. Null when the time is missing. */
+export function lessonAgeDays(createdAt: string, nowMs: number): number | null {
+  return nyCalendarDaysSince(createdAt, nowMs);
+}
+
+export function lessonAgeLine(createdAt: string, nowMs: number): string | null {
+  const days = lessonAgeDays(createdAt, nowMs);
+  if (days === null) return null;
+  if (days <= 0) return 'Opened today';
+  if (days === 1) return 'Open 1 day';
+  return `Open ${days} days`;
 }
 
 export function mapLessonWaits(rows: readonly JsonObjectRow[] | unknown): LessonWait[] {
@@ -60,8 +79,10 @@ export function lessonWaitLine(
 ): string | null {
   if (!wait || wait.test_id === null) return null;
   const id = wait.test_id;
-  if (wait.test_status === null) return `Waiting on test ${id}`;
-  if (wait.test_status !== 'queued') return null;
+  const status = wait.test_status?.trim().toLowerCase() ?? null;
+  if (status && TEST_FINISHED.has(status)) return 'Test finished, ready to decide';
+  if (status === null) return `Waiting on test ${id}`;
+  if (status !== 'queued') return null;
   if (wait.age_days === null || wait.age_days < 0) return `Waiting on test ${id}, still queued`;
   if (wait.age_days === 0) return `Waiting on test ${id}, queued today`;
   const word = wait.age_days === 1 ? 'day' : 'days';

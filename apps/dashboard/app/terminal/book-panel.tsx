@@ -2,14 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 
-import { rulesInForceByDomain, type BeliefUpdateRow, type RulesInForceGroup } from '../../lib/beliefs';
+import {
+  closeBeliefForLesson,
+  closeMoveLine,
+  rulesInForceByDomain,
+  scoredCloseLessonIds,
+  type BeliefUpdateRow,
+  type RulesInForceGroup,
+} from '../../lib/beliefs';
 import { holdingTicket } from '../../lib/book-holdings';
 import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip';
 import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 import { ontologyFreshnessLine } from '../../lib/ledger-watchdog';
-import { lessonWaitLine, type LessonWait } from '../../lib/lesson-waits';
+import {
+  lessonAgeDays,
+  lessonAgeLine,
+  lessonWaitLine,
+  OPEN_LESSON_STALE_DAYS,
+  type LessonWait,
+} from '../../lib/lesson-waits';
 import { shadowTallyLine, type ShadowCandidate } from '../../lib/shadow-tally';
 import { formatAmount } from '../../lib/money-units';
 import {
@@ -496,6 +509,9 @@ function BooksDetail({
               <p className="books-note">
                 <b>{h.clip_note.kind === 'lesson' ? 'Lesson' : 'Belief'}</b> {h.clip_note.summary}
               </p>
+              {h.clip_note.move ? (
+                <p className="books-note books-close-move">{h.clip_note.move}</p>
+              ) : null}
               {h.clip_note.belief ? (
                 <p className="books-note"><b>Belief</b> {h.clip_note.belief.summary}</p>
               ) : null}
@@ -606,7 +622,14 @@ function ThesisBody({
   const [allLessons, setAllLessons] = useState(false);
   const ruleGroups = rulesInForceByDomain({ thesisId: thesis.id, beliefs, domains });
   const trail = thesis.beliefs.filter((note) => note.kind !== 'playbook_rule');
-  const shown = allLessons ? lessons : lessons.slice(0, LESSONS_SHOWN);
+  const scoredIds = scoredCloseLessonIds(beliefs);
+  const openLessons = lessons
+    .filter((row) => !row.incorporated && !scoredIds.has(String(row.id)))
+    .slice()
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  const scoredLessons = lessons.filter((row) => scoredIds.has(String(row.id)));
+  const playbookLessons = lessons.filter((row) => row.incorporated && !scoredIds.has(String(row.id)));
+  const shownOpen = allLessons ? openLessons : openLessons.slice(0, LESSONS_SHOWN);
   const linkedCycles = cycles.filter((row): row is { id: number; thesis_id: string; hypothesis?: string | null; preregistered_outcome?: string | null } =>
     typeof row.thesis_id === 'string');
   const scoped = testsForThesis(thesis.id, tests, linkedCycles, lessons);
@@ -729,21 +752,26 @@ function ThesisBody({
           </ul>
         </>
       ) : null}
-      {lessons.length ? (
+      {openLessons.length ? (
         <>
-          <p className="books-section-label">Lessons · {lessons.length}</p>
+          <p className="books-section-label">Open lessons waiting for a decision · {openLessons.length}</p>
           <ul className="thesis-evidence books-lessons">
-            {shown.map((row) => {
+            {shownOpen.map((row) => {
               const waiting = lessonWaitLine(waits.get(row.id));
+              const age = lessonAgeLine(row.created_at, now);
+              const ageDays = lessonAgeDays(row.created_at, now);
+              const stale = ageDays !== null && ageDays >= OPEN_LESSON_STALE_DAYS;
               return (
-                <li key={row.id} data-lesson={row.id}>
+                <li key={row.id} data-lesson={row.id} data-open-lesson="1" data-stale={stale ? '1' : undefined}>
                   <span>
                     {plainWords(row.lesson_type)}
                     {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
                     {' · '}
                     {row.created_at.slice(0, 10)}
-                    {row.incorporated ? ' · in the playbook' : ''}
                   </span>
+                  {age ? (
+                    <span className={stale ? 'books-lesson-age is-stale' : 'books-lesson-age'}>{age}</span>
+                  ) : null}
                   <p>{row.summary}</p>
                   {waiting ? <p className="books-lesson-wait">{waiting}</p> : null}
                   {row.test_id !== null && byId.get(row.test_id) ? (
@@ -753,11 +781,54 @@ function ThesisBody({
               );
             })}
           </ul>
-          {lessons.length > LESSONS_SHOWN ? (
+          {openLessons.length > LESSONS_SHOWN ? (
             <button type="button" className="books-more" onClick={() => setAllLessons((value) => !value)}>
-              {allLessons ? 'Show fewer' : `Show all ${lessons.length}`}
+              {allLessons ? 'Show fewer' : `Show all ${openLessons.length}`}
             </button>
           ) : null}
+        </>
+      ) : null}
+      {scoredLessons.length ? (
+        <>
+          <p className="books-section-label">Already moved confidence · {scoredLessons.length}</p>
+          <ul className="thesis-evidence books-lessons books-scored">
+            {scoredLessons.map((row) => {
+              const move = closeMoveLine(closeBeliefForLesson(row.id, beliefs) ?? {
+                prior_confidence: null,
+                new_confidence: null,
+              });
+              return (
+                <li key={row.id} data-lesson={row.id} data-scored="1">
+                  <span>
+                    {plainWords(row.lesson_type)}
+                    {' · '}
+                    {row.created_at.slice(0, 10)}
+                  </span>
+                  <p>{row.summary}</p>
+                  {move ? <p className="books-close-move">{move}</p> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
+      {playbookLessons.length ? (
+        <>
+          <p className="books-section-label">In the playbook · {playbookLessons.length}</p>
+          <ul className="thesis-evidence books-lessons books-playbook">
+            {playbookLessons.map((row) => (
+              <li key={row.id} data-lesson={row.id} data-playbook="1">
+                <span>
+                  {plainWords(row.lesson_type)}
+                  {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
+                  {' · '}
+                  {row.created_at.slice(0, 10)}
+                  {' · in the playbook'}
+                </span>
+                <p>{row.summary}</p>
+              </li>
+            ))}
+          </ul>
         </>
       ) : null}
     </section>

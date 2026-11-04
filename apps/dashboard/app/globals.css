@@ -6772,10 +6772,23 @@ html.is-public-desk body {
   line-height: 1.4;
 }
 
-.books-detail .books-lesson-wait {
+.books-detail .books-lesson-wait,
+.books-detail .books-close-move,
+.books-lesson-age {
   margin: 2px 0 0;
   color: var(--ink-2, var(--text-2));
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.books-lesson-age.is-stale,
+.books-lessons [data-stale="1"] .books-lesson-age {
+  color: var(--ink, var(--text));
+  font-weight: 600;
+}
+
+.books-scored,
+.lesson-queue .review-card[data-scored="1"] {
+  opacity: 0.78;
 }

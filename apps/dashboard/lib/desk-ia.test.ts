@@ -276,7 +276,7 @@ describe('desk IA smoke', () => {
     expect(lessons).toContain('rankLessonsForDesk');
     expect(lessons).toContain('Incorporate');
     expect(lessons).toContain('in playbook');
-    expect(lessons).toContain('Open first, then in playbook.');
+    expect(lessons).toContain('Open lessons waiting for a decision come first. Closes that already moved confidence sit apart. Then the playbook.');
     expect(lessons).not.toContain('${open} open');
     expect(lessons).toContain('id="lessons-parchment"');
     expect(lessons).toContain('tabIndex={-1}');

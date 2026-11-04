@@ -300,6 +300,25 @@ describe('assembleLearningPulse', () => {
     expect(learningPulseSummary(pulse)).toEqual(pulse);
   });
 
+  test('a close that already moved confidence is not counted as an open lesson', () => {
+    const base = desk();
+    const pulse = assembleLearningPulse({
+      ...base,
+      lessons: [...(base.lessons ?? []), lesson(212, { lesson_type: 'invalidation', summary: 'RMBS close' })],
+      beliefs: [...(base.beliefs ?? []), belief({
+        id: 'b-rmbs',
+        kind: 'trade_close_lesson',
+        research_lesson_id: '212',
+        prior_confidence: 32,
+        new_confidence: 30,
+        pnl_sign: -1,
+        rules: [],
+      })],
+    });
+    expect(pulse.lessons_open).toBe(2);
+    expect(pulse.lessons_incorporated).toBe(1);
+  });
+
   test('adds the market comparison to the learning sentence when the scorecard has one', () => {
     const pulse = assembleLearningPulse(desk({
       scorecard: {

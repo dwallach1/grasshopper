@@ -510,7 +510,7 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
-  test('outcomes list the thesis lessons, newest first, with show all past five', async () => {
+  test('open lessons lead with the oldest, and show all past five', async () => {
     const lessons = Array.from({ length: 7 }, (_, index) => lesson(
       index + 1,
       `Lesson ${index + 1}`,
@@ -521,9 +521,10 @@ describe('Books page: one section per steward', () => {
       button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
     });
     const shown = () => [...view.host.querySelectorAll('.books-lessons li p')].map((node) => node.textContent);
-    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Lessons · 7');
-    expect(shown()).toEqual(['Lesson 7', 'Lesson 6', 'Lesson 5', 'Lesson 4', 'Lesson 3']);
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Open lessons waiting for a decision · 7');
+    expect(shown()).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3', 'Lesson 4', 'Lesson 5']);
     expect(view.host.querySelector('.books-lessons li span')?.textContent).toContain('missed swing · post print hold');
+    expect(view.host.querySelector('.books-lesson-age')?.textContent).toContain('Open');
     await act(async () => {
       button(view.host, '.books-more').click();
     });
@@ -675,11 +676,70 @@ describe('Books page: one section per steward', () => {
     });
     const lines = [...view.host.querySelectorAll('.books-lesson-wait')].map((node) => node.textContent);
     expect(lines).toEqual([
-      'Waiting on test 99, still queued',
       'Waiting on test 41, queued 4 days',
+      'Waiting on test 99, still queued',
     ]);
     expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('stale_queued');
     expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('v_open_lesson');
+    view.unmount();
+  });
+
+  test('a closed lot shows its lesson beside the confidence move, and a finished test is ready to decide', async () => {
+    const now = '2026-11-04T18:00:00.000Z';
+    const payload = desk([], [{
+      ...position('ep-rmbs', 'RMBS', EARNINGS),
+      status: 'closed',
+      quantity: 0,
+      closed_at: '2026-11-04T16:06:16.000Z',
+    }], [
+      lesson(212, 'RMBS: the line was paid in full.', '2026-11-04T16:07:31.000Z'),
+      lesson(142, 'An old structure note still needs a decision.', '2026-10-20T16:00:00.000Z'),
+      { ...lesson(203, 'Waiting on a test that already finished.', '2026-11-04T00:29:52.000Z'), test_id: 51 },
+    ]);
+    payload.beliefs = [
+      ...payload.beliefs,
+      {
+        ...belief(),
+        id: 'b-rmbs',
+        kind: 'trade_close_lesson',
+        research_lesson_id: '212',
+        lot_id: 'ep-rmbs',
+        prior_confidence: 32,
+        new_confidence: 30,
+        pnl_sign: -1,
+        rationale: 'The close taught that the line distance was paid.',
+        rules: [],
+      },
+    ];
+    payload.lesson_waits = [{
+      lesson_id: 203,
+      thesis_id: EARNINGS,
+      test_id: 51,
+      test_status: 'killed',
+      age_days: 1,
+    }];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: now }));
+    const closedFold = [...view.host.querySelectorAll('button.books-fold-toggle')]
+      .find((node) => node.textContent?.includes('Closed'));
+    if (!(closedFold instanceof HTMLButtonElement)) throw new Error('missing closed fold');
+    await act(async () => {
+      closedFold.click();
+    });
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq-closed:ep-rmbs"]').click();
+    });
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.textContent).toContain('RMBS: the line was paid in full.');
+    expect(detail?.querySelector('.books-close-move')?.textContent).toBe('confidence 32 → 30 · loss');
+    expect(detail?.querySelector('.books-close-move')?.textContent).not.toMatch(/\$|18/);
+    expect(detail?.textContent).toContain('Open lessons waiting for a decision · 2');
+    expect(detail?.textContent).toContain('Already moved confidence · 1');
+    expect(detail?.textContent).not.toContain('Open lessons waiting for a decision · 3');
+    expect(detail?.querySelector('[data-lesson="142"] .books-lesson-age')?.textContent).toBe('Open 15 days');
+    expect(detail?.querySelector('[data-lesson="142"]')?.getAttribute('data-stale')).toBe('1');
+    expect(detail?.querySelector('[data-lesson="203"] .books-lesson-wait')?.textContent)
+      .toBe('Test finished, ready to decide');
+    expect(detail?.querySelector('[data-lesson="212"]')?.getAttribute('data-scored')).toBe('1');
     view.unmount();
   });
 
