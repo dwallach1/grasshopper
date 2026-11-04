@@ -355,9 +355,16 @@ class StewardScripts(unittest.TestCase):
 
     def test_trade_close_lesson_links_the_research_lesson(self) -> None:
         sql = (HERE.parent / "supabase" / "schemas" / "93_link_trade_close_lessons.sql").read_text()
-        mig = sorted((HERE.parent / "supabase" / "migrations").glob("*_link_trade_close_lessons.sql"))
-        self.assertEqual(len(mig), 1)
-        self.assertEqual(mig[0].read_text(), sql)
+        # Applied live as five migrations; the files are byte-for-byte what schema_migrations stores.
+        migs = HERE.parent / "supabase" / "migrations"
+        for name in ("20261104183848_link_trade_close_lesson_match.sql",
+                     "20261104183855_link_trade_close_lesson_trigger.sql",
+                     "20261104183925_link_trade_close_lesson_backfill.sql"):
+            self.assertIn((migs / name).read_text().strip(), sql)
+        rpc = (migs / "20261104183911_link_trade_close_lesson_rpc.sql").read_text()
+        strip = lambda t: [l.rstrip() for l in t.splitlines() if l.strip() and not l.lstrip().startswith("--")]
+        body = sql[sql.index("create or replace function public.steward_close_lesson(p jsonb)"):sql.index("-- ---------------------------------------------------------------- 3. backfill")]
+        self.assertEqual(strip(rpc), strip(body))
         fn = sql[sql.index("create or replace function public.steward_close_lesson(p jsonb)"):]
         fn = fn[:fn.index("$$;")]
         self.assertLess(fn.index("if v_dry then"), fn.index("insert into public.belief_updates"))
