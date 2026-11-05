@@ -20,6 +20,7 @@ import {
   lessonAgeDays,
   lessonAgeLine,
   lessonWaitLine,
+  openLessonGroup,
   OPEN_LESSON_STALE_DAYS,
   type LessonWait,
 } from '../../lib/lesson-waits';
@@ -619,7 +620,8 @@ function ThesisBody({
   now: number;
   onOpenLot: (id: string) => void;
 }) {
-  const [allLessons, setAllLessons] = useState(false);
+  const [allReady, setAllReady] = useState(false);
+  const [allWaiting, setAllWaiting] = useState(false);
   const ruleGroups = rulesInForceByDomain({ thesisId: thesis.id, beliefs, domains });
   const trail = thesis.beliefs.filter((note) => note.kind !== 'playbook_rule');
   const scoredIds = scoredCloseLessonIds(beliefs);
@@ -629,7 +631,6 @@ function ThesisBody({
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
   const scoredLessons = lessons.filter((row) => scoredIds.has(String(row.id)));
   const playbookLessons = lessons.filter((row) => row.incorporated && !scoredIds.has(String(row.id)));
-  const shownOpen = allLessons ? openLessons : openLessons.slice(0, LESSONS_SHOWN);
   const linkedCycles = cycles.filter((row): row is { id: number; thesis_id: string; hypothesis?: string | null; preregistered_outcome?: string | null } =>
     typeof row.thesis_id === 'string');
   const scoped = testsForThesis(thesis.id, tests, linkedCycles, lessons);
@@ -644,6 +645,8 @@ function ThesisBody({
   });
   const byId = new Map(scoped.map((row) => [row.id, row]));
   const waits = new Map(lessonWaits.map((row) => [row.lesson_id, row]));
+  const readyLessons = openLessons.filter((row) => openLessonGroup(waits.get(row.id)) === 'ready');
+  const waitingLessons = openLessons.filter((row) => openLessonGroup(waits.get(row.id)) === 'waiting');
   return (
     <section className="books-thesis" aria-label="Thesis">
       {nested ? (
@@ -752,42 +755,30 @@ function ThesisBody({
           </ul>
         </>
       ) : null}
-      {openLessons.length ? (
-        <>
-          <p className="books-section-label">Open lessons waiting for a decision · {openLessons.length}</p>
-          <ul className="thesis-evidence books-lessons">
-            {shownOpen.map((row) => {
-              const waiting = lessonWaitLine(waits.get(row.id));
-              const age = lessonAgeLine(row.created_at, now);
-              const ageDays = lessonAgeDays(row.created_at, now);
-              const stale = ageDays !== null && ageDays >= OPEN_LESSON_STALE_DAYS;
-              return (
-                <li key={row.id} data-lesson={row.id} data-open-lesson="1" data-stale={stale ? '1' : undefined}>
-                  <span>
-                    {plainWords(row.lesson_type)}
-                    {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
-                    {' · '}
-                    {row.created_at.slice(0, 10)}
-                  </span>
-                  {age ? (
-                    <span className={stale ? 'books-lesson-age is-stale' : 'books-lesson-age'}>{age}</span>
-                  ) : null}
-                  <p>{row.summary}</p>
-                  {waiting ? <p className="books-lesson-wait">{waiting}</p> : null}
-                  {row.test_id !== null && byId.get(row.test_id) ? (
-                    <TestOutcome test={byId.get(row.test_id)!} cycles={cycles} artifacts={artifacts} linked />
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-          {openLessons.length > LESSONS_SHOWN ? (
-            <button type="button" className="books-more" onClick={() => setAllLessons((value) => !value)}>
-              {allLessons ? 'Show fewer' : `Show all ${openLessons.length}`}
-            </button>
-          ) : null}
-        </>
-      ) : null}
+      <OpenLessonGroup
+        label="Ready to write into the playbook"
+        lane="ready"
+        lessons={readyLessons}
+        expanded={allReady}
+        onToggle={() => setAllReady((value) => !value)}
+        waits={waits}
+        byId={byId}
+        cycles={cycles}
+        artifacts={artifacts}
+        now={now}
+      />
+      <OpenLessonGroup
+        label="Still waiting on a test"
+        lane="waiting"
+        lessons={waitingLessons}
+        expanded={allWaiting}
+        onToggle={() => setAllWaiting((value) => !value)}
+        waits={waits}
+        byId={byId}
+        cycles={cycles}
+        artifacts={artifacts}
+        now={now}
+      />
       {scoredLessons.length ? (
         <>
           <p className="books-section-label">Already moved confidence · {scoredLessons.length}</p>
@@ -845,6 +836,74 @@ function WaitingTestLine({ row }: { row: WaitingTest }) {
       </p>
       {row.lessonsLine ? <p className="books-note">{row.lessonsLine}</p> : null}
     </li>
+  );
+}
+
+function OpenLessonGroup({
+  label,
+  lane,
+  lessons,
+  expanded,
+  onToggle,
+  waits,
+  byId,
+  cycles,
+  artifacts,
+  now,
+}: {
+  label: string;
+  lane: 'ready' | 'waiting';
+  lessons: LessonRow[];
+  expanded: boolean;
+  onToggle: () => void;
+  waits: Map<number, LessonWait>;
+  byId: Map<number, StrategyTestRow>;
+  cycles: { id: number; preregistered_outcome?: string | null }[];
+  artifacts: BacktestArtifactRow[];
+  now: number;
+}) {
+  if (!lessons.length) return null;
+  const shown = expanded ? lessons : lessons.slice(0, LESSONS_SHOWN);
+  return (
+    <>
+      <p className="books-section-label">{label} · {lessons.length}</p>
+      <ul className="thesis-evidence books-lessons" data-lesson-lane={lane}>
+        {shown.map((row) => {
+          const waiting = lessonWaitLine(waits.get(row.id));
+          const age = lessonAgeLine(row.created_at, now);
+          const ageDays = lessonAgeDays(row.created_at, now);
+          const stale = ageDays !== null && ageDays >= OPEN_LESSON_STALE_DAYS;
+          const linked = row.test_id === null ? undefined : byId.get(row.test_id);
+          return (
+            <li
+              key={row.id}
+              data-lesson={row.id}
+              data-lesson-lane={lane}
+              data-open-lesson="1"
+              data-stale={stale ? '1' : undefined}
+            >
+              <span>
+                {plainWords(row.lesson_type)}
+                {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
+                {' · '}
+                {row.created_at.slice(0, 10)}
+              </span>
+              {age ? (
+                <span className={stale ? 'books-lesson-age is-stale' : 'books-lesson-age'}>{age}</span>
+              ) : null}
+              <p>{row.summary}</p>
+              {waiting ? <p className="books-lesson-wait">{waiting}</p> : null}
+              {linked ? <TestOutcome test={linked} cycles={cycles} artifacts={artifacts} linked /> : null}
+            </li>
+          );
+        })}
+      </ul>
+      {lessons.length > LESSONS_SHOWN ? (
+        <button type="button" className="books-more" data-lesson-lane={lane} onClick={onToggle}>
+          {expanded ? 'Show fewer' : `Show all ${lessons.length}`}
+        </button>
+      ) : null}
+    </>
   );
 }
 

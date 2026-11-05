@@ -88,3 +88,18 @@ export function lessonWaitLine(
   const word = wait.age_days === 1 ? 'day' : 'days';
   return `Waiting on test ${id}, queued ${wait.age_days} ${word}`;
 }
+
+export type OpenLessonGroup = 'ready' | 'waiting';
+
+/**
+ * Where an open lesson sits. A line that starts "Waiting on test" is still
+ * queued or unnamed. A finished test, a missing wait, or any other status
+ * is ready to write into the playbook.
+ */
+export function openLessonGroup(
+  wait: Pick<LessonWait, 'test_id' | 'test_status' | 'age_days'> | null | undefined,
+): OpenLessonGroup {
+  const line = lessonWaitLine(wait);
+  if (line !== null && line.startsWith('Waiting on test')) return 'waiting';
+  return 'ready';
+}

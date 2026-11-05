@@ -8,7 +8,14 @@ import {
   rankLessonsForDesk,
   thesisNameForLesson,
 } from '../../lib/lesson-incorporate';
-import { lessonAgeDays, lessonAgeLine, OPEN_LESSON_STALE_DAYS } from '../../lib/lesson-waits';
+import {
+  lessonAgeDays,
+  lessonAgeLine,
+  lessonWaitLine,
+  openLessonGroup,
+  OPEN_LESSON_STALE_DAYS,
+  type LessonWait,
+} from '../../lib/lesson-waits';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 
 export function LessonQueue({
@@ -20,17 +27,23 @@ export function LessonQueue({
   canIncorporate?: boolean;
   onIncorporated?: () => void;
 }) {
+  const waits = useMemo(
+    () => new Map((desk.lesson_waits ?? []).map((row) => [row.lesson_id, row])),
+    [desk.lesson_waits],
+  );
   const grouped = useMemo(() => {
     const all = desk.lessons ?? [];
     const scored = scoredCloseLessonIds(desk.beliefs ?? []);
     const newest = (a: LessonRow, b: LessonRow) => b.created_at.localeCompare(a.created_at) || b.id - a.id;
     const oldest = (a: LessonRow, b: LessonRow) => a.created_at.localeCompare(b.created_at) || a.id - b.id;
+    const open = all.filter((row) => !row.incorporated && !scored.has(String(row.id))).sort(oldest);
     return {
-      open: all.filter((row) => !row.incorporated && !scored.has(String(row.id))).sort(oldest),
+      ready: open.filter((row) => openLessonGroup(waits.get(row.id)) === 'ready'),
+      waiting: open.filter((row) => openLessonGroup(waits.get(row.id)) === 'waiting'),
       scored: all.filter((row) => scored.has(String(row.id))).sort(newest),
       playbook: rankLessonsForDesk(all.filter((row) => row.incorporated && !scored.has(String(row.id)))),
     };
-  }, [desk.beliefs, desk.lessons]);
+  }, [desk.beliefs, desk.lessons, waits]);
   const now = Date.parse(desk.generated_at);
 
   return (
@@ -43,32 +56,34 @@ export function LessonQueue({
       <header className="review-mast">
         <p className="paper-title">Lessons</p>
         <p className="thesis-lede">
-          {grouped.open.length || grouped.scored.length || grouped.playbook.length
-            ? 'Open lessons waiting for a decision come first. Closes that already moved confidence sit apart. Then the playbook.'
+          {grouped.ready.length || grouped.waiting.length || grouped.scored.length || grouped.playbook.length
+            ? 'Lessons ready to write into the playbook come first. Ones still waiting on a test sit next. Closes that already moved confidence sit apart. Then the playbook.'
             : 'No research lessons on this desk.'}
           {canIncorporate
             ? ' Incorporate writes a playbook rule.'
             : ' Public phone is read-only.'}
         </p>
       </header>
-      {grouped.open.length ? (
-        <>
-          <p className="books-section-label">Open lessons waiting for a decision · {grouped.open.length}</p>
-          <ul className="review-list">
-            {grouped.open.map((row) => (
-              <LessonCard
-                key={row.id}
-                row={row}
-                thesisName={thesisNameForLesson(row, desk.theses ?? [])}
-                canIncorporate={canIncorporate}
-                onIncorporated={onIncorporated}
-                age={lessonAgeLine(row.created_at, now)}
-                stale={(lessonAgeDays(row.created_at, now) ?? 0) >= OPEN_LESSON_STALE_DAYS}
-              />
-            ))}
-          </ul>
-        </>
-      ) : null}
+      <LessonLane
+        lane="ready"
+        label="Ready to write into the playbook"
+        rows={grouped.ready}
+        desk={desk}
+        waits={waits}
+        now={now}
+        canIncorporate={canIncorporate}
+        onIncorporated={onIncorporated}
+      />
+      <LessonLane
+        lane="waiting"
+        label="Still waiting on a test"
+        rows={grouped.waiting}
+        desk={desk}
+        waits={waits}
+        now={now}
+        canIncorporate={canIncorporate}
+        onIncorporated={onIncorporated}
+      />
       {grouped.scored.length ? (
         <>
           <p className="books-section-label">Already moved confidence · {grouped.scored.length}</p>
@@ -106,21 +121,67 @@ export function LessonQueue({
   );
 }
 
+function LessonLane({
+  lane,
+  label,
+  rows,
+  desk,
+  waits,
+  now,
+  canIncorporate,
+  onIncorporated,
+}: {
+  lane: 'ready' | 'waiting';
+  label: string;
+  rows: LessonRow[];
+  desk: DeskPayload;
+  waits: ReadonlyMap<number, LessonWait>;
+  now: number;
+  canIncorporate: boolean;
+  onIncorporated?: () => void;
+}) {
+  if (!rows.length) return null;
+  return (
+    <>
+      <p className="books-section-label">{label} · {rows.length}</p>
+      <ul className="review-list" data-lesson-lane={lane}>
+        {rows.map((row) => (
+          <LessonCard
+            key={row.id}
+            row={row}
+            lane={lane}
+            thesisName={thesisNameForLesson(row, desk.theses ?? [])}
+            canIncorporate={canIncorporate}
+            onIncorporated={onIncorporated}
+            age={lessonAgeLine(row.created_at, now)}
+            wait={lessonWaitLine(waits.get(row.id))}
+            stale={(lessonAgeDays(row.created_at, now) ?? 0) >= OPEN_LESSON_STALE_DAYS}
+          />
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function LessonCard({
   row,
+  lane,
   thesisName,
   canIncorporate = false,
   onIncorporated,
   age = null,
+  wait = null,
   stale = false,
   scored = false,
   move = null,
 }: {
   row: LessonRow;
+  lane?: 'ready' | 'waiting';
   thesisName: string;
   canIncorporate?: boolean;
   onIncorporated?: () => void;
   age?: string | null;
+  wait?: string | null;
   stale?: boolean;
   scored?: boolean;
   move?: string | null;
@@ -147,6 +208,7 @@ function LessonCard({
     <li
       className="review-card"
       data-lesson={row.id}
+      data-lesson-lane={lane}
       data-incorporated={row.incorporated ? '1' : '0'}
       data-scored={scored ? '1' : undefined}
       data-stale={stale ? '1' : undefined}
@@ -160,6 +222,7 @@ function LessonCard({
           {age ? ` · ${age}` : ''}
         </i>
         <p>{row.summary}</p>
+        {wait ? <p className="books-lesson-wait">{wait}</p> : null}
         {move ? <p className="books-close-move">{move}</p> : null}
       </span>
       <span className="review-card-meta">

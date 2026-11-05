@@ -5542,6 +5542,12 @@ a:focus-visible {
   opacity: 0.72;
 }
 
+.lesson-queue .review-card-copy,
+.lesson-queue .books-lesson-wait {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .review-mast {
   display: flex;
   flex-direction: column;
@@ -6643,7 +6649,30 @@ html.is-public-desk body {
 /* Detail: the thesis page, reached in one tap from a row. */
 .books-detail {
   z-index: 5;
+  min-width: 0;
   overscroll-behavior-y: contain;
+}
+
+/* A long exit note wraps inside the phone column. The parchment clips
+   sideways overflow, so an unbreakable token was cut mid-word. */
+.books-detail > *,
+.books-detail .books-thesis > *,
+.books-detail .thesis-evidence > li,
+.books-detail .thesis-beliefs > li {
+  min-width: 0;
+}
+
+.books-detail .books-note,
+.books-detail .books-track,
+.books-detail .books-question,
+.books-detail .thesis-page-falsifier,
+.books-detail .books-thesis > p,
+.books-detail .thesis-evidence p,
+.books-detail .thesis-beliefs p,
+.books-detail .books-lesson-wait,
+.books-detail .books-close-move {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .books-detail h3 {
@@ -6773,6 +6802,7 @@ html.is-public-desk body {
 }
 
 .books-detail .books-lesson-wait,
+.lesson-queue .books-lesson-wait,
 .books-detail .books-close-move,
 .books-lesson-age {
   margin: 2px 0 0;
