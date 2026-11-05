@@ -276,7 +276,16 @@ describe('desk IA smoke', () => {
     expect(lessons).toContain('rankLessonsForDesk');
     expect(lessons).toContain('Incorporate');
     expect(lessons).toContain('in playbook');
-    expect(lessons).toContain('Open lessons waiting for a decision come first. Closes that already moved confidence sit apart. Then the playbook.');
+    expect(lessons).toContain('Lessons ready to write into the playbook come first. Ones still waiting on a test sit next. Closes that already moved confidence sit apart. Then the playbook.');
+    expect(lessons).toContain('Ready to write into the playbook');
+    expect(lessons).toContain('Still waiting on a test');
+    expect(lessons).toContain('openLessonGroup');
+    expect(lessons).toContain('lessonWaitLine');
+    expect(lessons).not.toContain('Open lessons waiting for a decision');
+    expect(world).toContain('Ready to write into the playbook');
+    expect(world).toContain('Still waiting on a test');
+    expect(world).not.toContain('Open lessons waiting for a decision');
+    expect(css).toMatch(/\.books-detail \.books-note[\s\S]{0,700}overflow-wrap:\s*anywhere/);
     expect(lessons).not.toContain('${open} open');
     expect(lessons).toContain('id="lessons-parchment"');
     expect(lessons).toContain('tabIndex={-1}');

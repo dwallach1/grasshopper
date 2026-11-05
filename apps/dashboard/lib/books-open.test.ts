@@ -521,7 +521,7 @@ describe('Books page: one section per steward', () => {
       button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
     });
     const shown = () => [...view.host.querySelectorAll('.books-lessons li p')].map((node) => node.textContent);
-    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Open lessons waiting for a decision · 7');
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Ready to write into the playbook · 7');
     expect(shown()).toEqual(['Lesson 1', 'Lesson 2', 'Lesson 3', 'Lesson 4', 'Lesson 5']);
     expect(view.host.querySelector('.books-lessons li span')?.textContent).toContain('missed swing · post print hold');
     expect(view.host.querySelector('.books-lesson-age')?.textContent).toContain('Open');
@@ -679,8 +679,41 @@ describe('Books page: one section per steward', () => {
       'Waiting on test 41, queued 4 days',
       'Waiting on test 99, still queued',
     ]);
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Still waiting on a test · 2');
+    expect(view.host.querySelector('[data-lesson-lane="ready"]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-lesson-lane="waiting"] [data-lesson]')].map((node) => node.getAttribute('data-lesson')))
+      .toEqual(['134', '200']);
     expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('stale_queued');
     expect(view.host.querySelector('.books-detail')?.textContent).not.toContain('v_open_lesson');
+    view.unmount();
+  });
+
+  test('a killed test sits ready to write, and a queued test stays in the waiting group', async () => {
+    const payload = desk([], [], [
+      lesson(142, 'An old structure note still needs a decision.', '2026-10-20T16:00:00.000Z'),
+      { ...lesson(203, 'Waiting on a test that already finished.', '2026-11-04T00:29:52.000Z'), test_id: 51 },
+      { ...lesson(134, 'The follow-through is preregistered as strategy_test #41.', '2026-11-03T16:00:00.000Z'), test_id: 41 },
+    ]);
+    payload.lesson_waits = [
+      { lesson_id: 203, thesis_id: EARNINGS, test_id: 51, test_status: 'killed', age_days: 1 },
+      { lesson_id: 134, thesis_id: EARNINGS, test_id: 41, test_status: 'queued', age_days: 4 },
+    ];
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-04T18:00:00.000Z' }));
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
+    });
+    const ready = view.host.querySelector('ul[data-lesson-lane="ready"]');
+    const waiting = view.host.querySelector('ul[data-lesson-lane="waiting"]');
+    if (!(ready instanceof HTMLElement) || !(waiting instanceof HTMLElement)) throw new Error('missing lesson groups');
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Ready to write into the playbook · 2');
+    expect(view.host.querySelector('.books-detail')?.textContent).toContain('Still waiting on a test · 1');
+    expect([...ready.querySelectorAll('[data-lesson]')].map((node) => node.getAttribute('data-lesson'))).toEqual(['142', '203']);
+    expect(ready?.querySelector('[data-lesson="203"] .books-lesson-wait')?.textContent).toBe('Test finished, ready to decide');
+    expect(ready?.querySelector('[data-lesson="142"] .books-lesson-age')?.textContent).toBe('Open 15 days');
+    expect(ready?.textContent).not.toContain('The follow-through is preregistered');
+    expect([...waiting.querySelectorAll('[data-lesson]')].map((node) => node.getAttribute('data-lesson'))).toEqual(['134']);
+    expect(waiting?.querySelector('.books-lesson-wait')?.textContent).toBe('Waiting on test 41, queued 4 days');
+    expect(waiting?.querySelector('.books-lesson-age')?.textContent).toBe('Open 1 day');
     view.unmount();
   });
 
@@ -732,9 +765,10 @@ describe('Books page: one section per steward', () => {
     expect(detail?.textContent).toContain('RMBS: the line was paid in full.');
     expect(detail?.querySelector('.books-close-move')?.textContent).toBe('confidence 32 → 30 · loss');
     expect(detail?.querySelector('.books-close-move')?.textContent).not.toMatch(/\$|18/);
-    expect(detail?.textContent).toContain('Open lessons waiting for a decision · 2');
+    expect(detail?.textContent).toContain('Ready to write into the playbook · 2');
     expect(detail?.textContent).toContain('Already moved confidence · 1');
-    expect(detail?.textContent).not.toContain('Open lessons waiting for a decision · 3');
+    expect(detail?.textContent).not.toContain('Ready to write into the playbook · 3');
+    expect(detail?.querySelector('[data-lesson-lane="waiting"]')).toBeNull();
     expect(detail?.querySelector('[data-lesson="142"] .books-lesson-age')?.textContent).toBe('Open 15 days');
     expect(detail?.querySelector('[data-lesson="142"]')?.getAttribute('data-stale')).toBe('1');
     expect(detail?.querySelector('[data-lesson="203"] .books-lesson-wait')?.textContent)
