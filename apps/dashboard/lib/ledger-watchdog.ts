@@ -176,6 +176,34 @@ export type OntologyFreshness = {
   skipped?: number | null;
 };
 
+export type ResearchIdSequence = {
+  max_id: number | null;
+  last_value: number | null;
+  is_called: boolean;
+  lagging: boolean;
+};
+
+/** Identity sequence versus max(id). Null when the watchdog column is absent. */
+export type ResearchIdSequences = {
+  research_cycles: ResearchIdSequence;
+  research_lessons: ResearchIdSequence;
+};
+
+/**
+ * One parchment sentence when a research id sequence is behind max(id).
+ * Absent when both are caught up, or the column was not on the row.
+ * Does not invent a count and does not change `/api/health` ok.
+ */
+export function researchIdSequenceLine(row: ResearchIdSequences | null): string | null {
+  if (!row) return null;
+  const lessons = row.research_lessons?.lagging === true;
+  const cycles = row.research_cycles?.lagging === true;
+  if (lessons && cycles) return 'The research lesson and cycle id sequences are behind the newest rows.';
+  if (lessons) return 'The research lesson id sequence is behind the newest row.';
+  if (cycles) return 'The research cycle id sequence is behind the newest row.';
+  return null;
+}
+
 const ONTOLOGY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 function stampMs(value: string | null | undefined): number | null {
@@ -288,6 +316,11 @@ export type LedgerWatchdog = {
    * Does not change `ok` on /api/health. Heartbeat returns the same list.
    */
   learning_stalls: string[] | null;
+  /**
+   * Identity last_value versus max(id) on research_cycles and research_lessons.
+   * Null when the column is absent. Does not change `ok` on /api/health.
+   */
+  research_id_sequences: ResearchIdSequences | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -317,6 +350,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     unlinked_named_lessons: null,
     ontology_freshness: null,
     learning_stalls: null,
+    research_id_sequences: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -577,6 +611,9 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     learning_stalls: summary.learning_stalls === undefined
       ? null
       : learningStallSentences(summary.learning_stalls),
+    research_id_sequences: summary.research_id_sequences === undefined
+      ? null
+      : researchIdSequences(summary.research_id_sequences),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -815,6 +852,10 @@ export function watchdogHealthSummary(
   learning_stalls: string[];
   /** True when `learning_stalls` names at least one test. Does not change `ok`. */
   learning_loop_stalled: boolean;
+  /** Sequence versus max(id). Null when the column is absent. Does not change `ok`. */
+  research_id_sequences: ResearchIdSequences | null;
+  /** Plain sentence when a sequence lags. Null when both are caught up. Does not change `ok`. */
+  research_id_sequence_line: string | null;
 } {
   const w = quietRetiredWatchdog(watchdog ?? emptyLedgerWatchdog(), retired ?? new Set());
   return {
@@ -841,7 +882,38 @@ export function watchdogHealthSummary(
       : null,
     learning_stalls: w.learning_stalls ? [...w.learning_stalls] : [],
     learning_loop_stalled: (w.learning_stalls?.length ?? 0) > 0,
+    research_id_sequences: w.research_id_sequences
+      ? {
+        research_cycles: { ...w.research_id_sequences.research_cycles },
+        research_lessons: { ...w.research_id_sequences.research_lessons },
+      }
+      : null,
+    research_id_sequence_line: researchIdSequenceLine(w.research_id_sequences),
   };
+}
+
+function researchIdSequence(value: unknown): ResearchIdSequence | null {
+  const bag = record(value);
+  if (!bag || typeof bag.lagging !== 'boolean') return null;
+  const maxId = bag.max_id === null || bag.max_id === undefined ? null : optionalCount(bag.max_id);
+  const last = bag.last_value === null || bag.last_value === undefined ? null : optionalCount(bag.last_value);
+  if ((bag.max_id !== null && bag.max_id !== undefined && bag.max_id !== '') && maxId === null) return null;
+  if ((bag.last_value !== null && bag.last_value !== undefined && bag.last_value !== '') && last === null) return null;
+  return {
+    max_id: maxId,
+    last_value: last,
+    is_called: bag.is_called === true,
+    lagging: bag.lagging,
+  };
+}
+
+function researchIdSequences(value: unknown): ResearchIdSequences | null {
+  const bag = record(value);
+  if (!bag) return null;
+  const cycles = researchIdSequence(bag.research_cycles);
+  const lessons = researchIdSequence(bag.research_lessons);
+  if (!cycles || !lessons) return null;
+  return { research_cycles: cycles, research_lessons: lessons };
 }
 
 function learningStallSentences(value: unknown): string[] | null {

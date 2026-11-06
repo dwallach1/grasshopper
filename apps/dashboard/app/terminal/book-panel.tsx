@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from '
 import {
   closeBeliefForLesson,
   closeMoveLine,
+  earningsBoundLessonIds,
+  lessonNeedsDecision,
+  lessonWithBelief,
   rulesInForceByDomain,
   scoredCloseLessonIds,
   type BeliefUpdateRow,
@@ -15,7 +18,7 @@ import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip
 import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
-import { ontologyFreshnessLine } from '../../lib/ledger-watchdog';
+import { ontologyFreshnessLine, researchIdSequenceLine } from '../../lib/ledger-watchdog';
 import {
   lessonAgeDays,
   lessonAgeLine,
@@ -91,6 +94,7 @@ export function BookPanel({
 }) {
   const nowMs = Date.parse(nowIso ?? desk.generated_at);
   const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
+  const sequenceLine = researchIdSequenceLine(desk.watchdog?.research_id_sequences ?? null);
   const books = useMemo(() => assembleStewardBooks(desk, nowMs), [desk, nowMs]);
   const waitingByThesis = useMemo(() => {
     const ids = new Set<string>();
@@ -170,6 +174,9 @@ export function BookPanel({
             <p className="thesis-lede" data-ontology-freshness={desk.watchdog?.ontology_freshness?.starved || desk.watchdog?.ontology_freshness?.lagging ? 'stale' : 'fresh'}>
               {ontologyLine}
             </p>
+          ) : null}
+          {sequenceLine ? (
+            <p className="thesis-lede" data-research-id-sequence="lagging">{sequenceLine}</p>
           ) : null}
         </header>
         {books.sections.map((section) => (
@@ -614,7 +621,7 @@ function ThesisBody({
   domains: readonly { id: string; name: string; sort_order?: number | null }[];
   lessons: LessonRow[];
   tests: StrategyTestRow[];
-  cycles: { id: number; thesis_id?: string | null; hypothesis?: string | null; preregistered_outcome?: string | null }[];
+  cycles: { id: number; external_key?: string | null; thesis_id?: string | null; hypothesis?: string | null; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
   lessonWaits: LessonWait[];
   now: number;
@@ -625,12 +632,13 @@ function ThesisBody({
   const ruleGroups = rulesInForceByDomain({ thesisId: thesis.id, beliefs, domains });
   const trail = thesis.beliefs.filter((note) => note.kind !== 'playbook_rule');
   const scoredIds = scoredCloseLessonIds(beliefs);
+  const earningsBound = earningsBoundLessonIds(beliefs, lessons, cycles);
   const openLessons = lessons
-    .filter((row) => !row.incorporated && !scoredIds.has(String(row.id)))
+    .filter((row) => lessonNeedsDecision(row, scoredIds, earningsBound))
     .slice()
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
   const scoredLessons = lessons.filter((row) => scoredIds.has(String(row.id)));
-  const playbookLessons = lessons.filter((row) => row.incorporated && !scoredIds.has(String(row.id)));
+  const playbookLessons = lessons.filter((row) => lessonWithBelief(row, scoredIds, earningsBound));
   const linkedCycles = cycles.filter((row): row is { id: number; thesis_id: string; hypothesis?: string | null; preregistered_outcome?: string | null } =>
     typeof row.thesis_id === 'string');
   const scoped = testsForThesis(thesis.id, tests, linkedCycles, lessons);
@@ -807,18 +815,22 @@ function ThesisBody({
         <>
           <p className="books-section-label">In the playbook · {playbookLessons.length}</p>
           <ul className="thesis-evidence books-lessons books-playbook">
-            {playbookLessons.map((row) => (
-              <li key={row.id} data-lesson={row.id} data-playbook="1">
-                <span>
-                  {plainWords(row.lesson_type)}
-                  {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
-                  {' · '}
-                  {row.created_at.slice(0, 10)}
-                  {' · in the playbook'}
-                </span>
-                <p>{row.summary}</p>
-              </li>
-            ))}
+            {playbookLessons.map((row) => {
+              const bound = earningsBound.has(String(row.id));
+              return (
+                <li key={row.id} data-lesson={row.id} data-playbook="1" data-earnings-bound={bound ? '1' : undefined}>
+                  <span>
+                    {plainWords(row.lesson_type)}
+                    {row.market_regime ? ` · ${plainWords(row.market_regime)}` : ''}
+                    {' · '}
+                    {row.created_at.slice(0, 10)}
+                    {bound ? ' · belief already written' : ' · in the playbook'}
+                  </span>
+                  <p>{row.summary}</p>
+                  {bound ? <p className="books-lesson-wait">Belief already written. Confidence stays.</p> : null}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : null}

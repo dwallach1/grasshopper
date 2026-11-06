@@ -5,6 +5,9 @@ import {
   beliefTrailFor,
   clipNoteFor,
   closeMoveLine,
+  earningsBoundLessonIds,
+  lessonDeskChip,
+  lessonNeedsDecision,
   domainIdForSteward,
   humanizeRule,
   isPlaybookRule,
@@ -506,6 +509,74 @@ describe('belief mapping', () => {
     })).toMatchObject({ kind: 'belief', belief: null });
     expect(clipNoteFor({ thesisId: 'orphan', beliefs: linked, lessons: [] })).toBeNull();
     expect(clipNoteFor({ thesisId: null, beliefs: linked, lessons: [lesson36] })).toBeNull();
+  });
+
+  test('a closed clip uses the earnings belief for that lot and does not invent a confidence move', () => {
+    const lot = '6d2c1c0a-1111-4111-8111-111111111111';
+    const printLesson: LessonRow = {
+      id: 196,
+      cycle_id: 80,
+      test_id: null,
+      thesis_id: 'earnings_gap_structure',
+      lesson_type: 'earnings_print',
+      summary: 'RDDT moved more than the options price.',
+      market_regime: null,
+      incorporated: false,
+      created_at: '2026-11-05T21:00:00.000Z',
+    };
+    const newer: LessonRow = {
+      ...printLesson,
+      id: 240,
+      lesson_type: 'structure',
+      summary: 'A later structure note still needs a decision.',
+      created_at: '2026-11-06T21:00:00.000Z',
+    };
+    const rows = mapBeliefs([belief({
+      id: 'b-rddt',
+      prior_confidence: null,
+      new_confidence: null,
+      rationale: 'RDDT moved more than the options price.',
+      meta: {
+        kind: 'earnings_print',
+        steward: 'quantanamo',
+        lot_id: lot,
+        research_lesson_id: 196,
+        confidence_delta: 0,
+      },
+    })]);
+    expect(clipNoteFor({
+      thesisId: 'earnings_gap_structure',
+      lotId: lot,
+      beliefs: rows,
+      lessons: [printLesson, newer],
+    })).toEqual({
+      key: 'lesson:196',
+      kind: 'lesson',
+      summary: 'RDDT moved more than the options price.',
+      belief: null,
+    });
+    const bound = earningsBoundLessonIds(rows, [printLesson, newer], [
+      { id: 80, external_key: `earnings-print:${lot}` },
+    ]);
+    expect([...bound].sort()).toEqual(['196']);
+    expect(lessonNeedsDecision(printLesson, new Set(), bound)).toBe(false);
+    expect(lessonNeedsDecision(newer, new Set(), bound)).toBe(true);
+    expect(lessonDeskChip({ incorporated: false, scored: false, earningsBound: true })).toBe('belief written');
+    expect(lessonDeskChip({ incorporated: true, scored: false, earningsBound: false })).toBe('in playbook');
+    const byLotOnly = earningsBoundLessonIds(
+      rows.map((row) => ({ ...row, research_lesson_id: null })),
+      [printLesson],
+      [{ id: 80, external_key: `earnings-print:${lot}` }],
+    );
+    expect(byLotOnly.has('196')).toBe(true);
+    const misbound = earningsBoundLessonIds(
+      rows.map((row) => ({ ...row, research_lesson_id: '240' })),
+      [printLesson, newer],
+      [],
+    );
+    expect(misbound.has('240')).toBe(false);
+    expect(misbound.has('196')).toBe(false);
+    expect(lessonNeedsDecision(newer, new Set(), misbound)).toBe(true);
   });
 
   test('holding thesis prefers an explicit id, then a held lot, then a symbol list', () => {

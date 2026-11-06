@@ -275,7 +275,11 @@ describe('desk IA smoke', () => {
     const lessons = await readDashboard('app/terminal/lesson-queue.tsx');
     expect(lessons).toContain('rankLessonsForDesk');
     expect(lessons).toContain('Incorporate');
-    expect(lessons).toContain('in playbook');
+    expect(lessons).toContain('lessonDeskChip');
+    expect(lessons).toContain('Belief already written. Confidence stays.');
+    const beliefCopy = await readDashboard('lib/beliefs.ts');
+    expect(beliefCopy).toContain("return 'in playbook'");
+    expect(beliefCopy).toContain("return 'belief written'");
     expect(lessons).toContain('Lessons ready to write into the playbook come first. Ones still waiting on a test sit next. Closes that already moved confidence sit apart. Then the playbook.');
     expect(lessons).toContain('Ready to write into the playbook');
     expect(lessons).toContain('Still waiting on a test');

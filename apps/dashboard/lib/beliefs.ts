@@ -13,6 +13,7 @@ import type { JsonObjectRow } from './ledger-map';
 
 export const PLAYBOOK_RULE_KIND = 'playbook_rule';
 export const TRADE_CLOSE_LESSON_KIND = 'trade_close_lesson';
+export const EARNINGS_PRINT_KIND = 'earnings_print';
 export const BELIEF_RATIONALE_CAP = 180;
 /**
  * Process and structure slugs on a lot. `kill` and `negative_result` append
@@ -251,6 +252,88 @@ export function scoredCloseLessonIds(
   return ids;
 }
 
+export function isEarningsPrintBelief(row: Pick<BeliefUpdateRow, 'kind'>): boolean {
+  return row.kind.trim().toLowerCase() === EARNINGS_PRINT_KIND;
+}
+
+const EARNINGS_PRINT_KEY = 'earnings-print:';
+
+/**
+ * Earnings_print lesson ids an earnings_print belief already names, plus the
+ * earnings_print lesson on the cycle whose key is `earnings-print:{lot_id}`.
+ * A named id is included only when that lesson's type is earnings_print.
+ * A structure or missed_swing lesson is not included.
+ */
+export function earningsBoundLessonIds(
+  beliefs: readonly Pick<BeliefUpdateRow, 'kind' | 'research_lesson_id' | 'lot_id'>[],
+  lessons: readonly Pick<LessonRow, 'id' | 'cycle_id' | 'lesson_type'>[] = [],
+  cycles: readonly { id: number; external_key?: string | null }[] = [],
+): Set<string> {
+  const ids = new Set<string>();
+  const lots = new Set<string>();
+  const earningsIds = new Set(
+    lessons
+      .filter((row) => row.lesson_type === EARNINGS_PRINT_KIND)
+      .map((row) => String(row.id)),
+  );
+  for (const row of beliefs) {
+    if (!isEarningsPrintBelief(row)) continue;
+    if (row.research_lesson_id && earningsIds.has(row.research_lesson_id)) ids.add(row.research_lesson_id);
+    const lot = row.lot_id?.trim();
+    if (lot) lots.add(lot);
+  }
+  if (lots.size && lessons.length && cycles.length) {
+    const keyByCycle = new Map(cycles.map((row) => [row.id, row.external_key ?? null]));
+    for (const lesson of lessons) {
+      if (lesson.lesson_type !== EARNINGS_PRINT_KIND) continue;
+      const key = keyByCycle.get(lesson.cycle_id);
+      if (!key?.startsWith(EARNINGS_PRINT_KEY)) continue;
+      if (lots.has(key.slice(EARNINGS_PRINT_KEY.length))) ids.add(String(lesson.id));
+    }
+  }
+  return ids;
+}
+
+/** Still waiting on a person. A bound earnings print and a scored close are not. */
+export function lessonNeedsDecision(
+  lesson: Pick<LessonRow, 'id' | 'incorporated'>,
+  scored: ReadonlySet<string>,
+  earningsBound: ReadonlySet<string>,
+): boolean {
+  const id = String(lesson.id);
+  return !lesson.incorporated && !scored.has(id) && !earningsBound.has(id);
+}
+
+/** Incorporated, or an earnings belief already binds it, and the close did not score it. */
+export function lessonWithBelief(
+  lesson: Pick<LessonRow, 'id' | 'incorporated'>,
+  scored: ReadonlySet<string>,
+  earningsBound: ReadonlySet<string>,
+): boolean {
+  const id = String(lesson.id);
+  return (lesson.incorporated || earningsBound.has(id)) && !scored.has(id);
+}
+
+export function lessonDeskChip(input: {
+  incorporated: boolean;
+  scored: boolean;
+  earningsBound: boolean;
+}): 'moved confidence' | 'belief written' | 'open' | 'in playbook' {
+  if (input.scored) return 'moved confidence';
+  if (input.earningsBound) return 'belief written';
+  if (!input.incorporated) return 'open';
+  return 'in playbook';
+}
+
+export function earningsBeliefForLot(
+  lotId: string,
+  beliefs: readonly BeliefUpdateRow[],
+): BeliefUpdateRow | null {
+  const wanted = lotId.trim();
+  if (!wanted) return null;
+  return beliefs.find((row) => isEarningsPrintBelief(row) && row.lot_id === wanted) ?? null;
+}
+
 export function closeBeliefForLesson(
   lessonId: number,
   beliefs: readonly BeliefUpdateRow[],
@@ -341,6 +424,21 @@ export function clipNoteFor(input: {
       belief: null,
       move,
     };
+  }
+  const print = input.lotId ? earningsBeliefForLot(input.lotId, beliefs) : null;
+  if (print && print.thesis_id === thesisId) {
+    const linked = print.research_lesson_id
+      ? lessons.find((row) => String(row.id) === print.research_lesson_id && row.thesis_id === thesisId) ?? null
+      : null;
+    const summary = truncateRationale(linked?.summary ?? print.rationale);
+    if (summary) {
+      return {
+        key: linked ? `lesson:${linked.id}` : `belief:${print.id}`,
+        kind: linked ? 'lesson' : 'belief',
+        summary,
+        belief: null,
+      };
+    }
   }
   const lesson = (input.lessons ?? [])
     .filter((row) => row.thesis_id === thesisId)
