@@ -88,11 +88,12 @@ comment on function public.research_id_sequence_state(text) is
 
 revoke all on function public.research_id_sequence_state(text) from public, anon;
 grant execute on function public.research_id_sequence_state(text)
-  to authenticated, quantanamo_worker, oddsborne_worker, bandit_worker, desk_public_reader, service_role;
+  to authenticated, quantanamo_worker, desk_public_reader, service_role;
 
 -- SELECT lets the watchdog read last_value. UPDATE (nextval) stays with the writers who already have it.
+-- Retired seats (oddsborne_worker, bandit_worker) get no new privilege here.
 grant select on sequence public.research_cycles_id_seq, public.research_lessons_id_seq
-  to authenticated, quantanamo_worker, oddsborne_worker, bandit_worker, desk_public_reader, service_role;
+  to authenticated, quantanamo_worker, desk_public_reader, service_role;
 
 -- ---------------------------------------------------------------- 2. the writer marks the lesson incorporated once the belief exists
 create or replace function public.steward_record_earnings_lesson(p jsonb)
@@ -172,6 +173,7 @@ begin
     update public.research_lessons l
     set incorporated = true
     where l.incorporated is distinct from true
+      and l.lesson_type = 'earnings_print'
       and (
         l.id = (
           select case
@@ -181,13 +183,10 @@ begin
           from public.belief_updates b
           where b.id = v_belief
         )
-        or (
-          l.lesson_type = 'earnings_print'
-          and l.cycle_id = (
-            select c.id
-            from public.research_cycles c
-            where c.external_key = 'earnings-print:' || v_lot::text
-          )
+        or l.cycle_id = (
+          select c.id
+          from public.research_cycles c
+          where c.external_key = 'earnings-print:' || v_lot::text
         )
       );
     select l.id into v_lesson
@@ -201,12 +200,17 @@ begin
     order by l.id
     limit 1;
     if v_lesson is null then
-      select case
-        when b.meta->>'research_lesson_id' ~ '^[0-9]+$'
-          then (b.meta->>'research_lesson_id')::bigint
-      end into v_lesson
-      from public.belief_updates b
-      where b.id = v_belief;
+      select l.id into v_lesson
+      from public.research_lessons l
+      where l.lesson_type = 'earnings_print'
+        and l.id = (
+          select case
+            when b.meta->>'research_lesson_id' ~ '^[0-9]+$'
+              then (b.meta->>'research_lesson_id')::bigint
+          end
+          from public.belief_updates b
+          where b.id = v_belief
+        );
     end if;
     return jsonb_build_object(
       'ok', true, 'replayed', true, 'incorporated', true,
@@ -527,4 +531,4 @@ comment on column public.v_ledger_watchdog.research_id_sequences is
   'Identity sequence versus max(id) for research_cycles and research_lessons. lagging is true when last_value is behind max(id), or the sequence has not been called and last_value is not past max(id). An empty table is not lagging. It does not call setval and it does not make /api/health not-ok.';
 
 grant select on public.v_ledger_watchdog
-  to authenticated, quantanamo_worker, oddsborne_worker, bandit_worker, desk_public_reader, service_role;
+  to authenticated, quantanamo_worker, desk_public_reader, service_role;

@@ -569,6 +569,14 @@ describe('belief mapping', () => {
       [{ id: 80, external_key: `earnings-print:${lot}` }],
     );
     expect(byLotOnly.has('196')).toBe(true);
+    const misbound = earningsBoundLessonIds(
+      rows.map((row) => ({ ...row, research_lesson_id: '240' })),
+      [printLesson, newer],
+      [],
+    );
+    expect(misbound.has('240')).toBe(false);
+    expect(misbound.has('196')).toBe(false);
+    expect(lessonNeedsDecision(newer, new Set(), misbound)).toBe(true);
   });
 
   test('holding thesis prefers an explicit id, then a held lot, then a symbol list', () => {

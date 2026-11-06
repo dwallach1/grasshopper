@@ -259,8 +259,9 @@ export function isEarningsPrintBelief(row: Pick<BeliefUpdateRow, 'kind'>): boole
 const EARNINGS_PRINT_KEY = 'earnings-print:';
 
 /**
- * Lesson ids an earnings_print belief already names, plus the earnings_print
- * lesson on the cycle whose key is `earnings-print:{lot_id}`.
+ * Earnings_print lesson ids an earnings_print belief already names, plus the
+ * earnings_print lesson on the cycle whose key is `earnings-print:{lot_id}`.
+ * A named id is included only when that lesson's type is earnings_print.
  * A structure or missed_swing lesson is not included.
  */
 export function earningsBoundLessonIds(
@@ -270,9 +271,14 @@ export function earningsBoundLessonIds(
 ): Set<string> {
   const ids = new Set<string>();
   const lots = new Set<string>();
+  const earningsIds = new Set(
+    lessons
+      .filter((row) => row.lesson_type === EARNINGS_PRINT_KIND)
+      .map((row) => String(row.id)),
+  );
   for (const row of beliefs) {
     if (!isEarningsPrintBelief(row)) continue;
-    if (row.research_lesson_id) ids.add(row.research_lesson_id);
+    if (row.research_lesson_id && earningsIds.has(row.research_lesson_id)) ids.add(row.research_lesson_id);
     const lot = row.lot_id?.trim();
     if (lot) lots.add(lot);
   }

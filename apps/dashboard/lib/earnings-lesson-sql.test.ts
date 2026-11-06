@@ -34,6 +34,9 @@ describe('earnings print lessons', () => {
     expect(fn).not.toContain('playbook_rule');
     expect(fn).not.toContain('steward_sizing_guidance');
     expect(fn).not.toContain('edge_max_stake');
+    expect(fn).toMatch(
+      /where l\.incorporated is distinct from true\s+and l\.lesson_type = 'earnings_print'\s+and \(/,
+    );
     for (const match of fn.matchAll(/insert into public\.research_(?:cycles|lessons) \(([^)]*)\)/g)) {
       const cols = match[1].split(',').map((col) => col.trim());
       expect(cols).not.toContain('id');
@@ -66,6 +69,11 @@ describe('earnings print lessons', () => {
     expect(sql).toContain('v_last < v_max');
     expect(sql).toContain('v_called is not true and v_last <= v_max');
     expect(sql).toContain('grant select on sequence public.research_cycles_id_seq, public.research_lessons_id_seq');
+    const grants = [...sql.matchAll(/^grant\b[^;]*;/gim)].map((match) => match[0]);
+    expect(grants.length).toBeGreaterThan(0);
+    for (const grant of grants) {
+      expect(grant).not.toMatch(/oddsborne_worker|bandit_worker/);
+    }
     expect(sql).not.toContain('setval(');
     expect(sql).toContain('does not make /api/health not-ok');
     expect(sql).not.toContain('create or replace function public.steward_close_lesson');
