@@ -100,6 +100,13 @@ function desk(): DeskPayload {
       created_at: '2026-09-01T16:00:00.000Z',
       incorporated: true,
     }),
+    lesson({
+      id: 196,
+      summary: 'RDDT moved more than the options price.',
+      created_at: '2026-11-05T21:00:00.000Z',
+      lesson_type: 'earnings_print',
+      market_regime: null,
+    }),
   ];
   const waits: LessonWait[] = [
     { lesson_id: 203, thesis_id: THESIS, test_id: 51, test_status: 'killed', age_days: 1 },
@@ -109,7 +116,21 @@ function desk(): DeskPayload {
   return {
     generated_at: NOW,
     lessons,
-    beliefs: [belief(212)],
+    beliefs: [belief(212), {
+      id: 'b-rddt',
+      thesis_id: THESIS,
+      domain_id: null,
+      agent_id: null,
+      prior_confidence: null,
+      new_confidence: null,
+      rationale: 'RDDT moved more than the options price.',
+      observed_at: NOW,
+      kind: 'earnings_print',
+      rules: [],
+      steward: 'quantanamo',
+      research_lesson_id: '196',
+      lot_id: '6d2c1c0a-1111-4111-8111-111111111111',
+    }],
     theses: [thesis()],
     lesson_waits: waits,
   } as DeskPayload;
@@ -147,7 +168,7 @@ describe('Lessons parchment', () => {
     expect(view.host.textContent).toContain('Ready to write into the playbook · 2');
     expect(view.host.textContent).toContain('Still waiting on a test · 1');
     expect(view.host.textContent).toContain('Already moved confidence · 1');
-    expect(view.host.textContent).toContain('In the playbook · 1');
+    expect(view.host.textContent).toContain('In the playbook · 2');
     const readyIds = [...view.host.querySelectorAll('ul[data-lesson-lane="ready"] [data-lesson]')]
       .map((node) => node.getAttribute('data-lesson'));
     expect(readyIds).toEqual(['142', '203']);
@@ -165,6 +186,12 @@ describe('Lessons parchment', () => {
     expect(view.host.querySelector('ul[data-lesson-lane="ready"]')?.textContent).not.toContain('The follow-through is still queued');
     expect(view.host.querySelector('[data-lesson="212"]')?.textContent).toContain('moved confidence');
     expect(view.host.querySelector('[data-lesson="220"]')?.textContent).toContain('in playbook');
+    const print = view.host.querySelector('[data-lesson="196"]');
+    expect(print?.getAttribute('data-earnings-bound')).toBe('1');
+    expect(print?.textContent).toContain('belief written');
+    expect(print?.textContent).toContain('Belief already written. Confidence stays.');
+    expect(view.host.querySelector('ul[data-lesson-lane="ready"]')?.textContent).not.toContain('RDDT moved');
+    expect(view.host.querySelector('ul[data-lesson-lane="waiting"]')?.textContent).not.toContain('RDDT moved');
     expect(view.host.querySelector('button')).toBeNull();
     view.unmount();
   });
@@ -178,6 +205,7 @@ describe('Lessons parchment', () => {
     expect(buttons).toEqual(['Incorporate', 'Incorporate', 'Incorporate']);
     expect(open.host.querySelector('[data-lesson="212"] button')).toBeNull();
     expect(open.host.querySelector('[data-lesson="220"] button')).toBeNull();
+    expect(open.host.querySelector('[data-lesson="196"] button')).toBeNull();
     expect(open.host.querySelector('.thesis-lede')?.textContent).toContain('Incorporate writes a playbook rule.');
     expect(open.host.querySelector('.thesis-lede')?.textContent).not.toContain('Public phone is read-only.');
     open.unmount();

@@ -13,6 +13,7 @@ import {
   mapLedgerWatchdog,
   ontologyFreshnessLine,
   replayActionableBreachChecks,
+  researchIdSequenceLine,
   watchdogHealthSummary,
 } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
@@ -782,5 +783,61 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(watchdog.unscoreable_decisions.oddsborne).toBe(1);
     expect(watchdog.learning_gap_lots).toHaveLength(2);
     expect(watchdogHealthSummary(watchdog).learning_gaps).toEqual(watchdog.learning_gaps);
+  });
+
+  test('a research id sequence behind max(id) is learning health and does not stall the loop', () => {
+    const caughtUp = {
+      max_id: 229,
+      last_value: 229,
+      is_called: true,
+      lagging: false,
+    };
+    const behind = {
+      max_id: 237,
+      last_value: 236,
+      is_called: true,
+      lagging: true,
+    };
+    const absent = mapLedgerWatchdog({ summary: [{ learning_stalls: [] }] });
+    expect(absent.research_id_sequences).toBeNull();
+    expect(researchIdSequenceLine(absent.research_id_sequences)).toBeNull();
+    expect(watchdogHealthSummary(absent)).toMatchObject({
+      research_id_sequences: null,
+      research_id_sequence_line: null,
+      learning_loop_stalled: false,
+    });
+    const lagging = mapLedgerWatchdog({
+      summary: [{
+        research_id_sequences: {
+          research_cycles: behind,
+          research_lessons: caughtUp,
+        },
+      }],
+    });
+    expect(lagging.research_id_sequences).toEqual({
+      research_cycles: behind,
+      research_lessons: caughtUp,
+    });
+    expect(researchIdSequenceLine(lagging.research_id_sequences)).toBe(
+      'The research cycle id sequence is behind the newest row.',
+    );
+    expect(watchdogHealthSummary(lagging)).toMatchObject({
+      learning_loop_stalled: false,
+      research_id_sequence_line: 'The research cycle id sequence is behind the newest row.',
+    });
+    const both = mapLedgerWatchdog({
+      summary: [{
+        research_id_sequences: {
+          research_cycles: behind,
+          research_lessons: { ...caughtUp, lagging: true, last_value: 200 },
+        },
+      }],
+    });
+    expect(researchIdSequenceLine(both.research_id_sequences)).toBe(
+      'The research lesson and cycle id sequences are behind the newest rows.',
+    );
+    expect(mapLedgerWatchdog({
+      summary: [{ research_id_sequences: { research_cycles: behind } }],
+    }).research_id_sequences).toBeNull();
   });
 });

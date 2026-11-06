@@ -19,7 +19,7 @@ const AT = '2026-09-16T20:00:00.000Z';
 function lesson(id: number, extra: Partial<LessonRow> = {}): LessonRow {
   return {
     id,
-    cycle_id: 1,
+    cycle_id: extra.cycle_id ?? 1,
     test_id: null,
     thesis_id: extra.thesis_id ?? 'earnings_gap_structure',
     lesson_type: extra.lesson_type ?? 'structure',
@@ -61,6 +61,7 @@ function belief(extra: Partial<BeliefUpdateRow> = {}): BeliefUpdateRow {
     rules: extra.rules ?? ['no_chase_already_printed_leftovers'],
     steward: extra.steward ?? 'quantanamo',
     research_lesson_id: extra.research_lesson_id ?? null,
+    lot_id: extra.lot_id ?? null,
   };
 }
 
@@ -317,6 +318,64 @@ describe('assembleLearningPulse', () => {
     });
     expect(pulse.lessons_open).toBe(2);
     expect(pulse.lessons_incorporated).toBe(1);
+  });
+
+  test('an earnings print that already has a belief is not an open lesson', () => {
+    const base = desk();
+    const lot = '6d2c1c0a-1111-4111-8111-111111111111';
+    const pulse = assembleLearningPulse({
+      ...base,
+      lessons: [
+        ...(base.lessons ?? []),
+        lesson(196, {
+          lesson_type: 'earnings_print',
+          cycle_id: 80,
+          summary: 'RDDT moved more than the options price.',
+          incorporated: false,
+        }),
+        lesson(229, {
+          lesson_type: 'earnings_print',
+          cycle_id: 81,
+          summary: 'MELI moved more than the options price.',
+          incorporated: false,
+        }),
+      ],
+      cycles: [{
+        id: 81,
+        external_key: `earnings-print:${lot}`,
+        thesis_id: 'earnings_gap_structure',
+        hypothesis: 'The options price bounds the gap.',
+        preregistered_outcome: 'The move stays inside 1.5x.',
+        preregistered_at: AT,
+        stage: 'research',
+        status: 'open',
+        iteration: 1,
+        market_regime: null,
+      }],
+      beliefs: [
+        ...(base.beliefs ?? []),
+        belief({
+          id: 'b-196',
+          kind: 'earnings_print',
+          research_lesson_id: '196',
+          prior_confidence: null,
+          new_confidence: null,
+          rules: [],
+          lot_id: lot,
+        }),
+        belief({
+          id: 'b-229',
+          kind: 'earnings_print',
+          research_lesson_id: null,
+          prior_confidence: null,
+          new_confidence: null,
+          rules: [],
+          lot_id: lot,
+        }),
+      ],
+    });
+    expect(pulse.lessons_open).toBe(2);
+    expect(pulse.lessons_incorporated).toBe(3);
   });
 
   test('adds the market comparison to the learning sentence when the scorecard has one', () => {

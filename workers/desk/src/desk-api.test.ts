@@ -132,6 +132,8 @@ describe('public desk Worker API', () => {
         ontology_freshness: null,
         learning_stalls: [],
         learning_loop_stalled: false,
+        research_id_sequences: null,
+        research_id_sequence_line: null,
       },
       learning: {
         to_review: 0,

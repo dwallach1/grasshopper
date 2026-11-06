@@ -2,7 +2,15 @@
 
 import { useMemo, useState } from 'react';
 
-import { closeBeliefForLesson, closeMoveLine, scoredCloseLessonIds } from '../../lib/beliefs';
+import {
+  closeBeliefForLesson,
+  closeMoveLine,
+  earningsBoundLessonIds,
+  lessonDeskChip,
+  lessonNeedsDecision,
+  lessonWithBelief,
+  scoredCloseLessonIds,
+} from '../../lib/beliefs';
 import {
   incorporateResearchLesson,
   rankLessonsForDesk,
@@ -33,17 +41,20 @@ export function LessonQueue({
   );
   const grouped = useMemo(() => {
     const all = desk.lessons ?? [];
-    const scored = scoredCloseLessonIds(desk.beliefs ?? []);
+    const beliefs = desk.beliefs ?? [];
+    const scored = scoredCloseLessonIds(beliefs);
+    const earningsBound = earningsBoundLessonIds(beliefs, all, desk.cycles ?? []);
     const newest = (a: LessonRow, b: LessonRow) => b.created_at.localeCompare(a.created_at) || b.id - a.id;
     const oldest = (a: LessonRow, b: LessonRow) => a.created_at.localeCompare(b.created_at) || a.id - b.id;
-    const open = all.filter((row) => !row.incorporated && !scored.has(String(row.id))).sort(oldest);
+    const open = all.filter((row) => lessonNeedsDecision(row, scored, earningsBound)).sort(oldest);
     return {
       ready: open.filter((row) => openLessonGroup(waits.get(row.id)) === 'ready'),
       waiting: open.filter((row) => openLessonGroup(waits.get(row.id)) === 'waiting'),
       scored: all.filter((row) => scored.has(String(row.id))).sort(newest),
-      playbook: rankLessonsForDesk(all.filter((row) => row.incorporated && !scored.has(String(row.id)))),
+      playbook: rankLessonsForDesk(all.filter((row) => lessonWithBelief(row, scored, earningsBound))),
+      earningsBound,
     };
-  }, [desk.beliefs, desk.lessons, waits]);
+  }, [desk.beliefs, desk.cycles, desk.lessons, waits]);
   const now = Date.parse(desk.generated_at);
 
   return (
@@ -98,6 +109,7 @@ export function LessonQueue({
                   new_confidence: null,
                 })}
                 scored
+                earningsBound={grouped.earningsBound.has(String(row.id))}
               />
             ))}
           </ul>
@@ -112,6 +124,7 @@ export function LessonQueue({
                 key={row.id}
                 row={row}
                 thesisName={thesisNameForLesson(row, desk.theses ?? [])}
+                earningsBound={grouped.earningsBound.has(String(row.id))}
               />
             ))}
           </ul>
@@ -173,6 +186,7 @@ function LessonCard({
   wait = null,
   stale = false,
   scored = false,
+  earningsBound = false,
   move = null,
 }: {
   row: LessonRow;
@@ -184,11 +198,13 @@ function LessonCard({
   wait?: string | null;
   stale?: boolean;
   scored?: boolean;
+  earningsBound?: boolean;
   move?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const open = !row.incorporated && !scored;
+  const open = !row.incorporated && !scored && !earningsBound;
+  const chip = lessonDeskChip({ incorporated: row.incorporated, scored, earningsBound });
 
   async function act() {
     if (!canIncorporate || !open || busy) return;
@@ -211,6 +227,7 @@ function LessonCard({
       data-lesson-lane={lane}
       data-incorporated={row.incorporated ? '1' : '0'}
       data-scored={scored ? '1' : undefined}
+      data-earnings-bound={earningsBound ? '1' : undefined}
       data-stale={stale ? '1' : undefined}
       data-lesson-type={row.lesson_type}
     >
@@ -223,10 +240,11 @@ function LessonCard({
         </i>
         <p>{row.summary}</p>
         {wait ? <p className="books-lesson-wait">{wait}</p> : null}
+        {earningsBound ? <p className="books-lesson-wait">Belief already written. Confidence stays.</p> : null}
         {move ? <p className="books-close-move">{move}</p> : null}
       </span>
       <span className="review-card-meta">
-        <span className="thesis-chip">{scored ? 'moved confidence' : open ? 'open' : 'in playbook'}</span>
+        <span className="thesis-chip">{chip}</span>
       </span>
       {canIncorporate && open ? (
         <div className="review-actions">
