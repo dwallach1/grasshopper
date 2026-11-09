@@ -419,6 +419,24 @@ describe('ledger watchdog', () => {
     expect(quietSql).not.toMatch(/to oddsborne_worker/);
     expect(quietSql).not.toMatch(/to bandit_worker/);
 
+    const lessonScoreDir = join(import.meta.dir, '../../../supabase/migrations');
+    const lessonScoreNames = readdirSync(lessonScoreDir).filter((name) => name.endsWith('_quiet_lesson_score_earnings.sql'));
+    expect(lessonScoreNames).toEqual([lessonScoreNames[0]]);
+    const lessonScoreSql = readFileSync(join(import.meta.dir, '../../../supabase/schemas/96_quiet_lesson_score_earnings.sql'), 'utf8');
+    expect(readFileSync(join(lessonScoreDir, lessonScoreNames[0]!), 'utf8')).toBe(lessonScoreSql);
+    expect(lessonScoreSql).toContain("and th.id is distinct from 'earnings_events'");
+    expect(lessonScoreSql).toContain("where r.theme_id is distinct from 'earnings_events'");
+    expect(lessonScoreSql).toContain('from bookmark_themed');
+    expect(lessonScoreSql).toContain('Score 0; ticker only mentioned in lesson write-up text, not a real earnings_events candidate (known lesson-text leak).');
+    expect(lessonScoreSql).toContain("and c.status = 'pending'");
+    expect(lessonScoreSql).toContain("and c.score = 0");
+    expect(lessonScoreSql).toContain("coalesce(c.sample_context->>'source', '') = 'research_lesson'");
+    expect(lessonScoreSql).toContain("e.source_type is distinct from 'research_lesson'");
+    expect(lessonScoreSql).not.toContain('n_earn >= 2 or s.recent_themed');
+    expect(lessonScoreSql).not.toContain('cron.schedule');
+    expect(lessonScoreSql).not.toContain('grant execute');
+    expect(lessonScoreSql).not.toMatch(/update public\.ontology_candidates c\s+set[\s\S]*where c\.status = 'promoted'/);
+
     const stall = readFileSync(join(import.meta.dir, '../../../supabase/schemas/91_learning_loop_stall.sql'), 'utf8');
     expect(readFileSync(join(import.meta.dir, '../../../supabase/migrations/20261102184327_learning_loop_stall.sql'), 'utf8')).toBe(stall);
     expect(stall).toContain(') >= 5');
