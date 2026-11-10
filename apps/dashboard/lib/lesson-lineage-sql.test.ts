@@ -29,6 +29,14 @@ describe('research lesson lineage', () => {
     expect(sql).toContain('grant select on table public.research_lesson_repeats');
     expect(sql).toContain('to authenticated, quantanamo_worker, desk_public_reader, service_role');
     expect(sql).toContain('revoke all on function private.link_research_lesson_repeats() from public, anon, authenticated, desk_public_reader');
+    expect(sql).toContain('revoke execute on function private.cited_lesson_ids(text) from oddsborne_worker, bandit_worker;');
+    expect(sql).toContain('revoke execute on function private.link_research_lesson_repeats() from oddsborne_worker, bandit_worker;');
+    const executeGrants = [...sql.matchAll(/^grant execute on function private\.(?:cited_lesson_ids\(text\)|link_research_lesson_repeats\(\))[^;]*;/gim)].map((match) => match[0]);
+    expect(executeGrants).toHaveLength(2);
+    for (const grant of executeGrants) {
+      expect(grant).not.toContain('oddsborne_worker');
+      expect(grant).not.toContain('bandit_worker');
+    }
     expect(sql).not.toMatch(/update\s+public\.belief_updates/i);
     expect(sql).not.toMatch(/update\s+public\.research_lessons/i);
     expect(sql).not.toMatch(/insert\s+into\s+public\.belief_updates/i);

@@ -55,8 +55,9 @@ comment on function private.cited_lesson_ids(text) is
   'Lesson ids named in a summary: lesson N, lesson N/M, or lessons N/M. Does not decide whether the id exists or is older.';
 
 revoke all on function private.cited_lesson_ids(text) from public, anon, authenticated, desk_public_reader;
+revoke execute on function private.cited_lesson_ids(text) from oddsborne_worker, bandit_worker;
 grant execute on function private.cited_lesson_ids(text)
-  to quantanamo_worker, oddsborne_worker, bandit_worker, service_role;
+  to quantanamo_worker, service_role;
 
 create or replace function private.link_research_lesson_repeats()
 returns trigger
@@ -82,8 +83,9 @@ comment on function private.link_research_lesson_repeats() is
   'AFTER insert or summary change: replace this lesson''s links with citations of lessons that exist and are older. Does not change the lesson row, a belief, or incorporated.';
 
 revoke all on function private.link_research_lesson_repeats() from public, anon, authenticated, desk_public_reader;
+revoke execute on function private.link_research_lesson_repeats() from oddsborne_worker, bandit_worker;
 grant execute on function private.link_research_lesson_repeats()
-  to authenticated, quantanamo_worker, oddsborne_worker, bandit_worker, service_role;
+  to authenticated, quantanamo_worker, service_role;
 
 drop trigger if exists research_lessons_link_repeats on public.research_lessons;
 create trigger research_lessons_link_repeats
