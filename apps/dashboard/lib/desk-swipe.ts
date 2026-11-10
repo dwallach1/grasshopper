@@ -17,6 +17,10 @@ import {
 export const PAGE_SWIPE_PX = 56;
 export const PAGE_SWIPE_WRAP_PX = 56;
 export const PAGE_SWIPE_LOCK_PX = 12;
+/** A short flick commits even when the finger traveled less than PAGE_SWIPE_PX. px/s. */
+export const PAGE_FLICK_PX_S = 500;
+/** Release speed is the movement inside this tail, so a pause does not inherit an earlier burst. */
+export const VELOCITY_WINDOW_MS = 100;
 /** A resting page, not a coordinate the smooth wrap used to pass through. */
 export const PAGER_SETTLE_PX = 8;
 /** |dx| must beat |dy| by this factor. 1.2 ≈ 40° from the horizontal — not a diagonal. */
@@ -107,11 +111,80 @@ export function isDominantHorizontal(
   return Math.abs(dx) > Math.abs(dy) * dominance;
 }
 
-/** -1 previous, 1 next, 0 stay. Needs dominant X past the threshold — not a vertical flick. */
-export function swipeAxis(dx: number, dy: number, threshold = PAGE_SWIPE_PX): -1 | 0 | 1 {
+export type PointerSample = { t: number; x: number };
+
+/** Keep the last ~100ms. A stopped finger has nothing left in the window. */
+export function notePointerSample(
+  samples: readonly PointerSample[],
+  t: number,
+  x: number,
+  windowMs = VELOCITY_WINDOW_MS,
+): PointerSample[] {
+  if (!Number.isFinite(t) || !Number.isFinite(x)) return samples.slice();
+  const cutoff = t - windowMs;
+  const next: PointerSample[] = [];
+  for (const sample of samples) {
+    if (sample.t >= cutoff) next.push(sample);
+  }
+  next.push({ t, x });
+  if (next.length > 32) next.splice(0, next.length - 32);
+  return next;
+}
+
+/**
+ * Signed px/s across samples that fall inside the last `windowMs` of `now`.
+ * One sample, or a gap, is a stop: 0. The sign matches the axis (right / down positive).
+ */
+export function releaseVelocity(
+  samples: readonly PointerSample[],
+  now: number,
+  windowMs = VELOCITY_WINDOW_MS,
+): number {
+  if (!Number.isFinite(now) || samples.length < 2) return 0;
+  const cutoff = now - windowMs;
+  let first: PointerSample | null = null;
+  let last: PointerSample | null = null;
+  for (const sample of samples) {
+    if (sample.t < cutoff || sample.t > now) continue;
+    if (!Number.isFinite(sample.t) || !Number.isFinite(sample.x)) continue;
+    if (first === null) first = sample;
+    last = sample;
+  }
+  if (first === null || last === null) return 0;
+  const dt = last.t - first.t;
+  if (dt <= 0) return 0;
+  return ((last.x - first.x) / dt) * 1000;
+}
+
+/**
+ * -1 previous, 1 next, 0 stay. The axis is already locked.
+ * Distance past the threshold commits, and so does a flick the other way:
+ * release speed wins when it clears PAGE_FLICK_PX_S, so a short fast flick counts
+ * and a reversal is not dragged onward by the earlier travel.
+ */
+export function swipeRelease(
+  dx: number,
+  velocity: number,
+  threshold = PAGE_SWIPE_PX,
+  flick = PAGE_FLICK_PX_S,
+): -1 | 0 | 1 {
+  if (!Number.isFinite(dx) || !Number.isFinite(velocity)) return 0;
+  if (Math.abs(velocity) >= flick && velocity !== 0) return velocity < 0 ? 1 : -1;
   if (Math.abs(dx) < threshold) return 0;
-  if (!isDominantHorizontal(dx, dy)) return 0;
   return dx < 0 ? 1 : -1;
+}
+
+/** -1 previous, 1 next, 0 stay. Dominant X only — a vertical flick never changes tabs. */
+export function swipeAxis(
+  dx: number,
+  dy: number,
+  threshold = PAGE_SWIPE_PX,
+  velocity = 0,
+  flick = PAGE_FLICK_PX_S,
+): -1 | 0 | 1 {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return 0;
+  if (!isDominantHorizontal(dx, dy)) return 0;
+  return swipeRelease(dx, velocity, threshold, flick);
 }
 
 export function isHorizontalLock(dx: number, dy: number, lock = PAGE_SWIPE_LOCK_PX): boolean {
@@ -145,17 +218,60 @@ export function wrapFromEdgeDrag(
   return null;
 }
 
-/** Pane to snap to, or null if this drag is vertical / short / diagonal. */
+/** Pane to snap to, or null if this drag is vertical / short / diagonal. Velocity flips a short flick. */
 export function pageSwipeFromDrag(
   surface: DeskSwipeSurface,
   dx: number,
   dy: number,
+  velocity = 0,
 ): DeskSwipeSurface | null {
-  const wrap = wrapFromEdgeDrag(surface, dx, dy);
-  if (wrap) return wrap;
-  const axis = swipeAxis(dx, dy);
+  const axis = swipeAxis(dx, dy, PAGE_SWIPE_PX, velocity);
   if (axis === 0) return null;
   return wrapSwipeSurface(surface, axis);
+}
+
+export type SpringState = {
+  position: number;
+  velocity: number;
+  target: number;
+};
+
+export type SpringTune = {
+  stiffness: number;
+  damping: number;
+  /** Reduced motion settles without crossing the target. */
+  overshoot: boolean;
+};
+
+/** Underdamped so a drag can bounce once. Reduced motion is overdamped and clamped. */
+export function gestureSpring(reduceMotion: boolean): SpringTune {
+  if (reduceMotion) return { stiffness: 640, damping: 72, overshoot: false };
+  return { stiffness: 280, damping: 22, overshoot: true };
+}
+
+export function springStep(state: SpringState, dtSeconds: number, tune: SpringTune): SpringState {
+  if (!Number.isFinite(dtSeconds) || dtSeconds <= 0) return state;
+  if (!Number.isFinite(state.position) || !Number.isFinite(state.velocity) || !Number.isFinite(state.target)) {
+    return state;
+  }
+  const dt = Math.min(dtSeconds, 0.034);
+  const displacement = state.position - state.target;
+  const acceleration = (-tune.stiffness * displacement) - (tune.damping * state.velocity);
+  const velocity = state.velocity + (acceleration * dt);
+  const position = state.position + (velocity * dt);
+  if (!tune.overshoot) {
+    const before = state.position - state.target;
+    const after = position - state.target;
+    if (before === 0 || before * after <= 0) {
+      return { position: state.target, velocity: 0, target: state.target };
+    }
+  }
+  return { position, velocity, target: state.target };
+}
+
+export function springSettled(state: SpringState, epsilon = 0.5, velocityEpsilon = 40): boolean {
+  return Math.abs(state.position - state.target) <= epsilon
+    && Math.abs(state.velocity) <= velocityEpsilon;
 }
 
 export function followPagerScroll(startLeft: number, dx: number, maxLeft: number): number {
