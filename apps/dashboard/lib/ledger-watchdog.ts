@@ -190,6 +190,50 @@ export type ResearchIdSequences = {
 };
 
 /**
+ * An incorporated lesson that was taught again at least twice.
+ * `lesson_ids` is the chain, oldest first. `summary` is the newest lesson.
+ * `came_back` is how many lessons followed the first. Does not change `/api/health` ok.
+ */
+export type RuleNotTaking = {
+  lesson_ids: number[];
+  thesis_id: string;
+  summary: string;
+  came_back: number;
+};
+
+/** Later lessons that cite this one, directly or through the ones in between. */
+export type LessonCameBack = {
+  lesson_id: number;
+  came_back: number;
+};
+
+/** "Came back 3 times." Absent when this lesson was not cited again. */
+export function cameBackLine(times: number | null | undefined): string | null {
+  if (times === null || times === undefined || !Number.isFinite(times)) return null;
+  const n = Math.trunc(times);
+  if (n < 1) return null;
+  return n === 1 ? 'Came back 1 time.' : `Came back ${n} times.`;
+}
+
+/** "Earnings gap structure came back 3 times." */
+export function ruleNotTakingLead(thesisName: string, cameBack: number): string {
+  const name = thesisName.trim() || 'This rule';
+  const n = Math.trunc(cameBack);
+  const times = n === 1 ? '1 time' : `${n} times`;
+  return `${name} came back ${times}.`;
+}
+
+export function cameBackCounts(rows: readonly LessonCameBack[] | null | undefined): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const row of rows ?? []) {
+    if (!Number.isFinite(row.lesson_id) || !Number.isFinite(row.came_back)) continue;
+    const n = Math.trunc(row.came_back);
+    if (n >= 1) map.set(row.lesson_id, n);
+  }
+  return map;
+}
+
+/**
  * One parchment sentence when a research id sequence is behind max(id).
  * Absent when both are caught up, or the column was not on the row.
  * Does not invent a count and does not change `/api/health` ok.
@@ -321,6 +365,16 @@ export type LedgerWatchdog = {
    * Null when the column is absent. Does not change `ok` on /api/health.
    */
   research_id_sequences: ResearchIdSequences | null;
+  /**
+   * Incorporated lessons re-taught at least twice. Null when the column is absent.
+   * Does not change `ok` on /api/health.
+   */
+  rules_not_taking: RuleNotTaking[] | null;
+  /**
+   * How many times each lesson was cited again. Null when the column is absent.
+   * Does not change `ok` on /api/health.
+   */
+  lesson_came_back: LessonCameBack[] | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -351,6 +405,8 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     ontology_freshness: null,
     learning_stalls: null,
     research_id_sequences: null,
+    rules_not_taking: null,
+    lesson_came_back: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -614,6 +670,12 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     research_id_sequences: summary.research_id_sequences === undefined
       ? null
       : researchIdSequences(summary.research_id_sequences),
+    rules_not_taking: summary.rules_not_taking === undefined
+      ? null
+      : rulesNotTaking(summary.rules_not_taking),
+    lesson_came_back: summary.lesson_came_back === undefined
+      ? null
+      : lessonCameBack(summary.lesson_came_back),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -856,6 +918,11 @@ export function watchdogHealthSummary(
   research_id_sequences: ResearchIdSequences | null;
   /** Plain sentence when a sequence lags. Null when both are caught up. Does not change `ok`. */
   research_id_sequence_line: string | null;
+  /**
+   * Incorporated lessons re-taught at least twice. Empty when the column is absent.
+   * Does not change `ok`.
+   */
+  rules_not_taking: RuleNotTaking[];
 } {
   const w = quietRetiredWatchdog(watchdog ?? emptyLedgerWatchdog(), retired ?? new Set());
   return {
@@ -889,6 +956,12 @@ export function watchdogHealthSummary(
       }
       : null,
     research_id_sequence_line: researchIdSequenceLine(w.research_id_sequences),
+    rules_not_taking: (w.rules_not_taking ?? []).map((row) => ({
+      lesson_ids: [...row.lesson_ids],
+      thesis_id: row.thesis_id,
+      summary: row.summary,
+      came_back: row.came_back,
+    })),
   };
 }
 
@@ -914,6 +987,63 @@ function researchIdSequences(value: unknown): ResearchIdSequences | null {
   const lessons = researchIdSequence(bag.research_lessons);
   if (!cycles || !lessons) return null;
   return { research_cycles: cycles, research_lessons: lessons };
+}
+
+function jsonValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function idList(value: unknown): number[] {
+  const parsed = jsonValue(value);
+  if (!Array.isArray(parsed)) return [];
+  const ids: number[] = [];
+  for (const item of parsed) {
+    const n = optionalCount(item);
+    if (n !== null && n > 0) ids.push(n);
+  }
+  return ids;
+}
+
+function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
+  const parsed = jsonValue(value);
+  if (!Array.isArray(parsed)) return null;
+  const out: RuleNotTaking[] = [];
+  for (const item of parsed) {
+    const bag = record(item);
+    if (!bag) continue;
+    const thesisId = str(bag.thesis_id);
+    const summary = str(bag.summary);
+    const cameBack = optionalCount(bag.came_back);
+    const lessonIds = idList(bag.lesson_ids);
+    if (!thesisId || !summary || cameBack === null || lessonIds.length < 3) continue;
+    out.push({
+      lesson_ids: lessonIds,
+      thesis_id: thesisId,
+      summary,
+      came_back: cameBack,
+    });
+  }
+  return out;
+}
+
+function lessonCameBack(value: unknown): LessonCameBack[] | null {
+  const parsed = jsonValue(value);
+  if (!Array.isArray(parsed)) return null;
+  const out: LessonCameBack[] = [];
+  for (const item of parsed) {
+    const bag = record(item);
+    if (!bag) continue;
+    const lessonId = optionalCount(bag.lesson_id);
+    const cameBack = optionalCount(bag.came_back);
+    if (lessonId === null || lessonId <= 0 || cameBack === null || cameBack < 1) continue;
+    out.push({ lesson_id: lessonId, came_back: cameBack });
+  }
+  return out;
 }
 
 function learningStallSentences(value: unknown): string[] | null {

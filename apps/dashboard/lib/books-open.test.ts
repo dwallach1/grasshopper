@@ -1158,4 +1158,49 @@ describe('Books page: one section per steward', () => {
     expect(view.host.textContent).toContain('Incorporate');
     view.unmount();
   });
+
+  test('a lesson that came back says so, and the chain is a rule not taking', async () => {
+    const payload = desk([], [], [
+      {
+        ...lesson(197, 'Coverage gap. IDXX was on no sheet.', '2026-11-03T00:22:54.000Z'),
+        incorporated: true,
+        lesson_type: 'coverage',
+      },
+      {
+        ...lesson(241, 'SANM was outside the screened universe. Already lesson 226.', '2026-11-10T00:28:47.000Z'),
+        incorporated: true,
+        lesson_type: 'coverage',
+      },
+    ]);
+    payload.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      rules_not_taking: [{
+        lesson_ids: [197, 223, 226, 241],
+        thesis_id: EARNINGS,
+        summary: 'SANM was outside the screened universe. Already lesson 226.',
+        came_back: 3,
+      }],
+      lesson_came_back: [
+        { lesson_id: 197, came_back: 3 },
+        { lesson_id: 241, came_back: 0 },
+      ],
+    };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-10T18:00:00.000Z' }));
+    const home = view.host.querySelector('.books [data-rules-not-taking]');
+    expect(home?.textContent).toContain('Rules not taking');
+    expect(home?.textContent).toContain('Earnings gap structure came back 3 times.');
+    expect(home?.textContent).toContain('Lessons 197, 223, 226, 241.');
+    expect(home?.textContent).not.toContain('Already lesson 226');
+    await act(async () => {
+      button(view.host, 'button.books-lot[data-lot="eq:CODA"]').click();
+    });
+    const detail = view.host.querySelector('.books-detail');
+    expect(detail?.querySelector('[data-rule-chain="197, 223, 226, 241"]')?.textContent)
+      .toContain('SANM was outside the screened universe. Already lesson 226.');
+    expect(detail?.querySelector('[data-lesson="197"] [data-came-back]')?.textContent).toBe('Came back 3 times.');
+    expect(detail?.querySelector('[data-lesson="241"] [data-came-back]')).toBeNull();
+    expect(detail?.textContent).not.toContain('Incorporate');
+    view.unmount();
+  });
 });

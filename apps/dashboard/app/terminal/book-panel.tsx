@@ -18,7 +18,14 @@ import { assembleBookOpen, type BookOpenTicket } from '../../lib/book-open-strip
 import { blurFocusWithin } from '../../lib/desk-focus';
 import { isMarkStale } from '../../lib/desk-freshness';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
-import { ontologyFreshnessLine, researchIdSequenceLine } from '../../lib/ledger-watchdog';
+import {
+  cameBackCounts,
+  cameBackLine,
+  ontologyFreshnessLine,
+  researchIdSequenceLine,
+  ruleNotTakingLead,
+  type RuleNotTaking,
+} from '../../lib/ledger-watchdog';
 import {
   lessonAgeDays,
   lessonAgeLine,
@@ -71,6 +78,49 @@ type Reading =
 
 const LESSONS_SHOWN = 5;
 
+function thesisPlainName(desk: DeskPayload, thesisId: string): string {
+  const row = (desk.theses ?? []).find((thesis) => thesis.id === thesisId);
+  return plainThesisName(row?.name ?? '', thesisId);
+}
+
+function RulesNotTakingList({
+  rows,
+  thesisName,
+  thesisId,
+  withSummary = false,
+}: {
+  rows: readonly RuleNotTaking[];
+  thesisName: (thesisId: string) => string;
+  thesisId?: string;
+  withSummary?: boolean;
+}) {
+  const shown = thesisId ? rows.filter((row) => row.thesis_id === thesisId) : rows;
+  if (!shown.length) return null;
+  return (
+    <section className="books-rules-not-taking" aria-label="Rules not taking" data-rules-not-taking={shown.length}>
+      <p className="books-section-label">Rules not taking</p>
+      <ul className="books-waiting">
+        {shown.map((row) => {
+          const ids = row.lesson_ids.join(', ');
+          return (
+            <li key={ids} data-rule-chain={ids}>
+              <p className="books-note">{ruleNotTakingLead(thesisName(row.thesis_id), row.came_back)}</p>
+              <p className="books-note">Lessons {ids}.</p>
+              {withSummary ? <p className="books-note">{row.summary}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function CameBack({ id, counts }: { id: number; counts: ReadonlyMap<number, number> }) {
+  const line = cameBackLine(counts.get(id));
+  if (!line) return null;
+  return <p className="books-lesson-wait" data-came-back={counts.get(id)}>{line}</p>;
+}
+
 /**
  * Book: one page per steward replacing the old Book and Theses tabs.
  * Header line, then open positions as one or two sentences (why it is held,
@@ -95,6 +145,11 @@ export function BookPanel({
   const nowMs = Date.parse(nowIso ?? desk.generated_at);
   const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
   const sequenceLine = researchIdSequenceLine(desk.watchdog?.research_id_sequences ?? null);
+  const rulesNotTaking = desk.watchdog?.rules_not_taking ?? [];
+  const cameBack = useMemo(
+    () => cameBackCounts(desk.watchdog?.lesson_came_back),
+    [desk.watchdog?.lesson_came_back],
+  );
   const books = useMemo(() => assembleStewardBooks(desk, nowMs), [desk, nowMs]);
   const waitingByThesis = useMemo(() => {
     const ids = new Set<string>();
@@ -178,6 +233,7 @@ export function BookPanel({
           {sequenceLine ? (
             <p className="thesis-lede" data-research-id-sequence="lagging">{sequenceLine}</p>
           ) : null}
+          <RulesNotTakingList rows={rulesNotTaking} thesisName={(id) => thesisPlainName(desk, id)} />
         </header>
         {books.sections.map((section) => (
           <StewardSection
@@ -214,6 +270,9 @@ export function BookPanel({
           lessonWaits={desk.lesson_waits ?? []}
           beliefs={desk.beliefs ?? []}
           domains={desk.team?.domains ?? []}
+          rulesNotTaking={rulesNotTaking}
+          cameBack={cameBack}
+          thesisName={(id) => thesisPlainName(desk, id)}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -230,6 +289,9 @@ export function BookPanel({
           lessonWaits={desk.lesson_waits ?? []}
           beliefs={desk.beliefs ?? []}
           domains={desk.team?.domains ?? []}
+          rulesNotTaking={rulesNotTaking}
+          cameBack={cameBack}
+          thesisName={(id) => thesisPlainName(desk, id)}
           onClose={() => setReading(null)}
           onOpenLot={(id) => setReading({ kind: 'lot', id })}
         />
@@ -439,6 +501,9 @@ function BooksDetail({
   lessonWaits,
   beliefs,
   domains,
+  rulesNotTaking,
+  cameBack,
+  thesisName,
   onClose,
   onOpenLot,
 }: {
@@ -456,6 +521,9 @@ function BooksDetail({
   lessonWaits: LessonWait[];
   beliefs: readonly BeliefUpdateRow[];
   domains: readonly { id: string; name: string; sort_order?: number | null }[];
+  rulesNotTaking: readonly RuleNotTaking[];
+  cameBack: ReadonlyMap<number, number>;
+  thesisName: (thesisId: string) => string;
   onClose: () => void;
   onOpenLot: (id: string) => void;
 }) {
@@ -549,6 +617,9 @@ function BooksDetail({
           artifacts={artifacts}
           lessonWaits={lessonWaits}
           now={now}
+          rulesNotTaking={rulesNotTaking}
+          cameBack={cameBack}
+          thesisName={thesisName}
           onOpenLot={onOpenLot}
         />
       ) : null}
@@ -609,6 +680,9 @@ function ThesisBody({
   artifacts,
   lessonWaits,
   now,
+  rulesNotTaking,
+  cameBack,
+  thesisName,
   onOpenLot,
 }: {
   thesis: ThesisRosterRow;
@@ -625,6 +699,9 @@ function ThesisBody({
   artifacts: BacktestArtifactRow[];
   lessonWaits: LessonWait[];
   now: number;
+  rulesNotTaking: readonly RuleNotTaking[];
+  cameBack: ReadonlyMap<number, number>;
+  thesisName: (thesisId: string) => string;
   onOpenLot: (id: string) => void;
 }) {
   const [allReady, setAllReady] = useState(false);
@@ -763,6 +840,12 @@ function ThesisBody({
           </ul>
         </>
       ) : null}
+      <RulesNotTakingList
+        rows={rulesNotTaking}
+        thesisName={thesisName}
+        thesisId={thesis.id}
+        withSummary
+      />
       <OpenLessonGroup
         label="Ready to write into the playbook"
         lane="ready"
@@ -774,6 +857,7 @@ function ThesisBody({
         cycles={cycles}
         artifacts={artifacts}
         now={now}
+        cameBack={cameBack}
       />
       <OpenLessonGroup
         label="Still waiting on a test"
@@ -786,6 +870,7 @@ function ThesisBody({
         cycles={cycles}
         artifacts={artifacts}
         now={now}
+        cameBack={cameBack}
       />
       {scoredLessons.length ? (
         <>
@@ -804,6 +889,7 @@ function ThesisBody({
                     {row.created_at.slice(0, 10)}
                   </span>
                   <p>{row.summary}</p>
+                  <CameBack id={row.id} counts={cameBack} />
                   {move ? <p className="books-close-move">{move}</p> : null}
                 </li>
               );
@@ -827,6 +913,7 @@ function ThesisBody({
                     {bound ? ' · belief already written' : ' · in the playbook'}
                   </span>
                   <p>{row.summary}</p>
+                  <CameBack id={row.id} counts={cameBack} />
                   {bound ? <p className="books-lesson-wait">Belief already written. Confidence stays.</p> : null}
                 </li>
               );
@@ -862,6 +949,7 @@ function OpenLessonGroup({
   cycles,
   artifacts,
   now,
+  cameBack,
 }: {
   label: string;
   lane: 'ready' | 'waiting';
@@ -873,6 +961,7 @@ function OpenLessonGroup({
   cycles: { id: number; preregistered_outcome?: string | null }[];
   artifacts: BacktestArtifactRow[];
   now: number;
+  cameBack: ReadonlyMap<number, number>;
 }) {
   if (!lessons.length) return null;
   const shown = expanded ? lessons : lessons.slice(0, LESSONS_SHOWN);
@@ -904,6 +993,7 @@ function OpenLessonGroup({
                 <span className={stale ? 'books-lesson-age is-stale' : 'books-lesson-age'}>{age}</span>
               ) : null}
               <p>{row.summary}</p>
+              <CameBack id={row.id} counts={cameBack} />
               {waiting ? <p className="books-lesson-wait">{waiting}</p> : null}
               {linked ? <TestOutcome test={linked} cycles={cycles} artifacts={artifacts} linked /> : null}
             </li>

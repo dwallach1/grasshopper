@@ -6784,6 +6784,18 @@ html.is-public-desk body {
   line-height: 1.35;
 }
 
+.books-rules-not-taking {
+  margin: 8px 0 2px;
+}
+
+.books-rules-not-taking .books-note {
+  margin: 0;
+  color: var(--ink-2, var(--text-2));
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
 .books-waiting {
   margin: 2px 0 8px;
   padding: 0;
