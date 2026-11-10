@@ -16,6 +16,15 @@ import {
   lockSwipeAxis,
   pageSwipeConsumesTarget,
   pageSwipeFromDrag,
+  gestureSpring,
+  notePointerSample,
+  releaseVelocity,
+  springSettled,
+  springStep,
+  swipeRelease,
+  PAGE_FLICK_PX_S,
+  PAGE_SWIPE_PX,
+  VELOCITY_WINDOW_MS,
   instantPagerLeft,
   pagerScrollBehavior,
   pagerScrollToBehavior,
@@ -167,6 +176,14 @@ describe('desk swipe deck', () => {
     expect(swipeAxis(-80, 90)).toBe(0);
     expect(swipeAxis(40, 140)).toBe(0);
     expect(swipeAxis(-20, 0)).toBe(0);
+    expect(swipeAxis(-30, 4, PAGE_SWIPE_PX, -900)).toBe(1);
+    expect(swipeAxis(30, 4, PAGE_SWIPE_PX, 900)).toBe(-1);
+    expect(swipeAxis(-30, 90, PAGE_SWIPE_PX, -2000)).toBe(0);
+    expect(swipeRelease(-30, -900)).toBe(1);
+    expect(swipeRelease(80, -900)).toBe(1);
+    expect(swipeRelease(-20, -40)).toBe(0);
+    expect(swipeRelease(-90, -40)).toBe(1);
+    expect(swipeRelease(Number.NaN, -900)).toBe(0);
     expect(isHorizontalLock(24, 8)).toBe(true);
     expect(isHorizontalLock(16, 30)).toBe(false);
     expect(isHorizontalLock(4, 16)).toBe(false);
@@ -218,6 +235,73 @@ describe('desk swipe deck', () => {
     expect(shouldCapturePagerPointer('y', false)).toBe(false);
     expect(shouldCapturePagerPointer('y', true)).toBe(true);
     expect(shouldCapturePagerPointer('x', false)).toBe(true);
+  });
+
+  test('a fast short flick flips, a slow short drag stays, a slow long drag flips', () => {
+    const flick = [
+      { t: 1_000, x: 180 },
+      { t: 1_020, x: 168 },
+      { t: 1_040, x: 156 },
+      { t: 1_060, x: 144 },
+    ];
+    const flickSpeed = releaseVelocity(flick, 1_060);
+    expect(flickSpeed).toBeCloseTo(-600, 5);
+    expect(flickSpeed).toBeLessThan(-PAGE_FLICK_PX_S);
+    expect(Math.abs(144 - 180)).toBeLessThan(PAGE_SWIPE_PX);
+    expect(swipeRelease(144 - 180, flickSpeed)).toBe(1);
+    expect(pageSwipeFromDrag('book', 144 - 180, 3, flickSpeed)).toBe('team');
+    expect(pageSwipeFromDrag('leaderboard', 36, 4, 600)).toBe('team');
+
+    const slowShort = releaseVelocity([
+      { t: 0, x: 40 },
+      { t: 220, x: 24 },
+      { t: 320, x: 18 },
+    ], 320);
+    expect(Math.abs(slowShort)).toBeLessThan(PAGE_FLICK_PX_S);
+    expect(Math.abs(18 - 40)).toBeLessThan(PAGE_SWIPE_PX);
+    expect(swipeRelease(18 - 40, slowShort)).toBe(0);
+    expect(pageSwipeFromDrag('book', 18 - 40, 2, slowShort)).toBeNull();
+
+    const slowLong = releaseVelocity([
+      { t: 0, x: 200 },
+      { t: 500, x: 120 },
+      { t: 700, x: 112 },
+      { t: 800, x: 104 },
+    ], 800);
+    expect(slowLong).toBeCloseTo(-80, 5);
+    expect(Math.abs(slowLong)).toBeLessThan(PAGE_FLICK_PX_S);
+    expect(swipeRelease(104 - 200, slowLong)).toBe(1);
+    expect(pageSwipeFromDrag('book', 104 - 200, 6, slowLong)).toBe('team');
+
+    const paused = releaseVelocity([
+      { t: 0, x: 0 },
+      { t: 40, x: -48 },
+      { t: 400, x: -48 },
+    ], 400);
+    expect(paused).toBe(0);
+    expect(swipeRelease(-48, paused)).toBe(0);
+    expect(notePointerSample([{ t: 0, x: 0 }, { t: 40, x: -10 }], 400, -12, VELOCITY_WINDOW_MS)).toEqual([
+      { t: 400, x: -12 },
+    ]);
+  });
+
+  test('the release spring takes the finger velocity and reduced motion does not cross the target', () => {
+    const kicked = springStep(
+      { position: 24, velocity: 720, target: 0 },
+      1 / 60,
+      gestureSpring(false),
+    );
+    expect(kicked.position).toBeGreaterThan(24);
+
+    let state = { position: 72, velocity: -2400, target: 0 };
+    const calm = gestureSpring(true);
+    expect(calm.overshoot).toBe(false);
+    for (let frame = 0; frame < 180; frame += 1) {
+      state = springStep(state, 1 / 60, calm);
+      expect(state.position).toBeGreaterThanOrEqual(0);
+    }
+    expect(springSettled(state, 1, 80)).toBe(true);
+    expect(springStep(state, 0, calm)).toBe(state);
   });
 
   test('a touch swipe does not re-arm on the compatibility mouse down', () => {
