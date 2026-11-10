@@ -10,10 +10,12 @@ import {
   escalatedBreachSentence,
   exposureLine,
   learningGapHoldingId,
+  cameBackLine,
   mapLedgerWatchdog,
   ontologyFreshnessLine,
   replayActionableBreachChecks,
   researchIdSequenceLine,
+  ruleNotTakingLead,
   watchdogHealthSummary,
 } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
@@ -857,5 +859,51 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(mapLedgerWatchdog({
       summary: [{ research_id_sequences: { research_cycles: behind } }],
     }).research_id_sequences).toBeNull();
+  });
+
+  test('an incorporated lesson re-taught twice is a rule not taking and does not change ok', () => {
+    const summary = 'Sheet build still misses names outside the symbol list.';
+    const chain = {
+      lesson_ids: [197, 223, 226, 241],
+      thesis_id: 'earnings_gap_structure',
+      summary,
+      came_back: 3,
+    };
+    const absent = mapLedgerWatchdog({ summary: [{ learning_stalls: [] }] });
+    expect(absent.rules_not_taking).toBeNull();
+    expect(absent.lesson_came_back).toBeNull();
+    expect(watchdogHealthSummary(absent).rules_not_taking).toEqual([]);
+    const mapped = mapLedgerWatchdog({
+      summary: [{
+        rules_not_taking: [chain, { lesson_ids: [1], thesis_id: 'x', summary: 'too short', came_back: 0 }],
+        lesson_came_back: [
+          { lesson_id: 197, came_back: 3 },
+          { lesson_id: '223', came_back: 2 },
+          { lesson_id: 226, came_back: 1 },
+          { lesson_id: 241, came_back: 0 },
+        ],
+      }],
+    });
+    expect(mapped.rules_not_taking).toEqual([chain]);
+    expect(mapped.lesson_came_back).toEqual([
+      { lesson_id: 197, came_back: 3 },
+      { lesson_id: 223, came_back: 2 },
+      { lesson_id: 226, came_back: 1 },
+    ]);
+    expect(cameBackLine(3)).toBe('Came back 3 times.');
+    expect(cameBackLine(1)).toBe('Came back 1 time.');
+    expect(cameBackLine(0)).toBeNull();
+    expect(ruleNotTakingLead('Earnings gap structure', 3)).toBe('Earnings gap structure came back 3 times.');
+    const health = watchdogHealthSummary(mapped);
+    expect(health.rules_not_taking).toEqual([chain]);
+    const book = assembleDeskBookHealth({
+      watchdog: mapped,
+      book: { names: [], observed_at: null },
+      positions: [],
+      exposures: [],
+      fills: [],
+      intents: [],
+    } as unknown as DeskPayload, Date.parse('2026-11-10T18:00:00.000Z'));
+    expect(deskHealthSummary(book).integrity_issues).toBe(0);
   });
 });

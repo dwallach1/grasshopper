@@ -134,6 +134,7 @@ describe('public desk Worker API', () => {
         learning_loop_stalled: false,
         research_id_sequences: null,
         research_id_sequence_line: null,
+        rules_not_taking: [],
       },
       learning: {
         to_review: 0,
@@ -235,6 +236,50 @@ describe('public desk Worker API', () => {
     expect(body.watchdog.stale_queued_tests).toMatchObject({ n: 18, quantanamo: 18 });
     expect(body.watchdog.unlinked_named_lessons).toBe(1);
     expect(body.watchdog.learning_loop_stalled).toBe(false);
+  });
+
+  test('a rule that came back is on /api/health and /api/desk, and health stays ok', async () => {
+    const rulesNotTaking = [{
+      lesson_ids: [197, 223, 226, 241],
+      thesis_id: 'earnings_gap_structure',
+      summary: 'SANM was outside the screened universe.',
+      came_back: 3,
+    }];
+    const desk = {
+      ...liveSample,
+      watchdog: {
+        ...emptyLedgerWatchdog(),
+        available: true,
+        rules_not_taking: rulesNotTaking,
+        lesson_came_back: [{ lesson_id: 197, came_back: 3 }],
+      },
+    };
+    const health = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => desk,
+    );
+    expect(health.status).toBe(200);
+    const healthBody = await health.json() as {
+      ok: boolean;
+      watchdog: { rules_not_taking: typeof rulesNotTaking };
+    };
+    expect(healthBody.ok).toBe(true);
+    expect(healthBody.watchdog.rules_not_taking).toEqual(rulesNotTaking);
+    const page = await handleDeskApi(
+      new Request('https://desk.test/api/desk'),
+      env(readerEnv),
+      async () => desk,
+    );
+    expect(page.status).toBe(200);
+    const pageBody = await page.json() as {
+      watchdog: {
+        rules_not_taking: typeof rulesNotTaking;
+        lesson_came_back: { lesson_id: number; came_back: number }[];
+      };
+    };
+    expect(pageBody.watchdog.rules_not_taking).toEqual(rulesNotTaking);
+    expect(pageBody.watchdog.lesson_came_back).toEqual([{ lesson_id: 197, came_back: 3 }]);
   });
 
   test('a queued test past five trading days is a learning-loop stall and /api/health stays ok', async () => {

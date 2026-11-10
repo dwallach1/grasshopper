@@ -24,6 +24,7 @@ import {
   OPEN_LESSON_STALE_DAYS,
   type LessonWait,
 } from '../../lib/lesson-waits';
+import { cameBackCounts, cameBackLine } from '../../lib/ledger-watchdog';
 import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 
 export function LessonQueue({
@@ -56,6 +57,10 @@ export function LessonQueue({
     };
   }, [desk.beliefs, desk.cycles, desk.lessons, waits]);
   const now = Date.parse(desk.generated_at);
+  const cameBack = useMemo(
+    () => cameBackCounts(desk.watchdog?.lesson_came_back),
+    [desk.watchdog?.lesson_came_back],
+  );
 
   return (
     <section
@@ -82,6 +87,7 @@ export function LessonQueue({
         desk={desk}
         waits={waits}
         now={now}
+        cameBack={cameBack}
         canIncorporate={canIncorporate}
         onIncorporated={onIncorporated}
       />
@@ -92,6 +98,7 @@ export function LessonQueue({
         desk={desk}
         waits={waits}
         now={now}
+        cameBack={cameBack}
         canIncorporate={canIncorporate}
         onIncorporated={onIncorporated}
       />
@@ -110,6 +117,7 @@ export function LessonQueue({
                 })}
                 scored
                 earningsBound={grouped.earningsBound.has(String(row.id))}
+                cameBack={cameBackLine(cameBack.get(row.id))}
               />
             ))}
           </ul>
@@ -125,6 +133,7 @@ export function LessonQueue({
                 row={row}
                 thesisName={thesisNameForLesson(row, desk.theses ?? [])}
                 earningsBound={grouped.earningsBound.has(String(row.id))}
+                cameBack={cameBackLine(cameBack.get(row.id))}
               />
             ))}
           </ul>
@@ -141,6 +150,7 @@ function LessonLane({
   desk,
   waits,
   now,
+  cameBack,
   canIncorporate,
   onIncorporated,
 }: {
@@ -150,6 +160,7 @@ function LessonLane({
   desk: DeskPayload;
   waits: ReadonlyMap<number, LessonWait>;
   now: number;
+  cameBack: ReadonlyMap<number, number>;
   canIncorporate: boolean;
   onIncorporated?: () => void;
 }) {
@@ -169,6 +180,7 @@ function LessonLane({
             age={lessonAgeLine(row.created_at, now)}
             wait={lessonWaitLine(waits.get(row.id))}
             stale={(lessonAgeDays(row.created_at, now) ?? 0) >= OPEN_LESSON_STALE_DAYS}
+            cameBack={cameBackLine(cameBack.get(row.id))}
           />
         ))}
       </ul>
@@ -188,6 +200,7 @@ function LessonCard({
   scored = false,
   earningsBound = false,
   move = null,
+  cameBack = null,
 }: {
   row: LessonRow;
   lane?: 'ready' | 'waiting';
@@ -200,6 +213,7 @@ function LessonCard({
   scored?: boolean;
   earningsBound?: boolean;
   move?: string | null;
+  cameBack?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -239,6 +253,7 @@ function LessonCard({
           {age ? ` · ${age}` : ''}
         </i>
         <p>{row.summary}</p>
+        {cameBack ? <p className="books-lesson-wait" data-came-back={row.id}>{cameBack}</p> : null}
         {wait ? <p className="books-lesson-wait">{wait}</p> : null}
         {earningsBound ? <p className="books-lesson-wait">Belief already written. Confidence stays.</p> : null}
         {move ? <p className="books-close-move">{move}</p> : null}
