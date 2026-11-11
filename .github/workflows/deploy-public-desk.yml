@@ -115,6 +115,8 @@ jobs:
       - name: Deploy desk-public-rest (verify_jwt=false)
         if: steps.gate.outputs.changed == 'true'
         run: |
+          # --yes is required for non-TTY CI (setup-cli latest prompts otherwise).
           supabase functions deploy desk-public-rest \
             --project-ref "$SUPABASE_PROJECT_REF" \
-            --no-verify-jwt
+            --no-verify-jwt \
+            --yes
