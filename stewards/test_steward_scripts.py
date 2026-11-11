@@ -27,7 +27,7 @@ SCRIPTS = {
 EXIT_SCRIPTS = {
     "bandit": [HERE / "bandit" / f for f in ("clip_common.py", "mark_clip.py", "exit_clip.py", "pnl_snapshot.py", "pass_marks.py", "close_lesson.py")],
     "oddsborne": [HERE / "oddsborne" / f for f in ("pm_exit.py", "pm_watch.py", "pm_fills_sync.py", "pm_pnl_snapshot.py", "pm_session_notes.py", "pm_decision_markets.py", "close_lesson.py")],
-    "quantanamo": [HERE / "quantanamo" / "pass_marks.py", HERE / "quantanamo" / "earnings_implied.py"],
+    "quantanamo": [HERE / "quantanamo" / "pass_marks.py", HERE / "quantanamo" / "earnings_implied.py", HERE / "quantanamo" / "earnings_sheet.py"],
 }
 RPC_CALL = re.compile(r'(?:rpc\(|ledger\(|call\([A-Za-z_.]+, )"([a-z_]+)"')
 SECRET_PATTERNS = [
@@ -113,7 +113,8 @@ class StewardScripts(unittest.TestCase):
                + FIXES_SQL.read_text() + NOTES_SQL.read_text()
                + (HERE.parent / "supabase" / "schemas" / "80_equity_implied_move_risk.sql").read_text()
                + (HERE.parent / "supabase" / "schemas" / "81_equity_implied_move_gaps.sql").read_text()
-               + (HERE.parent / "supabase" / "schemas" / "82_equity_earnings_score.sql").read_text())
+               + (HERE.parent / "supabase" / "schemas" / "82_equity_earnings_score.sql").read_text()
+               + (HERE.parent / "supabase" / "schemas" / "98_earnings_sheet_coverage.sql").read_text())
         edge = EDGE_FN.read_text()
         targets = [("bandit", SCRIPTS["bandit"]), ("bandit", HERE / "bandit" / "paper_bank20.py"), ("oddsborne", SCRIPTS["oddsborne"])]
         targets += [(steward, p) for steward, ps in EXIT_SCRIPTS.items() for p in ps]

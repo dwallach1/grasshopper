@@ -35,7 +35,7 @@ const ALLOWED_TABLES = new Set([
   // Open lessons and the test each one waits on. Optional until migration 20261020180000.
   'v_open_lesson_tests',
   // Shadow candidates and the earnings sheet label. Optional until migration 20261023180000.
-  'v_shadow_candidates', 'v_earnings_sheet',
+  'v_shadow_candidates', 'v_earnings_sheet', 'v_earnings_sheet_coverage',
 ]);
 
 const TABLE_RE = /^\/rest\/v1\/([a-z0-9_]+)$/;

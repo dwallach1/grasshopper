@@ -24,6 +24,17 @@ Steps:
 11. Finish the durable recap with `bun run run:report -- finish scheduled_research`. Supply a headline and short summary, plus repeatable `--insight`, `--learning`, and `--action` entries. State explicitly when the run produced no new thesis, no new evidence, or no executable action. Then run `bun run dashboard:publish` so the recap appears in the RUNS page.
 12. Do not run `bun run automations:sync` directly for the current run: a task cannot observe its own completion event while it is still running, and the post-run reconciler armed in step 0 owns this update.
 
+Earnings sheet, after the close. Rank the next two NYSE sessions from the full Robinhood high-cap calendar, including names that are not in `public.symbols`. Do not rank only the names already on the sheet.
+
+```bash
+python3 stewards/quantanamo/earnings_sheet.py plan --sessions 2
+# Call the printed Robinhood tools. Save the raw responses as payload.json,
+# with in_symbols set to the tickers already in public.symbols.
+python3 stewards/quantanamo/earnings_sheet.py rank payload.json --execute
+```
+
+`rank` without `--execute` prints the sheet and the SQL. `--execute` writes one `research_queue` row (priority 1, source `earnings_sheet`) and inserts calendar symbols missing from `public.symbols`. A beat counts only when both the reported EPS and the estimate are present. A missing bar stays missing. PLTR is never a candidate. This step does not size a trade and does not place an order.
+
 Output:
 - New or changed theses
 - Hardened theses

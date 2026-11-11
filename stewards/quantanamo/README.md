@@ -54,3 +54,41 @@ python3 /workspace/quantanamo/earnings_implied.py score --execute
 ```
 
 EFX can be fully scored that morning (the 10/20 session has closed). NFLX has its reference close and, after 09:30 ET, the 10/21 open; the 10/21 close is not usable until 16:00 ET, so the morning row is `no_post_close`. The same scoring runs at the end of `write <payload.json> --execute`.
+
+## Earnings sheet from the full calendar
+
+`earnings_sheet.py` builds the nightly earnings sheet from the Robinhood high-cap calendar, including names that are not in `public.symbols` yet. Lessons 190, 230, and 245 are that miss: a day-0 winner (AAON on 11/10) never reached the sheet because the autopsy only ranked names already on the list. The script ranks every calendar name. It does not size a trade and it does not place an order. PLTR is never a candidate.
+
+After the close:
+
+```bash
+bash /workspace/grasshopper/stewards/sync_box.sh
+python3 /workspace/quantanamo/earnings_sheet.py plan --sessions 2
+# Call the printed Robinhood tools, save the raw responses, then:
+python3 /workspace/quantanamo/earnings_sheet.py rank payload.json
+python3 /workspace/quantanamo/earnings_sheet.py rank payload.json --execute
+```
+
+From the repo the same commands are `python3 stewards/quantanamo/earnings_sheet.py plan --sessions 2` and `rank`. `--sessions 2` is the next two NYSE sessions. A session that has already closed is not one of them. A Friday-to-Monday window includes the weekend days the calendar tool needs.
+
+`plan` prints `get_earnings_calendar` (`start_date`, `days`, `filter` `high_market_cap`), then `get_earnings_results` once per calendar symbol except PLTR, then `get_equity_historicals` (`interval` `day`, `bounds` `regular`, `adjustment_type` `split`, at most 10 symbols a call) starting 420 days earlier. `get_earnings` (Financial Datasets) is optional, and only for a symbol whose Robinhood history cannot be read.
+
+`rank` reads `payload.json`:
+
+```json
+{
+  "sessions": ["2026-11-12", "2026-11-13"],
+  "in_symbols": ["ENS"],
+  "get_earnings_calendar": {},
+  "get_earnings_results": {"AAON": {}},
+  "get_equity_historicals": {"AAON": {}}
+}
+```
+
+`sessions` is the list `plan` printed. Leave it off to rank every name in the saved calendar. `in_symbols` is the tickers from `public.symbols`. Leave it off and the sheet says the outside count was not counted. `--execute` ignores that list and reads `public.steward_symbols_present` first.
+
+A beat is a reported EPS greater than that quarter's estimate. `beat_history_6of6` means the last 6 quarters before the report that have both numbers were all beats. Fewer than 6 is `no_history`. A tie is not a beat. The report being ranked is not part of the history. `quality_drawdown` is the 2026-09-25 screen: at least 30% below the high of the regular sessions in the 365 days before the prior session. From 2026-01-01 on, every one of those sessions has to have a bar. `crash_dump_am` is lesson 230: an AM print, at least 25% below that high, and a prior regular session close-to-close of -8% or worse. A missing EPS, estimate, or bar stays missing.
+
+`rank` prints the `research_queue` row (priority 1, source `earnings_sheet`) and `select public.steward_write_earnings_sheet(...)`. `--execute` writes it, marks the previous open `earnings_sheet` row done, and inserts any ranked symbol that is not in `public.symbols` (`status` `candidate`, mention counts left at 0). The topic line carries the 6/6 count and how many ranked names were outside `public.symbols`.
+
+`select * from public.v_earnings_sheet_coverage` is that latest row's counts. `outside_symbols` is null when the coverage line has no number. The view is empty when this script has not written a sheet. It does not change `/api/health`.
