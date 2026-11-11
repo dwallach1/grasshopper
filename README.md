@@ -64,7 +64,7 @@ Edit this table when a cadence is added, renamed, or retired. Last-run times on 
 | Routine | Folder / id | When (America/New_York) | Writes |
 |---|---|---|---|
 | Market scan | `quantanamo-market-scan` | Weekdays hourly **10:59–15:59** | `runs` (`market_scan`), snapshots, theses/evidence, intents when gated |
-| Missed-swing autopsy | `quantanamo-missed-swing-autopsy` | Weekdays **16:15** | `runs` (`missed_swing_autopsy`), lessons / earnings-gap notes |
+| Missed-swing autopsy | `quantanamo-missed-swing-autopsy` | Weekdays **16:15** | `runs` (`missed_swing_autopsy`), lessons / earnings-gap notes. The sheet for the next two sessions is `stewards/quantanamo/earnings_sheet.py` (`plan --sessions 2`, then `rank payload.json --execute`), over the full high-cap calendar. |
 
 A scan that cannot refresh the Agentic account, or that hits a closed session, fails closed and still records a run.
 

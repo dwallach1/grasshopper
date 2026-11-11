@@ -52,6 +52,9 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     'quantanamo_score_ah_open_shadow',
     'quantanamo_record_cohort_flag',
     'earnings_sheet_slot',
+    // full-calendar earnings sheet (supabase/schemas/98_earnings_sheet_coverage.sql; earnings_sheet.py)
+    'steward_symbols_present',
+    'steward_write_earnings_sheet',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',

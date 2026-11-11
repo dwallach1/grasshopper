@@ -8,6 +8,7 @@
 # 3. Runs doctor.sh and exits with its status.
 # QUANTANAMO earnings sweep: earnings_implied.py is copied to /workspace/quantanamo/earnings_implied.py.
 # Run `plan`, then `write <payload.json> --execute`. After a print, `score --execute` records the realized move.
+# The nightly earnings sheet is earnings_sheet.py: `plan --sessions 2`, then `rank <payload.json> --execute`.
 #
 # Why this exists: the box's durable store deliberately skips `.venv/`, `venv/` and `.cache/` (the box
 # default ignore list), so a box refresh wipes every venv and the pip cache while /workspace files survive.
@@ -74,6 +75,7 @@ else
     "$here/quantanamo/emit_b64.py:$box/bookmark-ingest/emit_b64.py"
     "$here/quantanamo/pass_marks.py:$box/quantanamo/pass_marks.py"
     "$here/quantanamo/earnings_implied.py:$box/quantanamo/earnings_implied.py"
+    "$here/quantanamo/earnings_sheet.py:$box/quantanamo/earnings_sheet.py"
     "$here/quantanamo/steward_rpc.py:$box/quantanamo/steward_rpc.py"
     "$here/quantanamo/requirements.txt:$box/quantanamo/requirements.txt"
   )
