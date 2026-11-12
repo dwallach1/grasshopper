@@ -240,10 +240,32 @@ describe('public desk Worker API', () => {
 
   test('a rule that came back is on /api/health and /api/desk, and health stays ok', async () => {
     const rulesNotTaking = [{
-      lesson_ids: [197, 223, 226, 241],
+      lesson_ids: [197, 223, 226, 241, 245],
       thesis_id: 'earnings_gap_structure',
-      summary: 'SANM was outside the screened universe.',
+      summary: 'AAON was again outside the screened universe.',
+      came_back: 4,
+      fix_ref: 'PR #204',
+      shipped_at: '2026-11-11T18:45:33Z',
+      status: 'fix_shipped_watching',
+      failed_lesson_id: null,
+    }, {
+      lesson_ids: [156, 233, 240],
+      thesis_id: 'earnings_gap_structure',
+      summary: 'Post-open entries on AM printers are chases.',
+      came_back: 2,
+      fix_ref: null,
+      shipped_at: null,
+      status: 'not_taking',
+      failed_lesson_id: null,
+    }, {
+      lesson_ids: [179, 188, 199, 204],
+      thesis_id: 'earnings_gap_structure',
+      summary: 'The last earnings-hold slot went to a below-gate name.',
       came_back: 3,
+      fix_ref: 'PR #10',
+      shipped_at: '2026-10-01T00:00:00Z',
+      status: 'fix_failed',
+      failed_lesson_id: 204,
     }];
     const desk = {
       ...liveSample,

@@ -16,6 +16,7 @@ import {
   replayActionableBreachChecks,
   researchIdSequenceLine,
   ruleNotTakingLead,
+  ruleNotTakingStatusLine,
   watchdogHealthSummary,
 } from './ledger-watchdog';
 import type { DeskPayload } from './ledger-types';
@@ -863,11 +864,38 @@ describe('10/8 NBIS and CODA breach replay', () => {
 
   test('an incorporated lesson re-taught twice is a rule not taking and does not change ok', () => {
     const summary = 'Sheet build still misses names outside the symbol list.';
-    const chain = {
+    const open = {
       lesson_ids: [197, 223, 226, 241],
       thesis_id: 'earnings_gap_structure',
       summary,
       came_back: 3,
+    };
+    const chain = {
+      ...open,
+      fix_ref: null,
+      shipped_at: null,
+      status: 'not_taking' as const,
+      failed_lesson_id: null,
+    };
+    const watching = {
+      lesson_ids: [197, 223, 226, 241, 245],
+      thesis_id: 'earnings_gap_structure',
+      summary: 'AAON was again outside the screened universe.',
+      came_back: 4,
+      fix_ref: 'PR #204',
+      shipped_at: '2026-11-11T18:45:33+00:00',
+      status: 'fix_shipped_watching' as const,
+      failed_lesson_id: null,
+    };
+    const failed = {
+      lesson_ids: [179, 188, 199, 204],
+      thesis_id: 'earnings_gap_structure',
+      summary: 'The last earnings-hold slot went to a below-gate name.',
+      came_back: 3,
+      fix_ref: 'PR #10',
+      shipped_at: '2026-10-01T00:00:00Z',
+      status: 'fix_failed' as const,
+      failed_lesson_id: 204,
     };
     const absent = mapLedgerWatchdog({ summary: [{ learning_stalls: [] }] });
     expect(absent.rules_not_taking).toBeNull();
@@ -875,7 +903,13 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(watchdogHealthSummary(absent).rules_not_taking).toEqual([]);
     const mapped = mapLedgerWatchdog({
       summary: [{
-        rules_not_taking: [chain, { lesson_ids: [1], thesis_id: 'x', summary: 'too short', came_back: 0 }],
+        rules_not_taking: [
+          open,
+          watching,
+          failed,
+          { lesson_ids: [1], thesis_id: 'x', summary: 'too short', came_back: 0 },
+          { ...open, status: 'shipped', lesson_ids: [9, 10, 11] },
+        ],
         lesson_came_back: [
           { lesson_id: 197, came_back: 3 },
           { lesson_id: '223', came_back: 2 },
@@ -884,7 +918,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
         ],
       }],
     });
-    expect(mapped.rules_not_taking).toEqual([chain]);
+    expect(mapped.rules_not_taking).toEqual([chain, watching, failed]);
     expect(mapped.lesson_came_back).toEqual([
       { lesson_id: 197, came_back: 3 },
       { lesson_id: 223, came_back: 2 },
@@ -894,8 +928,16 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(cameBackLine(1)).toBe('Came back 1 time.');
     expect(cameBackLine(0)).toBeNull();
     expect(ruleNotTakingLead('Earnings gap structure', 3)).toBe('Earnings gap structure came back 3 times.');
+    expect(ruleNotTakingStatusLine(chain, 'Earnings gap structure'))
+      .toBe('Still not taking: Earnings gap structure, taught 3 times, no fix yet.');
+    expect(ruleNotTakingStatusLine(watching, 'Earnings gap structure'))
+      .toBe('Earnings gap structure fix shipped Nov 11 (PR #204), watching: no repeat since.');
+    expect(ruleNotTakingStatusLine(failed, 'Earnings gap structure'))
+      .toBe('Earnings gap structure fix shipped Oct 1 (PR #10). Lesson 204 came back after.');
+    expect(ruleNotTakingStatusLine({ came_back: 4 }, ''))
+      .toBe('Still not taking: taught 4 times, no fix yet.');
     const health = watchdogHealthSummary(mapped);
-    expect(health.rules_not_taking).toEqual([chain]);
+    expect(health.rules_not_taking).toEqual([chain, watching, failed]);
     const book = assembleDeskBookHealth({
       watchdog: mapped,
       book: { names: [], observed_at: null },
@@ -903,7 +945,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       exposures: [],
       fills: [],
       intents: [],
-    } as unknown as DeskPayload, Date.parse('2026-11-10T18:00:00.000Z'));
+    } as unknown as DeskPayload, Date.parse('2026-11-12T18:00:00.000Z'));
     expect(deskHealthSummary(book).integrity_issues).toBe(0);
   });
 });

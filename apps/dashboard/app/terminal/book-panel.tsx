@@ -23,7 +23,7 @@ import {
   cameBackLine,
   ontologyFreshnessLine,
   researchIdSequenceLine,
-  ruleNotTakingLead,
+  ruleNotTakingStatusLine,
   type RuleNotTaking,
 } from '../../lib/ledger-watchdog';
 import {
@@ -103,8 +103,8 @@ function RulesNotTakingList({
         {shown.map((row) => {
           const ids = row.lesson_ids.join(', ');
           return (
-            <li key={ids} data-rule-chain={ids}>
-              <p className="books-note">{ruleNotTakingLead(thesisName(row.thesis_id), row.came_back)}</p>
+            <li key={ids} data-rule-chain={ids} data-rule-status={row.status ?? 'not_taking'}>
+              <p className="books-note">{ruleNotTakingStatusLine(row, thesisName(row.thesis_id))}</p>
               <p className="books-note">Lessons {ids}.</p>
               {withSummary ? <p className="books-note">{row.summary}</p> : null}
             </li>
