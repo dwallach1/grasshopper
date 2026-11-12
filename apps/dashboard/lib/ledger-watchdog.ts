@@ -189,16 +189,26 @@ export type ResearchIdSequences = {
   research_lessons: ResearchIdSequence;
 };
 
+/** A shipped fix has not been recorded, is being watched, or already came back. */
+export type RuleNotTakingStatus = 'not_taking' | 'fix_shipped_watching' | 'fix_failed';
+
 /**
  * An incorporated lesson that was taught again at least twice.
  * `lesson_ids` is the chain, oldest first. `summary` is the newest lesson.
- * `came_back` is how many lessons followed the first. Does not change `/api/health` ok.
+ * `came_back` is how many lessons followed the first.
+ * `fix_ref` and `shipped_at` are null when no fix is recorded.
+ * `failed_lesson_id` is the lesson created after the fix that cites the chain.
+ * Does not change `/api/health` ok.
  */
 export type RuleNotTaking = {
   lesson_ids: number[];
   thesis_id: string;
   summary: string;
   came_back: number;
+  fix_ref: string | null;
+  shipped_at: string | null;
+  status: RuleNotTakingStatus;
+  failed_lesson_id: number | null;
 };
 
 /** Later lessons that cite this one, directly or through the ones in between. */
@@ -221,6 +231,55 @@ export function ruleNotTakingLead(thesisName: string, cameBack: number): string 
   const n = Math.trunc(cameBack);
   const times = n === 1 ? '1 time' : `${n} times`;
   return `${name} came back ${times}.`;
+}
+
+/** "Nov 11" in UTC. Null when the timestamp is missing or not a date. */
+export function ruleFixDay(value: string | null | undefined): string | null {
+  const ms = stampMs(value);
+  if (ms === null) return null;
+  const date = new Date(ms);
+  return `${ONTOLOGY_MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
+}
+
+/**
+ * One parchment sentence for a rules-not-taking chain.
+ * Uses the thesis name, the shipped day, the fix reference, and the lesson
+ * that came back. Does not invent a date, a reference, or a lesson id.
+ */
+export function ruleNotTakingStatusLine(
+  row: {
+    status?: string | null;
+    fix_ref?: string | null;
+    shipped_at?: string | null;
+    came_back: number;
+    failed_lesson_id?: number | null;
+  },
+  thesisName: string,
+): string {
+  const name = thesisName.trim();
+  const status = row.status === 'fix_shipped_watching' || row.status === 'fix_failed'
+    ? row.status
+    : 'not_taking';
+  if (status === 'not_taking') {
+    const n = Number.isFinite(row.came_back) ? Math.trunc(row.came_back) : 0;
+    const times = n === 1 ? '1 time' : `${n} times`;
+    return name
+      ? `Still not taking: ${name}, taught ${times}, no fix yet.`
+      : `Still not taking: taught ${times}, no fix yet.`;
+  }
+  const subject = name || 'This';
+  const day = ruleFixDay(row.shipped_at);
+  const ref = row.fix_ref?.trim() ?? '';
+  const when = [day, ref ? `(${ref})` : ''].filter(Boolean).join(' ');
+  const shipped = when ? `${subject} fix shipped ${when}` : `${subject} fix shipped`;
+  if (status === 'fix_failed') {
+    const id = row.failed_lesson_id;
+    if (typeof id === 'number' && Number.isFinite(id) && id > 0) {
+      return `${shipped}. Lesson ${Math.trunc(id)} came back after.`;
+    }
+    return `${shipped}. It came back after.`;
+  }
+  return `${shipped}, watching: no repeat since.`;
 }
 
 export function cameBackCounts(rows: readonly LessonCameBack[] | null | undefined): Map<number, number> {
@@ -961,6 +1020,10 @@ export function watchdogHealthSummary(
       thesis_id: row.thesis_id,
       summary: row.summary,
       came_back: row.came_back,
+      fix_ref: row.fix_ref ?? null,
+      shipped_at: row.shipped_at ?? null,
+      status: row.status ?? 'not_taking',
+      failed_lesson_id: row.failed_lesson_id ?? null,
     })),
   };
 }
@@ -1009,6 +1072,15 @@ function idList(value: unknown): number[] {
   return ids;
 }
 
+const RULE_NOT_TAKING_STATUS = new Set<RuleNotTakingStatus>(['not_taking', 'fix_shipped_watching', 'fix_failed']);
+
+function ruleStatus(value: unknown): RuleNotTakingStatus | null {
+  if (value === undefined || value === null || value === '') return 'not_taking';
+  return typeof value === 'string' && RULE_NOT_TAKING_STATUS.has(value as RuleNotTakingStatus)
+    ? value as RuleNotTakingStatus
+    : null;
+}
+
 function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
   const parsed = jsonValue(value);
   if (!Array.isArray(parsed)) return null;
@@ -1020,12 +1092,18 @@ function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
     const summary = str(bag.summary);
     const cameBack = optionalCount(bag.came_back);
     const lessonIds = idList(bag.lesson_ids);
-    if (!thesisId || !summary || cameBack === null || lessonIds.length < 3) continue;
+    const status = ruleStatus(bag.status);
+    if (!thesisId || !summary || cameBack === null || lessonIds.length < 3 || !status) continue;
+    const failed = optionalCount(bag.failed_lesson_id);
     out.push({
       lesson_ids: lessonIds,
       thesis_id: thesisId,
       summary,
       came_back: cameBack,
+      fix_ref: str(bag.fix_ref),
+      shipped_at: str(bag.shipped_at),
+      status,
+      failed_lesson_id: failed !== null && failed > 0 ? failed : null,
     });
   }
   return out;

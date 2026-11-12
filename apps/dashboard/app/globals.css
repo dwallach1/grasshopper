@@ -6794,6 +6794,7 @@ html.is-public-desk body {
   font-family: var(--font-ui);
   font-size: 13.5px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .books-waiting {

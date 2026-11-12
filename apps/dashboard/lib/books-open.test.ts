@@ -1180,6 +1180,10 @@ describe('Books page: one section per steward', () => {
         thesis_id: EARNINGS,
         summary: 'SANM was outside the screened universe. Already lesson 226.',
         came_back: 3,
+        fix_ref: null,
+        shipped_at: null,
+        status: 'not_taking' as const,
+        failed_lesson_id: null,
       }],
       lesson_came_back: [
         { lesson_id: 197, came_back: 3 },
@@ -1189,7 +1193,8 @@ describe('Books page: one section per steward', () => {
     const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-10T18:00:00.000Z' }));
     const home = view.host.querySelector('.books [data-rules-not-taking]');
     expect(home?.textContent).toContain('Rules not taking');
-    expect(home?.textContent).toContain('Earnings gap structure came back 3 times.');
+    expect(home?.textContent).toContain('Still not taking: Earnings gap structure, taught 3 times, no fix yet.');
+    expect(home?.textContent).not.toContain('not_taking');
     expect(home?.textContent).toContain('Lessons 197, 223, 226, 241.');
     expect(home?.textContent).not.toContain('Already lesson 226');
     await act(async () => {
@@ -1201,6 +1206,57 @@ describe('Books page: one section per steward', () => {
     expect(detail?.querySelector('[data-lesson="197"] [data-came-back]')?.textContent).toBe('Came back 3 times.');
     expect(detail?.querySelector('[data-lesson="241"] [data-came-back]')).toBeNull();
     expect(detail?.textContent).not.toContain('Incorporate');
+    view.unmount();
+  });
+
+  test('a shipped fix and a repeat after it are plain sentences, and P/L stays by sign', async () => {
+    const payload = desk();
+    payload.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      rules_not_taking: [{
+        lesson_ids: [197, 223, 226, 241, 245],
+        thesis_id: EARNINGS,
+        summary: 'AAON was again outside the screened universe.',
+        came_back: 4,
+        fix_ref: 'PR #204',
+        shipped_at: '2026-11-11T18:45:33Z',
+        status: 'fix_shipped_watching',
+        failed_lesson_id: null,
+      }, {
+        lesson_ids: [156, 233, 240],
+        thesis_id: EARNINGS,
+        summary: 'Post-open entries on AM printers are chases.',
+        came_back: 2,
+        fix_ref: null,
+        shipped_at: null,
+        status: 'not_taking',
+        failed_lesson_id: null,
+      }, {
+        lesson_ids: [179, 188, 199, 204],
+        thesis_id: EARNINGS,
+        summary: 'The last earnings-hold slot went to a below-gate name.',
+        came_back: 3,
+        fix_ref: 'PR #10',
+        shipped_at: '2026-10-01T00:00:00Z',
+        status: 'fix_failed',
+        failed_lesson_id: 204,
+      }],
+    };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-12T18:00:00.000Z' }));
+    const home = view.host.querySelector('.books [data-rules-not-taking]');
+    expect(home?.textContent).toContain('Earnings gap structure fix shipped Nov 11 (PR #204), watching: no repeat since.');
+    expect(home?.textContent).toContain('Still not taking: Earnings gap structure, taught 2 times, no fix yet.');
+    expect(home?.textContent).toContain('Earnings gap structure fix shipped Oct 1 (PR #10). Lesson 204 came back after.');
+    expect(home?.textContent).not.toContain('fix_shipped_watching');
+    expect(home?.textContent).not.toContain('fix_failed');
+    expect(home?.textContent).not.toContain('not_taking');
+    expect(home?.querySelector('[data-rule-status="fix_shipped_watching"]')).not.toBeNull();
+    expect(home?.querySelector('[data-rule-status="not_taking"]')).not.toBeNull();
+    expect(home?.querySelector('[data-rule-status="fix_failed"]')).not.toBeNull();
+    const coda = button(view.host, 'button.books-lot[data-lot="eq:CODA"]');
+    expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
+    expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');
     view.unmount();
   });
 });
