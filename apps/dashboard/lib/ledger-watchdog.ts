@@ -189,27 +189,44 @@ export type ResearchIdSequences = {
   research_lessons: ResearchIdSequence;
 };
 
-/** A shipped fix has not been recorded, is being watched, or already came back. */
-export type RuleNotTakingStatus = 'not_taking' | 'fix_shipped_watching' | 'fix_failed';
+/**
+ * A chain is not taking when a later lesson broke the rule.
+ * Holding: the later lessons say the rule stood.
+ * Refining: they only narrow it.
+ * A shipped fix is watched until a later lesson breaks the rule again.
+ */
+export type RuleNotTakingStatus =
+  | 'not_taking'
+  | 'holding'
+  | 'refining'
+  | 'fix_shipped_watching'
+  | 'fix_failed';
 
 /**
  * An incorporated lesson that was taught again at least twice.
  * `lesson_ids` is the chain, oldest first. `summary` is the newest lesson.
  * `came_back` is how many lessons followed the first.
+ * `violations` is how many of those broke the rule.
  * `fix_ref` and `shipped_at` are null when no fix is recorded.
- * `failed_lesson_id` is the lesson created after the fix that cites the chain.
- * Does not change `/api/health` ok.
+ * `failed_lesson_id` is the lesson after the fix that broke the rule.
+ * Only `not_taking` and `fix_failed` are the alarm. Does not change `/api/health` ok.
  */
 export type RuleNotTaking = {
   lesson_ids: number[];
   thesis_id: string;
   summary: string;
   came_back: number;
+  violations: number;
   fix_ref: string | null;
   shipped_at: string | null;
   status: RuleNotTakingStatus;
   failed_lesson_id: number | null;
 };
+
+/** The chain is an alarm when the rule was broken and has not been shown holding since. */
+export function ruleNotTakingIsAlarm(status: string | null | undefined): boolean {
+  return status === 'not_taking' || status === 'fix_failed';
+}
 
 /** Later lessons that cite this one, directly or through the ones in between. */
 export type LessonCameBack = {
@@ -246,23 +263,52 @@ export function ruleFixDay(value: string | null | undefined): string | null {
  * Uses the thesis name, the shipped day, the fix reference, and the lesson
  * that came back. Does not invent a date, a reference, or a lesson id.
  */
+function taughtTimes(cameBack: number): string {
+  const n = Number.isFinite(cameBack) ? Math.trunc(cameBack) : 0;
+  return n === 1 ? '1 time' : `${n} times`;
+}
+
+function brokeTimes(violations: number): string {
+  return violations === 1 ? 'once' : `${violations} times`;
+}
+
 export function ruleNotTakingStatusLine(
   row: {
     status?: string | null;
     fix_ref?: string | null;
     shipped_at?: string | null;
     came_back: number;
+    violations?: number | null;
     failed_lesson_id?: number | null;
   },
   thesisName: string,
 ): string {
   const name = thesisName.trim();
+  const times = taughtTimes(row.came_back);
+  const violations = typeof row.violations === 'number' && Number.isFinite(row.violations)
+    ? Math.trunc(row.violations)
+    : 0;
   const status = row.status === 'fix_shipped_watching' || row.status === 'fix_failed'
+    || row.status === 'holding' || row.status === 'refining'
     ? row.status
     : 'not_taking';
+  if (status === 'holding') {
+    const lead = name ? `${name} came back ${times}.` : `Came back ${times}.`;
+    return violations > 0
+      ? `${lead} It broke the rule ${brokeTimes(violations)}, and the later checks say the rule stood.`
+      : `${lead} The later checks say the rule stood.`;
+  }
+  if (status === 'refining') {
+    return name
+      ? `${name} came back ${times}. The later lessons narrow the rule.`
+      : `Came back ${times}. The later lessons narrow the rule.`;
+  }
   if (status === 'not_taking') {
-    const n = Number.isFinite(row.came_back) ? Math.trunc(row.came_back) : 0;
-    const times = n === 1 ? '1 time' : `${n} times`;
+    if (violations > 0) {
+      return name
+        ? `Still not taking: ${name}, taught ${times}. The rule was broken ${brokeTimes(violations)}. No fix yet.`
+        : `Still not taking: taught ${times}. The rule was broken ${brokeTimes(violations)}. No fix yet.`;
+    }
     return name
       ? `Still not taking: ${name}, taught ${times}, no fix yet.`
       : `Still not taking: taught ${times}, no fix yet.`;
@@ -275,9 +321,9 @@ export function ruleNotTakingStatusLine(
   if (status === 'fix_failed') {
     const id = row.failed_lesson_id;
     if (typeof id === 'number' && Number.isFinite(id) && id > 0) {
-      return `${shipped}. Lesson ${Math.trunc(id)} came back after.`;
+      return `${shipped}. Lesson ${Math.trunc(id)} broke the rule after.`;
     }
-    return `${shipped}. It came back after.`;
+    return `${shipped}. It broke the rule after.`;
   }
   return `${shipped}, watching: no repeat since.`;
 }
@@ -1020,6 +1066,7 @@ export function watchdogHealthSummary(
       thesis_id: row.thesis_id,
       summary: row.summary,
       came_back: row.came_back,
+      violations: row.violations ?? 0,
       fix_ref: row.fix_ref ?? null,
       shipped_at: row.shipped_at ?? null,
       status: row.status ?? 'not_taking',
@@ -1072,7 +1119,13 @@ function idList(value: unknown): number[] {
   return ids;
 }
 
-const RULE_NOT_TAKING_STATUS = new Set<RuleNotTakingStatus>(['not_taking', 'fix_shipped_watching', 'fix_failed']);
+const RULE_NOT_TAKING_STATUS = new Set<RuleNotTakingStatus>([
+  'not_taking',
+  'holding',
+  'refining',
+  'fix_shipped_watching',
+  'fix_failed',
+]);
 
 function ruleStatus(value: unknown): RuleNotTakingStatus | null {
   if (value === undefined || value === null || value === '') return 'not_taking';
@@ -1095,11 +1148,16 @@ function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
     const status = ruleStatus(bag.status);
     if (!thesisId || !summary || cameBack === null || lessonIds.length < 3 || !status) continue;
     const failed = optionalCount(bag.failed_lesson_id);
+    const violations = bag.violations === undefined || bag.violations === null || bag.violations === ''
+      ? 0
+      : optionalCount(bag.violations);
+    if (violations === null || violations < 0) continue;
     out.push({
       lesson_ids: lessonIds,
       thesis_id: thesisId,
       summary,
       came_back: cameBack,
+      violations,
       fix_ref: str(bag.fix_ref),
       shipped_at: str(bag.shipped_at),
       status,

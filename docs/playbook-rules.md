@@ -136,3 +136,31 @@ select public.incorporate_research_lesson(37);
 ```
 
 The RPC sets `research_lessons.incorporated = true` and writes one `belief_updates` row with `meta.kind = 'playbook_rule'`, `meta.research_lesson_id`, `meta.source = 'operator_incorporate'`, and `meta.rules = [lesson_type]`. Rationale is the lesson summary. Confidence is left null — do not invent a move. Re-runnable: a second call returns the existing belief (`replayed: true`) and does not insert another. See [`docs/lesson-incorporate.md`](lesson-incorporate.md).
+
+## When a lesson cites an older one
+
+Set `research_lessons.lineage_role` on the insert. It is one of three words:
+
+| `lineage_role` | Write it when |
+| --- | --- |
+| `violation` | The steward acted against the incorporated rule, or a miss that rule was meant to prevent happened again. |
+| `confirmation` | The rule held. A rule-correct pass, "the rule stands", or "no rule change" with the evidence that it held. |
+| `refinement` | The lesson narrows or conditions the rule. It does not say the rule was broken. |
+
+Name the older lesson in the summary (`lesson 240`, `lessons 226/241`) so the chain stays attached. Leave `lineage_role` empty only when the lesson does not take a side. The text fills a clear phrase; anything unclear is read as a break, so set the column rather than relying on that.
+
+```sql
+insert into public.research_lessons (
+  cycle_id, thesis_id, lesson_type, summary, lineage_role, incorporated, created_at
+) values (
+  246,
+  'earnings_gap_structure',
+  'entry_timing',
+  'The pass-after-open rule stands. Post-open entries were passed. Lesson 240.',
+  'confirmation',
+  false,
+  now()
+);
+```
+
+A close that writes the research lesson in the same call passes the same word: `steward_close_lesson(..., 'lineage_role', 'confirmation')`, and `close_lesson.py --lineage-role confirmation` with `--lesson-summary`.

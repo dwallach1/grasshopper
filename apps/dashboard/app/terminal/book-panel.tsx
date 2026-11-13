@@ -23,6 +23,7 @@ import {
   cameBackLine,
   ontologyFreshnessLine,
   researchIdSequenceLine,
+  ruleNotTakingIsAlarm,
   ruleNotTakingStatusLine,
   type RuleNotTaking,
 } from '../../lib/ledger-watchdog';
@@ -83,6 +84,36 @@ function thesisPlainName(desk: DeskPayload, thesisId: string): string {
   return plainThesisName(row?.name ?? '', thesisId);
 }
 
+function RuleChainItems({
+  rows,
+  thesisName,
+  withSummary,
+}: {
+  rows: readonly RuleNotTaking[];
+  thesisName: (thesisId: string) => string;
+  withSummary: boolean;
+}) {
+  return (
+    <ul className="books-waiting">
+      {rows.map((row) => {
+        const ids = row.lesson_ids.join(', ');
+        return (
+          <li
+            key={ids}
+            data-rule-chain={ids}
+            data-rule-status={row.status ?? 'not_taking'}
+            data-rule-alarm={ruleNotTakingIsAlarm(row.status) ? 'true' : 'false'}
+          >
+            <p className="books-note">{ruleNotTakingStatusLine(row, thesisName(row.thesis_id))}</p>
+            <p className="books-note">Lessons {ids}.</p>
+            {withSummary ? <p className="books-note">{row.summary}</p> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function RulesNotTakingList({
   rows,
   thesisName,
@@ -96,22 +127,23 @@ function RulesNotTakingList({
 }) {
   const shown = thesisId ? rows.filter((row) => row.thesis_id === thesisId) : rows;
   if (!shown.length) return null;
+  const alarm = shown.filter((row) => ruleNotTakingIsAlarm(row.status));
+  const calm = shown.filter((row) => !ruleNotTakingIsAlarm(row.status));
   return (
-    <section className="books-rules-not-taking" aria-label="Rules not taking" data-rules-not-taking={shown.length}>
-      <p className="books-section-label">Rules not taking</p>
-      <ul className="books-waiting">
-        {shown.map((row) => {
-          const ids = row.lesson_ids.join(', ');
-          return (
-            <li key={ids} data-rule-chain={ids} data-rule-status={row.status ?? 'not_taking'}>
-              <p className="books-note">{ruleNotTakingStatusLine(row, thesisName(row.thesis_id))}</p>
-              <p className="books-note">Lessons {ids}.</p>
-              {withSummary ? <p className="books-note">{row.summary}</p> : null}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    <>
+      {alarm.length ? (
+        <section className="books-rules-not-taking" aria-label="Rules not taking" data-rules-not-taking={alarm.length}>
+          <p className="books-section-label">Rules not taking</p>
+          <RuleChainItems rows={alarm} thesisName={thesisName} withSummary={withSummary} />
+        </section>
+      ) : null}
+      {calm.length ? (
+        <section className="books-rules-not-taking" aria-label="Rules checked again" data-rules-checked={calm.length}>
+          <p className="books-section-label">Checked again</p>
+          <RuleChainItems rows={calm} thesisName={thesisName} withSummary={withSummary} />
+        </section>
+      ) : null}
+    </>
   );
 }
 

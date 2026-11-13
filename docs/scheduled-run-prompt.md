@@ -44,3 +44,4 @@ Output:
 - Orders placed, rejected, or deferred, with the exact gate result for each
 - Tactical sleeve deployment status and the next-session re-screen plan for any transient cash
 - A plain-language run recap separating genuinely new ideas from confirmations, risk findings, and queued actions
+- Each new `research_lessons` row sets `lineage_role`: `violation` when the steward acted against an incorporated rule or a miss that rule was meant to prevent happened again, `confirmation` when the rule held ("the rule stands", a rule-correct pass), `refinement` when the lesson only narrows the rule. Name the older lesson in the summary (`lesson 240`). See `docs/playbook-rules.md`.

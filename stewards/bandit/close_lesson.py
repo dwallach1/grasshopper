@@ -14,7 +14,9 @@ and the thesis is the lot's; confidence is on the 1-100 scale; the rationale mus
 The prior is always the ledger's current value (results_confidence, else stated; set in the database,
 not here); --confidence-delta moves from it, and a losing close can never raise it (clamped, meta.clamped).
 --research-lesson-id stamps that lesson on the belief. --lesson-summary with --lesson-type and --cycle-id
-writes the research lesson in the same call. Omit both and the ledger links the one lesson for this close
+writes the research lesson in the same call. Pass --lineage-role with that summary: violation when the
+rule was broken, confirmation when it held, refinement when the lesson only narrows it. Omit the id and
+the summary and the ledger links the one lesson for this close
 when it is unambiguous. --dry-run runs the same checks and arithmetic in the database (dry_run: true) and
 prints the result; no write.
 Keep this file identical in stewards/bandit and stewards/oddsborne (test_steward_scripts checks).
@@ -63,6 +65,9 @@ def lesson_args(steward: str, a) -> dict:
     cycle_id = getattr(a, "cycle_id", None)
     if cycle_id is not None:
         args["cycle_id"] = cycle_id
+    lineage_role = getattr(a, "lineage_role", None)
+    if lineage_role:
+        args["lineage_role"] = lineage_role
     return args
 
 
@@ -80,6 +85,8 @@ def main(argv=None) -> int:
     ap.add_argument("--lesson-summary", default=None)
     ap.add_argument("--lesson-type", default=None)
     ap.add_argument("--cycle-id", type=int, default=None)
+    ap.add_argument("--lineage-role", default=None, choices=["violation", "confirmation", "refinement"],
+                    help="violation if the rule was broken, confirmation if it held, refinement if the lesson only narrows it")
     ap.add_argument("--steward", default=steward_from_path(), choices=STEWARDS)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
@@ -91,6 +98,8 @@ def main(argv=None) -> int:
         ap.error("pass --research-lesson-id or --lesson-summary, not both")
     if a.lesson_summary and (not a.lesson_type or a.cycle_id is None):
         ap.error("--lesson-summary needs --lesson-type and --cycle-id")
+    if a.lineage_role and not a.lesson_summary:
+        ap.error("--lineage-role needs --lesson-summary")
     if a.new_confidence is not None and not (1 <= a.new_confidence <= 100):
         ap.error("--new-confidence is on the 1-100 scale")
     from steward_rpc import RpcError, call, dumps

@@ -84,6 +84,20 @@ describe('worker knowledge primitives', () => {
       variant: 'data-center demand',
       falsifier: 'capex cuts',
     }).operation).toBe('thesis_view');
+    expect(CaptureSchema.parse({
+      operation: 'lesson',
+      cycle_key: 'cycle-1',
+      thesis_id: 'earnings_gap_structure',
+      summary: 'The pass-after-open rule stands. Lesson 240.',
+      lineage_role: 'confirmation',
+    })).toMatchObject({ operation: 'lesson', lineage_role: 'confirmation' });
+    expect(() => CaptureSchema.parse({
+      operation: 'lesson',
+      cycle_key: 'cycle-1',
+      thesis_id: 'earnings_gap_structure',
+      summary: 'The rule stood.',
+      lineage_role: 'holding',
+    })).toThrow();
     expect(() => CaptureSchema.parse({ operation: 'thesis_view', thesis_id: 'power' })).toThrow();
   });
 

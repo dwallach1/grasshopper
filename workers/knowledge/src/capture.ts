@@ -64,6 +64,7 @@ export const CaptureSchema = z.discriminatedUnion('operation', [
     summary: NonEmpty(2000),
     test_key: OptionalString,
     lesson_type: z.string().trim().min(1).optional(),
+    lineage_role: z.enum(['violation', 'confirmation', 'refinement']).optional(),
     regime: OptionalString,
     incorporated: z.boolean().optional(),
   }),
@@ -151,14 +152,15 @@ export async function captureResearch(database: Database, input: Capture): Promi
       );
       if (!cycle[0]) throw new Error('unknown cycle');
       await database.execute(
-        `insert into research_lessons(cycle_id,test_id,thesis_id,lesson_type,summary,market_regime,incorporated,created_at)
-         values($1,(select id from strategy_tests where external_key=$2),$3,$4,$5,$6,$7,now())`,
+        `insert into research_lessons(cycle_id,test_id,thesis_id,lesson_type,summary,lineage_role,market_regime,incorporated,created_at)
+         values($1,(select id from strategy_tests where external_key=$2),$3,$4,$5,$6,$7,$8,now())`,
         [
           cycle[0].id,
           input.test_key ?? null,
           input.thesis_id,
           input.lesson_type ?? 'negative_result',
           input.summary,
+          input.lineage_role ?? null,
           input.regime ?? null,
           input.incorporated === true,
         ],

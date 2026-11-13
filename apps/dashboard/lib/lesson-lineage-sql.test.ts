@@ -115,3 +115,59 @@ describe('research lesson fixes', () => {
     expect(sql).not.toMatch(/create policy[^;]*for (insert|update|delete|all) to (anon|authenticated|quantanamo_worker|oddsborne_worker|bandit_worker|desk_public_reader)/i);
   });
 });
+
+describe('research lesson lineage role', () => {
+  const schema = join(root, 'supabase/schemas/100_research_lesson_lineage_role.sql');
+  const migration = join(root, 'supabase/migrations/20261113203000_research_lesson_lineage_role.sql');
+
+  test('a repeat is a violation, a confirmation, or a refinement, and only a break alarms', () => {
+    const sql = readFileSync(schema, 'utf8');
+    expect(readFileSync(migration, 'utf8')).toBe(sql);
+    expect(sql).toContain('add column if not exists lineage_role text');
+    expect(sql).toContain("lineage_role in ('violation', 'confirmation', 'refinement')");
+    expect(sql).toContain('private.lesson_lineage_role');
+    expect(sql).toContain('private.lesson_continues_uncited');
+    expect(sql).toContain('private.assign_lesson_lineage_role');
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'chase already ruled out' then 'violation'");
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'rule stands' then 'confirmation'");
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'sector-specific' then 'refinement'");
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'below-gate'");
+    expect(sql.indexOf("~* 'below-gate'")).toBeLessThan(sql.indexOf("~* 'rule stands'"));
+    expect(sql).toContain("when l.lineage_role in ('violation', 'confirmation', 'refinement') then l.lineage_role");
+    expect(sql).toMatch(/coalesce\(\s*case\s*when l\.lineage_role in \('violation', 'confirmation', 'refinement'\) then l\.lineage_role\s*end,\s*'violation'\s*\) as role/);
+    expect(sql).toContain('if new.lineage_role is null then');
+    expect(sql).toContain('private.lesson_continues_uncited(new.summary)');
+    expect(sql).toContain('set lineage_role = private.lesson_lineage_role(l.summary)');
+    expect(sql).toContain('on conflict do nothing');
+    expect(sql).toContain("'violations'");
+    expect(sql).toContain("then 'holding'");
+    expect(sql).toContain("then 'refining'");
+    expect(sql).toContain("when fx.shipped_at is null then 'not_taking'");
+    expect(sql).toContain("'fix_shipped_watching'");
+    expect(sql).toContain("else 'fix_failed'");
+    expect(sql).toContain('v.created_at > fx.shipped_at');
+    expect(sql).toContain("v_lineage_role text := nullif(btrim(p->>'lineage_role'), '');");
+    expect(sql).toContain('lineage_role, incorporated, created_at');
+    expect(sql).toContain('does not make /api/health not-ok');
+    expect(sql).toContain('Only not_taking and fix_failed are the alarm');
+    expect(sql).not.toMatch(/update\s+public\.belief_updates/i);
+    expect(sql).not.toMatch(/set\s+incorporated/i);
+    const helpers = [
+      'lesson_lineage_role(text)',
+      'lesson_continues_uncited(text)',
+      'assign_lesson_lineage_role()',
+    ];
+    for (const helper of helpers) {
+      expect(sql).toContain(`revoke execute on function private.${helper} from oddsborne_worker, bandit_worker;`);
+      const signature = helper.replace(/[()]/g, '\\$&');
+      const grant = sql.match(new RegExp(`grant execute on function private\\.${signature}[\\s\\S]*?;`, 'i'));
+      expect(grant?.[0]).toBeTruthy();
+      expect(grant?.[0]).toContain('quantanamo_worker');
+      expect(grant?.[0]).toContain('service_role');
+      expect(grant?.[0]).not.toContain('oddsborne_worker');
+      expect(grant?.[0]).not.toContain('bandit_worker');
+      expect(grant?.[0]).not.toContain('anon');
+    }
+    expect(sql).toContain('grant execute on function public.steward_close_lesson(jsonb) to quantanamo_worker, oddsborne_worker, bandit_worker, service_role;');
+  });
+});
