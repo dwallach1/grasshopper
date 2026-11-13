@@ -1180,6 +1180,7 @@ describe('Books page: one section per steward', () => {
         thesis_id: EARNINGS,
         summary: 'SANM was outside the screened universe. Already lesson 226.',
         came_back: 3,
+        violations: 3,
         fix_ref: null,
         shipped_at: null,
         status: 'not_taking' as const,
@@ -1193,7 +1194,7 @@ describe('Books page: one section per steward', () => {
     const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-10T18:00:00.000Z' }));
     const home = view.host.querySelector('.books [data-rules-not-taking]');
     expect(home?.textContent).toContain('Rules not taking');
-    expect(home?.textContent).toContain('Still not taking: Earnings gap structure, taught 3 times, no fix yet.');
+    expect(home?.textContent).toContain('Still not taking: Earnings gap structure, taught 3 times. The rule was broken 3 times. No fix yet.');
     expect(home?.textContent).not.toContain('not_taking');
     expect(home?.textContent).toContain('Lessons 197, 223, 226, 241.');
     expect(home?.textContent).not.toContain('Already lesson 226');
@@ -1219,24 +1220,37 @@ describe('Books page: one section per steward', () => {
         thesis_id: EARNINGS,
         summary: 'AAON was again outside the screened universe.',
         came_back: 4,
+        violations: 4,
         fix_ref: 'PR #204',
         shipped_at: '2026-11-11T18:45:33Z',
         status: 'fix_shipped_watching',
         failed_lesson_id: null,
       }, {
-        lesson_ids: [156, 233, 240],
+        lesson_ids: [156, 233, 240, 243, 246, 253],
         thesis_id: EARNINGS,
-        summary: 'Post-open entries on AM printers are chases.',
-        came_back: 2,
+        summary: 'The pass-after-open rule stands.',
+        came_back: 5,
+        violations: 1,
         fix_ref: null,
         shipped_at: null,
-        status: 'not_taking',
+        status: 'holding',
+        failed_lesson_id: null,
+      }, {
+        lesson_ids: [117, 124, 135],
+        thesis_id: EARNINGS,
+        summary: 'Beat-fade in a weak tape is sector-specific.',
+        came_back: 2,
+        violations: 0,
+        fix_ref: null,
+        shipped_at: null,
+        status: 'refining',
         failed_lesson_id: null,
       }, {
         lesson_ids: [179, 188, 199, 204],
         thesis_id: EARNINGS,
         summary: 'The last earnings-hold slot went to a below-gate name.',
         came_back: 3,
+        violations: 1,
         fix_ref: 'PR #10',
         shipped_at: '2026-10-01T00:00:00Z',
         status: 'fix_failed',
@@ -1244,16 +1258,25 @@ describe('Books page: one section per steward', () => {
       }],
     };
     const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-12T18:00:00.000Z' }));
-    const home = view.host.querySelector('.books [data-rules-not-taking]');
-    expect(home?.textContent).toContain('Earnings gap structure fix shipped Nov 11 (PR #204), watching: no repeat since.');
-    expect(home?.textContent).toContain('Still not taking: Earnings gap structure, taught 2 times, no fix yet.');
-    expect(home?.textContent).toContain('Earnings gap structure fix shipped Oct 1 (PR #10). Lesson 204 came back after.');
-    expect(home?.textContent).not.toContain('fix_shipped_watching');
-    expect(home?.textContent).not.toContain('fix_failed');
-    expect(home?.textContent).not.toContain('not_taking');
-    expect(home?.querySelector('[data-rule-status="fix_shipped_watching"]')).not.toBeNull();
-    expect(home?.querySelector('[data-rule-status="not_taking"]')).not.toBeNull();
-    expect(home?.querySelector('[data-rule-status="fix_failed"]')).not.toBeNull();
+    const alarm = view.host.querySelector('.books [data-rules-not-taking]');
+    const calm = view.host.querySelector('.books [data-rules-checked]');
+    expect(alarm?.textContent).toContain('Rules not taking');
+    expect(alarm?.textContent).toContain('Earnings gap structure fix shipped Oct 1 (PR #10). Lesson 204 broke the rule after.');
+    expect(alarm?.textContent).not.toContain('fix_failed');
+    expect(alarm?.textContent).not.toContain('not_taking');
+    expect(alarm?.querySelector('[data-rule-status="fix_failed"][data-rule-alarm="true"]')).not.toBeNull();
+    expect(alarm?.querySelector('[data-rule-status="holding"]')).toBeNull();
+    expect(alarm?.textContent).not.toContain('later checks say the rule stood');
+    expect(calm?.textContent).toContain('Checked again');
+    expect(calm?.textContent).toContain('Earnings gap structure fix shipped Nov 11 (PR #204), watching: no repeat since.');
+    expect(calm?.textContent).toContain('Earnings gap structure came back 5 times. It broke the rule once, and the later checks say the rule stood.');
+    expect(calm?.textContent).toContain('Earnings gap structure came back 2 times. The later lessons narrow the rule.');
+    expect(calm?.textContent).not.toContain('holding');
+    expect(calm?.textContent).not.toContain('refining');
+    expect(calm?.textContent).not.toContain('fix_shipped_watching');
+    expect(calm?.querySelector('[data-rule-status="holding"][data-rule-alarm="false"]')).not.toBeNull();
+    expect(calm?.querySelector('[data-rule-status="refining"][data-rule-alarm="false"]')).not.toBeNull();
+    expect(calm?.querySelector('[data-rule-status="fix_shipped_watching"]')).not.toBeNull();
     const coda = button(view.host, 'button.books-lot[data-lot="eq:CODA"]');
     expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
     expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');

@@ -187,8 +187,14 @@ QUANTANAMO's lots are `public.position_episodes`. Since schema 65, `public.stewa
 ```sql
 select public.steward_close_lesson(jsonb_build_object('steward', 'quantanamo',
   'position_id', '<position_episodes.id>', 'confidence_delta', -3,
-  'rationale', '<what this close taught, >= 20 chars>', 'meta', jsonb_build_object('research_lesson_ids', jsonb_build_array(111))));
+  'rationale', '<what this close taught, >= 20 chars>',
+  'lesson_summary', '<what the close taught, >= 20 chars>',
+  'lesson_type', 'exit', 'cycle_id', 1,
+  'lineage_role', 'confirmation',
+  'meta', jsonb_build_object('research_lesson_ids', jsonb_build_array(111))));
 ```
+
+`lineage_role` is `violation` when the close broke an incorporated rule, `confirmation` when the rule held, or `refinement` when the lesson only narrows the rule. Omit it when the close does not take a side. Name the older lesson in the summary (`lesson 240`). `close_lesson.py --lineage-role confirmation` sends the same word. See `docs/playbook-rules.md`.
 
 Over HTTPS, steward-rpc allowlists `steward_close_lesson` for `quantanamo_worker` (`{"fn": "steward_close_lesson", "args": {...}}`), and `close_lesson.py --steward quantanamo ...` works from either steward dir with `QUANTANAMO_WORKER_DB_PASSWORD` in the environment (stdlib only, any `python3`).
 
