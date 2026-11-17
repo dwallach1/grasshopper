@@ -298,7 +298,8 @@ select now() as checked_at,
     'research_lessons', public.research_id_sequence_state('research_lessons')
   ) as research_id_sequences,
   lineage.rules_not_taking,
-  lineage.lesson_came_back
+  lineage.lesson_came_back,
+  public.earnings_sheet_staleness(now()) as earnings_sheet_stale
 from (select 1) as one
 left join lateral (
   with recursive walk as (
@@ -466,8 +467,7 @@ left join lateral (
       )
       from sized s
       where cardinality(s.lesson_ids) > 1
-    ), '[]'::jsonb) as lesson_came_back,
-  public.earnings_sheet_staleness(now()) as earnings_sheet_stale
+    ), '[]'::jsonb) as lesson_came_back
 ) lineage on true;
 
 
