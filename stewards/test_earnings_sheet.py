@@ -118,10 +118,10 @@ def _aaon_doc(mod=None, *, bars=None, in_symbols=("ENS",), history=None) -> dict
         "sessions": ["2026-11-12", "2026-11-13"],
         "in_symbols": list(in_symbols) if in_symbols is not None else None,
         "get_earnings_calendar": {"data": {"results": [
-            _event("AAON", "am"),
+            _event("AAON", "am", "2026-11-13"),
             _event("ENS", "pm", "2026-11-13"),
             _event("PLTR", "pm"),
-            _event("GIB", "am"),
+            _event("GIB", "am", "2026-11-13"),
             {"symbol": "NOT A TICKER", "report": {"date": REPORT, "timing": "am"}},
         ]}},
         "get_earnings_results": {
@@ -152,7 +152,7 @@ class EarningsSheet(unittest.TestCase):
         self.assertEqual(calendar["tool"], "get_earnings_calendar")
         self.assertEqual(calendar["arguments"], {
             "start_date": "2026-11-12",
-            "days": 2,
+            "days": 5,
             "filter": "high_market_cap",
         })
         self.assertEqual(out["calls"][1]["tool"], "get_earnings_results")
@@ -167,13 +167,15 @@ class EarningsSheet(unittest.TestCase):
         # 15:00 UTC Friday is 10:00 ET, before the close. The next session after Friday is Monday.
         out = self.mod.plan_calls(datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc), 2)
         self.assertEqual(out["sessions"], ["2026-11-13", "2026-11-16"])
+        self.assertEqual(out["calendar_through"], "2026-11-17")
         self.assertEqual(out["calls"][0]["arguments"]["start_date"], "2026-11-13")
-        self.assertEqual(out["calls"][0]["arguments"]["days"], 4)
+        self.assertEqual(out["calls"][0]["arguments"]["days"], 5)
 
     def test_plan_friday_after_the_close_starts_monday(self):
         out = self.mod.plan_calls(datetime(2026, 11, 13, 21, 30, tzinfo=timezone.utc), 2)
         self.assertEqual(out["sessions"], ["2026-11-16", "2026-11-17"])
-        self.assertEqual(out["calls"][0]["arguments"]["days"], 2)
+        self.assertEqual(out["calendar_through"], "2026-11-18")
+        self.assertEqual(out["calls"][0]["arguments"]["days"], 3)
 
     def test_aaon_outside_universe_ranks_with_six_beats(self):
         mod = self.mod
@@ -189,6 +191,9 @@ class EarningsSheet(unittest.TestCase):
         self.assertTrue(aaon["flags"]["beat_history_6of6"])
         self.assertFalse(aaon["in_symbols"])
         self.assertEqual(aaon["label"], "screened")
+        self.assertEqual(aaon["print_session"], "2026-11-13")
+        self.assertEqual(aaon["entry_session"], "2026-11-12")
+        self.assertEqual(aaon["timing"], "am")
         self.assertIsNone(aaon["off_52w"])
         self.assertIn("bars_missing", aaon["missing"])
         ens = next(row for row in out["rows"] if row["symbol"] == "ENS")
@@ -410,6 +415,81 @@ class EarningsSheet(unittest.TestCase):
             check=False, capture_output=True, text=True,
         )
         self.assertEqual(bad.returncode, 1)
+
+    def test_thursday_sheet_includes_monday_am_as_friday_entry(self):
+        # HTHT-like: Monday 11/16 AM print. The Thursday sheet's entry sessions
+        # are Thu 11/12 and Fri 11/13. Friday RTH is the only pre-print entry.
+        doc = {
+            "sessions": ["2026-11-12", "2026-11-13"],
+            "in_symbols": [],
+            "get_earnings_calendar": {"data": {"results": [
+                _event("HTHT", "am", "2026-11-16"),
+                _event("TSN", "pm", "2026-11-13"),
+                _event("LATE", "pm", "2026-11-16"),
+                _event("THAM", "am", "2026-11-12"),
+            ]}},
+        }
+        out = self.mod.rank_document(doc)
+        symbols = [row["symbol"] for row in out["rows"]]
+        self.assertEqual(symbols, ["TSN", "HTHT"])
+        htht = next(row for row in out["rows"] if row["symbol"] == "HTHT")
+        self.assertEqual(htht["entry_session"], "2026-11-13")
+        self.assertEqual(htht["print_session"], "2026-11-16")
+        self.assertEqual(htht["timing"], "am")
+        self.assertEqual(htht["report_date"], "2026-11-16")
+        tsn = next(row for row in out["rows"] if row["symbol"] == "TSN")
+        self.assertEqual(tsn["entry_session"], "2026-11-13")
+        self.assertEqual(tsn["print_session"], "2026-11-13")
+        self.assertEqual(tsn["timing"], "pm")
+        self.assertIn("HTHT print Mon 11/16 AM. Entry is Fri 11/13 RTH.", out["reason"])
+        self.assertIn("Thu 11/12-Fri 11/13", out["topic"])
+        self.assertNotIn("LATE", out["reason"])
+        self.assertNotIn("THAM", out["reason"])
+
+    def test_holiday_sheet_reaches_the_next_trading_morning(self):
+        # Wednesday 11/25. Thursday 11/26 is Thanksgiving. Friday 11/27 AM is a
+        # Wednesday RTH entry. Friday PM is not, and Monday AM belongs to Friday.
+        doc = {
+            "sessions": ["2026-11-25"],
+            "in_symbols": [],
+            "get_earnings_calendar": {"data": {"results": [
+                _event("AMFRI", "am", "2026-11-27"),
+                _event("PMFRI", "pm", "2026-11-27"),
+                _event("AMMON", "am", "2026-11-30"),
+            ]}},
+        }
+        out = self.mod.rank_document(doc)
+        self.assertEqual([row["symbol"] for row in out["rows"]], ["AMFRI"])
+        row = out["rows"][0]
+        self.assertEqual(row["entry_session"], "2026-11-25")
+        self.assertEqual(row["print_session"], "2026-11-27")
+        self.assertEqual(row["timing"], "am")
+        self.assertIn("AMFRI print Fri 11/27 AM. Entry is Wed 11/25 RTH.", out["reason"])
+
+        # Friday before MLK Day (Monday 2026-01-19 is a holiday). Tuesday AM is a Friday entry.
+        mlk = {
+            "sessions": ["2026-01-16"],
+            "in_symbols": [],
+            "get_earnings_calendar": {"data": {"results": [
+                _event("TUEAM", "am", "2026-01-20"),
+                _event("MONPM", "pm", "2026-01-19"),
+            ]}},
+        }
+        ranked = self.mod.rank_document(mlk)
+        self.assertEqual([row["symbol"] for row in ranked["rows"]], ["TUEAM"])
+        self.assertEqual(ranked["rows"][0]["entry_session"], "2026-01-16")
+        self.assertEqual(ranked["rows"][0]["print_session"], "2026-01-20")
+        self.assertIn("TUEAM print Tue 1/20 AM. Entry is Fri 1/16 RTH.", ranked["reason"])
+
+        # Wednesday morning before Thanksgiving: two entry sessions reach Monday AM.
+        plan = self.mod.plan_calls(datetime(2026, 11, 25, 15, 0, tzinfo=timezone.utc), 2)
+        self.assertEqual(plan["sessions"], ["2026-11-25", "2026-11-27"])
+        self.assertEqual(plan["calendar_through"], "2026-11-30")
+        self.assertEqual(plan["calls"][0]["arguments"]["days"], 6)
+        friday = self.mod.plan_calls(datetime(2026, 1, 16, 15, 0, tzinfo=timezone.utc), 1)
+        self.assertEqual(friday["sessions"], ["2026-01-16"])
+        self.assertEqual(friday["calendar_through"], "2026-01-20")
+        self.assertEqual(friday["calls"][0]["arguments"]["days"], 5)
 
     def test_schema_is_the_migration_and_skips_retired_workers(self):
         sql = SCHEMA.read_text()

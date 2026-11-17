@@ -24,7 +24,7 @@ Steps:
 11. Finish the durable recap with `bun run run:report -- finish scheduled_research`. Supply a headline and short summary, plus repeatable `--insight`, `--learning`, and `--action` entries. State explicitly when the run produced no new thesis, no new evidence, or no executable action. Then run `bun run dashboard:publish` so the recap appears in the RUNS page.
 12. Do not run `bun run automations:sync` directly for the current run: a task cannot observe its own completion event while it is still running, and the post-run reconciler armed in step 0 owns this update.
 
-Earnings sheet, after the close. Rank the next two NYSE sessions from the full Robinhood high-cap calendar, including names that are not in `public.symbols`. Do not rank only the names already on the sheet.
+Earnings sheet, after the close. Rank the next two NYSE entry sessions from the full Robinhood high-cap calendar, including names that are not in `public.symbols`. The calendar also covers the session after the last entry session, so that morning's printers are on the sheet as entries of the last session. A Friday sheet includes Monday AM. The session before a holiday includes the next trading day's AM printers. Do not rank only the names already on the sheet.
 
 ```bash
 python3 stewards/quantanamo/earnings_sheet.py plan --sessions 2

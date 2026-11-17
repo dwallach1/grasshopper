@@ -1282,4 +1282,37 @@ describe('Books page: one section per steward', () => {
     expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');
     view.unmount();
   });
+
+  test('a stale earnings sheet is one line on the book, and a current sheet is quiet', async () => {
+    const stale = desk();
+    stale.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      earnings_sheet_stale: {
+        stale: true,
+        last_sheet_at: '2026-11-12T13:16:51.902073+00:00',
+        sessions_missed: 3,
+        latest_entry_session: '2026-11-17',
+      },
+    };
+    const view = await mount(createElement(BookPanel, { desk: stale, nowIso: AT }));
+    const line = view.host.querySelector('[data-earnings-sheet="stale"]');
+    expect(line?.textContent).toBe('The earnings sheet is stale. Last sheet 12 Nov 2026. 3 sessions missed.');
+    view.unmount();
+
+    const current = desk();
+    current.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      earnings_sheet_stale: {
+        stale: false,
+        last_sheet_at: '2026-11-17T13:00:00+00:00',
+        sessions_missed: 0,
+        latest_entry_session: '2026-11-17',
+      },
+    };
+    const quiet = await mount(createElement(BookPanel, { desk: current, nowIso: AT }));
+    expect(quiet.host.querySelector('[data-earnings-sheet="stale"]')).toBeNull();
+    quiet.unmount();
+  });
 });

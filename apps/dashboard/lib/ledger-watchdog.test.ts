@@ -11,6 +11,7 @@ import {
   exposureLine,
   learningGapHoldingId,
   cameBackLine,
+  earningsSheetStaleLine,
   mapLedgerWatchdog,
   ontologyFreshnessLine,
   replayActionableBreachChecks,
@@ -989,5 +990,38 @@ describe('10/8 NBIS and CODA breach replay', () => {
       intents: [],
     } as unknown as DeskPayload, Date.parse('2026-11-12T18:00:00.000Z'));
     expect(deskHealthSummary(book).integrity_issues).toBe(0);
+  });
+
+  test('a missing earnings sheet for the latest entry session is on health and does not change ok', () => {
+    const stale = {
+      stale: true,
+      last_sheet_at: '2026-11-12T13:16:51.902073+00:00',
+      sessions_missed: 3,
+      latest_entry_session: '2026-11-17',
+    };
+    const absent = mapLedgerWatchdog({ summary: [{ learning_stalls: [] }] });
+    expect(absent.earnings_sheet_stale).toBeNull();
+    expect(earningsSheetStaleLine(absent.earnings_sheet_stale)).toBeNull();
+    expect(watchdogHealthSummary(absent).earnings_sheet_stale).toBeNull();
+    const mapped = mapLedgerWatchdog({ summary: [{ earnings_sheet_stale: stale }] });
+    expect(mapped.earnings_sheet_stale).toEqual(stale);
+    expect(earningsSheetStaleLine(mapped.earnings_sheet_stale)).toBe(
+      'The earnings sheet is stale. Last sheet 12 Nov 2026. 3 sessions missed.',
+    );
+    expect(watchdogHealthSummary(mapped).earnings_sheet_stale).toEqual(stale);
+    expect(earningsSheetStaleLine({ ...stale, stale: false })).toBeNull();
+    expect(earningsSheetStaleLine({ ...stale, sessions_missed: 1 })).toBe(
+      'The earnings sheet is stale. Last sheet 12 Nov 2026. 1 session missed.',
+    );
+    expect(earningsSheetStaleLine({
+      stale: true,
+      last_sheet_at: null,
+      sessions_missed: null,
+      latest_entry_session: '2026-11-17',
+    })).toBe('The earnings sheet has no row for the latest entry session.');
+    const health = assembleDeskBookHealth({
+      watchdog: mapped,
+    } as unknown as DeskPayload, Date.parse('2026-11-17T18:22:00Z'));
+    expect(deskHealthSummary(health).integrity_issues).toBe(0);
   });
 });

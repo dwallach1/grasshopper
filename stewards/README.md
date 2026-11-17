@@ -233,7 +233,7 @@ The views only measure. Promoting a rule is a steward decision, recorded as a pl
 
 QUANTANAMO scores one equity shadow, `ah_open_holds_prior_close`, by calling `quantanamo_score_ah_open_shadow` (or by the print and lot triggers). It uses the lot fill, the prior close, and the day-0 open already stored. A missing open is skipped. `quantanamo_record_cohort_flag` stores the cohort-down check beside test 41 on the pre-print lot or decision. It does not block the entry. Before sizing a pre-print name, read `earnings_sheet_slot`. SCORE-ONLY is a label: that entry session's week already has the starter count stored on the lots (`meta.starter.of`). The label does not change that count.
 
-The nightly sheet itself is `quantanamo/earnings_sheet.py`. After the close, `plan --sessions 2` prints the Robinhood calls for the full high-cap calendar, and `rank payload.json --execute` writes the ranked row. Names that are not in `public.symbols` stay on that sheet. The commands are in `quantanamo/README.md`.
+The nightly sheet itself is `quantanamo/earnings_sheet.py`. After the close, `plan --sessions 2` prints the Robinhood calls for the next two entry sessions on the full high-cap calendar, through the following session so its AM printers are included. A Friday sheet includes Monday AM. `rank payload.json --execute` writes the ranked row. Names that are not in `public.symbols` stay on that sheet. The commands are in `quantanamo/README.md`.
 
 ## Box environment (venvs)
 
