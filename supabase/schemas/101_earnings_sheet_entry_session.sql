@@ -111,7 +111,7 @@ grant execute on function public.earnings_sheet_staleness(timestamptz)
 -- Coverage chain 197, 223, 226, 241, 245, 260. Lesson 260 (2026-11-17) is the
 -- Monday-AM miss. This PR windows the sheet by entry session.
 insert into public.research_lesson_fixes (lesson_id, fix_ref, fix_kind, shipped_at)
-select 260, 'PR #0000', 'tool', timestamptz '2026-11-17 21:00:00+00'
+select 260, 'PR #208', 'tool', timestamptz '2026-11-17 18:40:00+00'
 where exists (select 1 from public.research_lessons where id = 260)
 on conflict (lesson_id, fix_ref) do nothing;
 
