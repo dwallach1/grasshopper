@@ -135,6 +135,7 @@ describe('public desk Worker API', () => {
         research_id_sequences: null,
         research_id_sequence_line: null,
         rules_not_taking: [],
+        earnings_sheet_stale: null,
       },
       learning: {
         to_review: 0,
@@ -315,6 +316,45 @@ describe('public desk Worker API', () => {
     };
     expect(pageBody.watchdog.rules_not_taking).toEqual(rulesNotTaking);
     expect(pageBody.watchdog.lesson_came_back).toEqual([{ lesson_id: 197, came_back: 3 }]);
+  });
+
+  test('a stale earnings sheet is on /api/health and /api/desk, and health stays ok', async () => {
+    const earningsSheetStale = {
+      stale: true,
+      last_sheet_at: '2026-11-12T13:16:51.902073+00:00',
+      sessions_missed: 3,
+      latest_entry_session: '2026-11-17',
+    };
+    const desk = {
+      ...liveSample,
+      watchdog: {
+        ...emptyLedgerWatchdog(),
+        available: true,
+        earnings_sheet_stale: earningsSheetStale,
+      },
+    };
+    const health = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => desk,
+    );
+    expect(health.status).toBe(200);
+    const healthBody = await health.json() as {
+      ok: boolean;
+      watchdog: { earnings_sheet_stale: typeof earningsSheetStale };
+    };
+    expect(healthBody.ok).toBe(true);
+    expect(healthBody.watchdog.earnings_sheet_stale).toEqual(earningsSheetStale);
+    const page = await handleDeskApi(
+      new Request('https://desk.test/api/desk'),
+      env(readerEnv),
+      async () => desk,
+    );
+    expect(page.status).toBe(200);
+    const pageBody = await page.json() as {
+      watchdog: { earnings_sheet_stale: typeof earningsSheetStale };
+    };
+    expect(pageBody.watchdog.earnings_sheet_stale).toEqual(earningsSheetStale);
   });
 
   test('a queued test past five trading days is a learning-loop stall and /api/health stays ok', async () => {

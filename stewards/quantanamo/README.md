@@ -69,7 +69,7 @@ python3 /workspace/quantanamo/earnings_sheet.py rank payload.json
 python3 /workspace/quantanamo/earnings_sheet.py rank payload.json --execute
 ```
 
-From the repo the same commands are `python3 stewards/quantanamo/earnings_sheet.py plan --sessions 2` and `rank`. `--sessions 2` is the next two NYSE sessions. A session that has already closed is not one of them. A Friday-to-Monday window includes the weekend days the calendar tool needs.
+From the repo the same commands are `python3 stewards/quantanamo/earnings_sheet.py plan --sessions 2` and `rank`. `--sessions` is that many NYSE entry sessions. A session that has already closed is not one of them. The calendar also covers the next session, so its AM printers are ranked as entries of the last session. A Friday sheet includes Monday AM. The session before a holiday includes the next trading day's AM printers. A Friday-to-Monday window includes the weekend days the calendar tool needs.
 
 `plan` prints `get_earnings_calendar` (`start_date`, `days`, `filter` `high_market_cap`), then `get_earnings_results` once per calendar symbol except PLTR, then `get_equity_historicals` (`interval` `day`, `bounds` `regular`, `adjustment_type` `split`, at most 10 symbols a call) starting 420 days earlier. `get_earnings` (Financial Datasets) is optional, and only for a symbol whose Robinhood history cannot be read.
 
@@ -85,7 +85,7 @@ From the repo the same commands are `python3 stewards/quantanamo/earnings_sheet.
 }
 ```
 
-`sessions` is the list `plan` printed. Leave it off to rank every name in the saved calendar. `in_symbols` is the tickers from `public.symbols`. Leave it off and the sheet says the outside count was not counted. `--execute` ignores that list and reads `public.steward_symbols_present` first.
+`sessions` is the entry-session list `plan` printed. An AM print is included when the prior RTH session is on that list. A PM print is included when its own session is. Leave `sessions` off to rank every name in the saved calendar. `in_symbols` is the tickers from `public.symbols`. Leave it off and the sheet says the outside count was not counted. `--execute` ignores that list and reads `public.steward_symbols_present` first.
 
 A beat is a reported EPS greater than that quarter's estimate. `beat_history_6of6` means the last 6 quarters before the report that have both numbers were all beats. Fewer than 6 is `no_history`. A tie is not a beat. The report being ranked is not part of the history. `quality_drawdown` is the 2026-09-25 screen: at least 30% below the high of the regular sessions in the 365 days before the prior session. From 2026-01-01 on, every one of those sessions has to have a bar. `crash_dump_am` is lesson 230: an AM print, at least 25% below that high, and a prior regular session close-to-close of -8% or worse. A missing EPS, estimate, or bar stays missing.
 

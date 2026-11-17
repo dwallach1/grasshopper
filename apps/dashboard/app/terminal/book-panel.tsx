@@ -21,6 +21,7 @@ import type { DeskPayload, LessonRow } from '../../lib/ledger-types';
 import {
   cameBackCounts,
   cameBackLine,
+  earningsSheetStaleLine,
   ontologyFreshnessLine,
   researchIdSequenceLine,
   ruleNotTakingIsAlarm,
@@ -177,6 +178,7 @@ export function BookPanel({
   const nowMs = Date.parse(nowIso ?? desk.generated_at);
   const ontologyLine = ontologyFreshnessLine(desk.watchdog?.ontology_freshness ?? null);
   const sequenceLine = researchIdSequenceLine(desk.watchdog?.research_id_sequences ?? null);
+  const sheetLine = earningsSheetStaleLine(desk.watchdog?.earnings_sheet_stale ?? null);
   const rulesNotTaking = desk.watchdog?.rules_not_taking ?? [];
   const cameBack = useMemo(
     () => cameBackCounts(desk.watchdog?.lesson_came_back),
@@ -264,6 +266,9 @@ export function BookPanel({
           ) : null}
           {sequenceLine ? (
             <p className="thesis-lede" data-research-id-sequence="lagging">{sequenceLine}</p>
+          ) : null}
+          {sheetLine ? (
+            <p className="thesis-lede" data-earnings-sheet="stale">{sheetLine}</p>
           ) : null}
           <RulesNotTakingList rows={rulesNotTaking} thesisName={(id) => thesisPlainName(desk, id)} />
         </header>

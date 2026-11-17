@@ -13,8 +13,12 @@ Python does not call Robinhood. On the box, sync_box.sh copies this file to
   python3 stewards/quantanamo/earnings_sheet.py rank payload.json
   python3 stewards/quantanamo/earnings_sheet.py rank payload.json --execute
 
-plan prints the tool calls for the next 1-2 NYSE sessions (after the close, those
-are the following sessions). rank reads the saved responses and prints one
+plan prints the tool calls for the next 1-2 NYSE entry sessions (after the close,
+those are the following sessions). The calendar also covers the session after the
+last entry session, so that morning's printers are ranked as entries of the last
+session. An AM printer's only pre-print entry is the prior RTH session: a Friday
+sheet includes Monday AM, and the session before a holiday includes the next
+trading day's AM printers. rank reads the saved responses and prints one
 research_queue row: priority 1, source earnings_sheet, the same shape the autopsy
 sheet uses. --execute writes that row and inserts any calendar symbol that is not
 in public.symbols yet. PLTR is never a candidate.
@@ -98,7 +102,7 @@ def prior_session(day: date) -> date | None:
 
 
 def next_sessions(n: int, now: datetime) -> list[date]:
-    """The next n NYSE sessions. A session already closed is not one of them."""
+    """The next n NYSE entry sessions. A session already closed is not one of them."""
     if n < 1:
         raise ValueError("sessions must be at least 1")
     et = now.astimezone(_zone())
@@ -116,11 +120,57 @@ def next_sessions(n: int, now: datetime) -> list[date]:
     raise ValueError(f"could not find {n} NYSE sessions")
 
 
+def next_session(day: date) -> date | None:
+    """The next NYSE session after day. None when none falls within two weeks."""
+    cursor = day
+    for _ in range(14):
+        cursor += timedelta(days=1)
+        if session_close_at(cursor) is not None:
+            return cursor
+    return None
+
+
+def entry_session_for(report: date, timing: str | None) -> date | None:
+    """The RTH session where a pre-print entry is possible.
+
+    An AM print's only pre-print session is the prior RTH session. That is
+    Friday when the print is Monday, and the last session before a holiday
+    when the print is the next trading morning. A PM print is entered that
+    same session. Unknown timing has no entry session.
+    """
+    if timing == "am":
+        return prior_session(report)
+    if timing == "pm" and session_close_at(report) is not None:
+        return report
+    return None
+
+
+def event_in_window(event: dict, session_days: set[date] | None) -> bool:
+    """True when this print can be entered on one of the entry sessions.
+
+    A missing timing stays only when the print day itself is an entry session.
+    It is not labeled as the prior session's entry.
+    """
+    if session_days is None:
+        return True
+    entry = entry_session_for(event["report_date"], event.get("timing"))
+    if entry is None:
+        return event["report_date"] in session_days
+    return entry in session_days
+
+
 def calendar_window(sessions: list[date]) -> dict:
-    """Robinhood get_earnings_calendar arguments that cover these sessions, including a weekend between them."""
+    """Robinhood get_earnings_calendar arguments for these entry sessions.
+
+    The window ends on the next NYSE session after the last entry session, so
+    that morning's printers are pulled. A Friday entry session reaches Monday.
+    The session before a holiday reaches the next trading day. Weekend days
+    between them count. Robinhood allows 1 to 31 days.
+    """
     if not sessions:
         raise ValueError("no sessions")
-    start, end = sessions[0], sessions[-1]
+    start = sessions[0]
+    end = next_session(sessions[-1]) or sessions[-1]
     days = (end - start).days + 1
     if days < 1 or days > 31:
         raise ValueError(f"calendar window is {days} days; Robinhood allows 1 to 31")
@@ -567,7 +617,7 @@ def rank_events(events: list[dict], doc: dict, *, beats_n: int, known: set[str] 
     flag_name = _flag_name(beats_n)
     for event in events:
         symbol = event["symbol"]
-        if session_days is not None and event["report_date"] not in session_days:
+        if not event_in_window(event, session_days):
             continue
         if symbol in EXCLUDED:
             excluded.append(symbol)
@@ -590,6 +640,9 @@ def rank_events(events: list[dict], doc: dict, *, beats_n: int, known: set[str] 
         missing = []
         if window["missing"]:
             missing.append(window["missing"])
+        entry = entry_session_for(event["report_date"], event["timing"])
+        if event["timing"] is None and "entry_session_unknown" not in missing:
+            missing.append("entry_session_unknown")
         if event.get("timing_disagrees"):
             missing.append("calendar_timing_disagrees")
         if off_why and off_why not in missing:
@@ -608,7 +661,9 @@ def rank_events(events: list[dict], doc: dict, *, beats_n: int, known: set[str] 
         rows.append({
             "symbol": symbol,
             "report_date": event["report_date"].isoformat(),
+            "print_session": event["report_date"].isoformat(),
             "timing": event["timing"],
+            "entry_session": None if entry is None else entry.isoformat(),
             "beats": window["beats"],
             "compared": window["compared"],
             "n": beats_n,
@@ -674,21 +729,63 @@ def coverage_line(counts: dict) -> str:
 def _name_line(row: dict) -> str:
     beats = "missing" if row["beats"] is None or row["compared"] is None else f"{row['beats']}/{row['compared']}"
     timing = row["timing"] or "missing"
+    entry = row["entry_session"] or "missing"
     in_symbols = "missing" if row["in_symbols"] is None else ("true" if row["in_symbols"] else "false")
     flags = ",".join(row["flag_list"]) if row["flag_list"] else "none"
     missing = ",".join(row["missing"]) if row["missing"] else "none"
     off = "missing" if row["off_52w"] is None else row["off_52w"]
     prior = "missing" if row["prior_rth"] is None else row["prior_rth"]
     return (
-        f"{row['symbol']} {row['report_date']} {timing} beats={beats} "
+        f"{row['symbol']} print_session={row['print_session']} {timing} "
+        f"entry_session={entry} beats={beats} "
         f"off_52w={off} prior_rth={prior} in_symbols={in_symbols} "
         f"flags={flags} label={row['label']} missing={missing}"
     )
 
 
+def _entry_dates(rows: list[dict]) -> list[date]:
+    found = []
+    for row in rows:
+        day = _parse_date(row.get("entry_session"))
+        if day is not None and day not in found:
+            found.append(day)
+    return sorted(found)
+
+
+def _am_entry_lines(rows: list[dict]) -> list[str]:
+    """AM printers whose entry is an earlier session, one line per entry session."""
+    groups: dict[date, list[dict]] = {}
+    for row in rows:
+        if row.get("timing") != "am":
+            continue
+        entry = _parse_date(row.get("entry_session"))
+        printed = _parse_date(row.get("print_session"))
+        if entry is None or printed is None or printed == entry:
+            continue
+        groups.setdefault(entry, []).append(row)
+    lines = []
+    for entry in sorted(groups):
+        group = groups[entry]
+        names = " ".join(sorted(row["symbol"] for row in group))
+        print_days = sorted({
+            day for day in (_parse_date(row["print_session"]) for row in group) if day is not None
+        })
+        printed = ", ".join(_short(day) for day in print_days)
+        lines.append(f"{names} print {printed} AM. Entry is {_short(entry)} RTH.")
+    return lines
+
+
 def sheet_text(rows: list[dict], excluded: list[str], counts: dict, sessions: list[date] | None) -> tuple[str, str]:
-    """Topic and reason for one research_queue row. The reason starts with the coverage line."""
-    dates = sorted({_parse_date(row["report_date"]) for row in rows if _parse_date(row["report_date"])})
+    """Topic and reason for one research_queue row. The reason starts with the coverage line.
+
+    The topic dates are the entry sessions the operator asked for. When that
+    list was not saved, the dates are the entry sessions of the ranked names.
+    An AM print on the next session stays inside that range and is named on
+    its own line as that prior RTH entry.
+    """
+    dates = sorted(sessions) if sessions else _entry_dates(rows)
+    if not dates:
+        dates = sorted({_parse_date(row["report_date"]) for row in rows if _parse_date(row["report_date"])})
     if not dates and sessions:
         dates = sorted(sessions)
     if not dates:
@@ -703,6 +800,7 @@ def sheet_text(rows: list[dict], excluded: list[str], counts: dict, sessions: li
         f"{when} earnings sheet ({WRITER}): {counts['beat_history_6of6']} with 6/6 beats, {outside_bit}"
     )
     lines = [coverage_line(counts), PLAIN]
+    lines.extend(_am_entry_lines(rows))
     if excluded:
         lines.append("excluded " + " ".join(excluded))
     lines.extend(_name_line(row) for row in rows)
@@ -796,9 +894,7 @@ def rank_payload(doc: dict, *, execute: bool = False, beats_n: int = BEATS_N, ca
         session_days = _sessions_filter(doc)
         symbols = sorted({
             event["symbol"] for event in events
-            if event["symbol"] not in EXCLUDED and (
-                session_days is None or event["report_date"] in session_days
-            )
+            if event["symbol"] not in EXCLUDED and event_in_window(event, session_days)
         })
         got = (
             caller("steward_symbols_present", {"symbols": symbols}, idempotent=True)
@@ -826,19 +922,30 @@ def rank_payload(doc: dict, *, execute: bool = False, beats_n: int = BEATS_N, ca
 
 
 def plan_calls(now: datetime, sessions: int) -> dict:
-    """The Robinhood calls for the next `sessions` NYSE sessions, plus the optional earnings alternate."""
+    """The Robinhood calls for the next `sessions` NYSE entry sessions.
+
+    The calendar runs through the session after the last entry session so that
+    morning's printers are included. A Friday entry session reaches Monday AM.
+    """
     days = next_sessions(sessions, now)
     window = calendar_window(days)
+    through = next_session(days[-1]) or days[-1]
     start = datetime.combine(days[0] - timedelta(days=420), time(0, 0), tzinfo=timezone.utc)
     start_time = start.isoformat().replace("+00:00", "Z")
     return {
         "writer": WRITER,
         "sessions": [day.isoformat() for day in days],
+        "calendar_through": through.isoformat(),
         "calls": [
             {
                 "tool": "get_earnings_calendar",
                 "arguments": window,
-                "note": "high-cap names only. Rank every symbol this returns. Do not drop a name because it is absent from public.symbols.",
+                "note": (
+                    "high-cap names only. sessions are entry sessions. The calendar runs "
+                    "through the next session so its AM printers are ranked as entries on "
+                    "the prior RTH session. A Friday or pre-holiday sheet includes the next "
+                    "trading day's AM printers. Do not drop a name because it is absent from public.symbols."
+                ),
             },
             {
                 "tool": "get_earnings_results",
@@ -865,7 +972,11 @@ def plan_calls(now: datetime, sessions: int) -> dict:
                 "note": "optional. Used only when that symbol's Robinhood history cannot be read. Same rule: both EPS and estimate, or the quarter does not count.",
             },
         ],
-        "then": "Save the raw responses and public.symbols for those tickers as in_symbols, then run rank payload.json",
+        "then": (
+            "Save the raw responses, the sessions list above as sessions, and public.symbols "
+            "for those tickers as in_symbols, then run rank payload.json. An AM print is "
+            "included only when the prior RTH session is one of those entry sessions."
+        ),
     }
 
 

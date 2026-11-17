@@ -234,6 +234,37 @@ export type LessonCameBack = {
   came_back: number;
 };
 
+/**
+ * Whether the latest entry session has an earnings_sheet research_queue row.
+ * `stale` is true when it does not. `sessions_missed` counts NYSE sessions
+ * after the last covered entry session through that latest session.
+ * Null when the column is absent. Does not change `/api/health` ok.
+ */
+export type EarningsSheetStale = {
+  stale: boolean;
+  last_sheet_at: string | null;
+  sessions_missed: number | null;
+  latest_entry_session: string | null;
+};
+
+/**
+ * One parchment sentence when the earnings sheet has no row for the latest
+ * entry session. Absent when the sheet is current or the column was not on
+ * the row. Does not invent a time or a count.
+ */
+export function earningsSheetStaleLine(row: EarningsSheetStale | null): string | null {
+  if (!row || row.stale !== true) return null;
+  const missed = row.sessions_missed;
+  const missedText = typeof missed === 'number' && Number.isFinite(missed)
+    ? (Math.trunc(missed) === 1 ? '1 session missed.' : `${Math.trunc(missed)} sessions missed.`)
+    : null;
+  const day = ontologyFreshnessDay(row.last_sheet_at);
+  if (day && missedText) return `The earnings sheet is stale. Last sheet ${day}. ${missedText}`;
+  if (day) return `The earnings sheet is stale. Last sheet ${day}.`;
+  if (missedText) return `The earnings sheet is stale. ${missedText}`;
+  return 'The earnings sheet has no row for the latest entry session.';
+}
+
 /** "Came back 3 times." Absent when this lesson was not cited again. */
 export function cameBackLine(times: number | null | undefined): string | null {
   if (times === null || times === undefined || !Number.isFinite(times)) return null;
@@ -480,6 +511,11 @@ export type LedgerWatchdog = {
    * Does not change `ok` on /api/health.
    */
   lesson_came_back: LessonCameBack[] | null;
+  /**
+   * No earnings_sheet row for the latest entry session. Null when the column
+   * is absent. Does not change `ok` on /api/health.
+   */
+  earnings_sheet_stale: EarningsSheetStale | null;
   breaches: WatchdogLot[];
   missing: WatchdogLot[];
   issues: WatchdogIssue[];
@@ -512,6 +548,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     research_id_sequences: null,
     rules_not_taking: null,
     lesson_came_back: null,
+    earnings_sheet_stale: null,
     breaches: [],
     missing: [],
     issues: [],
@@ -781,6 +818,9 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     lesson_came_back: summary.lesson_came_back === undefined
       ? null
       : lessonCameBack(summary.lesson_came_back),
+    earnings_sheet_stale: summary.earnings_sheet_stale === undefined
+      ? null
+      : earningsSheetStale(summary.earnings_sheet_stale),
     breaches: breachLots,
     missing: rows(bag.missing).map(lot),
     issues: rows(bag.issues).map(issue),
@@ -1028,6 +1068,11 @@ export function watchdogHealthSummary(
    * Does not change `ok`.
    */
   rules_not_taking: RuleNotTaking[];
+  /**
+   * Earnings sheet missing for the latest entry session. Null when the column
+   * is absent. Does not change `ok`.
+   */
+  earnings_sheet_stale: EarningsSheetStale | null;
 } {
   const w = quietRetiredWatchdog(watchdog ?? emptyLedgerWatchdog(), retired ?? new Set());
   return {
@@ -1072,6 +1117,9 @@ export function watchdogHealthSummary(
       status: row.status ?? 'not_taking',
       failed_lesson_id: row.failed_lesson_id ?? null,
     })),
+    earnings_sheet_stale: w.earnings_sheet_stale
+      ? { ...w.earnings_sheet_stale }
+      : null,
   };
 }
 
@@ -1180,6 +1228,20 @@ function lessonCameBack(value: unknown): LessonCameBack[] | null {
     out.push({ lesson_id: lessonId, came_back: cameBack });
   }
   return out;
+}
+
+function earningsSheetStale(value: unknown): EarningsSheetStale | null {
+  const bag = record(jsonValue(value));
+  if (!bag || typeof bag.stale !== 'boolean') return null;
+  const missed = bag.sessions_missed;
+  return {
+    stale: bag.stale,
+    last_sheet_at: str(bag.last_sheet_at),
+    sessions_missed: missed === null || missed === undefined || missed === ''
+      ? null
+      : optionalCount(missed),
+    latest_entry_session: str(bag.latest_entry_session),
+  };
 }
 
 function learningStallSentences(value: unknown): string[] | null {
