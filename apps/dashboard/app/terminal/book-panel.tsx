@@ -107,7 +107,14 @@ function RuleChainItems({
           >
             <p className="books-note">{ruleNotTakingStatusLine(row, thesisName(row.thesis_id))}</p>
             <p className="books-note">Lessons {ids}.</p>
-            {withSummary ? <p className="books-note">{row.summary}</p> : null}
+            {row.status === 'costing'
+              ? (row.cost_summaries ?? []).map((text) => (
+                <p key={text} className="books-note">{text}</p>
+              ))
+              : null}
+            {withSummary && !(row.cost_summaries ?? []).includes(row.summary)
+              ? <p className="books-note">{row.summary}</p>
+              : null}
           </li>
         );
       })}
@@ -129,13 +136,20 @@ function RulesNotTakingList({
   const shown = thesisId ? rows.filter((row) => row.thesis_id === thesisId) : rows;
   if (!shown.length) return null;
   const alarm = shown.filter((row) => ruleNotTakingIsAlarm(row.status));
-  const calm = shown.filter((row) => !ruleNotTakingIsAlarm(row.status));
+  const costing = shown.filter((row) => row.status === 'costing');
+  const calm = shown.filter((row) => !ruleNotTakingIsAlarm(row.status) && row.status !== 'costing');
   return (
     <>
       {alarm.length ? (
         <section className="books-rules-not-taking" aria-label="Rules not taking" data-rules-not-taking={alarm.length}>
           <p className="books-section-label">Rules not taking</p>
           <RuleChainItems rows={alarm} thesisName={thesisName} withSummary={withSummary} />
+        </section>
+      ) : null}
+      {costing.length ? (
+        <section className="books-rules-not-taking" aria-label="Rules that cost us winners" data-rules-costing={costing.length}>
+          <p className="books-section-label">Rules that cost us winners — review</p>
+          <RuleChainItems rows={costing} thesisName={thesisName} withSummary={withSummary} />
         </section>
       ) : null}
       {calm.length ? (

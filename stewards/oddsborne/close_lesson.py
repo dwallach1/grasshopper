@@ -15,7 +15,8 @@ The prior is always the ledger's current value (results_confidence, else stated;
 not here); --confidence-delta moves from it, and a losing close can never raise it (clamped, meta.clamped).
 --research-lesson-id stamps that lesson on the belief. --lesson-summary with --lesson-type and --cycle-id
 writes the research lesson in the same call. Pass --lineage-role with that summary: violation when the
-rule was broken, confirmation when it held, refinement when the lesson only narrows it. Omit the id and
+rule was broken, confirmation when it held, refinement when the lesson only narrows it, rule_cost when
+the rule was obeyed and the pass left a winner behind. Omit the id and
 the summary and the ledger links the one lesson for this close
 when it is unambiguous. --dry-run runs the same checks and arithmetic in the database (dry_run: true) and
 prints the result; no write.
@@ -85,8 +86,8 @@ def main(argv=None) -> int:
     ap.add_argument("--lesson-summary", default=None)
     ap.add_argument("--lesson-type", default=None)
     ap.add_argument("--cycle-id", type=int, default=None)
-    ap.add_argument("--lineage-role", default=None, choices=["violation", "confirmation", "refinement"],
-                    help="violation if the rule was broken, confirmation if it held, refinement if the lesson only narrows it")
+    ap.add_argument("--lineage-role", default=None, choices=["violation", "confirmation", "refinement", "rule_cost"],
+                    help="violation if the rule was broken, confirmation if it held, refinement if the lesson only narrows it, rule_cost if the pass followed the rule and left a winner behind")
     ap.add_argument("--steward", default=steward_from_path(), choices=STEWARDS)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)

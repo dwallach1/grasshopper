@@ -1181,6 +1181,8 @@ describe('Books page: one section per steward', () => {
         summary: 'SANM was outside the screened universe. Already lesson 226.',
         came_back: 3,
         violations: 3,
+        rule_costs: 0,
+        cost_summaries: [],
         fix_ref: null,
         shipped_at: null,
         status: 'not_taking' as const,
@@ -1221,6 +1223,8 @@ describe('Books page: one section per steward', () => {
         summary: 'AAON was again outside the screened universe.',
         came_back: 4,
         violations: 4,
+        rule_costs: 0,
+        cost_summaries: [],
         fix_ref: 'PR #204',
         shipped_at: '2026-11-11T18:45:33Z',
         status: 'fix_shipped_watching',
@@ -1231,6 +1235,8 @@ describe('Books page: one section per steward', () => {
         summary: 'The pass-after-open rule stands.',
         came_back: 5,
         violations: 1,
+        rule_costs: 0,
+        cost_summaries: [],
         fix_ref: null,
         shipped_at: null,
         status: 'holding',
@@ -1241,6 +1247,8 @@ describe('Books page: one section per steward', () => {
         summary: 'Beat-fade in a weak tape is sector-specific.',
         came_back: 2,
         violations: 0,
+        rule_costs: 0,
+        cost_summaries: [],
         fix_ref: null,
         shipped_at: null,
         status: 'refining',
@@ -1251,6 +1259,8 @@ describe('Books page: one section per steward', () => {
         summary: 'The last earnings-hold slot went to a below-gate name.',
         came_back: 3,
         violations: 1,
+        rule_costs: 0,
+        cost_summaries: [],
         fix_ref: 'PR #10',
         shipped_at: '2026-10-01T00:00:00Z',
         status: 'fix_failed',
@@ -1277,6 +1287,81 @@ describe('Books page: one section per steward', () => {
     expect(calm?.querySelector('[data-rule-status="holding"][data-rule-alarm="false"]')).not.toBeNull();
     expect(calm?.querySelector('[data-rule-status="refining"][data-rule-alarm="false"]')).not.toBeNull();
     expect(calm?.querySelector('[data-rule-status="fix_shipped_watching"]')).not.toBeNull();
+    const coda = button(view.host, 'button.books-lot[data-lot="eq:CODA"]');
+    expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
+    expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');
+    view.unmount();
+  });
+
+  test('a rule that was followed and left winners behind is its own review, and the moves stay in the lesson text', async () => {
+    const stn = 'Seat pressure cost the in-lane winners again: STN (+14%) and NU (+11.7%) were QD names on sheet 304. The pass was correct under the rules.';
+    const seed = 'Both were correctly passed under lesson 194 (last EH slot). POWL +5.6% on 3.2x, ACM +2.9% on 1.9x.';
+    const day0 = 'Seed update (QD PM printer closing green on a red tape with >=1.5x volume): ACM day-0 +11.1% (3.2x), POWL day-0 -0.2%. Both were correctly passed under lesson 194.';
+    const payload = desk();
+    payload.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      rules_not_taking: [{
+        lesson_ids: [194, 204, 257, 261, 267],
+        thesis_id: EARNINGS,
+        summary: day0,
+        came_back: 4,
+        violations: 1,
+        rule_costs: 3,
+        cost_summaries: [stn, seed, day0],
+        fix_ref: null,
+        shipped_at: null,
+        status: 'costing',
+        failed_lesson_id: null,
+      }, {
+        lesson_ids: [197, 223, 226, 241, 245, 260],
+        thesis_id: EARNINGS,
+        summary: 'Monday AM printers keep falling between sheets.',
+        came_back: 5,
+        violations: 5,
+        rule_costs: 0,
+        cost_summaries: [],
+        fix_ref: 'PR #208',
+        shipped_at: '2026-11-17T18:36:22Z',
+        status: 'fix_shipped_watching',
+        failed_lesson_id: null,
+      }, {
+        lesson_ids: [179, 188, 199, 204],
+        thesis_id: EARNINGS,
+        summary: 'The last earnings-hold slot went to a below-gate name.',
+        came_back: 3,
+        violations: 1,
+        rule_costs: 0,
+        cost_summaries: [],
+        fix_ref: null,
+        shipped_at: null,
+        status: 'not_taking',
+        failed_lesson_id: null,
+      }],
+    };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-18T18:00:00.000Z' }));
+    const alarm = view.host.querySelector('.books [data-rules-not-taking]');
+    const review = view.host.querySelector('.books [data-rules-costing]');
+    const calm = view.host.querySelector('.books [data-rules-checked]');
+    expect(alarm?.textContent).toContain('Rules not taking');
+    expect(alarm?.textContent).toContain('Still not taking: Earnings gap structure, taught 3 times. The rule was broken once. No fix yet.');
+    expect(review?.textContent).toContain('Rules that cost us winners — review');
+    expect(review?.textContent).toContain('Earnings gap structure came back 4 times. The rule was followed 3 times, and those passes left winners behind.');
+    expect(review?.textContent).toContain('Lessons 194, 204, 257, 261, 267.');
+    expect(review?.textContent).toContain('STN (+14%)');
+    expect(review?.textContent).toContain('NU (+11.7%)');
+    expect(review?.textContent).toContain('ACM day-0 +11.1%');
+    expect(review?.textContent).toContain('POWL day-0 -0.2%');
+    expect(review?.textContent).not.toContain('costing');
+    expect(review?.textContent).not.toContain('rule_cost');
+    expect(review?.textContent).not.toContain('↑');
+    expect(review?.textContent).not.toContain('▼');
+    expect(review?.querySelector('.books-lot-pnl')).toBeNull();
+    expect(review?.querySelector('[data-rule-status="costing"][data-rule-alarm="false"]')).not.toBeNull();
+    expect(alarm?.textContent).not.toContain('left winners behind');
+    expect(calm?.textContent).toContain('Checked again');
+    expect(calm?.textContent).toContain('Earnings gap structure fix shipped Nov 17 (PR #208), watching: no repeat since.');
+    expect(calm?.textContent).not.toContain('left winners behind');
     const coda = button(view.host, 'button.books-lot[data-lot="eq:CODA"]');
     expect(coda.querySelector('.books-lot-pnl')?.classList.contains('up')).toBe(true);
     expect(coda.querySelector('.books-lot-pnl')?.textContent).toBe('+$10.00 (+10.0%)');
