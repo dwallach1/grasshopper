@@ -28,7 +28,7 @@ Each call:
 
 `meta.rules` is the ledger `lesson_type` slug (`structure`, `missed_swing`, …). Rationale is the lesson summary. Prior/new confidence stay null. `meta.source = 'operator_incorporate'` plus `actor_id` is the audit — same playbook table as #50, not a second actions ledger.
 
-A lesson that cites an older one sets `lineage_role` when it is written: `violation` when the rule was broken, `confirmation` when it held, `refinement` when the lesson only narrows it. Name the older lesson in the summary (`lesson 240`). The incorporate call does not change that column. See [`docs/playbook-rules.md`](playbook-rules.md).
+A lesson that cites an older one sets `lineage_role` when it is written: `violation` when the rule was broken, `confirmation` when it held, `refinement` when the lesson only narrows it, `rule_cost` when the rule was obeyed and the pass left a qualified winner behind. Name the older lesson in the summary (`lesson 240`). The incorporate call does not change that column. A lesson left without a role is still read as a break. See [`docs/playbook-rules.md`](playbook-rules.md).
 
 `active_playbook_rules` then surfaces every playbook row still in force for that thesis and book. A newer row replaces an older one only when it names that row in `meta.supersedes`, or the older row is withdrawn. Stewards load that before size.
 

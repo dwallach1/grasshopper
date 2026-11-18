@@ -193,12 +193,15 @@ export type ResearchIdSequences = {
  * A chain is not taking when a later lesson broke the rule.
  * Holding: the later lessons say the rule stood.
  * Refining: they only narrow it.
+ * Costing: after the rule was last written, the later lessons only say it was
+ * followed, and those passes left winners behind.
  * A shipped fix is watched until a later lesson breaks the rule again.
  */
 export type RuleNotTakingStatus =
   | 'not_taking'
   | 'holding'
   | 'refining'
+  | 'costing'
   | 'fix_shipped_watching'
   | 'fix_failed';
 
@@ -206,10 +209,14 @@ export type RuleNotTakingStatus =
  * An incorporated lesson that was taught again at least twice.
  * `lesson_ids` is the chain, oldest first. `summary` is the newest lesson.
  * `came_back` is how many lessons followed the first.
- * `violations` is how many of those broke the rule.
+ * `violations` is how many of those broke the rule. A lesson with no role is
+ * counted here on purpose: an unclassified repeat is still a break.
+ * `rule_costs` is how many later lessons say the rule was followed and the
+ * pass left a winner behind. `cost_summaries` are those lesson texts.
  * `fix_ref` and `shipped_at` are null when no fix is recorded.
  * `failed_lesson_id` is the lesson after the fix that broke the rule.
- * Only `not_taking` and `fix_failed` are the alarm. Does not change `/api/health` ok.
+ * Only `not_taking` and `fix_failed` are the alarm. `costing` is a review.
+ * Does not change `/api/health` ok.
  */
 export type RuleNotTaking = {
   lesson_ids: number[];
@@ -217,6 +224,8 @@ export type RuleNotTaking = {
   summary: string;
   came_back: number;
   violations: number;
+  rule_costs: number;
+  cost_summaries: string[];
   fix_ref: string | null;
   shipped_at: string | null;
   status: RuleNotTakingStatus;
@@ -310,6 +319,7 @@ export function ruleNotTakingStatusLine(
     shipped_at?: string | null;
     came_back: number;
     violations?: number | null;
+    rule_costs?: number | null;
     failed_lesson_id?: number | null;
   },
   thesisName: string,
@@ -320,9 +330,20 @@ export function ruleNotTakingStatusLine(
     ? Math.trunc(row.violations)
     : 0;
   const status = row.status === 'fix_shipped_watching' || row.status === 'fix_failed'
-    || row.status === 'holding' || row.status === 'refining'
+    || row.status === 'holding' || row.status === 'refining' || row.status === 'costing'
     ? row.status
     : 'not_taking';
+  if (status === 'costing') {
+    const costs = typeof row.rule_costs === 'number' && Number.isFinite(row.rule_costs)
+      ? Math.trunc(row.rule_costs)
+      : 0;
+    const lead = name ? `${name} came back ${times}.` : `Came back ${times}.`;
+    if (costs > 0) {
+      const followed = costs === 1 ? 'once' : `${costs} times`;
+      return `${lead} The rule was followed ${followed}, and those passes left winners behind.`;
+    }
+    return `${lead} The rule was followed, and those passes left winners behind.`;
+  }
   if (status === 'holding') {
     const lead = name ? `${name} came back ${times}.` : `Came back ${times}.`;
     return violations > 0
@@ -1112,6 +1133,8 @@ export function watchdogHealthSummary(
       summary: row.summary,
       came_back: row.came_back,
       violations: row.violations ?? 0,
+      rule_costs: row.rule_costs ?? 0,
+      cost_summaries: [...(row.cost_summaries ?? [])],
       fix_ref: row.fix_ref ?? null,
       shipped_at: row.shipped_at ?? null,
       status: row.status ?? 'not_taking',
@@ -1167,10 +1190,23 @@ function idList(value: unknown): number[] {
   return ids;
 }
 
+function stringList(value: unknown): string[] {
+  const parsed = jsonValue(value);
+  if (!Array.isArray(parsed)) return [];
+  const texts: string[] = [];
+  for (const item of parsed) {
+    if (typeof item !== 'string') continue;
+    const text = item.trim();
+    if (text) texts.push(text);
+  }
+  return texts;
+}
+
 const RULE_NOT_TAKING_STATUS = new Set<RuleNotTakingStatus>([
   'not_taking',
   'holding',
   'refining',
+  'costing',
   'fix_shipped_watching',
   'fix_failed',
 ]);
@@ -1199,13 +1235,18 @@ function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
     const violations = bag.violations === undefined || bag.violations === null || bag.violations === ''
       ? 0
       : optionalCount(bag.violations);
-    if (violations === null || violations < 0) continue;
+    const ruleCosts = bag.rule_costs === undefined || bag.rule_costs === null || bag.rule_costs === ''
+      ? 0
+      : optionalCount(bag.rule_costs);
+    if (violations === null || violations < 0 || ruleCosts === null || ruleCosts < 0) continue;
     out.push({
       lesson_ids: lessonIds,
       thesis_id: thesisId,
       summary,
       came_back: cameBack,
       violations,
+      rule_costs: ruleCosts,
+      cost_summaries: stringList(bag.cost_summaries),
       fix_ref: str(bag.fix_ref),
       shipped_at: str(bag.shipped_at),
       status,

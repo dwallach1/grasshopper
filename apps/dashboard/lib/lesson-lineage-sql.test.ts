@@ -171,3 +171,58 @@ describe('research lesson lineage role', () => {
     expect(sql).toContain('grant execute on function public.steward_close_lesson(jsonb) to quantanamo_worker, oddsborne_worker, bandit_worker, service_role;');
   });
 });
+
+describe('research lesson rule cost', () => {
+  const schema = join(root, 'supabase/schemas/102_research_lesson_rule_cost.sql');
+  const migration = join(root, 'supabase/migrations/20261118190000_research_lesson_rule_cost.sql');
+
+  test('a followed rule that left winners behind is costing, and a null repeat is still a violation', () => {
+    const sql = readFileSync(schema, 'utf8');
+    expect(readFileSync(migration, 'utf8')).toBe(sql);
+    expect(sql).toContain("lineage_role in ('violation', 'confirmation', 'refinement', 'rule_cost')");
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'correctly passed' then 'rule_cost'");
+    expect(sql).toContain("when coalesce(p_summary, '') ~* 'pass was correct' then 'rule_cost'");
+    expect(sql.indexOf("~* 'correctly passed'")).toBeLessThan(sql.indexOf("~* 'below-gate'"));
+    expect(sql.indexOf("~* 'pass was correct'")).toBeLessThan(sql.indexOf("~* 'below-gate'"));
+    expect(sql).toContain("when l.lineage_role in ('violation', 'confirmation', 'refinement', 'rule_cost') then l.lineage_role");
+    expect(sql).toMatch(/coalesce\(\s*case\s*when l\.lineage_role in \('violation', 'confirmation', 'refinement', 'rule_cost'\) then l\.lineage_role\s*end,\s*'violation'\s*\) as role/);
+    expect(sql).toContain('A null lineage_role is read as a violation on purpose');
+    expect(sql).toContain("and r.role = 'violation'");
+    expect(sql).toContain("'rule_costs'");
+    expect(sql).toContain("and r.role = 'rule_cost'");
+    expect(sql).toContain("'cost_summaries'");
+    expect(sql).toContain("then 'costing'");
+    expect(sql).toContain('inc.incorporated');
+    expect(sql).toContain("when fx.shipped_at is null then 'not_taking'");
+    expect(sql).toContain("'fix_shipped_watching'");
+    expect(sql).toContain("else 'fix_failed'");
+    expect(sql).toContain('where id in (257, 261, 267)');
+    expect(sql).toContain("private.lesson_lineage_role(l.summary) = 'rule_cost'");
+    expect(sql).toContain('lineage_role must be violation, confirmation, refinement, or rule_cost');
+    expect(sql).toContain('Only not_taking and fix_failed are the alarm');
+    expect(sql).toContain('costing is a review, not the alarm');
+    expect(sql).toContain('does not make /api/health not-ok');
+    expect(sql).not.toMatch(/update\s+public\.belief_updates/i);
+    expect(sql).not.toMatch(/set\s+incorporated/i);
+    expect(sql).toContain('revoke execute on function private.lesson_lineage_role(text) from oddsborne_worker, bandit_worker;');
+    const helperGrant = sql.match(/grant execute on function private\.lesson_lineage_role\(text\)[\s\S]*?;/i);
+    expect(helperGrant?.[0]).toContain('quantanamo_worker');
+    expect(helperGrant?.[0]).toContain('service_role');
+    expect(helperGrant?.[0]).not.toContain('oddsborne_worker');
+    expect(helperGrant?.[0]).not.toContain('bandit_worker');
+    expect(helperGrant?.[0]).not.toContain('desk_public_reader');
+    expect(helperGrant?.[0]).not.toContain('anon');
+    const grants = [...sql.matchAll(/^grant\b[^;]*;/gim)].map((match) => match[0]);
+    expect(grants.length).toBeGreaterThan(0);
+    for (const grant of grants) {
+      if (/v_ledger_watchdog/.test(grant) && /desk_public_reader/.test(grant)) {
+        expect(grant).toMatch(/\bselect\b/i);
+        expect(grant).not.toMatch(/\b(insert|update|delete|all)\b/i);
+      }
+      if (/oddsborne_worker|bandit_worker/.test(grant)) {
+        expect(grant).toContain('steward_close_lesson');
+        expect(grant).toContain('service_role');
+      }
+    }
+  });
+});

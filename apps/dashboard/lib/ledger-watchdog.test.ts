@@ -875,6 +875,8 @@ describe('10/8 NBIS and CODA breach replay', () => {
     const chain = {
       ...open,
       violations: 0,
+      rule_costs: 0,
+      cost_summaries: [],
       fix_ref: null,
       shipped_at: null,
       status: 'not_taking' as const,
@@ -886,6 +888,8 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'AAON was again outside the screened universe.',
       came_back: 4,
       violations: 4,
+      rule_costs: 0,
+      cost_summaries: [],
       fix_ref: 'PR #204',
       shipped_at: '2026-11-11T18:45:33+00:00',
       status: 'fix_shipped_watching' as const,
@@ -897,6 +901,8 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'The last earnings-hold slot went to a below-gate name.',
       came_back: 3,
       violations: 1,
+      rule_costs: 0,
+      cost_summaries: [],
       fix_ref: 'PR #10',
       shipped_at: '2026-10-01T00:00:00Z',
       status: 'fix_failed' as const,
@@ -908,6 +914,8 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'The pass-after-open rule stands.',
       came_back: 5,
       violations: 1,
+      rule_costs: 0,
+      cost_summaries: [],
       fix_ref: null,
       shipped_at: null,
       status: 'holding' as const,
@@ -919,9 +927,26 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'Beat-fade in a weak tape is sector-specific.',
       came_back: 2,
       violations: 0,
+      rule_costs: 0,
+      cost_summaries: [],
       fix_ref: null,
       shipped_at: null,
       status: 'refining' as const,
+      failed_lesson_id: null,
+    };
+    const stn = 'Seat pressure cost the in-lane winners again: STN (+14%) and NU (+11.7%) were QD names on sheet 304. The pass was correct under the rules.';
+    const acm = 'Seed update: ACM day-0 +11.1% (3.2x), POWL day-0 -0.2%. Both were correctly passed under lesson 194.';
+    const costing = {
+      lesson_ids: [194, 204, 257, 261, 267],
+      thesis_id: 'earnings_gap_structure',
+      summary: acm,
+      came_back: 4,
+      violations: 1,
+      rule_costs: 3,
+      cost_summaries: [stn, acm],
+      fix_ref: null,
+      shipped_at: null,
+      status: 'costing' as const,
       failed_lesson_id: null,
     };
     const absent = mapLedgerWatchdog({ summary: [{ learning_stalls: [] }] });
@@ -936,9 +961,11 @@ describe('10/8 NBIS and CODA breach replay', () => {
           failed,
           holding,
           refining,
+          costing,
           { lesson_ids: [1], thesis_id: 'x', summary: 'too short', came_back: 0 },
           { ...open, status: 'shipped', lesson_ids: [9, 10, 11] },
           { ...holding, violations: -1, lesson_ids: [7, 8, 9] },
+          { ...costing, rule_costs: -1, lesson_ids: [4, 5, 6] },
         ],
         lesson_came_back: [
           { lesson_id: 197, came_back: 3 },
@@ -948,7 +975,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
         ],
       }],
     });
-    expect(mapped.rules_not_taking).toEqual([chain, watching, failed, holding, refining]);
+    expect(mapped.rules_not_taking).toEqual([chain, watching, failed, holding, refining, costing]);
     expect(mapped.lesson_came_back).toEqual([
       { lesson_id: 197, came_back: 3 },
       { lesson_id: 223, came_back: 2 },
@@ -968,6 +995,10 @@ describe('10/8 NBIS and CODA breach replay', () => {
       .toBe('Earnings gap structure came back 5 times. It broke the rule once, and the later checks say the rule stood.');
     expect(ruleNotTakingStatusLine(refining, 'Earnings gap structure'))
       .toBe('Earnings gap structure came back 2 times. The later lessons narrow the rule.');
+    expect(ruleNotTakingStatusLine(costing, 'Earnings gap structure'))
+      .toBe('Earnings gap structure came back 4 times. The rule was followed 3 times, and those passes left winners behind.');
+    expect(ruleNotTakingStatusLine({ ...costing, rule_costs: 1 }, 'Earnings gap structure'))
+      .toBe('Earnings gap structure came back 4 times. The rule was followed once, and those passes left winners behind.');
     expect(ruleNotTakingStatusLine({ ...chain, violations: 1 }, 'Earnings gap structure'))
       .toBe('Still not taking: Earnings gap structure, taught 3 times. The rule was broken once. No fix yet.');
     expect(ruleNotTakingIsAlarm('not_taking')).toBe(true);
@@ -975,10 +1006,11 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(ruleNotTakingIsAlarm('holding')).toBe(false);
     expect(ruleNotTakingIsAlarm('refining')).toBe(false);
     expect(ruleNotTakingIsAlarm('fix_shipped_watching')).toBe(false);
+    expect(ruleNotTakingIsAlarm('costing')).toBe(false);
     expect(ruleNotTakingStatusLine({ came_back: 4 }, ''))
       .toBe('Still not taking: taught 4 times, no fix yet.');
     const health = watchdogHealthSummary(mapped);
-    expect(health.rules_not_taking).toEqual([chain, watching, failed, holding, refining]);
+    expect(health.rules_not_taking).toEqual([chain, watching, failed, holding, refining, costing]);
     expect(health.rules_not_taking.filter((row) => ruleNotTakingIsAlarm(row.status)).map((row) => row.status))
       .toEqual(['not_taking', 'fix_failed']);
     const book = assembleDeskBookHealth({

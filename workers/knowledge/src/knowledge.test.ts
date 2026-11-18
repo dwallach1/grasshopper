@@ -91,6 +91,13 @@ describe('worker knowledge primitives', () => {
       summary: 'The pass-after-open rule stands. Lesson 240.',
       lineage_role: 'confirmation',
     })).toMatchObject({ operation: 'lesson', lineage_role: 'confirmation' });
+    expect(CaptureSchema.parse({
+      operation: 'lesson',
+      cycle_key: 'cycle-1',
+      thesis_id: 'earnings_gap_structure',
+      summary: 'Both were correctly passed under lesson 194. The pass left STN and NU behind.',
+      lineage_role: 'rule_cost',
+    })).toMatchObject({ operation: 'lesson', lineage_role: 'rule_cost' });
     expect(() => CaptureSchema.parse({
       operation: 'lesson',
       cycle_key: 'cycle-1',

@@ -139,15 +139,16 @@ The RPC sets `research_lessons.incorporated = true` and writes one `belief_updat
 
 ## When a lesson cites an older one
 
-Set `research_lessons.lineage_role` on the insert. It is one of three words:
+Set `research_lessons.lineage_role` on the insert. It is one of four words:
 
 | `lineage_role` | Write it when |
 | --- | --- |
 | `violation` | The steward acted against the incorporated rule, or a miss that rule was meant to prevent happened again. |
 | `confirmation` | The rule held. A rule-correct pass, "the rule stands", or "no rule change" with the evidence that it held. |
 | `refinement` | The lesson narrows or conditions the rule. It does not say the rule was broken. |
+| `rule_cost` | The rule was obeyed, and the pass left a qualified winner behind. "The pass was correct", "correctly passed". |
 
-Name the older lesson in the summary (`lesson 240`, `lessons 226/241`) so the chain stays attached. Leave `lineage_role` empty only when the lesson does not take a side. The text fills a clear phrase; anything unclear is read as a break, so set the column rather than relying on that.
+Name the older lesson in the summary (`lesson 240`, `lessons 226/241`) so the chain stays attached. Leave `lineage_role` empty only when the lesson does not take a side. The text fills a clear phrase. A lesson left empty is still read as a break: that is intentional, so an unclassified repeat stays an alarm. Set the column rather than relying on the text. `rule_cost` is not a break. A chain whose later lessons are only that cost is a review of a rule that is keeping winners out, not an enforcement alarm.
 
 ```sql
 insert into public.research_lessons (
@@ -163,4 +164,4 @@ insert into public.research_lessons (
 );
 ```
 
-A close that writes the research lesson in the same call passes the same word: `steward_close_lesson(..., 'lineage_role', 'confirmation')`, and `close_lesson.py --lineage-role confirmation` with `--lesson-summary`.
+A close that writes the research lesson in the same call passes the same word: `steward_close_lesson(..., 'lineage_role', 'confirmation')`, and `close_lesson.py --lineage-role confirmation` with `--lesson-summary`. `--lineage-role rule_cost` is the same path when the pass followed the rule and left a winner behind.

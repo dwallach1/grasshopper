@@ -64,7 +64,7 @@ export const CaptureSchema = z.discriminatedUnion('operation', [
     summary: NonEmpty(2000),
     test_key: OptionalString,
     lesson_type: z.string().trim().min(1).optional(),
-    lineage_role: z.enum(['violation', 'confirmation', 'refinement']).optional(),
+    lineage_role: z.enum(['violation', 'confirmation', 'refinement', 'rule_cost']).optional(),
     regime: OptionalString,
     incorporated: z.boolean().optional(),
   }),
