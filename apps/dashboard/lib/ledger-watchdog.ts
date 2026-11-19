@@ -167,6 +167,12 @@ export type OntologyFreshness = {
   created_7d: number;
   pending: number;
   starved: boolean;
+  /**
+   * True when no candidate was first seen in 72 hours and a bookmark or lesson
+   * is newer than that. A learning-loop flag. Does not change `/api/health` ok.
+   * Absent on a watchdog row from before this flag.
+   */
+  learning_loop?: boolean;
   /** Last successful proposer run. Absent on a watchdog row from before the run log. */
   last_run_at?: string | null;
   /** Newest note the last run had in front of it. */
@@ -444,6 +450,9 @@ export function ontologyFreshnessLine(row: OntologyFreshness | null): string | n
       if (unreviewed) return 'The ontology proposer has not reviewed the newest notes.';
       return 'The ontology proposer has not run recently.';
     }
+    if (row.learning_loop) {
+      return 'Ontology has gone more than 72 hours without a new candidate, and notes are still arriving.';
+    }
     if (row.proposed === 0) return 'The ontology proposer ran, and nothing new qualified.';
     if (typeof row.proposed === 'number' && row.proposed > 0) {
       const word = row.proposed === 1 ? 'candidate' : 'candidates';
@@ -458,6 +467,9 @@ export function ontologyFreshnessLine(row: OntologyFreshness | null): string | n
       return `Ontology candidates are ${rounded} ${unit} behind the newest bookmark or lesson.`;
     }
     return 'Ontology candidates are more than 36 hours behind the newest bookmark or lesson.';
+  }
+  if (row.learning_loop) {
+    return 'Ontology has gone more than 72 hours without a new candidate, and notes are still arriving.';
   }
   const day = ontologyFreshnessDay(row.last_first_seen_at);
   if (row.starved || row.created_7d === 0) {
@@ -1078,7 +1090,11 @@ export function watchdogHealthSummary(
    * Empty when the column is absent. Does not change `ok`.
    */
   learning_stalls: string[];
-  /** True when `learning_stalls` names at least one test. Does not change `ok`. */
+  /**
+   * True when a queued test has stalled, or ontology candidates have gone more
+   * than 72 hours without a first-seen while notes are still arriving.
+   * Does not change `ok`.
+   */
   learning_loop_stalled: boolean;
   /** Sequence versus max(id). Null when the column is absent. Does not change `ok`. */
   research_id_sequences: ResearchIdSequences | null;
@@ -1119,7 +1135,8 @@ export function watchdogHealthSummary(
       ? { ...w.ontology_freshness }
       : null,
     learning_stalls: w.learning_stalls ? [...w.learning_stalls] : [],
-    learning_loop_stalled: (w.learning_stalls?.length ?? 0) > 0,
+    learning_loop_stalled: (w.learning_stalls?.length ?? 0) > 0
+      || w.ontology_freshness?.learning_loop === true,
     research_id_sequences: w.research_id_sequences
       ? {
         research_cycles: { ...w.research_id_sequences.research_cycles },
@@ -1332,6 +1349,7 @@ function ontologyFreshness(value: unknown): OntologyFreshness | null {
   if ('considered' in bag) freshness.considered = bag.considered === null ? null : optionalCount(bag.considered);
   if ('proposed' in bag) freshness.proposed = bag.proposed === null ? null : optionalCount(bag.proposed);
   if ('skipped' in bag) freshness.skipped = bag.skipped === null ? null : optionalCount(bag.skipped);
+  if ('learning_loop' in bag) freshness.learning_loop = bag.learning_loop === true;
   return freshness;
 }
 

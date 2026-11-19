@@ -420,6 +420,60 @@ describe('public desk Worker API', () => {
     expect(body.watchdog.ontology_freshness).toMatchObject({ lagging: false, proposed: 0 });
   });
 
+  test('a starved ontology grind with new notes is a learning-loop flag on /api/health and /api/desk', async () => {
+    const ontologyFreshness = {
+      last_first_seen_at: '2026-11-07T00:24:37.981222+00:00',
+      last_seen_at: '2026-11-07T00:24:37.981222+00:00',
+      newest_evidence_at: '2026-11-19T16:05:43.778819+00:00',
+      last_run_at: '2026-11-19T18:15:02.128197+00:00',
+      evidence_through: '2026-11-19T16:05:43.778819+00:00',
+      considered: 243,
+      proposed: 0,
+      skipped: 243,
+      lag_hours: 0.2,
+      lagging: false,
+      created_7d: 0,
+      pending: 0,
+      starved: true,
+      learning_loop: true,
+    };
+    const payload = {
+      ...liveSample,
+      watchdog: {
+        ...emptyLedgerWatchdog(),
+        available: true,
+        learning_stalls: [],
+        ontology_freshness: ontologyFreshness,
+      },
+    };
+    const health = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => payload,
+    );
+    expect(health.status).toBe(200);
+    const healthBody = await health.json() as {
+      ok: boolean;
+      watchdog: {
+        learning_loop_stalled: boolean;
+        ontology_freshness: { learning_loop?: boolean; starved: boolean } | null;
+      };
+    };
+    expect(healthBody.ok).toBe(true);
+    expect(healthBody.watchdog.learning_loop_stalled).toBe(true);
+    expect(healthBody.watchdog.ontology_freshness).toMatchObject({ learning_loop: true, starved: true });
+    const desk = await handleDeskApi(
+      new Request('https://desk.test/api/desk'),
+      env(readerEnv),
+      async () => payload,
+    );
+    expect(desk.status).toBe(200);
+    const deskBody = await desk.json() as {
+      watchdog: { ontology_freshness: { learning_loop?: boolean; starved: boolean } | null };
+    };
+    expect(deskBody.watchdog.ontology_freshness).toMatchObject({ learning_loop: true, starved: true });
+  });
+
   test('market skill is on the health learning block and does not change ok', async () => {
     const response = await handleDeskApi(
       new Request('https://desk.test/api/health'),
