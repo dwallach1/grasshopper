@@ -346,6 +346,38 @@ describe('ledger watchdog', () => {
     expect(ontologyFreshnessLine(quiet.ontology_freshness)).toBe(
       'The ontology proposer ran, and nothing new qualified.',
     );
+    const starvedLoop = mapLedgerWatchdog({
+      summary: [{
+        ontology_freshness: {
+          last_first_seen_at: '2026-11-07T00:24:37.981222+00:00',
+          last_seen_at: '2026-11-07T00:24:37.981222+00:00',
+          newest_evidence_at: '2026-11-19T16:05:43.778819+00:00',
+          last_run_at: '2026-11-19T18:15:02.128197+00:00',
+          evidence_through: '2026-11-19T16:05:43.778819+00:00',
+          considered: 243,
+          proposed: 0,
+          skipped: 243,
+          lag_hours: 0.2,
+          lagging: false,
+          created_7d: 0,
+          pending: 0,
+          starved: true,
+          learning_loop: true,
+        },
+      }],
+    });
+    expect(starvedLoop.ontology_freshness?.learning_loop).toBe(true);
+    expect(ontologyFreshnessLine(starvedLoop.ontology_freshness)).toBe(
+      'Ontology has gone more than 72 hours without a new candidate, and notes are still arriving.',
+    );
+    expect(watchdogHealthSummary(starvedLoop)).toMatchObject({
+      learning_stalls: [],
+      learning_loop_stalled: true,
+    });
+    expect(assembleDeskBookHealth(
+      { watchdog: starvedLoop } as unknown as DeskPayload,
+      Date.parse('2026-11-19T18:20:00Z'),
+    ).alerts).toEqual([]);
     expect(quiet.learning_stalls).toEqual([
       'A test of earnings gap structure has been waiting 12 trading days. Lessons that depend on it still have no verdict.',
     ]);
