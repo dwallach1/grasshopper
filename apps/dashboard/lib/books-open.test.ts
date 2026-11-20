@@ -1368,6 +1368,36 @@ describe('Books page: one section per steward', () => {
     view.unmount();
   });
 
+  test('a repeat with no verdict is a quiet line, not an alarm', async () => {
+    const payload = desk();
+    payload.watchdog = {
+      ...emptyLedgerWatchdog(),
+      available: true,
+      unclassified_repeats: 1,
+      rules_not_taking: [{
+        lesson_ids: [197, 223, 226, 241, 245, 260],
+        thesis_id: EARNINGS,
+        summary: 'Monday AM printers keep falling between sheets.',
+        came_back: 5,
+        violations: 4,
+        unclassified: 1,
+        rule_costs: 0,
+        cost_summaries: [],
+        fix_ref: 'PR #208',
+        shipped_at: '2026-11-17T18:36:22Z',
+        status: 'fix_shipped_watching',
+        failed_lesson_id: null,
+      }],
+    };
+    const view = await mount(createElement(BookPanel, { desk: payload, nowIso: '2026-11-20T18:00:00.000Z' }));
+    const line = view.host.querySelector('[data-repeats-need-verdict="1"]');
+    expect(line?.textContent).toBe('1 repeat needs a verdict.');
+    expect(view.host.querySelector('[data-rules-not-taking]')).toBeNull();
+    expect(view.host.querySelector('[data-rule-alarm="true"]')).toBeNull();
+    expect(line?.textContent).not.toContain('unclassified');
+    view.unmount();
+  });
+
   test('a stale earnings sheet is one line on the book, and a current sheet is quiet', async () => {
     const stale = desk();
     stale.watchdog = {

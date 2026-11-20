@@ -16,7 +16,8 @@ not here); --confidence-delta moves from it, and a losing close can never raise 
 --research-lesson-id stamps that lesson on the belief. --lesson-summary with --lesson-type and --cycle-id
 writes the research lesson in the same call. Pass --lineage-role with that summary: violation when the
 rule was broken, confirmation when it held, refinement when the lesson only narrows it, rule_cost when
-the rule was obeyed and the pass left a winner behind. Omit the id and
+the rule was obeyed and the pass left a winner behind. The flag is required when the summary names an
+older lesson (`lesson 240`). Omit the id and
 the summary and the ledger links the one lesson for this close
 when it is unambiguous. --dry-run runs the same checks and arithmetic in the database (dry_run: true) and
 prints the result; no write.
@@ -27,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +36,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 STEWARDS = ("bandit", "oddsborne", "quantanamo")
+_CITES_OLDER_LESSON = re.compile(r"\blessons?\s+\d+", re.IGNORECASE)
 
 
 def steward_from_path(path: str = _HERE) -> str | None:
@@ -101,6 +104,8 @@ def main(argv=None) -> int:
         ap.error("--lesson-summary needs --lesson-type and --cycle-id")
     if a.lineage_role and not a.lesson_summary:
         ap.error("--lineage-role needs --lesson-summary")
+    if a.lesson_summary and _CITES_OLDER_LESSON.search(a.lesson_summary) and not a.lineage_role:
+        ap.error("--lesson-summary names an older lesson, so --lineage-role is required: violation, confirmation, refinement, or rule_cost")
     if a.new_confidence is not None and not (1 <= a.new_confidence <= 100):
         ap.error("--new-confidence is on the 1-100 scale")
     from steward_rpc import RpcError, call, dumps

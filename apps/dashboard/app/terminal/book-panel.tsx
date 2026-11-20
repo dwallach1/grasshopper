@@ -24,6 +24,7 @@ import {
   earningsSheetStaleLine,
   ontologyFreshnessLine,
   researchIdSequenceLine,
+  repeatsNeedVerdictLine,
   ruleNotTakingIsAlarm,
   ruleNotTakingStatusLine,
   type RuleNotTaking,
@@ -127,14 +128,19 @@ function RulesNotTakingList({
   thesisName,
   thesisId,
   withSummary = false,
+  unclassifiedRepeats,
 }: {
   rows: readonly RuleNotTaking[];
   thesisName: (thesisId: string) => string;
   thesisId?: string;
   withSummary?: boolean;
+  unclassifiedRepeats?: number | null;
 }) {
   const shown = thesisId ? rows.filter((row) => row.thesis_id === thesisId) : rows;
-  if (!shown.length) return null;
+  const fromShown = shown.reduce((sum, row) => sum + (row.unclassified ?? 0), 0);
+  const verdicts = thesisId || unclassifiedRepeats == null ? fromShown : unclassifiedRepeats;
+  const verdictLine = repeatsNeedVerdictLine(verdicts);
+  if (!shown.length && !verdictLine) return null;
   const alarm = shown.filter((row) => ruleNotTakingIsAlarm(row.status));
   const costing = shown.filter((row) => row.status === 'costing');
   const calm = shown.filter((row) => !ruleNotTakingIsAlarm(row.status) && row.status !== 'costing');
@@ -157,6 +163,9 @@ function RulesNotTakingList({
           <p className="books-section-label">Checked again</p>
           <RuleChainItems rows={calm} thesisName={thesisName} withSummary={withSummary} />
         </section>
+      ) : null}
+      {verdictLine ? (
+        <p className="thesis-lede" data-repeats-need-verdict={verdicts}>{verdictLine}</p>
       ) : null}
     </>
   );
@@ -284,7 +293,11 @@ export function BookPanel({
           {sheetLine ? (
             <p className="thesis-lede" data-earnings-sheet="stale">{sheetLine}</p>
           ) : null}
-          <RulesNotTakingList rows={rulesNotTaking} thesisName={(id) => thesisPlainName(desk, id)} />
+          <RulesNotTakingList
+            rows={rulesNotTaking}
+            thesisName={(id) => thesisPlainName(desk, id)}
+            unclassifiedRepeats={desk.watchdog?.unclassified_repeats}
+          />
         </header>
         {books.sections.map((section) => (
           <StewardSection

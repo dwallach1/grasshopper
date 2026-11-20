@@ -226,3 +226,61 @@ describe('research lesson rule cost', () => {
     }
   });
 });
+
+describe('unclassified lesson repeats', () => {
+  const schema = join(root, 'supabase/schemas/104_unclassified_lesson_repeats.sql');
+  const migration = join(root, 'supabase/migrations/20261120213000_unclassified_lesson_repeats.sql');
+
+  test('a blank repeat role is unclassified, and a new link needs a role', () => {
+    const sql = readFileSync(schema, 'utf8');
+    expect(readFileSync(migration, 'utf8')).toBe(sql);
+    expect(sql).toContain("end,\n             'unclassified'\n           ) as role");
+    expect(sql).not.toContain("end,\n             'violation'\n           ) as role");
+    expect(sql).toContain('A null or unknown lineage_role is unclassified');
+    expect(sql).not.toContain('read as a violation on purpose');
+    expect(sql).toContain("'unclassified', (");
+    expect(sql).toContain("and r.role = 'unclassified'");
+    expect(sql).toContain('as unclassified_repeats');
+    expect(sql).toContain("and r.role <> 'unclassified'");
+    expect(sql).toContain("and r.role = 'violation'");
+    expect(sql).toContain("and r.role = 'rule_cost'");
+    expect(sql).toContain("then 'costing'");
+    expect(sql).toContain("when fx.shipped_at is null then 'not_taking'");
+    expect(sql).toContain("'fix_shipped_watching'");
+    expect(sql).toContain("else 'fix_failed'");
+    expect(sql).toContain('where id in (275, 276)');
+    expect(sql).toContain('260 stays null');
+    expect(sql).not.toContain("where id in (275, 276, 260)");
+    expect(sql).toContain('private.guard_research_lesson_repeat');
+    expect(sql).toContain('research_lesson_repeats_require_lineage_role');
+    expect(sql).toContain('a lesson that cites an older lesson needs lineage_role (violation, confirmation, refinement, or rule_cost)');
+    expect(sql).toContain('if new.lineage_role is null');
+    expect(sql).toContain('v_lineage_role := private.lesson_lineage_role(v_lesson_summary)');
+    expect(sql).toContain('to_regclass(\'public.v_ledger_watchdog_base\')');
+    expect(sql).toContain('CI does not apply it');
+    expect(sql).toContain('does not make /api/health not-ok');
+    expect(sql).not.toMatch(/update\s+public\.belief_updates/i);
+    expect(sql).not.toMatch(/set\s+incorporated/i);
+    for (const helper of ['link_research_lesson_repeats()', 'guard_research_lesson_repeat()']) {
+      expect(sql).toContain(`revoke execute on function private.${helper} from oddsborne_worker, bandit_worker;`);
+      const grant = sql.match(new RegExp(`grant execute on function private\\.${helper.replace(/[()]/g, '\\$&')}[\\s\\S]*?;`, 'i'));
+      expect(grant?.[0]).toContain('quantanamo_worker');
+      expect(grant?.[0]).toContain('service_role');
+      expect(grant?.[0]).not.toContain('oddsborne_worker');
+      expect(grant?.[0]).not.toContain('bandit_worker');
+      expect(grant?.[0]).not.toContain('desk_public_reader');
+      expect(grant?.[0]).not.toContain('anon');
+    }
+    const grants = [...sql.matchAll(/^grant\b[^;]*;/gim)].map((match) => match[0]);
+    expect(grants.length).toBeGreaterThan(0);
+    for (const grant of grants) {
+      if (/v_ledger_watchdog\b/.test(grant) && /desk_public_reader/.test(grant)) {
+        expect(grant).toMatch(/\bselect\b/i);
+        expect(grant).not.toMatch(/\b(insert|update|delete|all)\b/i);
+      }
+      if (/oddsborne_worker|bandit_worker/.test(grant)) {
+        expect(grant).toContain('steward_close_lesson');
+      }
+    }
+  });
+});
