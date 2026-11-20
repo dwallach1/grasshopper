@@ -148,7 +148,7 @@ Set `research_lessons.lineage_role` on the insert. It is one of four words:
 | `refinement` | The lesson narrows or conditions the rule. It does not say the rule was broken. |
 | `rule_cost` | The rule was obeyed, and the pass left a qualified winner behind. "The pass was correct", "correctly passed". |
 
-Name the older lesson in the summary (`lesson 240`, `lessons 226/241`) so the chain stays attached. Leave `lineage_role` empty only when the lesson does not take a side. The text fills a clear phrase. A lesson left empty is still read as a break: that is intentional, so an unclassified repeat stays an alarm. Set the column rather than relying on the text. `rule_cost` is not a break. A chain whose later lessons are only that cost is a review of a rule that is keeping winners out, not an enforcement alarm.
+Name the older lesson in the summary (`lesson 240`, `lessons 226/241`) so the chain stays attached. When the summary names an older lesson, set `lineage_role` to one of those four words. The text fills a clear phrase (`the rule stands`, `correctly passed`). A citation with no role is refused, so a new repeat cannot be saved blank. Leave the column empty only when the lesson cites no older lesson. A blank role already stored is unclassified: it is not a break, and it does not by itself mark the chain as not taking. `rule_cost` is not a break. A chain whose later lessons are only that cost is a review of a rule that is keeping winners out, not an enforcement alarm.
 
 ```sql
 insert into public.research_lessons (

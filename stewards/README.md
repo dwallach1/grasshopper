@@ -194,7 +194,7 @@ select public.steward_close_lesson(jsonb_build_object('steward', 'quantanamo',
   'meta', jsonb_build_object('research_lesson_ids', jsonb_build_array(111))));
 ```
 
-`lineage_role` is `violation` when the close broke an incorporated rule, `confirmation` when the rule held, `refinement` when the lesson only narrows the rule, or `rule_cost` when the rule was obeyed and the pass left a qualified winner behind. Omit it when the close does not take a side. A lesson left empty is still read as a break. Name the older lesson in the summary (`lesson 240`). `close_lesson.py --lineage-role rule_cost` sends the same word. See `docs/playbook-rules.md`.
+`lineage_role` is `violation` when the close broke an incorporated rule, `confirmation` when the rule held, `refinement` when the lesson only narrows the rule, or `rule_cost` when the rule was obeyed and the pass left a qualified winner behind. Pass it whenever the summary names an older lesson (`lesson 240`). `close_lesson.py` refuses that summary without `--lineage-role`. Omit the word only when the close cites no older lesson. A blank role already stored is unclassified, not a break. `close_lesson.py --lineage-role rule_cost` sends the same word. See `docs/playbook-rules.md`.
 
 Over HTTPS, steward-rpc allowlists `steward_close_lesson` for `quantanamo_worker` (`{"fn": "steward_close_lesson", "args": {...}}`), and `close_lesson.py --steward quantanamo ...` works from either steward dir with `QUANTANAMO_WORKER_DB_PASSWORD` in the environment (stdlib only, any `python3`).
 

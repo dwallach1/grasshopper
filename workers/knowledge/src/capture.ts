@@ -8,6 +8,11 @@ const NonEmpty = (max: number) => z.string().trim().min(1).max(max);
 const Score = (minimum = 0, maximum = 100) => z.number().min(minimum).max(maximum);
 const OptionalString = z.union([z.string(), z.number(), z.boolean(), z.null()]).optional();
 
+/** True when a summary names an older lesson and the writer did not set a role. */
+export function repeatNeedsLineageRole(summary: string, lineageRole: string | null | undefined): boolean {
+  return /\blessons?\s+\d+/i.test(summary) && !lineageRole;
+}
+
 export const CaptureSchema = z.discriminatedUnion('operation', [
   z.object({
     operation: z.literal('thesis_view'),
@@ -146,6 +151,9 @@ export async function captureResearch(database: Database, input: Capture): Promi
       return { operation: input.operation, key };
     }
     case 'lesson': {
+      if (repeatNeedsLineageRole(input.summary, input.lineage_role)) {
+        throw new Error('a lesson that cites an older lesson needs lineage_role: violation, confirmation, refinement, or rule_cost');
+      }
       const cycle = await database.query<{ id: number }>(
         'select id from research_cycles where external_key=$1',
         [input.cycle_key],

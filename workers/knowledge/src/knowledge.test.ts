@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { bookmarkFromUnknown, asSmallint, claimRowsForPersist } from './bookmarks';
-import { CaptureSchema } from './capture';
+import { CaptureSchema, repeatNeedsLineageRole } from './capture';
 import {
   parseClaimInvestigation,
   shouldInvestigateClaim,
@@ -105,6 +105,9 @@ describe('worker knowledge primitives', () => {
       summary: 'The rule stood.',
       lineage_role: 'holding',
     })).toThrow();
+    expect(repeatNeedsLineageRole('No re-entry of KKR today (lesson 233).', null)).toBe(true);
+    expect(repeatNeedsLineageRole('No re-entry of KKR today (lesson 233).', 'confirmation')).toBe(false);
+    expect(repeatNeedsLineageRole('The rule stands.', undefined)).toBe(false);
     expect(() => CaptureSchema.parse({ operation: 'thesis_view', thesis_id: 'power' })).toThrow();
   });
 

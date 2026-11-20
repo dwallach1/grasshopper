@@ -16,6 +16,7 @@ import {
   ontologyFreshnessLine,
   replayActionableBreachChecks,
   researchIdSequenceLine,
+  repeatsNeedVerdictLine,
   ruleNotTakingIsAlarm,
   ruleNotTakingLead,
   ruleNotTakingStatusLine,
@@ -907,6 +908,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
     const chain = {
       ...open,
       violations: 0,
+      unclassified: 0,
       rule_costs: 0,
       cost_summaries: [],
       fix_ref: null,
@@ -920,6 +922,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'AAON was again outside the screened universe.',
       came_back: 4,
       violations: 4,
+      unclassified: 0,
       rule_costs: 0,
       cost_summaries: [],
       fix_ref: 'PR #204',
@@ -933,6 +936,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'The last earnings-hold slot went to a below-gate name.',
       came_back: 3,
       violations: 1,
+      unclassified: 0,
       rule_costs: 0,
       cost_summaries: [],
       fix_ref: 'PR #10',
@@ -946,6 +950,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'The pass-after-open rule stands.',
       came_back: 5,
       violations: 1,
+      unclassified: 0,
       rule_costs: 0,
       cost_summaries: [],
       fix_ref: null,
@@ -959,6 +964,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: 'Beat-fade in a weak tape is sector-specific.',
       came_back: 2,
       violations: 0,
+      unclassified: 0,
       rule_costs: 0,
       cost_summaries: [],
       fix_ref: null,
@@ -974,6 +980,7 @@ describe('10/8 NBIS and CODA breach replay', () => {
       summary: acm,
       came_back: 4,
       violations: 1,
+      unclassified: 0,
       rule_costs: 3,
       cost_summaries: [stn, acm],
       fix_ref: null,
@@ -1039,6 +1046,21 @@ describe('10/8 NBIS and CODA breach replay', () => {
     expect(ruleNotTakingIsAlarm('refining')).toBe(false);
     expect(ruleNotTakingIsAlarm('fix_shipped_watching')).toBe(false);
     expect(ruleNotTakingIsAlarm('costing')).toBe(false);
+    expect(repeatsNeedVerdictLine(0)).toBeNull();
+    expect(repeatsNeedVerdictLine(1)).toBe('1 repeat needs a verdict.');
+    expect(repeatsNeedVerdictLine(2)).toBe('2 repeats need a verdict.');
+    const withBlank = mapLedgerWatchdog({
+      summary: [{
+        unclassified_repeats: 2,
+        rules_not_taking: [{ ...holding, unclassified: 2, lesson_ids: [156, 233, 275] }],
+      }],
+    });
+    expect(withBlank.unclassified_repeats).toBe(2);
+    expect(withBlank.rules_not_taking?.[0]?.unclassified).toBe(2);
+    expect(watchdogHealthSummary(withBlank).unclassified_repeats).toBe(2);
+    expect(mapLedgerWatchdog({
+      summary: [{ rules_not_taking: [{ ...holding, unclassified: -1 }] }],
+    }).rules_not_taking).toEqual([]);
     expect(ruleNotTakingStatusLine({ came_back: 4 }, ''))
       .toBe('Still not taking: taught 4 times, no fix yet.');
     const health = watchdogHealthSummary(mapped);

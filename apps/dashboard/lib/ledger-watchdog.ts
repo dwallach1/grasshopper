@@ -216,7 +216,8 @@ export type RuleNotTakingStatus =
  * `lesson_ids` is the chain, oldest first. `summary` is the newest lesson.
  * `came_back` is how many lessons followed the first.
  * `violations` is how many of those broke the rule. A lesson with no role is
- * counted here on purpose: an unclassified repeat is still a break.
+ * `unclassified`: it is not a break, and it does not by itself mark the chain
+ * not taking.
  * `rule_costs` is how many later lessons say the rule was followed and the
  * pass left a winner behind. `cost_summaries` are those lesson texts.
  * `fix_ref` and `shipped_at` are null when no fix is recorded.
@@ -230,6 +231,8 @@ export type RuleNotTaking = {
   summary: string;
   came_back: number;
   violations: number;
+  /** Later lessons with no role. Not a break. */
+  unclassified: number;
   rule_costs: number;
   cost_summaries: string[];
   fix_ref: string | null;
@@ -278,6 +281,17 @@ export function earningsSheetStaleLine(row: EarningsSheetStale | null): string |
   if (day) return `The earnings sheet is stale. Last sheet ${day}.`;
   if (missedText) return `The earnings sheet is stale. ${missedText}`;
   return 'The earnings sheet has no row for the latest entry session.';
+}
+
+/**
+ * "2 repeats need a verdict." Absent when none are waiting.
+ * A blank role is not a break. The line stays quiet.
+ */
+export function repeatsNeedVerdictLine(count: number | null | undefined): string | null {
+  if (count === null || count === undefined || !Number.isFinite(count)) return null;
+  const n = Math.trunc(count);
+  if (n < 1) return null;
+  return n === 1 ? '1 repeat needs a verdict.' : `${n} repeats need a verdict.`;
 }
 
 /** "Came back 3 times." Absent when this lesson was not cited again. */
@@ -540,6 +554,11 @@ export type LedgerWatchdog = {
    */
   rules_not_taking: RuleNotTaking[] | null;
   /**
+   * Repeats in those chains whose role was left blank. Null when the column
+   * is absent. Not a break. Does not change `ok` on /api/health.
+   */
+  unclassified_repeats: number | null;
+  /**
    * How many times each lesson was cited again. Null when the column is absent.
    * Does not change `ok` on /api/health.
    */
@@ -580,6 +599,7 @@ export function emptyLedgerWatchdog(): LedgerWatchdog {
     learning_stalls: null,
     research_id_sequences: null,
     rules_not_taking: null,
+    unclassified_repeats: null,
     lesson_came_back: null,
     earnings_sheet_stale: null,
     breaches: [],
@@ -848,6 +868,9 @@ export function mapLedgerWatchdog(raw: unknown): LedgerWatchdog {
     rules_not_taking: summary.rules_not_taking === undefined
       ? null
       : rulesNotTaking(summary.rules_not_taking),
+    unclassified_repeats: summary.unclassified_repeats === undefined
+      ? null
+      : optionalCount(summary.unclassified_repeats),
     lesson_came_back: summary.lesson_came_back === undefined
       ? null
       : lessonCameBack(summary.lesson_came_back),
@@ -1106,6 +1129,11 @@ export function watchdogHealthSummary(
    */
   rules_not_taking: RuleNotTaking[];
   /**
+   * Repeats in those chains whose role was left blank. Null when the column
+   * is absent. Not a break. Does not change `ok`.
+   */
+  unclassified_repeats: number | null;
+  /**
    * Earnings sheet missing for the latest entry session. Null when the column
    * is absent. Does not change `ok`.
    */
@@ -1144,12 +1172,14 @@ export function watchdogHealthSummary(
       }
       : null,
     research_id_sequence_line: researchIdSequenceLine(w.research_id_sequences),
+    unclassified_repeats: w.unclassified_repeats,
     rules_not_taking: (w.rules_not_taking ?? []).map((row) => ({
       lesson_ids: [...row.lesson_ids],
       thesis_id: row.thesis_id,
       summary: row.summary,
       came_back: row.came_back,
       violations: row.violations ?? 0,
+      unclassified: row.unclassified ?? 0,
       rule_costs: row.rule_costs ?? 0,
       cost_summaries: [...(row.cost_summaries ?? [])],
       fix_ref: row.fix_ref ?? null,
@@ -1252,16 +1282,20 @@ function rulesNotTaking(value: unknown): RuleNotTaking[] | null {
     const violations = bag.violations === undefined || bag.violations === null || bag.violations === ''
       ? 0
       : optionalCount(bag.violations);
+    const unclassified = bag.unclassified === undefined || bag.unclassified === null || bag.unclassified === ''
+      ? 0
+      : optionalCount(bag.unclassified);
     const ruleCosts = bag.rule_costs === undefined || bag.rule_costs === null || bag.rule_costs === ''
       ? 0
       : optionalCount(bag.rule_costs);
-    if (violations === null || violations < 0 || ruleCosts === null || ruleCosts < 0) continue;
+    if (violations === null || violations < 0 || unclassified === null || unclassified < 0 || ruleCosts === null || ruleCosts < 0) continue;
     out.push({
       lesson_ids: lessonIds,
       thesis_id: thesisId,
       summary,
       came_back: cameBack,
       violations,
+      unclassified,
       rule_costs: ruleCosts,
       cost_summaries: stringList(bag.cost_summaries),
       fix_ref: str(bag.fix_ref),
