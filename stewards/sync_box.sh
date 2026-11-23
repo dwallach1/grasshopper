@@ -76,6 +76,7 @@ else
     "$here/quantanamo/pass_marks.py:$box/quantanamo/pass_marks.py"
     "$here/quantanamo/earnings_implied.py:$box/quantanamo/earnings_implied.py"
     "$here/quantanamo/earnings_sheet.py:$box/quantanamo/earnings_sheet.py"
+    "$here/quantanamo/symbol_sectors.py:$box/quantanamo/symbol_sectors.py"
     "$here/quantanamo/steward_rpc.py:$box/quantanamo/steward_rpc.py"
     "$here/quantanamo/requirements.txt:$box/quantanamo/requirements.txt"
   )

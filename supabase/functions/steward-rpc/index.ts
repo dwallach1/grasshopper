@@ -55,6 +55,10 @@ const ALLOWED: Record<string, ReadonlySet<string>> = {
     // full-calendar earnings sheet (supabase/schemas/98_earnings_sheet_coverage.sql; earnings_sheet.py)
     'steward_symbols_present',
     'steward_write_earnings_sheet',
+    // company-facts sectors for the ontology proposer (supabase/schemas/105_ontology_sector_membership.sql)
+    'symbol_sector_gaps',
+    'symbol_sector_vault',
+    'upsert_symbol_sector',
   ]),
   oddsborne_worker: new Set([
     'steward_entry_guidance',

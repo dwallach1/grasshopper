@@ -92,3 +92,15 @@ A beat is a reported EPS greater than that quarter's estimate. `beat_history_6of
 `rank` prints the `research_queue` row (priority 1, source `earnings_sheet`) and `select public.steward_write_earnings_sheet(...)`. `--execute` writes it, marks the previous open `earnings_sheet` row done, and inserts any ranked symbol that is not in `public.symbols` (`status` `candidate`, mention counts left at 0). The topic line carries the 6/6 count and how many ranked names were outside `public.symbols`.
 
 `select * from public.v_earnings_sheet_coverage` is that latest row's counts. `outside_symbols` is null when the coverage line has no number. The view is empty when this script has not written a sheet. It does not change `/api/health`.
+
+## Sector rows for the ontology proposer
+
+`symbol_sectors.py` writes `public.symbol_sectors` from Financial Datasets `GET /company/facts` (header `X-API-KEY`, key `FINANCIAL_DATASETS_API_KEY`). Apply migration `20261123190000_ontology_sector_membership.sql` first. A company.facts row already in `financial_records` is upserted before another request is bought. A 200 with no sector, or a 404, stores `skip_reason = no_sector`. A missing key or HTTP 401/402/429/5xx stores nothing for that ticker.
+
+```bash
+bash /workspace/grasshopper/stewards/sync_box.sh
+/workspace/quantanamo/.venv/bin/python /workspace/quantanamo/symbol_sectors.py --dry-run
+/workspace/quantanamo/.venv/bin/python /workspace/quantanamo/symbol_sectors.py
+```
+
+Then `select public.propose_ontology_candidates();`. Names with a sector become `<sector theme>:<SYMBOL>` candidates. Names without one show up as `no_sector` on that run.
