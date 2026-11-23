@@ -54,13 +54,13 @@ alter table public.symbol_sectors enable row level security;
 
 revoke all on table public.symbol_sectors from public, anon, oddsborne_worker, bandit_worker;
 grant select on table public.symbol_sectors
-  to authenticated, quantanamo_worker, desk_public_reader, service_role;
+  to authenticated, quantanamo_worker, service_role;
 grant insert, update on table public.symbol_sectors
   to quantanamo_worker, service_role;
 
 drop policy if exists symbol_sectors_read on public.symbol_sectors;
 create policy symbol_sectors_read on public.symbol_sectors
-  for select to authenticated, quantanamo_worker, desk_public_reader
+  for select to authenticated, quantanamo_worker
   using (true);
 
 drop policy if exists symbol_sectors_write on public.symbol_sectors;

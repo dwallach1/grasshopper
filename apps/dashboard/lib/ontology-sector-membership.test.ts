@@ -29,6 +29,12 @@ describe('sector membership proposer', () => {
       expect(grant).not.toContain('oddsborne_worker');
       expect(grant).not.toContain('bandit_worker');
       expect(grant).not.toContain(' anon');
+      expect(grant).not.toContain('desk_public_reader');
+    }
+    const policies = [...sql.matchAll(/^create policy\b[\s\S]*?;/gim)].map((match) => match[0]);
+    expect(policies.length).toBeGreaterThan(0);
+    for (const policy of policies) {
+      expect(policy).not.toContain('desk_public_reader');
     }
   });
 });
