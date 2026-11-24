@@ -95,7 +95,7 @@ A beat is a reported EPS greater than that quarter's estimate. `beat_history_6of
 
 ## Sector rows for the ontology proposer
 
-`symbol_sectors.py` writes `public.symbol_sectors` from Financial Datasets `GET /company/facts` (header `X-API-KEY`, key `FINANCIAL_DATASETS_API_KEY`). Apply migration `20261123190000_ontology_sector_membership.sql` first. A company.facts row already in `financial_records` is upserted before another request is bought. A 200 with no sector, or a 404, stores `skip_reason = no_sector`. A missing key or HTTP 401/402/429/5xx stores nothing for that ticker.
+`symbol_sectors.py` writes `public.symbol_sectors` from Financial Datasets `GET /company/facts` (header `X-API-KEY`, key `FINANCIAL_DATASETS_API_KEY`). Apply migration `20261123190000_ontology_sector_membership.sql` first, then `20261124190000_symbol_sector_robinhood_fundamentals.sql`. A company.facts row already in `financial_records` is upserted before another request is bought. A 200 with no sector, or a 404, stores `skip_reason = no_sector`. A missing key or HTTP 401/429/5xx stores nothing for that ticker. HTTP 402 or a credit/balance exhaustion response logs `financialdatasets_credit_exhausted` and exits 0. The operator fallback is `upsert_symbol_sector` with source `robinhood_fundamentals`. A symbol that already has a non-null sector keeps that source.
 
 ```bash
 bash /workspace/grasshopper/stewards/sync_box.sh

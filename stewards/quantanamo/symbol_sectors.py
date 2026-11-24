@@ -12,14 +12,22 @@ Usage (from /workspace/quantanamo, after the sector migration is applied):
   .venv/bin/python symbol_sectors.py --dry-run  # print what would be written; no upsert
 
 A 200 with no sector, or a 404, stores skip_reason no_sector. A missing key, a
-timeout, or HTTP 401/402/429/5xx stores nothing for that ticker: the next run
-tries again. The key is never printed.
+timeout, or HTTP 401/429/5xx stores nothing for that ticker: the next run
+tries again. HTTP 402, or another credit/balance exhaustion response, logs
+skip financialdatasets_credit_exhausted and exits 0. Tickers that call did
+not finish are not stored. The key is never printed.
+
+The operator fallback, when this provider has no balance, is source
+robinhood_fundamentals via upsert_symbol_sector. This script does not call
+Robinhood. A symbol that already has a non-null sector from the other source
+keeps that taxonomy; the RPC returns skip kept_existing_source.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -33,6 +41,43 @@ DEFAULT_SECRETS_FILE = "/home/box/sand-data/box-secrets.json"
 
 class SourceError(RuntimeError):
     """The company-facts call did not return a usable payload. Not a sector."""
+
+
+class CreditExhausted(SourceError):
+    """Prepaid balance or HTTP 402. The run skips the provider. Not a sector."""
+
+
+_CREDIT_MARKERS = (
+    "insufficient credit",
+    "insufficient balance",
+    "not enough credit",
+    "out of credit",
+    "no credits",
+    "credit balance",
+    "prepaid balance",
+    "payment required",
+    "credits exhausted",
+    "balance exhausted",
+    "exceeded your credit",
+    "quota exceeded",
+)
+
+
+def credit_exhausted(status: int, raw: bytes | str) -> bool:
+    """True for HTTP 402 or an error body that says the prepaid balance is gone.
+
+    A 200 company-facts payload can mention a balance sheet. That is not a refusal.
+    """
+    if status == 402:
+        return True
+    if status < 400:
+        return False
+    if isinstance(raw, bytes):
+        text = raw.decode("utf-8", errors="replace")
+    else:
+        text = raw
+    folded = text.lower()
+    return any(marker in folded for marker in _CREDIT_MARKERS)
 
 
 def _api_key() -> str | None:
@@ -90,10 +135,12 @@ def sector_from_payload(body: object, symbol: str) -> dict:
 
 
 def classify_http(status: int) -> str:
-    """'none' stores no_sector. 'retry' stores nothing. Anything else is a hard error."""
+    """'none' stores no_sector. 'credit' skips the run. 'retry' stores nothing for that ticker."""
     if status == 404:
         return "none"
-    if status in (401, 402, 429, 500, 502, 503, 504) or status >= 500:
+    if status == 402:
+        return "credit"
+    if status in (401, 429, 500, 502, 503, 504) or status >= 500:
         return "retry"
     if status == 200:
         return "ok"
@@ -120,6 +167,8 @@ def fetch_facts(symbol: str, api_key: str) -> dict:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise SourceError(f"{type(exc).__name__}: {str(exc)[:200]}") from None
     kind = classify_http(status)
+    if kind == "credit" or credit_exhausted(status, raw):
+        raise CreditExhausted(f"financial datasets prepaid balance exhausted (HTTP {status})")
     if kind == "none":
         return {"symbol": symbol.upper(), "sector": None, "industry": None, "source": SOURCE}
     if kind == "retry":
@@ -181,9 +230,16 @@ def populate(caller, api_key: str | None, *, dry_run: bool = False, limit: int |
             "retry": sorted(wanted),
             "error": "FINANCIAL_DATASETS_API_KEY not set",
         }
-    for symbol in sorted(wanted):
+    pending = sorted(wanted)
+    credit = None
+    unfetched: list[str] = []
+    for index, symbol in enumerate(pending):
         try:
             args = fetch_facts(symbol, api_key or "")
+        except CreditExhausted as exc:
+            credit = str(exc)[:300]
+            unfetched = pending[index:]
+            break
         except SourceError as exc:
             retried.append({"symbol": symbol, "error": str(exc)[:200]})
             continue
@@ -194,7 +250,15 @@ def populate(caller, api_key: str | None, *, dry_run: bool = False, limit: int |
         wrote.append({"symbol": symbol, "via": "api", **result})
         if result.get("skip_reason") == "no_sector":
             skipped.append(symbol)
-    return {"ok": not retried, "wrote": len(wrote), "no_sector": skipped, "retry": retried, "rows": wrote}
+    report = {"ok": not retried, "wrote": len(wrote), "no_sector": skipped, "retry": retried, "rows": wrote}
+    if credit:
+        # The provider is out of balance. That is a skip, not a failed ticker.
+        report["skip"] = "financialdatasets_credit_exhausted"
+        report["skip_reason"] = credit
+        report["unfetched"] = unfetched
+        if not retried:
+            report["ok"] = True
+    return report
 
 
 def main() -> None:
@@ -203,6 +267,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="cap tickers this run")
     args = parser.parse_args()
     report = populate(_default_caller, _api_key(), dry_run=args.dry_run, limit=args.limit)
+    if report.get("skip") == "financialdatasets_credit_exhausted":
+        print(
+            f"skip {report['skip']}: {report.get('skip_reason', '')}",
+            file=sys.stderr,
+        )
     print(json.dumps(report, default=str))
     if not report.get("ok", True):
         raise SystemExit(1)
