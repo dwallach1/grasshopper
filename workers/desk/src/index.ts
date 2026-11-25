@@ -1,4 +1,5 @@
 import { DESK_API_HEADERS, handleDeskApi } from './desk-api';
+import { errorFields } from './desk-live';
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
@@ -25,9 +26,11 @@ export default {
     try {
       return await handleDeskApi(request, env, undefined, ctx);
     } catch (error) {
+      const fields = errorFields(error);
       console.error(JSON.stringify({
         event: 'desk_worker_error',
-        error: error instanceof Error ? error.message : 'unknown',
+        error: fields.error,
+        name: fields.name,
       }));
       return new Response(JSON.stringify({ error: 'Desk ledger unavailable' }), {
         status: 503,

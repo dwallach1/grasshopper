@@ -209,6 +209,42 @@ async function restGet(query: string, optional = false): Promise<unknown[]> {
   return Array.isArray(body) ? body : [];
 }
 
+/**
+ * One required table may 500/504. That section becomes [] and a note.
+ * A second failure still fails the bundle so an outage is not an empty desk.
+ */
+async function restGetNoted(query: string, failures: string[]): Promise<unknown[]> {
+  try {
+    return await restGet(query);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown';
+    failures.push(message);
+    console.error(JSON.stringify({
+      event: 'desk_public_rest_section_failed',
+      error: message,
+    }));
+    return [];
+  }
+}
+
+/** First failure string per table. Two queries against one table count once. */
+function failedTables(failures: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const notes: string[] = [];
+  for (const failure of failures) {
+    const table = failure.split(':')[0] || failure;
+    if (seen.has(table)) continue;
+    seen.add(table);
+    notes.push(failure);
+  }
+  return notes;
+}
+
+function refuseManySectionFailures(failures: readonly string[]): void {
+  const notes = failedTables(failures);
+  if (notes.length > 1) throw new Error(notes.join(','));
+}
+
 async function objectFrom(pairs: Array<[string, string]>, optional = true): Promise<Record<string, unknown[]>> {
   const entries = await Promise.all(pairs.map(async ([key, query]) => [key, await restGet(query, optional)] as const));
   return Object.fromEntries(entries);
@@ -236,10 +272,10 @@ function playbookViewAsBelief(row: unknown): unknown {
 }
 
 /** In-force playbook rules (the view) plus the newest other beliefs. Newest first. */
-async function loadBeliefRows(otherQuery: string): Promise<unknown[]> {
+async function loadBeliefRows(otherQuery: string, failures: string[]): Promise<unknown[]> {
   const [playbook, other] = await Promise.all([
-    restGet(ACTIVE_PLAYBOOK_RULES_QUERY),
-    restGet(otherQuery),
+    restGetNoted(ACTIVE_PLAYBOOK_RULES_QUERY, failures),
+    restGetNoted(otherQuery, failures),
   ]);
   const shaped = playbook.map(playbookViewAsBelief);
   return [...shaped, ...other].sort((a, b) => {
@@ -313,30 +349,38 @@ function publicMeme(since: string): Array<[string, string]> {
  * The start row is `pnl_start`, not another point on the liveline.
  * Account snapshots still skip the inception read when their own window is short.
  */
-async function pnlWindow(table: 'pm_pnl' | 'meme_pnl', cols: string, limit: number): Promise<{ pnl: unknown[]; pnl_start: unknown | null }> {
+async function pnlWindow(
+  table: 'pm_pnl' | 'meme_pnl',
+  cols: string,
+  limit: number,
+  failures: string[],
+): Promise<{ pnl: unknown[]; pnl_start: unknown | null }> {
   const [latest, first] = await Promise.all([
-    restGet(`${table}?select=${cols}&order=as_of.desc,id.desc&limit=${limit}`),
-    restGet(`${table}?select=${cols}&order=as_of.asc,id.asc&limit=1`),
+    restGetNoted(`${table}?select=${cols}&order=as_of.desc,id.desc&limit=${limit}`, failures),
+    restGetNoted(`${table}?select=${cols}&order=as_of.asc,id.asc&limit=1`, failures),
   ]);
   return attachPnlStart(latest, first[0] ?? null, limit);
 }
 
-async function publicAccountWindow(): Promise<{ accountLatest: unknown[]; accountFirst: unknown[] }> {
-  const latest = await restGet(
+async function publicAccountWindow(failures: string[]): Promise<{ accountLatest: unknown[]; accountFirst: unknown[] }> {
+  const latest = await restGetNoted(
     `account_snapshots?select=${ACCOUNT_COLS}&${AGENTIC_FILTER}&order=observed_at.desc,id.desc&limit=${PUBLIC_ACCOUNT_LIMIT}`,
+    failures,
   );
   if (latest.length < PUBLIC_ACCOUNT_LIMIT) {
     const oldest = latest.length ? latest[latest.length - 1] : null;
     return { accountLatest: latest, accountFirst: oldest ? [oldest] : [] };
   }
-  const first = await restGet(
+  const first = await restGetNoted(
     `account_snapshots?select=${ACCOUNT_COLS}&${AGENTIC_FILTER}&order=observed_at.asc,id.asc&limit=1`,
+    failures,
   );
   return { accountLatest: latest, accountFirst: first };
 }
 
-async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
+export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
   try {
+    const failures: string[] = [];
     const since = mode === 'public' ? new Date(Date.now() - PUBLIC_RECENT_MS).toISOString() : '';
     const tables = (mode === 'public'
       ? REQUIRED.filter(([key]) =>
@@ -363,21 +407,22 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const pmPnlCols = mode === 'public' ? PM_PNL_PUBLIC_COLS : PM_PNL_COLS;
     const memePnlCols = mode === 'public' ? MEME_PNL_PUBLIC_COLS : MEME_PNL_COLS;
     const [required, beliefRows, pmRaw, memeRaw, team, accounts, pmPnl, memePnl, scorecard, watchdog, summaries, earnings, lessonWaits, shadows] = await Promise.all([
-      Promise.all(tables.map(async ([key, query]) => [key, await restGet(query)] as const)),
-      loadBeliefRows(OTHER_BELIEFS_QUERY),
+      Promise.all(tables.map(async ([key, query]) => [key, await restGetNoted(query, failures)] as const)),
+      loadBeliefRows(OTHER_BELIEFS_QUERY, failures),
       objectFrom(mode === 'public' ? publicPm(since) : PM),
       objectFrom(mode === 'public' ? publicMeme(since) : MEME),
       objectFrom(TEAM),
-      mode === 'public' ? publicAccountWindow() : Promise.resolve(null),
-      pnlWindow('pm_pnl', pmPnlCols, pnlLimit),
-      pnlWindow('meme_pnl', memePnlCols, pnlLimit),
+      mode === 'public' ? publicAccountWindow(failures) : Promise.resolve(null),
+      pnlWindow('pm_pnl', pmPnlCols, pnlLimit, failures),
+      pnlWindow('meme_pnl', memePnlCols, pnlLimit, failures),
       objectFrom(SCORECARD),
       objectFrom(WATCHDOG),
-      mode === 'public' ? restGet(PUBLIC_SUMMARY_QUERY) : Promise.resolve([]),
+      mode === 'public' ? restGetNoted(PUBLIC_SUMMARY_QUERY, failures) : Promise.resolve([]),
       restGet(EARNINGS_QUERY, true),
       restGet(LESSON_WAITS_QUERY, true),
       restGet(SHADOWS_QUERY, true),
     ]);
+    refuseManySectionFailures(failures);
     const body: Record<string, unknown> = Object.fromEntries(required);
     body.beliefs = beliefRows;
     let pm: Record<string, unknown> = { ...pmRaw, pnl: pmPnl.pnl, pnl_start: pmPnl.pnl_start };
@@ -395,12 +440,13 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       const cycleIds = [...new Set(projected.map((row) => Number(row.cycle_id)).filter((id) => Number.isFinite(id) && id > 0))];
       const [cycles, scenarios] = await Promise.all([
         cycleIds.length
-          ? restGet(`research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&id=in.(${cycleIds.join(',')})`)
+          ? restGetNoted(`research_cycles?select=id,external_key,thesis_id,hypothesis,preregistered_outcome,preregistered_at,stage,status,iteration,market_regime&id=in.(${cycleIds.join(',')})`, failures)
           : Promise.resolve([]),
         testIds.length
-          ? restGet(`test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&test_id=in.(${testIds.join(',')})`)
+          ? restGetNoted(`test_scenarios?select=id,test_id,scenario_key,market_regime,cost_multiplier,outcome,metric_value,breach_type&test_id=in.(${testIds.join(',')})`, failures)
           : Promise.resolve([]),
       ]);
+      refuseManySectionFailures(failures);
       body.cycles = cycles.map((row) => {
         const record = row && typeof row === 'object' && !Array.isArray(row) ? row as Record<string, unknown> : null;
         if (!record) return row;
@@ -415,6 +461,8 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       pm = { ...pm, notes: clipRows(asRows(pm.notes), 'body', PUBLIC_NOTE_BODY) };
       meme = { ...meme, notes: clipRows(asRows(meme.notes), 'body', PUBLIC_NOTE_BODY) };
     }
+    const notes = failedTables(failures);
+    refuseManySectionFailures(failures);
     return Response.json({
       ...body,
       earnings,
@@ -425,6 +473,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       team,
       scorecard,
       watchdog,
+      ...(notes.length === 1 ? { read_notes: notes } : {}),
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error(JSON.stringify({
@@ -436,7 +485,7 @@ async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
   }
 }
 
-Deno.serve(async (req) => {
+async function onRequest(req: Request): Promise<Response> {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
@@ -464,4 +513,8 @@ Deno.serve(async (req) => {
   const contentType = response.headers.get('Content-Type');
   if (contentType) headers.set('Content-Type', contentType);
   return new Response(body, { status: response.status, headers });
-});
+}
+
+if (typeof Deno !== 'undefined' && typeof Deno.serve === 'function') {
+  Deno.serve(onRequest);
+}

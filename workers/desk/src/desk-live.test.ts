@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { coalesceLiveRead, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
+import { coalesceLiveRead, expirePublicDeskLiveCache, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
 
 const localAnon =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
@@ -111,6 +111,66 @@ describe('loadPublicDeskServe', () => {
       expect(autopsy?.last_summary).toBe('No run recorded');
       expect(urls.every((url) => url.includes('/bundle/public'))).toBe(true);
       expect(urls.some((url) => url.includes('/rest/v1/'))).toBe(false);
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('a failed refresh keeps the last good serve and marks it stale', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({
+          runs: [],
+          cloudRuns: [],
+          automations: [],
+          theses: [{
+            id: 'semis_photonics',
+            name: 'AI semiconductor and photonics',
+            summary: 'Second-order compute.',
+            status: 'hardening',
+            confidence: 70,
+            stated_confidence: null,
+            results_confidence: null,
+            time_horizon: 'quarters',
+            stance: 'long',
+            variant_perception: null,
+            falsifier: null,
+            created_at: '2026-09-01T00:00:00.000Z',
+            updated_at: '2026-11-24T00:00:00.000Z',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: 'Desk ledger unavailable' }), { status: 503 });
+    }) as typeof fetch;
+    try {
+      const first = await loadPublicDeskServe(readerEnv);
+      expect(first.stale).toBeUndefined();
+      const desk = JSON.parse(first.json) as { theses: Array<{ id: string }> };
+      expect(desk.theses.map((row) => row.id)).toEqual(['semis_photonics']);
+      expirePublicDeskLiveCache();
+      const second = await loadPublicDeskServe(readerEnv);
+      expect(calls).toBe(2);
+      expect(second.stale).toBe(true);
+      expect(second.json).toBe(first.json);
+      expect(second.generated_at).toBe(first.generated_at);
+      expect(JSON.parse(second.json)).toEqual(JSON.parse(first.json));
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('with no last good serve, a bundle failure still throws', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('{}', { status: 503 })) as typeof fetch;
+    try {
+      await expect(loadPublicDeskServe(readerEnv)).rejects.toThrow('desk_bundle_503');
     } finally {
       globalThis.fetch = original;
       resetPublicDeskLiveCache();

@@ -22,6 +22,8 @@ export type PublicDeskServe = {
   desk: unknown;
   json: string;
   generated_at: string;
+  /** True when this is a previous successful serve, after a fresh read failed. */
+  stale?: boolean;
 };
 
 let liveCache: { at: number; serve: PublicDeskServe } | null = null;
@@ -30,6 +32,18 @@ const liveSlot: { pending: Promise<PublicDeskServe> | null } = { pending: null }
 export function resetPublicDeskLiveCache(): void {
   liveCache = null;
   liveSlot.pending = null;
+}
+
+/** Age the isolate's last good serve so the next read must hit origin. */
+export function expirePublicDeskLiveCache(): void {
+  if (liveCache) liveCache.at = 0;
+}
+
+export function errorFields(error: unknown): { error: string; name: string } {
+  if (error instanceof Error) {
+    return { error: error.message || 'unknown', name: error.name || 'Error' };
+  }
+  return { error: 'unknown', name: 'unknown' };
 }
 
 /**
@@ -112,7 +126,36 @@ export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDes
   return coalesceLiveRead(liveSlot, () => readPublicDeskServe(env));
 }
 
+function lastGoodServe(error: unknown): PublicDeskServe | null {
+  if (!liveCache) return null;
+  const fields = errorFields(error);
+  console.error(JSON.stringify({
+    event: 'desk_live_stale',
+    error: fields.error,
+    name: fields.name,
+    generated_at: liveCache.serve.generated_at,
+  }));
+  return {
+    desk: liveCache.serve.desk,
+    json: liveCache.serve.json,
+    generated_at: liveCache.serve.generated_at,
+    stale: true,
+  };
+}
+
 async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
+  try {
+    const serve = await fetchPublicDeskServe(env);
+    liveCache = { at: Date.now(), serve };
+    return serve;
+  } catch (error) {
+    const stale = lastGoodServe(error);
+    if (stale) return stale;
+    throw error;
+  }
+}
+
+async function fetchPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
   const supabaseUrl = env.DESK_SUPABASE_URL?.trim() || '';
   const apiKey = env.DESK_READER_APIKEY?.trim() || '';
   const accessToken = env.DESK_READER_JWT?.trim() || '';
@@ -141,9 +184,7 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
     throw new Error(`desk_bundle_${response.status}`);
   }
   const raw = await readBoundedJson(response, MAX_SNAPSHOT_BYTES);
-  const serve = assemblePublicBundle(raw);
-  liveCache = { at: Date.now(), serve };
-  return serve;
+  return assemblePublicBundle(raw);
 }
 
 /** Zod-parse a `/bundle/public` body and publish the phone snapshot. */
@@ -193,6 +234,7 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
     earnings?: unknown;
     lesson_waits?: unknown;
     shadows?: unknown;
+    read_notes?: unknown;
   };
   const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
@@ -248,11 +290,20 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
     ...live,
     source: 'postgrest',
   });
+  const notes = readNotes(bag.read_notes);
+  if (notes.length) {
+    (published as { read_notes?: string[] }).read_notes = notes;
+  }
   if (!isPublicSnapshot(published)) {
     throw new Error('desk_live_rejected');
   }
   const json = JSON.stringify(published);
   return { desk: published, json, generated_at: published.generated_at };
+}
+
+function readNotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0);
 }
 
 export async function loadPublicDeskLive(env: DeskReaderEnv): Promise<unknown> {

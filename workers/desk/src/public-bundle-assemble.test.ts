@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isPublicSnapshot } from '@quantanamo/contracts/desk-snapshot';
+import { isPublicSnapshot, MAX_SNAPSHOT_BYTES } from '@quantanamo/contracts/desk-snapshot';
+import { readBoundedJson } from '@quantanamo/shared/http';
 
 import { assemblePublicBundle } from './desk-live';
 
@@ -151,6 +152,77 @@ describe('public bundle assemble', () => {
     expect(desk.earnings).toEqual([
       expect.objectContaining({ symbol: 'NFLX', straddle_price: 9.7, underlying_price: 100 }),
     ]);
+  });
+
+  test('a single backtest_artifacts failure is a note, and the rest of the bundle still publishes', () => {
+    const bundle = slimBundle() as Record<string, unknown>;
+    bundle.artifacts = [];
+    bundle.read_notes = ['backtest_artifacts:500'];
+    bundle.candidates = [{
+      id: 901,
+      candidate_type: 'membership',
+      candidate_key: 'sector:semis:NVDA',
+      proposed_theme_id: 'semis',
+      proposed_label: 'NVDA',
+      proposed_description: 'Sector membership from company facts.',
+      score: 3,
+      evidence_count: 2,
+      source_count: 2,
+      status: 'pending',
+      last_seen_at: '2026-11-24T18:00:00.000Z',
+      review_note: null,
+      listed_equity: true,
+    }];
+    const serve = assemblePublicBundle(bundle);
+    const desk = serve.desk as {
+      read_notes?: string[];
+      backtest_artifacts: unknown[];
+      ontology_candidates: Array<{ candidate_key: string }>;
+      tests: Array<{ id: number }>;
+    };
+    expect(desk.read_notes).toEqual(['backtest_artifacts:500']);
+    expect(desk.backtest_artifacts).toEqual([]);
+    expect(desk.tests.map((row) => row.id)).toEqual([16]);
+    expect(desk.ontology_candidates.map((row) => row.candidate_key)).toEqual(['sector:semis:NVDA']);
+    expect(serve.json).not.toContain('payload_json');
+  });
+
+  test('a public bundle the size of the 2026-11-25 ledger still assembles', async () => {
+    const bundle = slimBundle() as Record<string, unknown>;
+    bundle.lessons = [{
+      id: 1,
+      cycle_id: 25,
+      test_id: 16,
+      thesis_id: 'earnings_gap_structure',
+      lesson_type: 'result',
+      summary: 'sector fill '.repeat(40_000),
+      market_regime: null,
+      incorporated: false,
+      created_at: '2026-11-24T18:00:00.000Z',
+    }];
+    bundle.themes = [{
+      id: 'semis',
+      thesis_id: 'earnings_gap_structure',
+      kind: 'sector',
+      name: 'Semiconductors',
+      description: 'Company-facts sector.',
+      status: 'active',
+      match_threshold: 1,
+      auto_promote_sources: 2,
+    }];
+    const lesson = bundle.lessons[0] as { summary: string };
+    lesson.summary = 'sector fill '.repeat(52_000);
+    const encoded = new TextEncoder().encode(JSON.stringify(bundle));
+    expect(encoded.byteLength).toBeGreaterThan(600_000);
+    expect(encoded.byteLength).toBeLessThan(MAX_SNAPSHOT_BYTES);
+    const raw = await readBoundedJson(new Response(encoded, {
+      headers: { 'content-type': 'application/json', 'content-length': String(encoded.byteLength) },
+    }), MAX_SNAPSHOT_BYTES);
+    const serve = assemblePublicBundle(raw);
+    expect(isPublicSnapshot(serve.desk)).toBe(true);
+    const desk = serve.desk as { lessons: unknown[]; ontology_themes?: unknown[] };
+    expect(desk.lessons).toHaveLength(1);
+    expect(new TextEncoder().encode(serve.json).byteLength).toBeLessThan(MAX_SNAPSHOT_BYTES);
   });
 
   test('an open lesson wait survives the public bundle with its age', () => {
