@@ -78,6 +78,48 @@ const PUBLIC_RECENT_MS = 21 * 24 * 60 * 60 * 1000;
 const ACCOUNT_COLS = 'observed_at,account_label,total_value,equity_value,cash,buying_power,source';
 const AGENTIC_FILTER = 'account_label=ilike.*Agentic*';
 
+/**
+ * Tables the phone treats as the book. A miss here is an outage: an empty
+ * section would publish 0 lots, a wrong NAV, or 0 invalidation breaches as live.
+ *
+ * Equity book and NAV: position_episodes, portfolio_exposure, account_snapshots
+ * (accountLatest, accountFirst, and the public window). Fills and intents feed
+ * the tape the book is reconciled against. Theses and thesis_symbols bind lots.
+ * risk_controls is the full-bundle rail list (the public slim path does not select it).
+ *
+ * Open lots and invalidation lines on the other sleeves: pm_markets, pm_positions,
+ * meme_tokens, meme_positions. assembleDeskBookHealth and assembleBookHoldings
+ * read those rows for stale marks, resolved-but-open tickets, and the line.
+ *
+ * Breach math: v_ledger_watchdog (counts, including open lots and breaches),
+ * v_invalidation_breaches, v_open_lots_missing_invalidation, v_ledger_integrity
+ * (line at or below cost). watchdogHealthSummary and deskHealthSummary read
+ * that mapped watchdog. A timeout must not become available:false and 0 breaches.
+ *
+ * learningPulseSummary's open-lot counts come from those same holdings. Lessons,
+ * cycles, beliefs, scorecard, and ontology stay outside this set.
+ */
+export const CORE_LEDGER_TABLES = [
+  'position_episodes',
+  'portfolio_exposure',
+  'account_snapshots',
+  'broker_fills',
+  'trade_intents',
+  'theses',
+  'thesis_symbols',
+  'risk_controls',
+  'pm_markets',
+  'pm_positions',
+  'meme_tokens',
+  'meme_positions',
+  'v_ledger_watchdog',
+  'v_invalidation_breaches',
+  'v_open_lots_missing_invalidation',
+  'v_ledger_integrity',
+] as const;
+
+const CORE_TABLES = new Set<string>(CORE_LEDGER_TABLES);
+
 /** Same columns as apps/dashboard/lib/ledger-live.ts EARNINGS_QUERY. Optional so a pre-migration 400 does not 503 the phone. */
 const LESSON_WAITS_QUERY =
   'v_open_lesson_tests?select=lesson_id,thesis_id,test_id,test_status,age_days&order=lesson_id.asc';
@@ -202,21 +244,36 @@ async function restGet(query: string, optional = false): Promise<unknown[]> {
   }
   const response = await fetch(`${supabaseUrl}/rest/v1/${query}`, { headers: restHeaders() });
   if (!response.ok) {
+    const failure = `${table}:${response.status}`;
+    if (CORE_TABLES.has(table)) {
+      console.error(JSON.stringify({
+        event: 'desk_public_rest_core_failed',
+        error: failure,
+      }));
+      throw new Error(failure);
+    }
     if (optional) return [];
-    throw new Error(`${table}:${response.status}`);
+    throw new Error(failure);
   }
   const body: unknown = await response.json();
   return Array.isArray(body) ? body : [];
 }
 
+function queryTable(query: string): string {
+  return query.split('?')[0] ?? '';
+}
+
 /**
- * One required table may 500/504. That section becomes [] and a note.
- * A second failure still fails the bundle so an outage is not an empty desk.
+ * One non-core table may 500/504. That section becomes [] and a note.
+ * A core table (the book, its NAV, or the breach views) is never emptied:
+ * the bundle fails so the worker can serve the last good snapshot.
+ * A second non-core failure still fails the bundle.
  */
 async function restGetNoted(query: string, failures: string[]): Promise<unknown[]> {
   try {
     return await restGet(query);
   } catch (error) {
+    if (CORE_TABLES.has(queryTable(query))) throw error;
     const message = error instanceof Error ? error.message : 'unknown';
     failures.push(message);
     console.error(JSON.stringify({
@@ -246,7 +303,10 @@ function refuseManySectionFailures(failures: readonly string[]): void {
 }
 
 async function objectFrom(pairs: Array<[string, string]>, optional = true): Promise<Record<string, unknown[]>> {
-  const entries = await Promise.all(pairs.map(async ([key, query]) => [key, await restGet(query, optional)] as const));
+  const entries = await Promise.all(pairs.map(async ([key, query]) => {
+    const soften = optional && !CORE_TABLES.has(queryTable(query));
+    return [key, await restGet(query, soften)] as const;
+  }));
   return Object.fromEntries(entries);
 }
 

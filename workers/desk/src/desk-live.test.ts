@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { handleBundle } from '../../../supabase/functions/desk-public-rest/index';
+
 import { coalesceLiveRead, expirePublicDeskLiveCache, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
 
 const localAnon =
@@ -161,6 +163,75 @@ describe('loadPublicDeskServe', () => {
       expect(JSON.parse(second.json)).toEqual(JSON.parse(first.json));
     } finally {
       globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('a core table failure keeps the last good book instead of an empty one', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    const deno = (globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } }).Deno;
+    (globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } }).Deno = {
+      env: {
+        get: (key: string) => {
+          if (key === 'SUPABASE_URL') return 'https://ledger.test';
+          if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'service-role-test';
+          return undefined;
+        },
+      },
+    };
+    let bundleCalls = 0;
+    const position = {
+      id: 'lot-nvda',
+      account_key: 'agentic',
+      symbol: 'NVDA',
+      status: 'open',
+      quantity: 2,
+      average_cost: 100,
+      opened_at: '2026-11-01T14:30:00.000Z',
+      closed_at: null,
+      next_review_at: null,
+      thesis_id: 'semis_photonics',
+      invalidation_price: 90,
+      invalidation_note: 'below the line',
+    };
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/')) {
+        if (url.includes('/rest/v1/position_episodes?') || url.endsWith('/rest/v1/position_episodes')) {
+          return new Response(JSON.stringify({ message: 'statement timeout' }), { status: 500 });
+        }
+        return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      bundleCalls += 1;
+      if (bundleCalls === 1) {
+        return new Response(JSON.stringify({
+          runs: [],
+          cloudRuns: [],
+          automations: [],
+          positions: [position],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return handleBundle('public');
+    }) as typeof fetch;
+    try {
+      const first = await loadPublicDeskServe(readerEnv);
+      expect(first.stale).toBeUndefined();
+      const saved = JSON.parse(first.json) as { positions: Array<{ id: string; symbol: string }> };
+      expect(saved.positions.map((row) => row.id)).toEqual(['lot-nvda']);
+      expirePublicDeskLiveCache();
+      const second = await loadPublicDeskServe(readerEnv);
+      expect(bundleCalls).toBe(2);
+      expect(second.stale).toBe(true);
+      expect(second.json).toBe(first.json);
+      expect(JSON.parse(second.json)).toEqual(JSON.parse(first.json));
+      const kept = JSON.parse(second.json) as { positions: Array<{ symbol: string; invalidation_price: number }> };
+      expect(kept.positions).toEqual([
+        expect.objectContaining({ symbol: 'NVDA', invalidation_price: 90 }),
+      ]);
+    } finally {
+      globalThis.fetch = original;
+      (globalThis as { Deno?: unknown }).Deno = deno;
       resetPublicDeskLiveCache();
     }
   });

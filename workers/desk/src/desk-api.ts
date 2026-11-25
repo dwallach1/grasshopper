@@ -132,12 +132,21 @@ function staleHeaders(): Record<string, string> {
   };
 }
 
+/** Degraded non-core sections on a published snapshot. Empty when the read was complete. */
+function partialSections(desk: unknown): string[] {
+  if (!desk || typeof desk !== 'object') return [];
+  const notes = (desk as { read_notes?: unknown }).read_notes;
+  if (!Array.isArray(notes)) return [];
+  return notes.filter((note): note is string => typeof note === 'string' && note.length > 0);
+}
+
 function healthResponse(served: PublicDeskServe): Response {
   const payload = served.desk as DeskPayload;
   const retired = retiredStewardSlugs(payload);
   const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
   const learning = learningPulseSummary(assembleLearningPulse(payload));
   const watchdog = watchdogHealthSummary(payload.watchdog, retired);
+  const partial = partialSections(served.desk);
   return jsonResponse(200, {
     ok: true,
     generated_at: served.generated_at,
@@ -145,6 +154,7 @@ function healthResponse(served: PublicDeskServe): Response {
     ...health,
     watchdog,
     learning,
+    ...(partial.length ? { partial } : {}),
     ...(served.stale ? { stale: true, notice: PUBLIC_DESK_REFRESH_FAILED } : {}),
   }, served.stale ? staleHeaders() : { 'Cache-Control': 'no-store' });
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { handleBundle } from '../../../supabase/functions/desk-public-rest/index';
+import { CORE_LEDGER_TABLES, handleBundle } from '../../../supabase/functions/desk-public-rest/index';
 
 function installDenoEnv(): void {
   (globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } }).Deno = {
@@ -24,6 +24,10 @@ function mockLedger(fail: (url: string) => boolean): typeof fetch {
   }) as typeof fetch;
 }
 
+function failsTable(url: string, table: string): boolean {
+  return url.includes(`/rest/v1/${table}?`) || url.endsWith(`/rest/v1/${table}`);
+}
+
 describe('desk-public-rest bundle section failures', () => {
   test('backtest_artifacts:500 empties that section and notes it', async () => {
     installDenoEnv();
@@ -42,6 +46,21 @@ describe('desk-public-rest bundle section failures', () => {
       expect(body.artifacts).toEqual([]);
       expect(body.tests).toEqual([]);
       expect(body.theses).toEqual([]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test('two non-core table failures still fail the bundle', async () => {
+    installDenoEnv();
+    const original = globalThis.fetch;
+    globalThis.fetch = mockLedger((url) =>
+      failsTable(url, 'research_lessons') || failsTable(url, 'backtest_artifacts'),
+    );
+    try {
+      const response = await handleBundle('public');
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
     } finally {
       globalThis.fetch = original;
     }
@@ -87,6 +106,35 @@ describe('desk-public-rest bundle section failures', () => {
       const body = await response.json() as { read_notes?: string[]; earnings: unknown[] };
       expect(body.read_notes).toBeUndefined();
       expect(body.earnings).toEqual([]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  const publicCore = CORE_LEDGER_TABLES.filter((table) => table !== 'risk_controls');
+  for (const table of publicCore) {
+    test(`${table} failing alone fails the public bundle`, async () => {
+      installDenoEnv();
+      const original = globalThis.fetch;
+      globalThis.fetch = mockLedger((url) => failsTable(url, table));
+      try {
+        const response = await handleBundle('public');
+        expect(response.status).toBe(503);
+        expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
+      } finally {
+        globalThis.fetch = original;
+      }
+    });
+  }
+
+  test('risk_controls failing alone fails the full bundle', async () => {
+    installDenoEnv();
+    const original = globalThis.fetch;
+    globalThis.fetch = mockLedger((url) => failsTable(url, 'risk_controls'));
+    try {
+      const response = await handleBundle('full');
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
     } finally {
       globalThis.fetch = original;
     }

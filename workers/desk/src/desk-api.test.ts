@@ -113,6 +113,22 @@ describe('public desk Worker API', () => {
     expect(body.generated_at).toBe('2026-09-09T14:00:00.000Z');
   });
 
+  test('health names a degraded section when the snapshot carries read_notes', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        read_notes: ['backtest_artifacts:500'],
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok: boolean; partial?: string[]; stale?: boolean };
+    expect(body.ok).toBe(true);
+    expect(body.partial).toEqual(['backtest_artifacts:500']);
+    expect(body.stale).toBeUndefined();
+  });
+
   test('a failed live read serves the edge-cached desk instead of inventing one', async () => {
     const json = JSON.stringify(liveSample);
     const cache = {
