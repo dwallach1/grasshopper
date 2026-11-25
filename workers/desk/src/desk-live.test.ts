@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { coalesceLiveRead, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
+import { handleBundle } from '../../../supabase/functions/desk-public-rest/index';
+
+import { coalesceLiveRead, expirePublicDeskLiveCache, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
 
 const localAnon =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
@@ -111,6 +113,135 @@ describe('loadPublicDeskServe', () => {
       expect(autopsy?.last_summary).toBe('No run recorded');
       expect(urls.every((url) => url.includes('/bundle/public'))).toBe(true);
       expect(urls.some((url) => url.includes('/rest/v1/'))).toBe(false);
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('a failed refresh keeps the last good serve and marks it stale', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({
+          runs: [],
+          cloudRuns: [],
+          automations: [],
+          theses: [{
+            id: 'semis_photonics',
+            name: 'AI semiconductor and photonics',
+            summary: 'Second-order compute.',
+            status: 'hardening',
+            confidence: 70,
+            stated_confidence: null,
+            results_confidence: null,
+            time_horizon: 'quarters',
+            stance: 'long',
+            variant_perception: null,
+            falsifier: null,
+            created_at: '2026-09-01T00:00:00.000Z',
+            updated_at: '2026-11-24T00:00:00.000Z',
+          }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ error: 'Desk ledger unavailable' }), { status: 503 });
+    }) as typeof fetch;
+    try {
+      const first = await loadPublicDeskServe(readerEnv);
+      expect(first.stale).toBeUndefined();
+      const desk = JSON.parse(first.json) as { theses: Array<{ id: string }> };
+      expect(desk.theses.map((row) => row.id)).toEqual(['semis_photonics']);
+      expirePublicDeskLiveCache();
+      const second = await loadPublicDeskServe(readerEnv);
+      expect(calls).toBe(2);
+      expect(second.stale).toBe(true);
+      expect(second.json).toBe(first.json);
+      expect(second.generated_at).toBe(first.generated_at);
+      expect(JSON.parse(second.json)).toEqual(JSON.parse(first.json));
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('a core table failure keeps the last good book instead of an empty one', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    const deno = (globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } }).Deno;
+    (globalThis as { Deno?: { env: { get: (key: string) => string | undefined } } }).Deno = {
+      env: {
+        get: (key: string) => {
+          if (key === 'SUPABASE_URL') return 'https://ledger.test';
+          if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'service-role-test';
+          return undefined;
+        },
+      },
+    };
+    let bundleCalls = 0;
+    const position = {
+      id: 'lot-nvda',
+      account_key: 'agentic',
+      symbol: 'NVDA',
+      status: 'open',
+      quantity: 2,
+      average_cost: 100,
+      opened_at: '2026-11-01T14:30:00.000Z',
+      closed_at: null,
+      next_review_at: null,
+      thesis_id: 'semis_photonics',
+      invalidation_price: 90,
+      invalidation_note: 'below the line',
+    };
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/')) {
+        if (url.includes('/rest/v1/position_episodes?') || url.endsWith('/rest/v1/position_episodes')) {
+          return new Response(JSON.stringify({ message: 'statement timeout' }), { status: 500 });
+        }
+        return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      bundleCalls += 1;
+      if (bundleCalls === 1) {
+        return new Response(JSON.stringify({
+          runs: [],
+          cloudRuns: [],
+          automations: [],
+          positions: [position],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return handleBundle('public');
+    }) as typeof fetch;
+    try {
+      const first = await loadPublicDeskServe(readerEnv);
+      expect(first.stale).toBeUndefined();
+      const saved = JSON.parse(first.json) as { positions: Array<{ id: string; symbol: string }> };
+      expect(saved.positions.map((row) => row.id)).toEqual(['lot-nvda']);
+      expirePublicDeskLiveCache();
+      const second = await loadPublicDeskServe(readerEnv);
+      expect(bundleCalls).toBe(2);
+      expect(second.stale).toBe(true);
+      expect(second.json).toBe(first.json);
+      expect(JSON.parse(second.json)).toEqual(JSON.parse(first.json));
+      const kept = JSON.parse(second.json) as { positions: Array<{ symbol: string; invalidation_price: number }> };
+      expect(kept.positions).toEqual([
+        expect.objectContaining({ symbol: 'NVDA', invalidation_price: 90 }),
+      ]);
+    } finally {
+      globalThis.fetch = original;
+      (globalThis as { Deno?: unknown }).Deno = deno;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('with no last good serve, a bundle failure still throws', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response('{}', { status: 503 })) as typeof fetch;
+    try {
+      await expect(loadPublicDeskServe(readerEnv)).rejects.toThrow('desk_bundle_503');
     } finally {
       globalThis.fetch = original;
       resetPublicDeskLiveCache();

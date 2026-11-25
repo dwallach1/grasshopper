@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
+import { PUBLIC_DESK_REFRESH_FAILED, toPublicDeskSnapshot } from '@quantanamo/contracts/desk-snapshot';
 
 import { fallbackTeam } from '../../../apps/dashboard/lib/desk-team';
 import { emptyLedgerWatchdog } from '../../../apps/dashboard/lib/ledger-watchdog';
@@ -73,6 +73,91 @@ describe('public desk Worker API', () => {
     );
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'Desk ledger unavailable' });
+  });
+
+  test('a stale last-good serve is the same ledger with a stale marker', async () => {
+    const json = JSON.stringify(liveSample);
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/desk'),
+      env(readerEnv),
+      async () => ({
+        desk: liveSample,
+        json,
+        generated_at: liveSample.generated_at,
+        stale: true,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-desk-stale')).toBe('1');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.text()).toBe(json);
+  });
+
+  test('health from a stale serve stays ok and names the last good ledger', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        desk: liveSample,
+        json: JSON.stringify(liveSample),
+        generated_at: liveSample.generated_at,
+        stale: true,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-desk-stale')).toBe('1');
+    const body = await response.json() as { ok: boolean; stale?: boolean; notice?: string; generated_at: string };
+    expect(body.ok).toBe(true);
+    expect(body.stale).toBe(true);
+    expect(body.notice).toBe(PUBLIC_DESK_REFRESH_FAILED);
+    expect(body.generated_at).toBe('2026-09-09T14:00:00.000Z');
+  });
+
+  test('health names a degraded section when the snapshot carries read_notes', async () => {
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        ...liveSample,
+        read_notes: ['backtest_artifacts:500'],
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok: boolean; partial?: string[]; stale?: boolean };
+    expect(body.ok).toBe(true);
+    expect(body.partial).toEqual(['backtest_artifacts:500']);
+    expect(body.stale).toBeUndefined();
+  });
+
+  test('a failed live read serves the edge-cached desk instead of inventing one', async () => {
+    const json = JSON.stringify(liveSample);
+    const cache = {
+      async match(request: Request) {
+        const url = new URL(request.url);
+        if (url.pathname === '/api/desk' && url.search === '') {
+          return new Response(json, { status: 200, headers: { 'content-type': 'application/json' } });
+        }
+        return undefined;
+      },
+      async put() {},
+    };
+    const previous = (globalThis as { caches?: unknown }).caches;
+    (globalThis as { caches?: { default?: unknown } }).caches = { default: cache };
+    try {
+      const response = await handleDeskApi(
+        new Request('https://desk.test/api/desk?r=123'),
+        env(readerEnv),
+        async () => {
+          throw new Error('desk_bundle_503');
+        },
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-desk-stale')).toBe('1');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.text()).toBe(json);
+    } finally {
+      (globalThis as { caches?: unknown }).caches = previous;
+    }
   });
 
   test('missing reader credentials are a 503, not a silent KV fallback', async () => {

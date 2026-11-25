@@ -3,6 +3,7 @@ import {
   LIVE_JSON_CACHE_CONTROL,
   MAX_SNAPSHOT_BYTES,
   PUBLIC_DESK_REDIRECTS,
+  PUBLIC_DESK_REFRESH_FAILED,
   publicDeskJsonError,
 } from '@quantanamo/contracts/desk-snapshot';
 
@@ -15,7 +16,7 @@ import {
 } from '../../../apps/dashboard/lib/learning-pulse';
 import type { DeskPayload } from '../../../apps/dashboard/lib/ledger-types';
 
-import { liveReaderReady, loadPublicDeskServe, type PublicDeskServe } from './desk-live';
+import { errorFields, liveReaderReady, loadPublicDeskServe, type PublicDeskServe } from './desk-live';
 
 export const DESK_API_HEADERS = {
   'Cache-Control': 'no-store',
@@ -108,7 +109,7 @@ export async function handleDeskApi(
   }
 
   if (path === '/api/health' && request.method === 'GET') {
-    return handleHealth(env, loadLive);
+    return handleHealth(request, env, loadLive);
   }
 
   if (path === '/api/desk') {
@@ -124,7 +125,72 @@ export async function handleDeskApi(
   return publicError(404, 'Not found');
 }
 
+function staleHeaders(): Record<string, string> {
+  return {
+    'Cache-Control': 'no-store',
+    'X-Desk-Stale': '1',
+  };
+}
+
+/** Degraded non-core sections on a published snapshot. Empty when the read was complete. */
+function partialSections(desk: unknown): string[] {
+  if (!desk || typeof desk !== 'object') return [];
+  const notes = (desk as { read_notes?: unknown }).read_notes;
+  if (!Array.isArray(notes)) return [];
+  return notes.filter((note): note is string => typeof note === 'string' && note.length > 0);
+}
+
+function healthResponse(served: PublicDeskServe): Response {
+  const payload = served.desk as DeskPayload;
+  const retired = retiredStewardSlugs(payload);
+  const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
+  const learning = learningPulseSummary(assembleLearningPulse(payload));
+  const watchdog = watchdogHealthSummary(payload.watchdog, retired);
+  const partial = partialSections(served.desk);
+  return jsonResponse(200, {
+    ok: true,
+    generated_at: served.generated_at,
+    source: 'live',
+    ...health,
+    watchdog,
+    learning,
+    ...(partial.length ? { partial } : {}),
+    ...(served.stale ? { stale: true, notice: PUBLIC_DESK_REFRESH_FAILED } : {}),
+  }, served.stale ? staleHeaders() : { 'Cache-Control': 'no-store' });
+}
+
+function deskResponse(served: PublicDeskServe): Response {
+  return new Response(served.json, {
+    status: 200,
+    headers: {
+      ...DESK_API_HEADERS,
+      'Cache-Control': served.stale ? 'no-store' : LIVE_JSON_CACHE_CONTROL,
+      ...(served.stale ? { 'X-Desk-Stale': '1' } : {}),
+    },
+  });
+}
+
+/** Last published /api/desk body in this colo, ignoring a cache-busting query. */
+async function cachedDeskServe(request: Request): Promise<PublicDeskServe | null> {
+  const cache = edgeCache();
+  if (!cache) return null;
+  try {
+    const url = new URL(request.url);
+    url.pathname = '/api/desk';
+    url.search = '';
+    const hit = await cache.match(new Request(url, { method: 'GET' }));
+    if (!hit) return null;
+    const json = await hit.text();
+    const desk = JSON.parse(json) as unknown;
+    if (!isPublicSnapshot(desk)) return null;
+    return { desk, json, generated_at: desk.generated_at, stale: true };
+  } catch {
+    return null;
+  }
+}
+
 async function handleHealth(
+  request: Request,
   env: DeskBindings,
   loadLive: DeskLiveLoader,
 ): Promise<Response> {
@@ -137,23 +203,23 @@ async function handleHealth(
       console.error(JSON.stringify({ event: 'desk_live_rejected' }));
       return publicError(503);
     }
-    const payload = served.desk as DeskPayload;
-    const retired = retiredStewardSlugs(payload);
-    const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
-    const learning = learningPulseSummary(assembleLearningPulse(payload));
-    const watchdog = watchdogHealthSummary(payload.watchdog, retired);
-    return jsonResponse(200, {
-      ok: true,
-      generated_at: served.generated_at,
-      source: 'live',
-      ...health,
-      watchdog,
-      learning,
-    }, { 'Cache-Control': 'no-store' });
+    return healthResponse(served);
   } catch (error) {
+    const cached = await cachedDeskServe(request);
+    const fields = errorFields(error);
+    if (cached) {
+      console.error(JSON.stringify({
+        event: 'desk_live_stale',
+        error: fields.error,
+        name: fields.name,
+        generated_at: cached.generated_at,
+      }));
+      return healthResponse(cached);
+    }
     console.error(JSON.stringify({
       event: 'desk_health_failed',
-      error: error instanceof Error ? error.message : 'unknown',
+      error: fields.error,
+      name: fields.name,
     }));
     return publicError(503);
   }
@@ -188,25 +254,34 @@ async function handleLiveGet(
       console.error(JSON.stringify({ event: 'desk_live_too_large' }));
       return publicError(503);
     }
-    console.error(JSON.stringify({
-      event: 'desk_live_read',
-      generated_at: served.generated_at,
-    }));
-    const response = new Response(served.json, {
-      status: 200,
-      headers: {
-        ...DESK_API_HEADERS,
-        'Cache-Control': LIVE_JSON_CACHE_CONTROL,
-      },
-    });
-    if (cache && ctx) {
+    if (!served.stale) {
+      console.error(JSON.stringify({
+        event: 'desk_live_read',
+        generated_at: served.generated_at,
+      }));
+    }
+    const response = deskResponse(served);
+    if (cache && ctx && !served.stale) {
       ctx.waitUntil(cache.put(request, response.clone()));
     }
     return response;
   } catch (error) {
+    const cached = await cachedDeskServe(request);
+    const fields = errorFields(error);
+    if (cached) {
+      console.error(JSON.stringify({
+        event: 'desk_live_stale',
+        error: fields.error,
+        name: fields.name,
+        generated_at: cached.generated_at,
+        configured: liveReaderReady(env),
+      }));
+      return deskResponse(cached);
+    }
     console.error(JSON.stringify({
       event: 'desk_live_read_failed',
-      error: error instanceof Error ? error.message : 'unknown',
+      error: fields.error,
+      name: fields.name,
       configured: liveReaderReady(env),
     }));
     return publicError(503);
