@@ -39,6 +39,18 @@ export function expirePublicDeskLiveCache(): void {
   if (liveCache) liveCache.at = 0;
 }
 
+/** A failed refresh is retried quickly. A good serve stays for the phone poll. */
+export function liveCacheMaxAge(stale: boolean | undefined): number {
+  return stale ? 5_000 : LIVE_CACHE_MS;
+}
+
+function snapshotGeneratedAt(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length < 10) return null;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return null;
+  return value;
+}
+
 export function errorFields(error: unknown): { error: string; name: string } {
   if (error instanceof Error) {
     return { error: error.message || 'unknown', name: error.name || 'Error' };
@@ -120,7 +132,7 @@ export function liveReaderReady(env: DeskReaderEnv): boolean {
 
 export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
   const now = Date.now();
-  if (liveCache && now - liveCache.at < LIVE_CACHE_MS) {
+  if (liveCache && now - liveCache.at < liveCacheMaxAge(liveCache.serve.stale)) {
     return liveCache.serve;
   }
   return coalesceLiveRead(liveSlot, () => readPublicDeskServe(env));
@@ -183,8 +195,11 @@ async function fetchPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe
   if (!response.ok) {
     throw new Error(`desk_bundle_${response.status}`);
   }
+  const refreshFailed = response.headers.get('x-desk-stale') === '1';
   const raw = await readBoundedJson(response, MAX_SNAPSHOT_BYTES);
-  return assemblePublicBundle(raw);
+  const serve = assemblePublicBundle(raw);
+  if (refreshFailed) serve.stale = true;
+  return serve;
 }
 
 /** Zod-parse a `/bundle/public` body and publish the phone snapshot. */
@@ -235,6 +250,7 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
     lesson_waits?: unknown;
     shadows?: unknown;
     read_notes?: unknown;
+    generated_at?: unknown;
   };
   const live = assemblePublicDeskFromRestBag({
     theses: asJsonRows(bag.theses),
@@ -293,6 +309,10 @@ export function assemblePublicBundle(raw: unknown): PublicDeskServe {
   const notes = readNotes(bag.read_notes);
   if (notes.length) {
     (published as { read_notes?: string[] }).read_notes = notes;
+  }
+  const stamped = snapshotGeneratedAt(bag.generated_at);
+  if (stamped) {
+    (published as { generated_at: string }).generated_at = stamped;
   }
   if (!isPublicSnapshot(published)) {
     throw new Error('desk_live_rejected');

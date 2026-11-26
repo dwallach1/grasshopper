@@ -50,6 +50,12 @@ describe.skipIf(!supabaseReady)('desk_public_reader PostgREST path', () => {
       { headers: restHeaders(LOCAL.deskPublicReaderKey) },
     );
     expect([401, 403]).toContain(snapshot.status);
+
+    const bundle = await fetch(
+      `${LOCAL.supabaseUrl}/rest/v1/desk_public_bundle?select=id&limit=1`,
+      { headers: restHeaders(LOCAL.deskPublicReaderKey) },
+    );
+    expect([401, 403, 404]).toContain(bundle.status);
   });
 });
 

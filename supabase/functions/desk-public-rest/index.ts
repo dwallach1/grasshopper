@@ -3,6 +3,16 @@
  * The public Worker has no JWT secret and no service_role. This function
  * SELECTs desk_public_reader tables and returns one bundle. Writes are 405.
  */
+import {
+  type BundleSlot,
+  bundleResponse,
+  claimDeskRefresh,
+  markDeskRefreshFailed,
+  readDeskBundle,
+  saveDeskBundle,
+  scheduleBundleRefresh,
+  waitForDeskBundle,
+} from './bundle-cache.ts';
 import { attachPnlStart, PNL_TAIL_LIMIT } from './pnl-inception.ts';
 import {
   clipPublicNote,
@@ -12,6 +22,14 @@ import {
   PUBLIC_TEST_QUERY,
   slimPublicArtifacts,
 } from './public-tests.ts';
+
+/**
+ * authenticator's statement_timeout is 8s. About fifty reads at once push
+ * the heavy views into that ceiling, and a core miss 503s the phone.
+ * Keep a few in flight so each one finishes, and serve desk_public_bundle
+ * instead of waiting on the fan-out.
+ */
+export const DESK_REST_CONCURRENCY = 4;
 
 const ALLOWED_TABLES = new Set([
   'theses', 'thesis_symbols', 'thesis_evidence', 'thesis_scores', 'thesis_relations', 'runs',
@@ -235,28 +253,76 @@ function restHeaders(): HeadersInit {
   };
 }
 
-async function restGet(query: string, optional = false): Promise<unknown[]> {
+const restSlots: { active: number; queue: Array<() => void> } = { active: 0, queue: [] };
+
+export function resetDeskRestSlots(): void {
+  restSlots.active = 0;
+  restSlots.queue = [];
+}
+
+function acquireRestSlot(): Promise<void> {
+  if (restSlots.active < DESK_REST_CONCURRENCY) {
+    restSlots.active += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    restSlots.queue.push(() => {
+      restSlots.active += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseRestSlot(): void {
+  restSlots.active -= 1;
+  const next = restSlots.queue.shift();
+  if (next) next();
+}
+
+async function restGetOnce(query: string, optional: boolean): Promise<unknown[]> {
   const supabaseUrl = (Deno.env.get('SUPABASE_URL') || '').replace(/\/$/, '');
   const table = query.split('?')[0];
   if (!table || !ALLOWED_TABLES.has(table)) {
     if (optional) return [];
     throw new Error(`${table || 'unknown'}:not_allowed`);
   }
-  const response = await fetch(`${supabaseUrl}/rest/v1/${query}`, { headers: restHeaders() });
-  if (!response.ok) {
-    const failure = `${table}:${response.status}`;
-    if (CORE_TABLES.has(table)) {
-      console.error(JSON.stringify({
-        event: 'desk_public_rest_core_failed',
-        error: failure,
-      }));
+  await acquireRestSlot();
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${query}`, {
+      headers: restHeaders(),
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) {
+      const failure = `${table}:${response.status}`;
+      if (optional && !CORE_TABLES.has(table)) return [];
       throw new Error(failure);
     }
-    if (optional) return [];
-    throw new Error(failure);
+    const body: unknown = await response.json();
+    return Array.isArray(body) ? body : [];
+  } finally {
+    releaseRestSlot();
   }
-  const body: unknown = await response.json();
-  return Array.isArray(body) ? body : [];
+}
+
+async function restGet(query: string, optional = false): Promise<unknown[]> {
+  const table = query.split('?')[0] ?? '';
+  try {
+    return await restGetOnce(query, optional);
+  } catch (error) {
+    if (!CORE_TABLES.has(table)) throw error;
+    const message = error instanceof Error ? error.message : 'unknown';
+    console.error(JSON.stringify({ event: 'desk_public_rest_core_retry', error: message }));
+    try {
+      return await restGetOnce(query, optional);
+    } catch (retryError) {
+      const retryMessage = retryError instanceof Error ? retryError.message : 'unknown';
+      console.error(JSON.stringify({
+        event: 'desk_public_rest_core_failed',
+        error: retryMessage,
+      }));
+      throw retryError;
+    }
+  }
 }
 
 function queryTable(query: string): string {
@@ -438,8 +504,7 @@ async function publicAccountWindow(failures: string[]): Promise<{ accountLatest:
   return { accountLatest: latest, accountFirst: first };
 }
 
-export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
-  try {
+async function buildBundle(mode: 'full' | 'public'): Promise<Record<string, unknown>> {
     const failures: string[] = [];
     const since = mode === 'public' ? new Date(Date.now() - PUBLIC_RECENT_MS).toISOString() : '';
     const tables = (mode === 'public'
@@ -523,7 +588,7 @@ export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     }
     const notes = failedTables(failures);
     refuseManySectionFailures(failures);
-    return Response.json({
+    return {
       ...body,
       earnings,
       lesson_waits: lessonWaits,
@@ -534,13 +599,64 @@ export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
       scorecard,
       watchdog,
       ...(notes.length === 1 ? { read_notes: notes } : {}),
-    }, { headers: { 'Cache-Control': 'no-store' } });
+    };
+}
+
+async function refreshBundle(mode: 'full' | 'public', slot: BundleSlot): Promise<void> {
+  try {
+    console.error(JSON.stringify({ event: 'desk_public_bundle_refresh', slot }));
+    const generatedAt = new Date().toISOString();
+    const body = await buildBundle(mode);
+    body.generated_at = generatedAt;
+    const saved = await saveDeskBundle(slot, generatedAt, body);
+    if (!saved) throw new Error('desk_public_bundle_save_failed');
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: 'desk_public_bundle_refresh_failed',
+      slot,
+      error: error instanceof Error ? error.message : 'unknown',
+    }));
+    await markDeskRefreshFailed(slot);
+  }
+}
+
+/**
+ * Serve the last good bundle. A fresh row returns immediately. An older row
+ * returns immediately and one refresh runs in the background. A failed
+ * refresh keeps that row and sets X-Desk-Stale. Nothing here substitutes an
+ * empty book for a core-table miss.
+ */
+export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
+  const slot: BundleSlot = mode;
+  try {
+    const stored = await readDeskBundle(slot);
+    if (stored?.fresh) return bundleResponse(stored.payload, false);
+    const claim = await claimDeskRefresh(slot);
+    if (stored) {
+      if (claim === 'claimed') scheduleBundleRefresh(refreshBundle(mode, slot));
+      return bundleResponse(stored.payload, stored.refreshFailed);
+    }
+    if (claim === 'busy') {
+      const waited = await waitForDeskBundle(slot);
+      if (waited) return bundleResponse(waited.payload, waited.refreshFailed);
+      // The other refresh still holds the lock. A second fan-out would hit
+      // the same 8s statement timeout. The next request reads whatever it stored.
+      return Response.json({ error: 'Desk ledger unavailable' }, { status: 503 });
+    }
+    const generatedAt = new Date().toISOString();
+    const body = await buildBundle(mode);
+    body.generated_at = generatedAt;
+    await saveDeskBundle(slot, generatedAt, body);
+    return bundleResponse(body, false);
   } catch (error) {
     console.error(JSON.stringify({
       event: 'desk_public_rest_bundle_failed',
       mode,
       error: error instanceof Error ? error.message : 'unknown',
     }));
+    await markDeskRefreshFailed(slot);
+    const stored = await readDeskBundle(slot);
+    if (stored) return bundleResponse(stored.payload, true);
     return Response.json({ error: 'Desk ledger unavailable' }, { status: 503 });
   }
 }
