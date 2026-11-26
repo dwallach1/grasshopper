@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { handleBundle } from '../../../supabase/functions/desk-public-rest/index';
 
-import { coalesceLiveRead, expirePublicDeskLiveCache, loadPublicDeskServe, resetPublicDeskLiveCache } from './desk-live';
+import {
+  coalesceLiveRead,
+  expirePublicDeskLiveCache,
+  liveCacheMaxAge,
+  loadPublicDeskServe,
+  resetPublicDeskLiveCache,
+} from './desk-live';
 
 const localAnon =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
@@ -232,6 +238,48 @@ describe('loadPublicDeskServe', () => {
     } finally {
       globalThis.fetch = original;
       (globalThis as { Deno?: unknown }).Deno = deno;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('a stored bundle keeps its generated_at and a stale header stays stale', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      generated_at: '2026-11-26T18:05:51.000Z',
+      runs: [],
+      cloudRuns: [],
+      automations: [],
+      theses: [],
+      positions: [{
+        id: 'lot-nvda',
+        account_key: 'agentic',
+        symbol: 'NVDA',
+        status: 'open',
+        quantity: 2,
+        average_cost: 100,
+        opened_at: '2026-11-01T14:30:00.000Z',
+        closed_at: null,
+        next_review_at: null,
+        thesis_id: null,
+        invalidation_price: 90,
+        invalidation_note: 'below the line',
+      }],
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'x-desk-stale': '1' },
+    })) as typeof fetch;
+    try {
+      const serve = await loadPublicDeskServe(readerEnv);
+      expect(serve.stale).toBe(true);
+      expect(serve.generated_at).toBe('2026-11-26T18:05:51.000Z');
+      const desk = JSON.parse(serve.json) as { generated_at: string; positions: Array<{ id: string }> };
+      expect(desk.generated_at).toBe('2026-11-26T18:05:51.000Z');
+      expect(desk.positions.map((row) => row.id)).toEqual(['lot-nvda']);
+      expect(liveCacheMaxAge(true)).toBe(5_000);
+      expect(liveCacheMaxAge(false)).toBe(45_000);
+    } finally {
+      globalThis.fetch = original;
       resetPublicDeskLiveCache();
     }
   });
