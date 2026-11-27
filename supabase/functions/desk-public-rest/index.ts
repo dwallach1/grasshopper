@@ -5,10 +5,15 @@
  */
 import {
   type BundleSlot,
+  type LedgerFreshness,
+  DESK_HEALTH_WAIT_HEADER,
+  HEALTH_REFRESH_WAIT_MS,
   bundleResponse,
   claimDeskRefresh,
   markDeskRefreshFailed,
+  pollNewerBundle,
   readDeskBundle,
+  readLedgerFreshness,
   saveDeskBundle,
   scheduleBundleRefresh,
   waitForDeskBundle,
@@ -620,25 +625,64 @@ async function refreshBundle(mode: 'full' | 'public', slot: BundleSlot): Promise
   }
 }
 
+export type BundleServeOptions = {
+  /**
+   * /api/health only. When the stored book is older than the fresh window,
+   * wait at most this long for the single-flight refresh, then answer with
+   * whatever row we have. /api/desk omits it and returns immediately.
+   */
+  waitForRefreshMs?: number;
+};
+
+function healthMeta(
+  waitMs: number,
+  refreshing: boolean,
+  ledger: LedgerFreshness | null,
+): { refreshing: boolean; ledger: LedgerFreshness | null } | undefined {
+  if (waitMs <= 0) return undefined;
+  return { refreshing, ledger };
+}
+
 /**
  * Serve the last good bundle. A fresh row returns immediately. An older row
- * returns immediately and one refresh runs in the background. A failed
- * refresh keeps that row and sets X-Desk-Stale. Nothing here substitutes an
- * empty book for a core-table miss.
+ * returns immediately and one refresh runs in the background, unless this is
+ * a health read: that one waits up to 3s for the same single-flight refresh.
+ * A failed refresh keeps that row and sets X-Desk-Stale. Nothing here
+ * substitutes an empty book for a core-table miss.
  */
-export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
+export async function handleBundle(
+  mode: 'full' | 'public',
+  options?: BundleServeOptions,
+): Promise<Response> {
   const slot: BundleSlot = mode;
+  const waitMs = options?.waitForRefreshMs ?? 0;
+  let ledger: LedgerFreshness | null = null;
   try {
-    const stored = await readDeskBundle(slot);
-    if (stored?.fresh) return bundleResponse(stored.payload, false);
+    const [stored, freshness] = await Promise.all([
+      readDeskBundle(slot),
+      waitMs > 0 ? readLedgerFreshness() : Promise.resolve(null),
+    ]);
+    ledger = freshness;
+    if (stored?.fresh) return bundleResponse(stored.payload, false, healthMeta(waitMs, false, ledger));
     const claim = await claimDeskRefresh(slot);
     if (stored) {
+      const refreshing = claim === 'claimed' || claim === 'busy';
       if (claim === 'claimed') scheduleBundleRefresh(refreshBundle(mode, slot));
-      return bundleResponse(stored.payload, stored.refreshFailed);
+      if (waitMs > 0 && refreshing) {
+        const updated = await pollNewerBundle(slot, stored.generatedAt, waitMs);
+        if (updated) return bundleResponse(updated.payload, updated.refreshFailed, healthMeta(waitMs, false, ledger));
+        console.error(JSON.stringify({
+          event: 'desk_public_bundle_health_stale',
+          slot,
+          generated_at: stored.generatedAt,
+          refreshing: true,
+        }));
+      }
+      return bundleResponse(stored.payload, stored.refreshFailed, healthMeta(waitMs, refreshing, ledger));
     }
     if (claim === 'busy') {
       const waited = await waitForDeskBundle(slot);
-      if (waited) return bundleResponse(waited.payload, waited.refreshFailed);
+      if (waited) return bundleResponse(waited.payload, waited.refreshFailed, healthMeta(waitMs, false, ledger));
       // The other refresh still holds the lock. A second fan-out would hit
       // the same 8s statement timeout. The next request reads whatever it stored.
       return Response.json({ error: 'Desk ledger unavailable' }, { status: 503 });
@@ -647,7 +691,7 @@ export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     const body = await buildBundle(mode);
     body.generated_at = generatedAt;
     await saveDeskBundle(slot, generatedAt, body);
-    return bundleResponse(body, false);
+    return bundleResponse(body, false, healthMeta(waitMs, false, ledger));
   } catch (error) {
     console.error(JSON.stringify({
       event: 'desk_public_rest_bundle_failed',
@@ -656,7 +700,7 @@ export async function handleBundle(mode: 'full' | 'public'): Promise<Response> {
     }));
     await markDeskRefreshFailed(slot);
     const stored = await readDeskBundle(slot);
-    if (stored) return bundleResponse(stored.payload, true);
+    if (stored) return bundleResponse(stored.payload, true, healthMeta(waitMs, false, ledger));
     return Response.json({ error: 'Desk ledger unavailable' }, { status: 503 });
   }
 }
@@ -667,8 +711,9 @@ async function onRequest(req: Request): Promise<Response> {
   }
   const url = new URL(req.url);
   const path = restPath(url);
-  if (path === '/bundle/public') return handleBundle('public');
-  if (path === '/bundle') return handleBundle('full');
+  const waitMs = req.headers.get(DESK_HEALTH_WAIT_HEADER) === '1' ? HEALTH_REFRESH_WAIT_MS : 0;
+  if (path === '/bundle/public') return handleBundle('public', { waitForRefreshMs: waitMs });
+  if (path === '/bundle') return handleBundle('full', { waitForRefreshMs: waitMs });
   if (!path) return Response.json({ error: 'Not found' }, { status: 404 });
   const match = TABLE_RE.exec(path);
   const table = match?.[1];

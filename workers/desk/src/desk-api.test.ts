@@ -113,6 +113,67 @@ describe('public desk Worker API', () => {
     expect(body.generated_at).toBe('2026-09-09T14:00:00.000Z');
   });
 
+  test('an aged bundle is cache age, and a recent mark is the ledger', async () => {
+    const now = Date.now();
+    const response = await handleDeskApi(
+      new Request('https://desk.test/api/health'),
+      env(readerEnv),
+      async () => ({
+        desk: liveSample,
+        json: JSON.stringify(liveSample),
+        generated_at: '2026-11-27T13:52:00.000Z',
+        bundle_refreshing: true,
+        ledger_snapshot_at: new Date(now - 60_000).toISOString(),
+        ledger_mark_at: new Date(now - 30_000).toISOString(),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-desk-stale')).toBeNull();
+    const body = await response.json() as {
+      ok: boolean;
+      generated_at: string;
+      stale?: boolean;
+      notice?: string;
+      bundle_generated_at: string;
+      bundle_stale: boolean;
+      bundle_age_s: number;
+      bundle_refreshing: boolean;
+      ledger_snapshot_age_s: number;
+      ledger_mark_age_s: number;
+      market_session: { open: boolean; status: string };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.stale).toBeUndefined();
+    expect(body.notice).toBeUndefined();
+    expect(body.generated_at).toBe('2026-11-27T13:52:00.000Z');
+    expect(body.bundle_generated_at).toBe(body.generated_at);
+    expect(body.bundle_stale).toBe(true);
+    expect(body.bundle_age_s).toBeGreaterThan(60 * 60);
+    expect(body.bundle_refreshing).toBe(true);
+    expect(body.ledger_snapshot_age_s).toBeGreaterThanOrEqual(59);
+    expect(body.ledger_snapshot_age_s).toBeLessThan(90);
+    expect(body.ledger_mark_age_s).toBeGreaterThanOrEqual(29);
+    expect(body.ledger_mark_age_s).toBeLessThan(45);
+    expect(['open', 'closed', 'holiday', 'weekend', 'pre_open']).toContain(body.market_session.status);
+
+    const desk = await handleDeskApi(
+      new Request('https://desk.test/api/desk'),
+      env(readerEnv),
+      async () => ({
+        desk: liveSample,
+        json: JSON.stringify(liveSample),
+        generated_at: liveSample.generated_at,
+      }),
+    );
+    expect(desk.status).toBe(200);
+    const deskBody = await desk.json() as Record<string, unknown>;
+    expect(deskBody.bundle_stale).toBeUndefined();
+    expect(deskBody.bundle_refreshing).toBeUndefined();
+    expect(deskBody.market_session).toBeUndefined();
+    expect(deskBody.ledger_mark_at).toBeUndefined();
+    expect(deskBody.generated_at).toBe(liveSample.generated_at);
+  });
+
   test('health names a degraded section when the snapshot carries read_notes', async () => {
     const response = await handleDeskApi(
       new Request('https://desk.test/api/health'),
@@ -186,7 +247,8 @@ describe('public desk Worker API', () => {
       async () => liveSample,
     );
     expect(ok.status).toBe(200);
-    expect(await ok.json()).toEqual({
+    const healthBody = await ok.json() as Record<string, unknown>;
+    expect(healthBody).toEqual(expect.objectContaining({
       ok: true,
       generated_at: '2026-09-09T14:00:00.000Z',
       source: 'live',
@@ -234,7 +296,16 @@ describe('public desk Worker API', () => {
         open_books_legacy_untagged: 0,
         open_books_missing_gate: 0,
       },
-    });
+    }));
+    expect(healthBody.bundle_generated_at).toBe('2026-09-09T14:00:00.000Z');
+    expect(healthBody.bundle_stale).toBe(true);
+    expect(healthBody.bundle_refreshing).toBe(false);
+    expect(healthBody.ledger_snapshot_at).toBeNull();
+    expect(healthBody.ledger_mark_at).toBeNull();
+    expect(healthBody.market_session).toEqual(expect.objectContaining({
+      date: expect.any(String),
+      open: expect.any(Boolean),
+    }));
     expect(ok.headers.get('cache-control')).toBe('no-store');
     const down = await handleDeskApi(
       new Request('https://desk.test/api/health'),

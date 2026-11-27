@@ -8,6 +8,7 @@ import {
 } from '@quantanamo/contracts/desk-snapshot';
 
 import { assembleDeskBookHealth, deskHealthSummary } from '../../../apps/dashboard/lib/desk-book-health';
+import { bundleHealthFields } from './desk-health';
 import { retiredStewardSlugs } from '../../../apps/dashboard/lib/desk-team';
 import { watchdogHealthSummary } from '../../../apps/dashboard/lib/ledger-watchdog';
 import {
@@ -16,7 +17,13 @@ import {
 } from '../../../apps/dashboard/lib/learning-pulse';
 import type { DeskPayload } from '../../../apps/dashboard/lib/ledger-types';
 
-import { errorFields, liveReaderReady, loadPublicDeskServe, type PublicDeskServe } from './desk-live';
+import {
+  errorFields,
+  liveReaderReady,
+  loadPublicDeskServe,
+  type PublicDeskLoadOptions,
+  type PublicDeskServe,
+} from './desk-live';
 
 export const DESK_API_HEADERS = {
   'Cache-Control': 'no-store',
@@ -35,7 +42,7 @@ export type DeskBindings = {
   DESK_READER_JWT?: string;
 };
 
-export type DeskLiveLoader = (env: DeskBindings) => Promise<unknown>;
+export type DeskLiveLoader = (env: DeskBindings, options?: PublicDeskLoadOptions) => Promise<unknown>;
 
 export function jsonResponse(status: number, body: unknown, extra?: HeadersInit): Response {
   return new Response(JSON.stringify(body), {
@@ -140,17 +147,32 @@ function partialSections(desk: unknown): string[] {
   return notes.filter((note): note is string => typeof note === 'string' && note.length > 0);
 }
 
-function healthResponse(served: PublicDeskServe): Response {
+function healthResponse(served: PublicDeskServe, now = Date.now()): Response {
   const payload = served.desk as DeskPayload;
   const retired = retiredStewardSlugs(payload);
-  const health = deskHealthSummary(assembleDeskBookHealth(payload, Date.now()));
+  const health = deskHealthSummary(assembleDeskBookHealth(payload, now));
   const learning = learningPulseSummary(assembleLearningPulse(payload));
   const watchdog = watchdogHealthSummary(payload.watchdog, retired);
   const partial = partialSections(served.desk);
+  const bundle = bundleHealthFields(served, now);
+  // The fresh window is 45s. The session cron refreshes about once a minute,
+  // so a book a minute old is the warm path. Log only a real idle gap.
+  if (bundle.bundle_stale && (bundle.bundle_age_s === null || bundle.bundle_age_s >= 300)) {
+    console.error(JSON.stringify({
+      event: 'desk_health_bundle_stale',
+      bundle_age_s: bundle.bundle_age_s,
+      bundle_refreshing: bundle.bundle_refreshing,
+      ledger_snapshot_age_s: bundle.ledger_snapshot_age_s,
+      ledger_mark_age_s: bundle.ledger_mark_age_s,
+      market_open: bundle.market_session.open,
+      market_status: bundle.market_session.status,
+    }));
+  }
   return jsonResponse(200, {
     ok: true,
     generated_at: served.generated_at,
     source: 'live',
+    ...bundle,
     ...health,
     watchdog,
     learning,
@@ -198,7 +220,7 @@ async function handleHealth(
     return publicError(503);
   }
   try {
-    const served = asServe(await loadLive(env));
+    const served = asServe(await loadLive(env, { waitForRefresh: true }));
     if (!served) {
       console.error(JSON.stringify({ event: 'desk_live_rejected' }));
       return publicError(503);

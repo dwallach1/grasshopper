@@ -5,6 +5,14 @@
  */
 
 export const BUNDLE_FRESH_MS = 45_000;
+/** /api/health only. Desk never waits on a rebuild. */
+export const HEALTH_REFRESH_WAIT_MS = 3_000;
+export const HEALTH_REFRESH_POLL_MS = 200;
+/** Set by the desk Worker on /api/health. Absent on /api/desk. */
+export const DESK_HEALTH_WAIT_HEADER = 'x-desk-health-wait';
+export const DESK_BUNDLE_REFRESHING_HEADER = 'x-desk-bundle-refreshing';
+export const LEDGER_SNAPSHOT_AT_HEADER = 'x-ledger-snapshot-at';
+export const LEDGER_MARK_AT_HEADER = 'x-ledger-mark-at';
 const WAIT_ATTEMPTS = 40;
 const WAIT_DELAY_MS = 500;
 
@@ -59,10 +67,56 @@ export function bundleIsFresh(generatedAt: string, now = Date.now()): boolean {
   return age < BUNDLE_FRESH_MS && age > -5 * 60_000;
 }
 
-export function bundleResponse(payload: Record<string, unknown>, stale: boolean): Response {
+export type LedgerFreshness = {
+  snapshotAt: string | null;
+  markAt: string | null;
+};
+
+export function bundleResponse(
+  payload: Record<string, unknown>,
+  stale: boolean,
+  meta?: { refreshing?: boolean; ledger?: LedgerFreshness | null },
+): Response {
   const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
   if (stale) headers['X-Desk-Stale'] = '1';
+  if (meta?.refreshing) headers[DESK_BUNDLE_REFRESHING_HEADER] = '1';
+  if (meta?.ledger?.snapshotAt) headers[LEDGER_SNAPSHOT_AT_HEADER] = meta.ledger.snapshotAt;
+  if (meta?.ledger?.markAt) headers[LEDGER_MARK_AT_HEADER] = meta.ledger.markAt;
   return Response.json(payload, { headers });
+}
+
+function isoTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) return null;
+  return value;
+}
+
+/**
+ * Latest account snapshot and equity mark. One indexed read, not the bundle fan-out.
+ * A missing function (migration not applied yet) is a miss: the book still serves.
+ */
+export async function readLedgerFreshness(): Promise<LedgerFreshness | null> {
+  try {
+    const base = supabaseBase();
+    if (!base || !denoEnv('SUPABASE_SERVICE_ROLE_KEY')) return null;
+    const response = await fetch(`${base}/rest/v1/rpc/desk_public_ledger_freshness`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: '{}',
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+    const row = body as Record<string, unknown>;
+    return {
+      snapshotAt: isoTimestamp(row.snapshot_at),
+      markAt: isoTimestamp(row.mark_at),
+    };
+  } catch (error) {
+    logEvent('desk_public_ledger_freshness_failed', {
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return null;
+  }
 }
 
 export async function readDeskBundle(slot: BundleSlot, now = Date.now()): Promise<StoredBundle | null> {
@@ -185,6 +239,28 @@ export function scheduleBundleRefresh(work: Promise<void>): void {
     return;
   }
   void work;
+}
+
+/**
+ * Poll until a refresh stores a newer book, or the budget runs out.
+ * Does not start a second fan-out. The caller already holds or joined the single-flight lock.
+ */
+export async function pollNewerBundle(
+  slot: BundleSlot,
+  previousGeneratedAt: string,
+  waitMs: number,
+): Promise<StoredBundle | null> {
+  const previousMs = Date.parse(previousGeneratedAt);
+  const deadline = Date.now() + Math.max(0, waitMs);
+  while (Date.now() < deadline) {
+    const remaining = deadline - Date.now();
+    await new Promise((resolve) => setTimeout(resolve, Math.min(HEALTH_REFRESH_POLL_MS, Math.max(remaining, 1))));
+    const stored = await readDeskBundle(slot);
+    if (!stored) continue;
+    const nextMs = Date.parse(stored.generatedAt);
+    if (Number.isFinite(nextMs) && (!Number.isFinite(previousMs) || nextMs > previousMs)) return stored;
+  }
+  return null;
 }
 
 /** Used when another isolate holds the first-build lock and this request has nothing to serve yet. */
