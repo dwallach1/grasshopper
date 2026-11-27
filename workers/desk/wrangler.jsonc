@@ -31,6 +31,12 @@
     "DESK_READER_APIKEY": "sb_publishable_mmdS2KqyzybyDvMhxku6Vg_AMjRxBWj",
     "DESK_READER_JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxdW5neGFwcWljZG1ib25pZXp6Iiwicm9sZSI6ImRlc2tfcHVibGljX3JlYWRlciIsImlhdCI6MTc4ODk2MDAwMCwiZXhwIjoyMTAzMDg2NzU5fQ.desk_public_reader"
   },
+  "triggers": {
+    // Every minute, 13:00-21:59 UTC, weekdays. The handler fetches only while
+    // the NYSE core session is open (09:30-16:00 ET, 13:00 on an early close),
+    // so EST, EDT, and holidays share this window.
+    "crons": ["* 13-21 * * MON-FRI"]
+  },
   "observability": {
     "enabled": true,
     "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true },

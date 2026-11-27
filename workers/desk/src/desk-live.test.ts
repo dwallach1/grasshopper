@@ -8,6 +8,7 @@ import {
   liveCacheMaxAge,
   loadPublicDeskServe,
   resetPublicDeskLiveCache,
+  warmDeskBundleIfSession,
 } from './desk-live';
 
 const localAnon =
@@ -278,9 +279,92 @@ describe('loadPublicDeskServe', () => {
       expect(desk.positions.map((row) => row.id)).toEqual(['lot-nvda']);
       expect(liveCacheMaxAge(true)).toBe(5_000);
       expect(liveCacheMaxAge(false)).toBe(45_000);
+      const noon = Date.parse('2026-11-27T17:27:00.000Z');
+      expect(liveCacheMaxAge(false, '2026-11-27T13:52:00.000Z', noon)).toBe(5_000);
+      expect(liveCacheMaxAge(false, '2026-11-27T17:26:50.000Z', noon)).toBe(45_000);
     } finally {
       globalThis.fetch = original;
       resetPublicDeskLiveCache();
+    }
+  });
+
+  test('health asks for a bounded refresh and desk does not', async () => {
+    resetPublicDeskLiveCache();
+    const original = globalThis.fetch;
+    const waits: Array<string | null> = [];
+    let calls = 0;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      waits.push(new Headers(init?.headers).get('x-desk-health-wait'));
+      return new Response(JSON.stringify({
+        generated_at: '2026-11-27T13:52:00.000Z',
+        runs: [],
+        cloudRuns: [],
+        automations: [],
+      }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'x-desk-bundle-refreshing': '1',
+          'x-ledger-snapshot-at': '2026-11-27T17:26:00.000Z',
+          'x-ledger-mark-at': '2026-11-27T17:26:30.000Z',
+        },
+      });
+    }) as typeof fetch;
+    try {
+      const health = await loadPublicDeskServe(readerEnv, { waitForRefresh: true });
+      expect(health.generated_at).toBe('2026-11-27T13:52:00.000Z');
+      expect(health.bundle_refreshing).toBe(true);
+      expect(health.ledger_snapshot_at).toBe('2026-11-27T17:26:00.000Z');
+      expect(health.ledger_mark_at).toBe('2026-11-27T17:26:30.000Z');
+      expect(waits).toEqual(['1']);
+      await loadPublicDeskServe(readerEnv, { waitForRefresh: true });
+      expect(calls).toBe(1);
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+
+    const deskWaits: Array<string | null> = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      deskWaits.push(new Headers(init?.headers).get('x-desk-health-wait'));
+      return new Response(JSON.stringify({
+        generated_at: new Date().toISOString(),
+        runs: [],
+        cloudRuns: [],
+        automations: [],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const desk = await loadPublicDeskServe(readerEnv);
+      expect(desk.bundle_refreshing).toBe(false);
+      expect(desk.ledger_mark_at).toBeNull();
+      expect(deskWaits).toEqual([null]);
+    } finally {
+      globalThis.fetch = original;
+      resetPublicDeskLiveCache();
+    }
+  });
+
+  test('the warmer fetches on a half day and skips a holiday and the early close', async () => {
+    const original = globalThis.fetch;
+    const urls: string[] = [];
+    const waits: Array<string | null> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      urls.push(String(input));
+      waits.push(new Headers(init?.headers).get('x-desk-health-wait'));
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    try {
+      expect(await warmDeskBundleIfSession(readerEnv, Date.parse('2026-11-26T17:00:00.000Z'))).toBe('closed');
+      expect(await warmDeskBundleIfSession(readerEnv, Date.parse('2026-11-27T18:00:00.000Z'))).toBe('closed');
+      expect(await warmDeskBundleIfSession(readerEnv, Date.parse('2026-11-28T16:00:00.000Z'))).toBe('closed');
+      expect(urls).toEqual([]);
+      expect(await warmDeskBundleIfSession(readerEnv, Date.parse('2026-11-27T16:00:00.000Z'))).toBe('warmed');
+      expect(urls).toEqual(['https://desk.example.test/functions/v1/desk-public-rest/bundle/public']);
+      expect(waits).toEqual([null]);
+    } finally {
+      globalThis.fetch = original;
     }
   });
 

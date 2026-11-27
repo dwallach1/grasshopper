@@ -210,6 +210,24 @@ describe('desk public bundle snapshot', () => {
     expect(migration).toContain('security invoker');
     expect(migration).toContain("set search_path = ''");
     expect(migration).toContain('enable row level security');
+    const freshness = await Bun.file(new URL(
+      '../../../supabase/migrations/20261127190000_desk_health_freshness.sql',
+      import.meta.url,
+    )).text();
+    const freshnessSchema = await Bun.file(new URL(
+      '../../../supabase/schemas/108_desk_health_freshness.sql',
+      import.meta.url,
+    )).text();
+    expect(freshnessSchema).toBe(freshness);
+    expect(freshness).toContain('security invoker');
+    expect(freshness).toContain("set search_path = ''");
+    expect(freshness).not.toContain('security definer');
+    expect(freshness).toContain(
+      'revoke all on function public.desk_public_ledger_freshness() from anon, authenticated, desk_public_reader',
+    );
+    expect(freshness.split('\n').filter((line) => line.startsWith('grant '))).toEqual([
+      'grant execute on function public.desk_public_ledger_freshness() to service_role;',
+    ]);
     const fn = await Bun.file(new URL(
       '../../../supabase/functions/desk-public-rest/index.ts',
       import.meta.url,
@@ -217,5 +235,206 @@ describe('desk public bundle snapshot', () => {
     expect(fn).toContain('DESK_REST_CONCURRENCY = 4');
     const allowed = fn.slice(fn.indexOf('const ALLOWED_TABLES'), fn.indexOf('const TABLE_RE'));
     expect(allowed).not.toContain('desk_public_bundle');
+  });
+
+  test('an aged book returns immediately on the desk path', async () => {
+    installDenoEnv();
+    resetDeskRestSlots();
+    const original = globalThis.fetch;
+    const previous = (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
+    let releaseLedger: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseLedger = resolve;
+    });
+    const scheduled: Array<Promise<unknown>> = [];
+    (globalThis as { EdgeRuntime?: { waitUntil: (work: Promise<unknown>) => void } }).EdgeRuntime = {
+      waitUntil(work) {
+        scheduled.push(work);
+      },
+    };
+    const generatedAt = '2026-11-27T13:52:00.000Z';
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = methodOf(init);
+      if (url.includes('/rest/v1/desk_public_bundle') && method === 'GET') {
+        return Response.json([{
+          id: 'public',
+          ready: true,
+          generated_at: generatedAt,
+          refresh_failed_at: null,
+          payload: { theses: [], positions: [{ id: 'lot-nvda' }] },
+        }]);
+      }
+      if (url.includes('/rpc/claim_desk_public_refresh')) return Response.json(true);
+      await gate;
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const response = await Promise.race([
+        handleBundle('public'),
+        new Promise<Response>((_, reject) => {
+          setTimeout(() => reject(new Error('blocked on ledger')), 300);
+        }),
+      ]);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-desk-bundle-refreshing')).toBeNull();
+      expect(response.headers.get('x-ledger-mark-at')).toBeNull();
+      const body = await response.json() as { generated_at: string; positions: Array<{ id: string }> };
+      expect(body.generated_at).toBe(generatedAt);
+      expect(body.positions).toEqual([{ id: 'lot-nvda' }]);
+    } finally {
+      releaseLedger();
+      await Promise.allSettled(scheduled);
+      globalThis.fetch = original;
+      (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime = previous;
+      resetDeskRestSlots();
+    }
+  });
+
+  test('health waits for a newer book, and otherwise names the aged cache', async () => {
+    installDenoEnv();
+    resetDeskRestSlots();
+    const original = globalThis.fetch;
+    const previous = (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
+    const scheduled: Array<Promise<unknown>> = [];
+    (globalThis as { EdgeRuntime?: { waitUntil: (work: Promise<unknown>) => void } }).EdgeRuntime = {
+      waitUntil(work) {
+        scheduled.push(work);
+      },
+    };
+    const aged = '2026-11-27T13:52:00.000Z';
+    const fresh = '2026-11-27T17:27:05.000Z';
+    let reads = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = methodOf(init);
+      if (url.includes('/rpc/desk_public_ledger_freshness')) {
+        return Response.json({
+          snapshot_at: '2026-11-27T17:26:00.000Z',
+          mark_at: '2026-11-27T17:26:30.000Z',
+        });
+      }
+      if (url.includes('/rest/v1/desk_public_bundle') && method === 'GET') {
+        reads += 1;
+        return Response.json([{
+          id: 'public',
+          ready: true,
+          generated_at: reads === 1 ? aged : fresh,
+          refresh_failed_at: null,
+          payload: { theses: [], positions: [{ id: 'lot-nvda' }] },
+        }]);
+      }
+      if (url.includes('/rpc/claim_desk_public_refresh')) return Response.json(true);
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const started = Date.now();
+      const response = await handleBundle('public', { waitForRefreshMs: 800 });
+      expect(Date.now() - started).toBeLessThan(900);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-desk-stale')).toBeNull();
+      expect(response.headers.get('x-desk-bundle-refreshing')).toBeNull();
+      expect(response.headers.get('x-ledger-snapshot-at')).toBe('2026-11-27T17:26:00.000Z');
+      expect(response.headers.get('x-ledger-mark-at')).toBe('2026-11-27T17:26:30.000Z');
+      const body = await response.json() as { generated_at: string };
+      expect(body.generated_at).toBe(fresh);
+    } finally {
+      await Promise.allSettled(scheduled);
+      globalThis.fetch = original;
+      (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime = previous;
+      resetDeskRestSlots();
+    }
+  });
+
+  test('health returns the aged book with a refreshing mark when the rebuild outlasts the budget', async () => {
+    installDenoEnv();
+    resetDeskRestSlots();
+    const original = globalThis.fetch;
+    const previous = (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime;
+    let releaseLedger: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseLedger = resolve;
+    });
+    const scheduled: Array<Promise<unknown>> = [];
+    (globalThis as { EdgeRuntime?: { waitUntil: (work: Promise<unknown>) => void } }).EdgeRuntime = {
+      waitUntil(work) {
+        scheduled.push(work);
+      },
+    };
+    const aged = '2026-11-27T13:52:00.000Z';
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = methodOf(init);
+      if (url.includes('/rpc/desk_public_ledger_freshness')) {
+        return Response.json({
+          snapshot_at: '2026-11-27T17:26:00.000Z',
+          mark_at: '2026-11-27T17:26:30.000Z',
+        });
+      }
+      if (url.includes('/rest/v1/desk_public_bundle') && method === 'GET') {
+        return Response.json([{
+          id: 'public',
+          ready: true,
+          generated_at: aged,
+          refresh_failed_at: null,
+          payload: { theses: [], positions: [{ id: 'lot-nvda' }] },
+        }]);
+      }
+      if (url.includes('/rpc/claim_desk_public_refresh')) return Response.json(true);
+      await gate;
+      return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const started = Date.now();
+      const response = await handleBundle('public', { waitForRefreshMs: 250 });
+      const elapsed = Date.now() - started;
+      expect(elapsed).toBeGreaterThan(200);
+      expect(elapsed).toBeLessThan(900);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-desk-bundle-refreshing')).toBe('1');
+      expect(response.headers.get('x-ledger-mark-at')).toBe('2026-11-27T17:26:30.000Z');
+      const body = await response.json() as { generated_at: string };
+      expect(body.generated_at).toBe(aged);
+    } finally {
+      releaseLedger();
+      await Promise.allSettled(scheduled);
+      globalThis.fetch = original;
+      (globalThis as { EdgeRuntime?: unknown }).EdgeRuntime = previous;
+      resetDeskRestSlots();
+    }
+  });
+
+  test('a missing freshness function still serves the book', async () => {
+    installDenoEnv();
+    resetDeskRestSlots();
+    const original = globalThis.fetch;
+    const generatedAt = new Date().toISOString();
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/rpc/desk_public_ledger_freshness')) {
+        return new Response(JSON.stringify({ message: 'function not found' }), { status: 404 });
+      }
+      if (url.includes('/rest/v1/desk_public_bundle')) {
+        return Response.json([{
+          id: 'public',
+          ready: true,
+          generated_at: generatedAt,
+          refresh_failed_at: null,
+          payload: { theses: [], positions: [{ id: 'lot-nvda' }] },
+        }]);
+      }
+      throw new Error(`ledger read ${url}`);
+    }) as typeof fetch;
+    try {
+      const response = await handleBundle('public', { waitForRefreshMs: 3_000 });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('x-ledger-mark-at')).toBeNull();
+      expect(response.headers.get('x-desk-bundle-refreshing')).toBeNull();
+      const body = await response.json() as { generated_at: string };
+      expect(body.generated_at).toBe(generatedAt);
+    } finally {
+      globalThis.fetch = original;
+      resetDeskRestSlots();
+    }
   });
 });

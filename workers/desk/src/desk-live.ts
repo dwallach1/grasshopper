@@ -14,6 +14,14 @@ import { mapMemeCoins } from '../../../apps/dashboard/lib/meme-book';
 import { mapPredictionMarkets } from '../../../apps/dashboard/lib/prediction-book';
 import { mapStewardScorecard } from '../../../apps/dashboard/lib/steward-scorecard';
 import { mapLedgerWatchdog } from '../../../apps/dashboard/lib/ledger-watchdog';
+import {
+  bundleIsFresh,
+  DESK_BUNDLE_REFRESHING_HEADER,
+  DESK_HEALTH_WAIT_HEADER,
+  LEDGER_MARK_AT_HEADER,
+  LEDGER_SNAPSHOT_AT_HEADER,
+} from '../../../supabase/functions/desk-public-rest/bundle-cache';
+import { marketSessionHealth, shouldWarmDeskBundle } from './desk-health';
 
 /** Match the phone poll so a live GET does not re-assemble inside the interval. */
 export const LIVE_CACHE_MS = PUBLIC_LIVE_INTERVAL_MS;
@@ -24,14 +32,27 @@ export type PublicDeskServe = {
   generated_at: string;
   /** True when this is a previous successful serve, after a fresh read failed. */
   stale?: boolean;
+  /** True when desk-public-rest is rebuilding and this body is still the previous book. */
+  bundle_refreshing?: boolean;
+  /** Latest account_snapshots.observed_at. Null when the freshness read missed. */
+  ledger_snapshot_at?: string | null;
+  /** Latest portfolio_exposure.observed_at. Null when the freshness read missed. */
+  ledger_mark_at?: string | null;
 };
 
-let liveCache: { at: number; serve: PublicDeskServe } | null = null;
+export type PublicDeskLoadOptions = {
+  /** /api/health. The edge function may wait up to 3s for the single-flight refresh. */
+  waitForRefresh?: boolean;
+};
+
+let liveCache: { at: number; serve: PublicDeskServe; health: boolean } | null = null;
 const liveSlot: { pending: Promise<PublicDeskServe> | null } = { pending: null };
+const healthSlot: { pending: Promise<PublicDeskServe> | null } = { pending: null };
 
 export function resetPublicDeskLiveCache(): void {
   liveCache = null;
   liveSlot.pending = null;
+  healthSlot.pending = null;
 }
 
 /** Age the isolate's last good serve so the next read must hit origin. */
@@ -39,9 +60,14 @@ export function expirePublicDeskLiveCache(): void {
   if (liveCache) liveCache.at = 0;
 }
 
-/** A failed refresh is retried quickly. A good serve stays for the phone poll. */
-export function liveCacheMaxAge(stale: boolean | undefined): number {
-  return stale ? 5_000 : LIVE_CACHE_MS;
+/**
+ * A failed refresh, or a book older than the fresh window, is retried quickly.
+ * A good serve stays for the phone poll. Omit generatedAt to keep the old two-way check.
+ */
+export function liveCacheMaxAge(stale: boolean | undefined, generatedAt?: string, now = Date.now()): number {
+  if (stale) return 5_000;
+  if (generatedAt !== undefined && !bundleIsFresh(generatedAt, now)) return 5_000;
+  return LIVE_CACHE_MS;
 }
 
 function snapshotGeneratedAt(value: unknown): string | null {
@@ -130,12 +156,17 @@ export function liveReaderReady(env: DeskReaderEnv): boolean {
   return true;
 }
 
-export async function loadPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
+export async function loadPublicDeskServe(
+  env: DeskReaderEnv,
+  options?: PublicDeskLoadOptions,
+): Promise<PublicDeskServe> {
   const now = Date.now();
-  if (liveCache && now - liveCache.at < liveCacheMaxAge(liveCache.serve.stale)) {
-    return liveCache.serve;
+  if (liveCache && now - liveCache.at < liveCacheMaxAge(liveCache.serve.stale, liveCache.serve.generated_at, now)) {
+    // An aged desk read did not ask for ledger times. Health must not reuse it.
+    if (!options?.waitForRefresh || liveCache.health) return liveCache.serve;
   }
-  return coalesceLiveRead(liveSlot, () => readPublicDeskServe(env));
+  const slot = options?.waitForRefresh ? healthSlot : liveSlot;
+  return coalesceLiveRead(slot, () => readPublicDeskServe(env, options));
 }
 
 function lastGoodServe(error: unknown): PublicDeskServe | null {
@@ -148,17 +179,18 @@ function lastGoodServe(error: unknown): PublicDeskServe | null {
     generated_at: liveCache.serve.generated_at,
   }));
   return {
-    desk: liveCache.serve.desk,
-    json: liveCache.serve.json,
-    generated_at: liveCache.serve.generated_at,
+    ...liveCache.serve,
     stale: true,
   };
 }
 
-async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
+async function readPublicDeskServe(
+  env: DeskReaderEnv,
+  options?: PublicDeskLoadOptions,
+): Promise<PublicDeskServe> {
   try {
-    const serve = await fetchPublicDeskServe(env);
-    liveCache = { at: Date.now(), serve };
+    const serve = await fetchPublicDeskServe(env, options);
+    liveCache = { at: Date.now(), serve, health: options?.waitForRefresh === true };
     return serve;
   } catch (error) {
     const stale = lastGoodServe(error);
@@ -167,18 +199,28 @@ async function readPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe>
   }
 }
 
-async function fetchPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe> {
+function headerTime(response: Response, name: string): string | null {
+  const value = response.headers.get(name);
+  if (!value || !Number.isFinite(Date.parse(value))) return null;
+  return value;
+}
+
+async function fetchPublicDeskServe(
+  env: DeskReaderEnv,
+  options?: PublicDeskLoadOptions,
+): Promise<PublicDeskServe> {
   const supabaseUrl = env.DESK_SUPABASE_URL?.trim() || '';
   const apiKey = env.DESK_READER_APIKEY?.trim() || '';
   const accessToken = env.DESK_READER_JWT?.trim() || '';
   if (!liveReaderReady(env) || !supabaseUrl || !apiKey || !accessToken) {
     throw new Error('desk_reader_unconfigured');
   }
-  const headers = {
+  const headers: Record<string, string> = {
     apikey: apiKey,
     Authorization: `Bearer ${apiKey}`,
     Accept: 'application/json',
   };
+  if (options?.waitForRefresh) headers[DESK_HEALTH_WAIT_HEADER] = '1';
   const base = supabaseUrl.replace(/\/$/, '');
   let response = await fetch(`${base}/bundle/public`, {
     headers,
@@ -199,7 +241,52 @@ async function fetchPublicDeskServe(env: DeskReaderEnv): Promise<PublicDeskServe
   const raw = await readBoundedJson(response, MAX_SNAPSHOT_BYTES);
   const serve = assemblePublicBundle(raw);
   if (refreshFailed) serve.stale = true;
+  serve.bundle_refreshing = response.headers.get(DESK_BUNDLE_REFRESHING_HEADER) === '1';
+  serve.ledger_snapshot_at = headerTime(response, LEDGER_SNAPSHOT_AT_HEADER);
+  serve.ledger_mark_at = headerTime(response, LEDGER_MARK_AT_HEADER);
   return serve;
+}
+
+/**
+ * Touch /bundle/public during the core session so the stored book does not
+ * sit for hours. The edge function returns the last good row immediately and
+ * refreshes it off this request. Holidays, weekends, and the time after an
+ * early close do not fetch.
+ */
+export async function warmDeskBundleIfSession(
+  env: DeskReaderEnv,
+  now = Date.now(),
+): Promise<'warmed' | 'closed' | 'unconfigured' | 'failed'> {
+  const session = marketSessionHealth(now);
+  if (!shouldWarmDeskBundle(now)) {
+    console.error(JSON.stringify({
+      event: 'desk_bundle_warm_skipped',
+      status: session.status,
+      date: session.date,
+    }));
+    return 'closed';
+  }
+  if (!liveReaderReady(env)) {
+    console.error(JSON.stringify({ event: 'desk_bundle_warm_unconfigured' }));
+    return 'unconfigured';
+  }
+  const base = (env.DESK_SUPABASE_URL || '').replace(/\/$/, '');
+  const response = await fetch(`${base}/bundle/public`, {
+    headers: {
+      apikey: env.DESK_READER_APIKEY || '',
+      Authorization: `Bearer ${env.DESK_READER_APIKEY || ''}`,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(25_000),
+  });
+  await response.body?.cancel();
+  console.error(JSON.stringify({
+    event: response.ok ? 'desk_bundle_warm' : 'desk_bundle_warm_failed',
+    status: response.status,
+    date: session.date,
+  }));
+  return response.ok ? 'warmed' : 'failed';
 }
 
 /** Zod-parse a `/bundle/public` body and publish the phone snapshot. */
